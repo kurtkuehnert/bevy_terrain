@@ -1,0 +1,15 @@
+[package]
+name = "bevy_terrain"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = [
+    "bevy/dynamic",
+]
+
+[dependencies]
+bevy = { git = "https://github.com/bevyengine/bevy", branch = "latest" }
+bevy-inspector-egui = { git = "https://github.com/jakobhellermann/bevy-inspector-egui", branch = "main" }
+
+itertools = "0.10"
