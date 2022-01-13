@@ -9,7 +9,7 @@ default = [
 ]
 
 [dependencies]
-bevy = { git = "https://github.com/bevyengine/bevy", branch = "latest" }
-bevy-inspector-egui = { git = "https://github.com/jakobhellermann/bevy-inspector-egui", branch = "main" }
+bevy = "0.6.0"
+bevy-inspector-egui = "0.7.2"
 
 itertools = "0.10"
