@@ -1,26 +1,28 @@
+use crate::quad_tree::{Quadtree, Viewer};
 use bevy::prelude::*;
 use bevy_inspector_egui::{Inspectable, RegisterInspectable};
 
 #[derive(Component, Inspectable)]
-pub struct TileHierarchyDescriptor {
-    pub map_width: u16,
-    pub map_height: u16,
-    #[inspectable(min = 1, max = 181)]
-    pub tile_size: u8, // sparse = 2 * tile_size, dense = 4 * tile_size
+pub struct QuadtreeDescriptor {
+    #[inspectable(min = 1, max = 255)]
+    pub node_size: u8,
+    #[inspectable(min = 1, max = 16)]
+    pub lod_count: u8,
     pub wireframe: bool,
 }
 
-impl Default for TileHierarchyDescriptor {
+impl Default for QuadtreeDescriptor {
     fn default() -> Self {
         Self {
-            map_width: 30,
-            map_height: 20,
-            tile_size: 16,
+            node_size: 32,
+            lod_count: 6,
             wireframe: true,
         }
     }
 }
 
 pub fn register_inspectable_types(app: &mut App) {
-    app.register_inspectable::<TileHierarchyDescriptor>();
+    app.register_inspectable::<QuadtreeDescriptor>();
+    app.register_inspectable::<Viewer>();
+    app.register_inspectable::<Quadtree>();
 }
