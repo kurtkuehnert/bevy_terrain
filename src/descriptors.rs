@@ -1,10 +1,10 @@
-use crate::quad_tree::{Quadtree, Viewer};
+use crate::quadtree::{Quadtree, Viewer};
 use bevy::prelude::*;
 use bevy_inspector_egui::{Inspectable, RegisterInspectable};
 
 #[derive(Component, Inspectable)]
 pub struct QuadtreeDescriptor {
-    #[inspectable(min = 1, max = 255)]
+    #[inspectable(min = 2)]
     pub node_size: u8,
     #[inspectable(min = 1, max = 16)]
     pub lod_count: u8,
