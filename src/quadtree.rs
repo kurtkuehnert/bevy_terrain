@@ -1,6 +1,6 @@
 use crate::{
     descriptors::QuadtreeDescriptor,
-    material::{InstanceData, TileData},
+    material::{TerrainData, TileData},
     tile::Tile,
 };
 use bevy::{
@@ -9,38 +9,26 @@ use bevy::{
 };
 use bevy_inspector_egui::Inspectable;
 use itertools::iproduct;
+use std::mem::take;
 
-fn intersect(sphere: &Sphere, aabb: &Aabb) -> bool {
-    // get box closest point to sphere center by clamping
-    let x = (aabb.center.x - aabb.half_extents.x)
-        .max(sphere.center.x.min(aabb.center.x + aabb.half_extents.x));
-    let y = (aabb.center.y - aabb.half_extents.y)
-        .max(sphere.center.y.min(aabb.center.y + aabb.half_extents.y));
-
-    let z = (aabb.center.z - aabb.half_extents.z)
-        .max(sphere.center.z.min(aabb.center.z + aabb.half_extents.z));
-
-    let distance = (x - sphere.center.x) * (x - sphere.center.x)
-        + (y - sphere.center.y) * (y - sphere.center.y)
-        + (z - sphere.center.z) * (z - sphere.center.z);
-
-    distance < sphere.radius.powf(2.0)
-}
-
+/// Marks a camera as the viewer of the terrain.
+/// This is used to select the visible nodes of the quadtree.
+/// The view distance is a multiplier, which increases the size of the lod ranges.
 #[derive(Component, Inspectable)]
 pub struct Viewer {
-    #[inspectable(min = 0.0)]
+    #[inspectable(min = 1.0)]
     pub view_distance: f32,
 }
 
 impl Default for Viewer {
     fn default() -> Self {
-        Self {
-            view_distance: 32.0 * 2.0_f32.powf(8.0),
-        }
+        Self { view_distance: 2.0 }
     }
 }
 
+/// Selection of visible nodes.
+/// They are divided into dense and sparse nodes.
+/// The later have half the resolution of the former.
 #[derive(Default)]
 struct Selection {
     dense_nodes: Vec<TileData>,
@@ -57,6 +45,8 @@ impl Selection {
     }
 }
 
+/// Node representation used while traversing the quadtree.
+/// They get converted into [`TileData`], the Gpu equivalent.
 #[derive(Clone, Debug)]
 struct Node {
     position: UVec2,
@@ -87,35 +77,37 @@ impl From<Node> for TileData {
 }
 
 impl Node {
+    /// Recursively traverses the quadtree, while selecting all currently visible nodes.
     fn select_lod(
         self,
         quadtree: &Quadtree,
         camera_position: Vec3,
+        local_to_world: &Mat4,
         frustum: &Frustum,
         selection: &mut Selection,
     ) -> bool {
-        let model = Mat4::IDENTITY;
         // Todo: accurately calculate min and max heights
         let aabb = Aabb::from_min_max(
-            Vec3::new(self.position.x as f32, -1000.0, self.position.y as f32),
+            Vec3::new(self.position.x as f32, -10.0, self.position.y as f32),
             Vec3::new(
                 (self.position.x + self.size) as f32,
-                1000.0,
+                10.0,
                 (self.position.y + self.size) as f32,
             ),
         );
+
         let sphere = Sphere {
             center: camera_position,
             radius: self.range,
         };
 
         // test, whether the node is inside the current lod range
-        if !intersect(&sphere, &aabb) {
+        if !sphere.intersects_obb(&aabb, local_to_world) {
             return false; // area handled by parent
         }
 
         // test, whether the node is inside the cameras view frustum
-        if !frustum.intersects_obb(&aabb, &model) {
+        if !frustum.intersects_obb(&aabb, local_to_world) {
             return true; // area not visible
         }
 
@@ -127,22 +119,21 @@ impl Node {
 
         let lod = self.lod - 1;
         let range = quadtree.lod_ranges[lod as usize];
-
         let sphere = Sphere {
             center: camera_position,
             radius: range,
         };
 
         // test, whether the node is inside the next smaller lod range
-        if !sphere.intersects_obb(&aabb, &model) {
+        if !sphere.intersects_obb(&aabb, local_to_world) {
             selection.add_node(self, true);
             return true; // area covered by the current node, which isn't subdivided
         }
 
+        let size = self.size >> 1;
+
         // if this loop is reached the node has to be subdivided into four children
         for (x, y) in iproduct!(0..2, 0..2) {
-            let size = self.size >> 1;
-
             let child = Node {
                 position: self.position + UVec2::new(x * size, y * size),
                 size,
@@ -151,10 +142,13 @@ impl Node {
             };
 
             // test, whether the child is successfully selected
-            if !child
-                .clone()
-                .select_lod(quadtree, camera_position, frustum, selection)
-            {
+            if !child.clone().select_lod(
+                quadtree,
+                camera_position,
+                local_to_world,
+                frustum,
+                selection,
+            ) {
                 // the child was not selected yet, so it has to be selected as a part of its parent,
                 // with a sparse grid
                 selection.add_node(child, false);
@@ -165,6 +159,8 @@ impl Node {
     }
 }
 
+/// The quadtree responsible for the [`Node`] selection.
+/// Every frame the tree is traversed and all visible nodes are selected.
 #[derive(Component, Inspectable)]
 pub struct Quadtree {
     node_size: u32,
@@ -184,45 +180,43 @@ impl Default for Quadtree {
 
 pub fn traverse_quadtree(
     viewer_query: Query<(&GlobalTransform, &Frustum), (With<Viewer>, With<Camera>)>,
-    mut terrain_query: Query<(&Children, &Quadtree)>,
-    mut instance_query: Query<&mut InstanceData>,
+    mut quadtree_query: Query<(&Children, &Quadtree, &GlobalTransform)>,
+    mut terrain_query: Query<&mut TerrainData>,
 ) {
-    for (children, quadtree) in terrain_query.iter_mut() {
-        for (transform, frustum) in viewer_query.iter() {
+    for (children, quadtree, terrain_transform) in quadtree_query.iter_mut() {
+        for (camera_transform, frustum) in viewer_query.iter() {
             let lod = quadtree.lod_count - 1;
 
             let root = Node {
                 position: UVec2::ZERO,
-                size: quadtree.node_size * (1 << quadtree.lod_count as u32),
+                size: quadtree.node_size * (1 << lod as u32),
                 lod,
                 range: quadtree.lod_ranges[lod as usize],
             };
 
             let mut selection = Selection::default();
 
-            root.select_lod(quadtree, transform.translation, frustum, &mut selection);
+            root.select_lod(
+                quadtree,
+                camera_transform.translation,
+                &terrain_transform.compute_matrix(),
+                frustum,
+                &mut selection,
+            );
 
-            let Selection {
-                dense_nodes,
-                sparse_nodes,
-            } = selection;
-
-            println!("{} {}", dense_nodes.len(), sparse_nodes.len());
-            //
-            // // println!("{:?} {:?}", dense_nodes, sparse_nodes);
-            // println!("{:?}", quadtree.lod_ranges);
-            //
-            // for node in sparse_nodes.iter().chain(dense_nodes.iter()) {
-            //     println!("{:?}", node);
-            // }
+            // println!(
+            //     "{} {}",
+            //     selection.dense_nodes.len(),
+            //     selection.sparse_nodes.len()
+            // );
 
             for &child in children.iter() {
-                let mut instance_data = instance_query.get_mut(child).unwrap();
+                let mut instance_data = terrain_query.get_mut(child).unwrap();
 
                 if instance_data.sparse {
-                    instance_data.instance_data = sparse_nodes.clone();
+                    instance_data.data = take(&mut selection.sparse_nodes);
                 } else {
-                    instance_data.instance_data = dense_nodes.clone();
+                    instance_data.data = take(&mut selection.dense_nodes);
                 }
             }
         }
@@ -232,32 +226,31 @@ pub fn traverse_quadtree(
 pub fn update_quadtree_on_change(
     mut meshes: ResMut<Assets<Mesh>>,
     viewer_query: Query<&Viewer>,
-    mut terrain_query: Query<
+    mut quadtree_query: Query<
         (&Children, &mut Quadtree, &QuadtreeDescriptor),
         Changed<QuadtreeDescriptor>,
     >,
-    mut instance_query: Query<(&mut InstanceData, &Handle<Mesh>)>,
+    terrain_query: Query<(&TerrainData, &Handle<Mesh>)>,
 ) {
-    for (children, mut quadtree, quadtree_descriptor) in terrain_query.iter_mut() {
+    for (children, mut quadtree, quadtree_descriptor) in quadtree_query.iter_mut() {
         quadtree.node_size = quadtree_descriptor.node_size as u32;
         quadtree.lod_count = quadtree_descriptor.lod_count;
         update_view_distance(viewer_query.iter(), &mut quadtree);
 
         for &child in children.iter() {
-            let (mut instance_data, mesh) = instance_query.get_mut(child).unwrap();
+            let (terrain_data, mesh) = terrain_query.get(child).unwrap();
 
-            instance_data.wireframe = quadtree_descriptor.wireframe;
             let mesh = meshes
                 .get_mut(mesh.clone())
                 .expect("Instance mesh not initialized.");
 
-            let size = if instance_data.sparse {
+            let size = if terrain_data.sparse {
                 quadtree.node_size / 2
             } else {
                 quadtree.node_size
             } as u8;
 
-            *mesh = Tile::new(size, instance_data.wireframe).to_mesh();
+            *mesh = Tile::new(size, quadtree_descriptor.wireframe).to_mesh();
         }
     }
 }
@@ -274,8 +267,9 @@ pub fn update_view_distance_on_change(
 fn update_view_distance<'a>(viewer: impl Iterator<Item = &'a Viewer>, quadtree: &mut Quadtree) {
     for viewer in viewer {
         quadtree.lod_ranges = (0..quadtree.lod_count)
-            .rev()
-            .map(|lod| viewer.view_distance / (1 << lod as u32) as f32)
+            .map(|lod| quadtree.node_size as f32 * viewer.view_distance * (2 << lod as u32) as f32)
             .collect();
+
+        // println!("{:?}", quadtree.lod_ranges);
     }
 }
