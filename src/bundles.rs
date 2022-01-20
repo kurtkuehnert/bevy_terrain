@@ -1,10 +1,13 @@
-use crate::{descriptors::QuadtreeDescriptor, material::TerrainData, quadtree::Quadtree};
-use bevy::render::primitives::Aabb;
-use bevy::{prelude::*, render::render_resource::PrimitiveTopology};
+use crate::{
+    descriptors::QuadtreeDescriptor, material::TerrainMaterial, pipeline::TerrainData,
+    quadtree::Quadtree,
+};
+use bevy::{prelude::*, render::primitives::Aabb, render::render_resource::PrimitiveTopology};
 
 #[derive(Bundle)]
 pub struct InstanceBundle {
     mesh: Handle<Mesh>,
+    material: Handle<TerrainMaterial>,
     instance_data: TerrainData,
     transform: Transform,
     global_transform: GlobalTransform,
@@ -14,9 +17,10 @@ pub struct InstanceBundle {
 }
 
 impl InstanceBundle {
-    pub fn new(meshes: &mut Assets<Mesh>, sparse: bool) -> Self {
+    pub fn new(meshes: &mut Assets<Mesh>, material: Handle<TerrainMaterial>, sparse: bool) -> Self {
         Self {
             mesh: meshes.add(Mesh::new(PrimitiveTopology::TriangleList)),
+            material,
             instance_data: TerrainData {
                 sparse,
                 ..Default::default()

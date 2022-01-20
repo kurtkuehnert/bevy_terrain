@@ -1,22 +1,20 @@
+use crate::pipeline::{prepare_terrain, queue_terrain, DrawTerrain, TerrainData, TerrainPipeline};
 use bevy::{
     core_pipeline::Opaque3d,
-    ecs::{
-        query::QueryItem,
-        system::lifetimeless::{Read, SQuery},
-        system::{lifetimeless::SRes, SystemParamItem},
+    ecs::system::{
+        lifetimeless::{Read, SQuery, SRes},
+        SystemParamItem,
     },
-    pbr::{MeshPipeline, MeshPipelineKey, SetMeshBindGroup, SetMeshViewBindGroup},
     prelude::*,
+    reflect::TypeUuid,
     render::{
-        mesh::GpuBufferInfo,
-        render_asset::RenderAssets,
-        render_component::{ExtractComponent, ExtractComponentPlugin},
+        render_asset::{PrepareAssetError, RenderAsset, RenderAssetPlugin, RenderAssets},
+        render_component::ExtractComponentPlugin,
         render_phase::{
-            AddRenderCommand, DrawFunctions, EntityRenderCommand, RenderCommandResult, RenderPhase,
-            SetItemPipeline, TrackedRenderPass,
+            AddRenderCommand, EntityRenderCommand, RenderCommandResult, TrackedRenderPass,
         },
         render_resource::{
-            internal::bytemuck::{Pod, Zeroable},
+            std140::{AsStd140, Std140},
             *,
         },
         renderer::RenderDevice,
@@ -24,41 +22,14 @@ use bevy::{
     },
 };
 
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-#[repr(C)]
-pub struct TileData {
-    pub(crate) position: UVec2,
-    pub(crate) size: u32,
-    pub(crate) range: f32,
-    pub(crate) color: Vec4,
-}
-
-#[derive(Component)]
-struct GpuTerrainData {
-    buffer: Buffer,
-    length: usize,
-}
-
-#[derive(Clone, Default, Component)]
-pub struct TerrainData {
-    pub(crate) data: Vec<TileData>,
-    pub(crate) sparse: bool,
-}
-
-impl ExtractComponent for TerrainData {
-    type Query = &'static TerrainData;
-    type Filter = ();
-
-    fn extract_component(item: QueryItem<Self::Query>) -> Self {
-        item.clone()
-    }
-}
-
 pub struct TerrainMaterialPlugin;
 
 impl Plugin for TerrainMaterialPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugin(ExtractComponentPlugin::<TerrainData>::default());
+        app.add_asset::<TerrainMaterial>()
+            .add_plugin(RenderAssetPlugin::<TerrainMaterial>::default())
+            .add_plugin(ExtractComponentPlugin::<Handle<TerrainMaterial>>::default())
+            .add_plugin(ExtractComponentPlugin::<TerrainData>::default());
         app.sub_app_mut(RenderApp)
             .add_render_command::<Opaque3d, DrawTerrain>()
             .init_resource::<TerrainPipeline>()
@@ -68,163 +39,165 @@ impl Plugin for TerrainMaterialPlugin {
     }
 }
 
-fn queue_terrain(
-    draw_functions: Res<DrawFunctions<Opaque3d>>,
-    terrain_pipeline: Res<TerrainPipeline>,
-    msaa: Res<Msaa>,
-    meshes: Res<RenderAssets<Mesh>>,
-    mut pipelines: ResMut<SpecializedPipelines<TerrainPipeline>>,
-    mut pipeline_cache: ResMut<RenderPipelineCache>,
-    mut view_query: Query<&mut RenderPhase<Opaque3d>>,
-    terrain_query: Query<(Entity, &Handle<Mesh>), With<TerrainData>>,
-) {
-    let draw_function = draw_functions.read().get_id::<DrawTerrain>().unwrap();
+/// The GPU representation of the uniform data of a [`TerrainMaterial`].
+#[derive(Clone, Default, AsStd140)]
+struct TerrainMaterialUniformData {
+    height: f32,
+}
 
-    for mut opaque_phase in view_query.iter_mut() {
-        for (entity, mesh) in terrain_query.iter() {
-            let topology = meshes.get(mesh).unwrap().primitive_topology;
+/// The GPU representation of a [`TerrainMaterial`].
+#[derive(Debug, Clone)]
+pub struct GpuTerrainMaterial {
+    /// A buffer containing the [`TerrainMaterialUniformData`] of the material.
+    buffer: Buffer,
+    /// The bind group specifying how the [`TerrainMaterialUniformData`] and
+    /// all the textures of the material are bound.
+    bind_group: BindGroup,
+}
 
-            let key = MeshPipelineKey::from_msaa_samples(msaa.samples)
-                | MeshPipelineKey::from_primitive_topology(topology);
-            let pipeline = pipelines.specialize(&mut pipeline_cache, &terrain_pipeline, key);
+/// The material of the terrain, specifying its textures and parameters.
+#[derive(Debug, Clone, TypeUuid)]
+#[uuid = "7cc8ded7-03f9-4ed5-8379-a256f94613ff"]
+pub struct TerrainMaterial {
+    pub height_texture: Handle<Image>,
+    pub height: f32,
+}
 
-            opaque_phase.add(Opaque3d {
-                entity,
-                pipeline,
-                draw_function,
-                distance: f32::MIN,
-            });
-        }
+impl TerrainMaterial {
+    /// Returns this material's [`BindGroup`]. This should match the layout returned by [`SpecializedMaterial::bind_group_layout`].
+    #[inline]
+    fn bind_group(material: &<Self as RenderAsset>::PreparedAsset) -> &BindGroup {
+        &material.bind_group
     }
-}
 
-fn prepare_terrain(
-    mut commands: Commands,
-    terrain_query: Query<(Entity, &TerrainData)>,
-    render_device: Res<RenderDevice>,
-) {
-    for (entity, terrain_data) in terrain_query.iter() {
-        let buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
-            label: Some("terrain data buffer"),
-            contents: bytemuck::cast_slice(terrain_data.data.as_slice()),
-            usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
-        });
-
-        commands.entity(entity).insert(GpuTerrainData {
-            buffer,
-            length: terrain_data.data.len(),
-        });
-    }
-}
-
-struct TerrainPipeline {
-    shader: Handle<Shader>,
-    mesh_pipeline: MeshPipeline,
-}
-
-impl FromWorld for TerrainPipeline {
-    fn from_world(world: &mut World) -> Self {
-        let world = world.cell();
-        let asset_server = world.get_resource::<AssetServer>().unwrap();
-        let shader = asset_server.load("shaders/terrain.wgsl");
-        let mesh_pipeline = world.get_resource::<MeshPipeline>().unwrap();
-
-        TerrainPipeline {
-            shader,
-            mesh_pipeline: mesh_pipeline.clone(),
-        }
-    }
-}
-
-impl SpecializedPipeline for TerrainPipeline {
-    type Key = MeshPipelineKey;
-
-    fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
-        let mut descriptor = self.mesh_pipeline.specialize(key);
-        descriptor.vertex.shader = self.shader.clone();
-        descriptor.vertex.buffers.push(VertexBufferLayout {
-            array_stride: std::mem::size_of::<TileData>() as u64,
-            step_mode: VertexStepMode::Instance,
-            attributes: vec![
-                VertexAttribute {
-                    format: VertexFormat::Uint32x2,
-                    offset: 0,
-                    shader_location: 3,
+    /// Returns this material's [`BindGroupLayout`]. This should match the [`BindGroup`] returned by [`SpecializedMaterial::bind_group`].
+    pub(crate) fn bind_group_layout(render_device: &RenderDevice) -> BindGroupLayout {
+        render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+            entries: &[
+                // Uniform Data
+                BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::VERTEX_FRAGMENT,
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: BufferSize::new(
+                            TerrainMaterialUniformData::std140_size_static() as u64,
+                        ),
+                    },
+                    count: None,
                 },
-                VertexAttribute {
-                    format: VertexFormat::Uint32,
-                    offset: VertexFormat::Uint32x2.size(),
-                    shader_location: 4,
+                // Height Texture
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::VERTEX_FRAGMENT,
+                    ty: BindingType::Texture {
+                        multisampled: false,
+                        sample_type: TextureSampleType::Uint,
+                        view_dimension: TextureViewDimension::D2,
+                    },
+                    count: None,
                 },
-                VertexAttribute {
-                    format: VertexFormat::Float32,
-                    offset: VertexFormat::Uint32x2.size() + VertexFormat::Uint32.size(),
-                    shader_location: 5,
-                },
-                VertexAttribute {
-                    format: VertexFormat::Float32x4,
-                    offset: VertexFormat::Uint32x2.size()
-                        + VertexFormat::Uint32.size()
-                        + VertexFormat::Float32.size(),
-                    shader_location: 6,
+                // Height Texture Sampler
+                BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: ShaderStages::VERTEX_FRAGMENT,
+                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                    count: None,
                 },
             ],
-        });
-        descriptor.fragment.as_mut().unwrap().shader = self.shader.clone();
-        descriptor.layout = Some(vec![
-            self.mesh_pipeline.view_layout.clone(),
-            self.mesh_pipeline.mesh_layout.clone(),
-        ]);
+            label: Some("terrain_material_layout"),
+        })
+    }
 
-        descriptor
+    /// The dynamic uniform indices to set for the given `material`'s [`BindGroup`].
+    /// Defaults to an empty array / no dynamic uniform indices.
+    #[inline]
+    fn dynamic_uniform_indices(_material: &<Self as RenderAsset>::PreparedAsset) -> &[u32] {
+        &[]
     }
 }
 
-type DrawTerrain = (
-    SetItemPipeline,
-    SetMeshViewBindGroup<0>,
-    SetMeshBindGroup<1>,
-    DrawTerrainCommand,
-);
-
-struct DrawTerrainCommand;
-
-impl EntityRenderCommand for DrawTerrainCommand {
+impl RenderAsset for TerrainMaterial {
+    type ExtractedAsset = TerrainMaterial;
+    type PreparedAsset = GpuTerrainMaterial;
     type Param = (
-        SRes<RenderAssets<Mesh>>,
-        SQuery<(Read<GpuTerrainData>, Read<Handle<Mesh>>)>,
+        SRes<RenderDevice>,
+        SRes<TerrainPipeline>,
+        SRes<RenderAssets<Image>>,
+    );
+
+    fn extract_asset(&self) -> Self::ExtractedAsset {
+        self.clone()
+    }
+
+    fn prepare_asset(
+        material: Self::ExtractedAsset,
+        (render_device, terrain_pipeline, gpu_images): &mut SystemParamItem<Self::Param>,
+    ) -> Result<Self::PreparedAsset, PrepareAssetError<Self::ExtractedAsset>> {
+        let (height_texture_view, height_texture_sampler) =
+            match gpu_images.get(&material.height_texture) {
+                Some(gpu_image) => (&gpu_image.texture_view, &gpu_image.sampler),
+                None => return Err(PrepareAssetError::RetryNextUpdate(material)),
+            };
+
+        let uniform_data = TerrainMaterialUniformData {
+            height: material.height,
+        };
+
+        let buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
+            label: Some("pbr_standard_material_uniform_buffer"),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            contents: uniform_data.as_std140().as_bytes(),
+        });
+
+        let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: BindingResource::TextureView(height_texture_view),
+                },
+                BindGroupEntry {
+                    binding: 2,
+                    resource: BindingResource::Sampler(height_texture_sampler),
+                },
+            ],
+            label: Some("terrain_material_bind_group"),
+            layout: &terrain_pipeline.material_layout,
+        });
+
+        Ok(GpuTerrainMaterial { buffer, bind_group })
+    }
+}
+
+pub struct SetTerrainMaterialBindGroup<const I: usize>;
+impl<const I: usize> EntityRenderCommand for SetTerrainMaterialBindGroup<I> {
+    type Param = (
+        SRes<RenderAssets<TerrainMaterial>>,
+        SQuery<Read<Handle<TerrainMaterial>>>,
     );
     #[inline]
     fn render<'w>(
         _view: Entity,
         item: Entity,
-        (meshes, terrain_query): SystemParamItem<'w, '_, Self::Param>,
+        (materials, terrain_query): SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let (terrain_buffer, mesh) = terrain_query.get(item).unwrap();
-
-        let gpu_mesh = match meshes.into_inner().get(mesh) {
-            Some(gpu_mesh) => gpu_mesh,
+        let material = terrain_query.get(item).unwrap();
+        let material = match materials.into_inner().get(material) {
+            Some(material) => material,
             None => return RenderCommandResult::Failure,
         };
 
-        pass.set_vertex_buffer(0, gpu_mesh.vertex_buffer.slice(..));
-        pass.set_vertex_buffer(1, terrain_buffer.buffer.slice(..));
-
-        match &gpu_mesh.buffer_info {
-            GpuBufferInfo::Indexed {
-                buffer,
-                index_format,
-                count,
-            } => {
-                pass.set_index_buffer(buffer.slice(..), 0, *index_format);
-                pass.draw_indexed(0..*count, 0, 0..terrain_buffer.length as u32);
-            }
-            GpuBufferInfo::NonIndexed { vertex_count } => {
-                pass.draw_indexed(0..*vertex_count, 0, 0..terrain_buffer.length as u32);
-            }
-        }
-
+        pass.set_bind_group(
+            I,
+            TerrainMaterial::bind_group(material),
+            TerrainMaterial::dynamic_uniform_indices(material),
+        );
         RenderCommandResult::Success
     }
 }
