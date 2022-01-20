@@ -1,6 +1,6 @@
 use crate::{
     descriptors::QuadtreeDescriptor,
-    material::{TerrainData, TileData},
+    pipeline::{TerrainData, TileData},
     tile::Tile,
 };
 use bevy::{
