@@ -88,10 +88,10 @@ impl Node {
     ) -> bool {
         // Todo: accurately calculate min and max heights
         let aabb = Aabb::from_min_max(
-            Vec3::new(self.position.x as f32, -10.0, self.position.y as f32),
+            Vec3::new(self.position.x as f32, 0.0, self.position.y as f32),
             Vec3::new(
                 (self.position.x + self.size) as f32,
-                10.0,
+                500.0,
                 (self.position.y + self.size) as f32,
             ),
         );
