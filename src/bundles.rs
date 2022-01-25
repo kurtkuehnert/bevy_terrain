@@ -1,6 +1,8 @@
 use crate::{
-    descriptors::QuadtreeDescriptor, material::TerrainMaterial, pipeline::TerrainData,
-    quadtree::Quadtree,
+    material::TerrainMaterial,
+    pipeline::TerrainData,
+    quadtree::{NodeAtlas, Nodes, Quadtree, TreeUpdate},
+    terrain::TerrainConfig,
 };
 use bevy::{prelude::*, render::primitives::Aabb, render::render_resource::PrimitiveTopology};
 
@@ -34,10 +36,25 @@ impl InstanceBundle {
     }
 }
 
-#[derive(Default, Bundle)]
+#[derive(Bundle)]
 pub struct TerrainBundle {
     pub quadtree: Quadtree,
-    pub quadtree_descriptor: QuadtreeDescriptor,
+    pub tree_update: TreeUpdate,
+    pub nodes: Nodes,
+    pub node_atlas: NodeAtlas,
     pub transform: Transform,
     pub global_transform: GlobalTransform,
+}
+
+impl TerrainBundle {
+    pub fn new(config: &TerrainConfig) -> Self {
+        Self {
+            quadtree: Quadtree::new(config),
+            tree_update: Default::default(),
+            nodes: Nodes::new(32, 16),
+            node_atlas: Default::default(),
+            transform: Default::default(),
+            global_transform: Default::default(),
+        }
+    }
 }

@@ -1,5 +1,6 @@
+extern crate core;
+
 pub mod bundles;
-pub mod descriptors;
 pub mod material;
 pub mod pipeline;
 pub mod preprocess;
