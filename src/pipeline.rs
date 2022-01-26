@@ -42,7 +42,6 @@ pub struct GpuTerrainData {
 #[derive(Clone, Default, Component)]
 pub struct TerrainData {
     pub(crate) data: Vec<TileData>,
-    pub(crate) sparse: bool,
 }
 
 impl TerrainData {

@@ -49,7 +49,7 @@ struct TerrainMaterialUniformData {
 #[derive(Debug, Clone)]
 pub struct GpuTerrainMaterial {
     /// A buffer containing the [`TerrainMaterialUniformData`] of the material.
-    buffer: Buffer,
+    _buffer: Buffer,
     /// The bind group specifying how the [`TerrainMaterialUniformData`] and
     /// all the textures of the material are bound.
     bind_group: BindGroup,
@@ -170,7 +170,10 @@ impl RenderAsset for TerrainMaterial {
             layout: &terrain_pipeline.material_layout,
         });
 
-        Ok(GpuTerrainMaterial { buffer, bind_group })
+        Ok(GpuTerrainMaterial {
+            _buffer: buffer,
+            bind_group,
+        })
     }
 }
 
