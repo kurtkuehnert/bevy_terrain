@@ -1,37 +1,6 @@
-use crate::pipeline::{TerrainData, TileData};
 use crate::quadtree::{NodeAtlas, Nodes};
-use crate::terrain::TerrainConfig;
 use bevy::prelude::*;
 use bevy_inspector_egui::Inspectable;
-
-pub fn debug(mut terrain_query: Query<(&TerrainConfig, &NodeAtlas, &mut TerrainData)>) {
-    for (config, node_atlas, mut terrain_data) in terrain_query.iter_mut() {
-        let data: &mut Vec<TileData> = &mut terrain_data.data;
-
-        for update in &node_atlas.node_updates {
-            let (lod, x, y) = config.node_position(update.node_id);
-            let size = config.node_size(lod);
-            let position = UVec2::new(x, y) * size;
-
-            if update.atlas_id == NodeAtlas::INACTIVE_ID {
-                data.retain(|item| !(item.position == position && item.size == size));
-            } else {
-                let color = match lod {
-                    0 => Color::RED.into(),
-                    1 => Color::BLUE.into(),
-                    2 => Color::GREEN.into(),
-                    _ => Color::BLACK.into(),
-                };
-                data.push(TileData {
-                    position,
-                    size,
-                    range: 32.0,
-                    color,
-                });
-            }
-        }
-    }
-}
 
 #[derive(Default, Component, Inspectable)]
 pub struct TerrainDebugInfo {
