@@ -18,7 +18,7 @@ where
     let section_size = (config.chunk_size + 1) as u32;
 
     for lod in 0..config.lod_count {
-        let node_count = config.node_count(lod); // number of nodes per area
+        let node_count = config.nodes_per_area(lod); // number of nodes per area
         let node_size = config.node_size(lod); // offset in the source image
         let mapping = 1 << lod; // pixel to pixel ratio
 

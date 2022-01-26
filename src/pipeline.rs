@@ -1,3 +1,4 @@
+use crate::compute::{GpuTerrain, TerrainAsset};
 use crate::material::{SetTerrainMaterialBindGroup, TerrainMaterial};
 use bevy::{
     core_pipeline::Opaque3d,
@@ -191,19 +192,29 @@ pub(crate) struct DrawTerrainCommand;
 impl EntityRenderCommand for DrawTerrainCommand {
     type Param = (
         SRes<RenderAssets<Mesh>>,
-        SQuery<(Read<GpuTerrainData>, Read<Handle<Mesh>>)>,
+        SRes<RenderAssets<TerrainAsset>>,
+        SQuery<(
+            Read<GpuTerrainData>,
+            Read<Handle<Mesh>>,
+            Read<Handle<TerrainAsset>>,
+        )>,
     );
     #[inline]
     fn render<'w>(
         _view: Entity,
         item: Entity,
-        (meshes, terrain_query): SystemParamItem<'w, '_, Self::Param>,
+        (meshes, terrain_assets, terrain_query): SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let (terrain_buffer, mesh) = terrain_query.get(item).unwrap();
+        let (terrain_buffer, mesh, terrain_asset) = terrain_query.get(item).unwrap();
 
         let gpu_mesh = match meshes.into_inner().get(mesh) {
             Some(gpu_mesh) => gpu_mesh,
+            None => return RenderCommandResult::Failure,
+        };
+
+        let gpu_terrain: &GpuTerrain = match terrain_assets.into_inner().get(terrain_asset) {
+            Some(gpu_terrain) => gpu_terrain,
             None => return RenderCommandResult::Failure,
         };
 
@@ -217,7 +228,9 @@ impl EntityRenderCommand for DrawTerrainCommand {
                 count,
             } => {
                 pass.set_index_buffer(buffer.slice(..), 0, *index_format);
-                pass.draw_indexed(0..*count, 0, 0..terrain_buffer.length as u32);
+                pass.inner()
+                    .draw_indexed_indirect(&gpu_terrain.draw_patch_buffer, 0);
+                // pass.draw_indexed(0..*count, 0, 0..terrain_buffer.length as u32);
             }
             GpuBufferInfo::NonIndexed { vertex_count } => {
                 pass.draw_indexed(0..*vertex_count, 0, 0..terrain_buffer.length as u32);

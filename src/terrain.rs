@@ -2,12 +2,13 @@ use bevy::prelude::*;
 use itertools::{iproduct, Product};
 use std::ops::Range;
 
-#[derive(Debug, Component)]
+#[derive(Clone, Debug, Component)]
 pub struct TerrainConfig {
     pub lod_count: u32,
-    pub patch_count: u32,
     pub patch_size: u32,
+    pub patch_count: u32,
     pub chunk_size: u32,
+    pub chunk_count: UVec2,
     pub area_size: u32,
     pub area_count: UVec2,
     pub map_size: UVec2,
@@ -19,12 +20,14 @@ impl TerrainConfig {
         let patch_size = chunk_size / patch_count;
         let area_size = chunk_size * (1 << lod_count - 1);
         let map_size = area_count * area_size;
+        let chunk_count = area_count * (1 << lod_count - 1);
 
         Self {
             lod_count,
-            patch_count,
             patch_size,
+            patch_count,
             chunk_size,
+            chunk_count,
             area_size,
             area_count,
             map_size,
@@ -37,7 +40,12 @@ impl TerrainConfig {
     }
 
     #[inline]
-    pub fn node_count(&self, lod: u32) -> u32 {
+    pub fn nodes_count(&self, lod: u32) -> UVec2 {
+        self.area_count * self.nodes_per_area(lod)
+    }
+
+    #[inline]
+    pub fn nodes_per_area(&self, lod: u32) -> u32 {
         1 << self.lod_count - lod - 1
     }
 
