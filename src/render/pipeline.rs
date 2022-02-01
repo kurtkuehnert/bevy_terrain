@@ -1,4 +1,4 @@
-use crate::render::terrain_data::{SetTerrainDataBindGroup, TerrainData};
+use crate::render::render_data::{RenderData, SetTerrainDataBindGroup};
 use bevy::{
     core_pipeline::Opaque3d,
     ecs::{
@@ -28,7 +28,7 @@ pub(crate) fn queue_terrain(
     mut pipelines: ResMut<SpecializedPipelines<TerrainPipeline>>,
     mut pipeline_cache: ResMut<RenderPipelineCache>,
     mut view_query: Query<&mut RenderPhase<Opaque3d>>,
-    terrain_query: Query<(Entity, &Handle<Mesh>), With<Handle<TerrainData>>>,
+    terrain_query: Query<(Entity, &Handle<Mesh>), With<Handle<RenderData>>>,
 ) {
     let draw_function = draw_functions.read().get_id::<DrawTerrain>().unwrap();
 
@@ -62,7 +62,7 @@ impl FromWorld for TerrainPipeline {
         let render_device = world.get_resource::<RenderDevice>().unwrap();
         let asset_server = world.get_resource::<AssetServer>().unwrap();
         let mesh_pipeline = world.get_resource::<MeshPipeline>().unwrap().clone();
-        let terrain_data_layout = TerrainData::bind_group_layout(render_device);
+        let terrain_data_layout = RenderData::bind_group_layout(render_device);
         let shader = asset_server.load("shaders/terrain.wgsl");
 
         TerrainPipeline {
@@ -105,8 +105,8 @@ pub(crate) struct DrawTerrainCommand;
 impl EntityRenderCommand for DrawTerrainCommand {
     type Param = (
         SRes<RenderAssets<Mesh>>,
-        SRes<RenderAssets<TerrainData>>,
-        SQuery<(Read<Handle<Mesh>>, Read<Handle<TerrainData>>)>,
+        SRes<RenderAssets<RenderData>>,
+        SQuery<(Read<Handle<Mesh>>, Read<Handle<RenderData>>)>,
     );
     #[inline]
     fn render<'w>(
