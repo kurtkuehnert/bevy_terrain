@@ -1,14 +1,13 @@
+use crate::node_atlas::NodeAtlas;
 use crate::terrain::TerrainConfig;
 use bevy::{
     asset::{HandleId, LoadState},
-    math::Vec3Swizzles,
     prelude::*,
     utils::{HashMap, HashSet},
 };
 use bevy_inspector_egui::Inspectable;
 use itertools::iproduct;
 use lru::LruCache;
-use std::mem;
 
 /// Marks a camera as the viewer of the terrain.
 /// The view distance is a multiplier, which increases the amount of loaded nodes.
@@ -20,24 +19,24 @@ pub struct ViewDistance {
 
 impl Default for ViewDistance {
     fn default() -> Self {
-        Self { view_distance: 1.0 }
+        Self { view_distance: 4.0 }
     }
 }
 
 #[derive(Clone, Copy)]
 pub struct Viewer {
-    position: Vec2,
-    view_distance: f32,
+    pub(crate) position: Vec2,
+    pub(crate) view_distance: f32,
 }
 
 pub(crate) struct NodeData {
-    id: u32,
-    atlas_id: u16,
-    height_map: Handle<Image>,
+    pub(crate) id: u32,
+    pub(crate) atlas_index: u16,
+    pub(crate) height_map: Handle<Image>,
 }
 
 impl NodeData {
-    fn load(
+    pub(crate) fn load(
         id: u32,
         asset_server: &AssetServer,
         load_statuses: &mut HashMap<u32, LoadStatus>,
@@ -56,7 +55,7 @@ impl NodeData {
 
         Self {
             id,
-            atlas_id: NodeAtlas::INACTIVE_ID,
+            atlas_index: NodeAtlas::INACTIVE_ID,
             height_map,
         }
     }
@@ -64,7 +63,7 @@ impl NodeData {
 
 #[derive(Default)]
 pub(crate) struct LoadStatus {
-    finished: bool,
+    pub(crate) finished: bool,
 }
 
 /// Stores all information about the current nodes.
@@ -83,7 +82,7 @@ pub struct Nodes {
 }
 
 impl Nodes {
-    pub fn new(cache_size: usize) -> Self {
+    pub(crate) fn new(cache_size: usize) -> Self {
         Self {
             handle_mapping: Default::default(),
             load_statuses: Default::default(),
@@ -94,72 +93,23 @@ impl Nodes {
     }
 }
 
-pub(crate) struct NodeUpdate {
-    pub(crate) node_id: u32,
-    pub(crate) atlas_id: u16,
-}
-
-/// Maps the assets to the corresponding active nodes and tracks the node updates.
-#[derive(Component)]
-pub struct NodeAtlas {
-    pub(crate) height_maps: Vec<Handle<Image>>,
-    pub(crate) node_updates: Vec<NodeUpdate>,
-    pub(crate) available_ids: Vec<usize>,
-}
-
-impl NodeAtlas {
-    pub(crate) const INVALID_ID: u16 = u16::MAX;
-    pub(crate) const INACTIVE_ID: u16 = u16::MAX - 1;
-
-    pub fn new(atlas_size: usize) -> Self {
-        Self {
-            height_maps: vec![Handle::default(); atlas_size],
-            node_updates: vec![],
-            available_ids: (0..atlas_size).collect(),
-        }
-    }
-
-    fn add_node(&mut self, node: &mut NodeData) {
-        let atlas_id = self.available_ids.pop().expect("Out of atlas ids.");
-
-        self.height_maps[atlas_id] = node.height_map.as_weak();
-        node.atlas_id = atlas_id as u16;
-
-        self.node_updates.push(NodeUpdate {
-            node_id: node.id,
-            atlas_id: node.atlas_id,
-        });
-    }
-
-    fn remove_node(&mut self, node: &mut NodeData) {
-        self.available_ids.push(node.atlas_id as usize);
-
-        node.atlas_id = Self::INACTIVE_ID;
-
-        self.node_updates.push(NodeUpdate {
-            node_id: node.id,
-            atlas_id: node.atlas_id,
-        });
-    }
-}
-
 #[derive(Component)]
 pub struct TreeUpdate {
     /// Newly activated nodes since last traversal.
-    activated_nodes: HashSet<u32>,
+    pub(crate) activated_nodes: HashSet<u32>,
     /// Nodes that are no longer required and should be deactivated.
-    nodes_to_deactivate: Vec<u32>,
+    pub(crate) nodes_to_deactivate: Vec<u32>,
     /// Nodes that are required and should be loaded and scheduled for activation.
-    nodes_to_activate: Vec<u32>,
+    pub(crate) nodes_to_activate: Vec<u32>,
 }
 
 impl TreeUpdate {
-    pub fn new(config: &TerrainConfig) -> Self {
+    pub(crate) fn new(config: &TerrainConfig) -> Self {
         let lod = config.lod_count - 1;
 
         let nodes_to_activate = config
             .area_iter()
-            .map(|(x, y)| config.node_id(lod, x, y))
+            .map(|(x, y)| TerrainConfig::node_id(lod, x, y))
             .collect();
 
         Self {
@@ -188,7 +138,7 @@ struct TreeNode {
 
 impl TreeNode {
     fn new(config: &TerrainConfig, lod: u32, x: u32, y: u32) -> Self {
-        let id = config.node_id(lod, x, y);
+        let id = TerrainConfig::node_id(lod, x, y);
         let state = NodeState::Inactive;
         let size = config.node_size(lod) as f32;
         let position = Vec2::new(x as f32 * size, y as f32 * size);
@@ -256,7 +206,7 @@ pub struct Quadtree {
 }
 
 impl Quadtree {
-    pub fn new(config: &TerrainConfig) -> Self {
+    pub(crate) fn new(config: &TerrainConfig) -> Self {
         let lod = config.lod_count - 1;
 
         let nodes = match lod {
@@ -273,104 +223,9 @@ impl Quadtree {
         Self { nodes }
     }
 
-    fn traverse(&mut self, tree_update: &mut TreeUpdate, viewer: Viewer) {
+    pub(crate) fn traverse(&mut self, tree_update: &mut TreeUpdate, viewer: Viewer) {
         for node in &mut self.nodes {
             node.traverse(tree_update, viewer);
-        }
-    }
-}
-
-/// Traverses all quadtrees and generates a new tree update.
-pub fn traverse_quadtree(
-    viewer_query: Query<(&GlobalTransform, &ViewDistance), With<Camera>>,
-    mut terrain_query: Query<(&GlobalTransform, &mut Quadtree, &mut TreeUpdate)>,
-) {
-    for (terrain_transform, mut quadtree, mut tree_update) in terrain_query.iter_mut() {
-        for (camera_transform, view_distance) in viewer_query.iter() {
-            let viewer = Viewer {
-                position: (camera_transform.translation - terrain_transform.translation).xz(),
-                view_distance: view_distance.view_distance,
-            };
-
-            quadtree.traverse(&mut tree_update, viewer);
-        }
-    }
-}
-
-/// Updates the nodes and the node atlas according to the corresponding tree update
-/// and the load statuses.
-pub fn update_nodes(
-    asset_server: Res<AssetServer>,
-    mut terrain_query: Query<(&mut TreeUpdate, &mut Nodes, &mut NodeAtlas)>,
-) {
-    for (mut tree_update, mut nodes, mut node_atlas) in terrain_query.iter_mut() {
-        let Nodes {
-            ref mut handle_mapping,
-            ref mut load_statuses,
-            ref mut loading_nodes,
-            ref mut inactive_nodes,
-            ref mut active_nodes,
-        } = nodes.as_mut();
-
-        // clear the previously activated nodes
-        tree_update.activated_nodes.clear();
-        node_atlas.node_updates.clear();
-
-        let mut nodes_to_activate: Vec<NodeData> = Vec::new();
-
-        // load required nodes from cache or disk
-        for id in mem::take(&mut tree_update.nodes_to_activate) {
-            if let Some(node) = inactive_nodes.pop(&id) {
-                // queue cached node for activation
-                nodes_to_activate.push(node);
-            } else {
-                // load node before activation
-                loading_nodes.insert(
-                    id,
-                    NodeData::load(id, &asset_server, load_statuses, handle_mapping),
-                );
-            };
-        }
-
-        // queue all nodes that have finished loading for activation
-        load_statuses.retain(|&id, status| {
-            if status.finished {
-                nodes_to_activate.push(loading_nodes.remove(&id).unwrap());
-            }
-
-            !status.finished
-        });
-
-        // deactivate all no longer required nodes
-        for id in mem::take(&mut tree_update.nodes_to_deactivate) {
-            let mut node = active_nodes.remove(&id).unwrap();
-            node_atlas.remove_node(&mut node);
-            inactive_nodes.put(id, node);
-        }
-
-        // activate as many nodes as there are available atlas ids
-        for mut node in nodes_to_activate {
-            node_atlas.add_node(&mut node);
-            tree_update.activated_nodes.insert(node.id);
-            active_nodes.insert(node.id, node);
-        }
-    }
-}
-
-/// Updates the load status of a node for all of it newly loaded assets.
-pub fn update_load_status(
-    mut asset_events: EventReader<AssetEvent<Image>>,
-    mut terrain_query: Query<&mut Nodes>,
-) {
-    for event in asset_events.iter() {
-        if let AssetEvent::Created { handle } = event {
-            for mut nodes in terrain_query.iter_mut() {
-                if let Some(id) = nodes.handle_mapping.remove(&handle.id) {
-                    let status = nodes.load_statuses.get_mut(&id).unwrap();
-                    status.finished = true;
-                    break;
-                }
-            }
         }
     }
 }

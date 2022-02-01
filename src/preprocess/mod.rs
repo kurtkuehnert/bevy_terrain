@@ -27,7 +27,7 @@ where
             0..node_count * config.area_count.y,
             0..node_count * config.area_count.x
         ) {
-            let node_id = config.node_id(lod, x, y);
+            let node_id = TerrainConfig::node_id(lod, x, y);
             let section =
                 sample_section(source, x * node_size, y * node_size, section_size, mapping);
 

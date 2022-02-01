@@ -1,4 +1,4 @@
-use crate::{quadtree::NodeAtlas, render::pipeline::TerrainPipeline, terrain::TerrainConfig};
+use crate::render::pipeline::TerrainPipeline;
 use bevy::{
     ecs::system::{
         lifetimeless::{Read, SQuery, SRes},
@@ -17,7 +17,6 @@ use bevy::{
         renderer::{RenderDevice, RenderQueue},
     },
 };
-use std::{num::NonZeroU32, ops::Deref};
 
 #[derive(Clone, Copy, Debug, AsStd430)]
 #[repr(C)]
@@ -33,23 +32,21 @@ struct TerrainUniformData {
     height: f32,
 }
 
-#[derive(Debug, Clone, TypeUuid)]
-#[uuid = "32a1cd80-cef4-4534-b0ec-bc3a3d0800a9"]
-pub struct TerrainData {
-    // Todo: consider terrain resources rename
-    pub config: TerrainConfig,
-    pub height_texture: Handle<Image>, // Todo: replace in favor of the node atlas
-}
-
-pub struct GpuTerrainData {
-    pub(crate) quadtree_texture: Texture,
+// Todo: consider terrain resources rename
+pub struct GpuRenderData {
     pub(crate) draw_indirect_buffer: Buffer,
-    pub(crate) patch_buffer: Buffer,
-    pub(crate) terrain_uniform_buffer: Buffer,
+    pub(crate) _patch_buffer: Buffer,
+    pub(crate) _terrain_uniform_buffer: Buffer,
     pub(crate) bind_group: BindGroup,
 }
 
-impl TerrainData {
+#[derive(Debug, Clone, TypeUuid)]
+#[uuid = "32a1cd80-cef4-4534-b0ec-bc3a3d0800a9"]
+pub struct RenderData {
+    pub height_texture: Handle<Image>, // Todo: replace in favor of the node atlas
+}
+
+impl RenderData {
     pub(crate) fn bind_group_layout(render_device: &RenderDevice) -> BindGroupLayout {
         render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
             entries: &[
@@ -99,66 +96,11 @@ impl TerrainData {
             label: Some("terrain_data_layout"),
         })
     }
-
-    fn create_quadtree_texture(&mut self, device: &RenderDevice, queue: &RenderQueue) -> Texture {
-        let config = &self.config;
-
-        let texture_descriptor = TextureDescriptor {
-            label: None,
-            size: Extent3d {
-                width: config.chunk_count.x,
-                height: config.chunk_count.y,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: config.lod_count, // one mip level per lod
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            // only r16 required, but storage textures only support r32 https://www.w3.org/TR/WGSL/#texel-formats
-            format: TextureFormat::R32Uint,
-            usage: TextureUsages::COPY_DST | TextureUsages::STORAGE_BINDING,
-        };
-
-        let quadtree_texture = device.create_texture(&texture_descriptor);
-
-        // Todo: generate data all at once and only specify the offset
-        // use https://docs.rs/wgpu/latest/wgpu/util/trait.DeviceExt.html#tymethod.create_buffer_init
-
-        for lod in 0..config.lod_count {
-            let node_count = config.nodes_count(lod);
-
-            let texture = ImageCopyTextureBase {
-                texture: quadtree_texture.deref(),
-                mip_level: lod,
-                origin: Origin3d::ZERO,
-                aspect: TextureAspect::All, // Todo: ?
-            };
-
-            let data_layout = ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(NonZeroU32::try_from(node_count.x * 4).unwrap()),
-                rows_per_image: Some(NonZeroU32::try_from(node_count.y).unwrap()),
-            };
-
-            let size = Extent3d {
-                width: node_count.x,
-                height: node_count.y,
-                depth_or_array_layers: 1,
-            };
-
-            let data: Vec<u32> = (0..node_count.x * node_count.y)
-                .map(|_| NodeAtlas::INACTIVE_ID as u32)
-                .collect();
-
-            queue.write_texture(texture, bytemuck::cast_slice(&data), data_layout, size);
-        }
-
-        quadtree_texture
-    }
 }
 
-impl RenderAsset for TerrainData {
-    type ExtractedAsset = TerrainData;
-    type PreparedAsset = GpuTerrainData;
+impl RenderAsset for RenderData {
+    type ExtractedAsset = RenderData;
+    type PreparedAsset = GpuRenderData;
     type Param = (
         SRes<RenderDevice>,
         SRes<RenderQueue>,
@@ -171,12 +113,10 @@ impl RenderAsset for TerrainData {
     }
 
     fn prepare_asset(
-        mut terrain: Self::ExtractedAsset,
+        terrain: Self::ExtractedAsset,
         (device, queue, pipeline, gpu_images): &mut SystemParamItem<Self::Param>,
     ) -> Result<Self::PreparedAsset, PrepareAssetError<Self::ExtractedAsset>> {
         println!("init gpu terrain");
-
-        let quadtree_texture = terrain.create_quadtree_texture(&device, &queue);
 
         let buffer_descriptor = BufferDescriptor {
             label: None,
@@ -266,12 +206,11 @@ impl RenderAsset for TerrainData {
             layout: &pipeline.terrain_data_layout,
         });
 
-        Ok(GpuTerrainData {
+        Ok(GpuRenderData {
             bind_group,
-            terrain_uniform_buffer,
-            quadtree_texture,
+            _terrain_uniform_buffer: terrain_uniform_buffer,
             draw_indirect_buffer,
-            patch_buffer,
+            _patch_buffer: patch_buffer,
         })
     }
 }
@@ -280,8 +219,8 @@ pub struct SetTerrainDataBindGroup<const I: usize>;
 
 impl<const I: usize> EntityRenderCommand for SetTerrainDataBindGroup<I> {
     type Param = (
-        SRes<RenderAssets<TerrainData>>,
-        SQuery<Read<Handle<TerrainData>>>,
+        SRes<RenderAssets<RenderData>>,
+        SQuery<Read<Handle<RenderData>>>,
     );
     #[inline]
     fn render<'w>(

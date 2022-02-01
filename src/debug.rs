@@ -1,4 +1,5 @@
-use crate::quadtree::{NodeAtlas, Nodes};
+use crate::node_atlas::NodeAtlas;
+use crate::quadtree::Nodes;
 use bevy::prelude::*;
 use bevy_inspector_egui::Inspectable;
 

@@ -57,11 +57,11 @@ impl TerrainConfig {
 
     /// Calculates a unique identifier for the node at the specified position.
     /// These ids encode the position into 32 bits.
-    pub fn node_id(&self, lod: u32, x: u32, y: u32) -> u32 {
+    pub fn node_id(lod: u32, x: u32, y: u32) -> u32 {
         (lod & 0xF) << 28 | (x & 0x3FFF) << 14 | (y & 0x3FFF)
     }
 
-    pub fn node_position(&self, id: u32) -> (u32, u32, u32) {
+    pub fn node_position(id: u32) -> (u32, u32, u32) {
         ((id >> 28) & 0xF, (id >> 14) & 0x3FFF, id & 0x3FFF)
     }
 }
@@ -72,8 +72,8 @@ mod tests {
         let config = TerrainConfig::new(128, 3, UVec2::new(2, 2));
 
         for (lod1, x1, y1) in iproduct!(0..3, 0..8, 0..8) {
-            let id = config.node_id(lod1, x1, y1);
-            let (lod2, x2, y2) = config.node_position(id);
+            let id = TerrainConfig::node_id(lod1, x1, y1);
+            let (lod2, x2, y2) = TerrainConfig::node_position(id);
 
             assert_eq!(lod1, lod2);
             assert_eq!(x1, x2);
