@@ -19,9 +19,9 @@ impl TerrainConfig {
     pub fn new(chunk_size: u32, lod_count: u32, area_count: UVec2) -> Self {
         let patch_count = 8;
         let patch_size = chunk_size / patch_count;
-        let area_size = chunk_size * (1 << lod_count - 1);
+        let area_size = chunk_size * (1 << (lod_count - 1));
         let map_size = area_count * area_size;
-        let chunk_count = area_count * (1 << lod_count - 1);
+        let chunk_count = area_count * (1 << (lod_count - 1));
 
         Self {
             lod_count,
@@ -47,12 +47,12 @@ impl TerrainConfig {
 
     #[inline]
     pub fn nodes_per_area(&self, lod: u32) -> u32 {
-        1 << self.lod_count - lod - 1
+        1 << (self.lod_count - lod - 1)
     }
 
     #[inline]
     pub fn node_size(&self, lod: u32) -> u32 {
-        self.chunk_size * 1 << lod
+        self.chunk_size * (1 << lod)
     }
 
     /// Calculates a unique identifier for the node at the specified position.

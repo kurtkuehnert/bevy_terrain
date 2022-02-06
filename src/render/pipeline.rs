@@ -1,4 +1,6 @@
+use crate::compute::{SetPreparationDataBindGroup, NODE_BUFFER_LAYOUT};
 use crate::render::render_data::{RenderData, SetTerrainDataBindGroup};
+use crate::{PreparationData, TerrainComputePipeline};
 use bevy::{
     core_pipeline::Opaque3d,
     ecs::{
@@ -54,6 +56,7 @@ pub(crate) fn queue_terrain(
 pub struct TerrainPipeline {
     pub(crate) mesh_pipeline: MeshPipeline,
     pub(crate) terrain_data_layout: BindGroupLayout,
+    pub(crate) node_buffer_layout: BindGroupLayout,
     pub(crate) shader: Handle<Shader>,
 }
 
@@ -64,10 +67,12 @@ impl FromWorld for TerrainPipeline {
         let mesh_pipeline = world.get_resource::<MeshPipeline>().unwrap().clone();
         let terrain_data_layout = RenderData::bind_group_layout(render_device);
         let shader = asset_server.load("shaders/terrain.wgsl");
+        let node_buffer_layout = render_device.create_bind_group_layout(&NODE_BUFFER_LAYOUT);
 
         TerrainPipeline {
             mesh_pipeline,
             terrain_data_layout,
+            node_buffer_layout,
             shader,
         }
     }
@@ -84,6 +89,7 @@ impl SpecializedPipeline for TerrainPipeline {
             self.mesh_pipeline.view_layout.clone(),
             self.mesh_pipeline.mesh_layout.clone(),
             self.terrain_data_layout.clone(),
+            self.node_buffer_layout.clone(),
         ]);
 
         descriptor
@@ -97,6 +103,7 @@ pub(crate) type DrawTerrain = (
     SetMeshViewBindGroup<0>,
     SetMeshBindGroup<1>,
     SetTerrainDataBindGroup<2>,
+    SetPreparationDataBindGroup<3>,
     DrawTerrainCommand,
 );
 
@@ -106,24 +113,38 @@ impl EntityRenderCommand for DrawTerrainCommand {
     type Param = (
         SRes<RenderAssets<Mesh>>,
         SRes<RenderAssets<RenderData>>,
-        SQuery<(Read<Handle<Mesh>>, Read<Handle<RenderData>>)>,
+        SRes<RenderAssets<PreparationData>>,
+        SQuery<(
+            Read<Handle<Mesh>>,
+            Read<Handle<RenderData>>,
+            Read<Handle<PreparationData>>,
+        )>,
     );
     #[inline]
     fn render<'w>(
         _view: Entity,
         item: Entity,
-        (meshes, terrain_data, terrain_query): SystemParamItem<'w, '_, Self::Param>,
+        (meshes, terrain_data, preparation_data, terrain_query): SystemParamItem<
+            'w,
+            '_,
+            Self::Param,
+        >,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let (mesh, handle) = terrain_query.get(item).unwrap();
+        let (mesh, terrain_handle, preparation_handle) = terrain_query.get(item).unwrap();
 
         let gpu_mesh = match meshes.into_inner().get(mesh) {
             Some(gpu_mesh) => gpu_mesh,
             None => return RenderCommandResult::Failure,
         };
 
-        let gpu_terrain_data = match terrain_data.into_inner().get(handle) {
+        let gpu_terrain_data = match terrain_data.into_inner().get(terrain_handle) {
             Some(gpu_terrain) => gpu_terrain,
+            None => return RenderCommandResult::Failure,
+        };
+
+        let gpu_preparation_data = match preparation_data.into_inner().get(preparation_handle) {
+            Some(gpu_preparation_data) => gpu_preparation_data,
             None => return RenderCommandResult::Failure,
         };
 
@@ -136,7 +157,7 @@ impl EntityRenderCommand for DrawTerrainCommand {
                 pass.set_vertex_buffer(0, gpu_mesh.vertex_buffer.slice(..));
                 pass.set_index_buffer(buffer.slice(..), 0, *index_format);
                 pass.inner()
-                    .draw_indexed_indirect(&gpu_terrain_data.draw_indirect_buffer, 0);
+                    .draw_indexed_indirect(&gpu_preparation_data.indirect_buffer, 0);
 
                 RenderCommandResult::Success
             }

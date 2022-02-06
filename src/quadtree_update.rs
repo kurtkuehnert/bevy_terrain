@@ -35,6 +35,7 @@ impl ExtractComponent for QuadtreeUpdate {
 #[derive(Component)]
 pub struct GpuQuadtreeUpdate(pub(crate) Vec<(u32, BindGroup)>);
 
+// Todo: change to prepare
 pub(crate) fn queue_quadtree_update(
     mut commands: Commands,
     mut device: ResMut<RenderDevice>,
@@ -65,7 +66,7 @@ pub(crate) fn queue_quadtree_update(
 
                 let bind_group = device.create_bind_group(&BindGroupDescriptor {
                     label: None,
-                    layout: &pipeline.quadtree_update_bind_group_layout,
+                    layout: &pipeline.update_quadtree_bind_group_layout,
                     entries: &[
                         BindGroupEntry {
                             binding: 0,
