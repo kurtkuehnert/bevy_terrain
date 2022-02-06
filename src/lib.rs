@@ -54,11 +54,11 @@ impl Plugin for TerrainPlugin {
         let render_app = app
             .sub_app_mut(RenderApp)
             .add_render_command::<Opaque3d, DrawTerrain>()
+            .init_resource::<TerrainComputePipeline>()
+            .add_system_to_stage(RenderStage::Queue, queue_quadtree_update)
             .init_resource::<TerrainPipeline>()
             .init_resource::<SpecializedPipelines<TerrainPipeline>>()
-            .add_system_to_stage(RenderStage::Queue, queue_terrain)
-            .init_resource::<TerrainComputePipeline>()
-            .add_system_to_stage(RenderStage::Queue, queue_quadtree_update);
+            .add_system_to_stage(RenderStage::Queue, queue_terrain);
 
         let compute_node = TerrainComputeNode::from_world(&mut render_app.world);
 
