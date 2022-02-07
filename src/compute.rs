@@ -22,15 +22,11 @@ use std::ops::Deref;
 
 pub struct GpuPreparationData {
     pub(crate) lod_count: usize,
-    pub(crate) quadtree_texture: Texture,
     pub(crate) quadtree_data: Vec<(BufferVec<NodeUpdate>, TextureView)>,
-    pub(crate) node_temp_buffers: [Buffer; 2],
-    pub(crate) node_final_buffer: Buffer,
-    pub(crate) parameter_buffer: Buffer,
     pub(crate) indirect_buffer: Buffer,
-    pub(crate) config_uniform: Buffer,
     pub(crate) node_buffer_bind_groups: [BindGroup; 2],
     pub(crate) node_parameter_bind_group: BindGroup,
+    pub(crate) patch_buffer_bind_group: BindGroup,
 }
 
 #[derive(Debug, Clone, TypeUuid)]
@@ -95,7 +91,7 @@ impl PreparationData {
     }
 
     fn create_node_buffers(&mut self, device: &RenderDevice) -> ([Buffer; 2], Buffer) {
-        let max_node_count = self.config.chunk_count.x * self.config.chunk_count.x;
+        let max_node_count = self.config.chunk_count.x * self.config.chunk_count.y;
 
         let buffer_descriptor = BufferDescriptor {
             label: None,
@@ -112,11 +108,28 @@ impl PreparationData {
             device.create_buffer(&buffer_descriptor),
         )
     }
+
+    fn create_patch_buffer(&mut self, device: &RenderDevice) -> Buffer {
+        let max_patch_count = self.config.chunk_count.x
+            * self.config.chunk_count.y
+            * self.config.patch_count
+            * self.config.patch_count;
+
+        let buffer_descriptor = BufferDescriptor {
+            label: None,
+            size: PATCH_SIZE * max_patch_count as BufferAddress,
+            usage: BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        };
+
+        device.create_buffer(&buffer_descriptor)
+    }
 }
 
 const INDIRECT_BUFFER_SIZE: BufferAddress = 5 * mem::size_of::<u32>() as BufferAddress;
 const PARAMETER_BUFFER_SIZE: BufferAddress = 4 * mem::size_of::<u32>() as BufferAddress; // minimum buffer size = 16
 const CONFIG_BUFFER_SIZE: BufferAddress = 4 * mem::size_of::<u32>() as BufferAddress;
+const PATCH_SIZE: BufferAddress = 6 * mem::size_of::<u32>() as BufferAddress;
 
 const UPDATE_QUADTREE_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
     label: None,
@@ -233,6 +246,41 @@ const NODE_PARAMETER_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescript
         },
     ],
 };
+pub const PATCH_BUFFER_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
+    label: None,
+    entries: &[
+        BindGroupLayoutEntry {
+            binding: 0,
+            visibility: ShaderStages::COMPUTE,
+            ty: BindingType::Texture {
+                sample_type: TextureSampleType::Uint,
+                view_dimension: TextureViewDimension::D2,
+                multisampled: false,
+            },
+            count: None,
+        },
+        BindGroupLayoutEntry {
+            binding: 1,
+            visibility: ShaderStages::COMPUTE,
+            ty: BindingType::Buffer {
+                ty: BufferBindingType::Storage { read_only: false },
+                has_dynamic_offset: false,
+                min_binding_size: BufferSize::new(mem::size_of::<u32>() as u64),
+            },
+            count: None,
+        },
+        BindGroupLayoutEntry {
+            binding: 2,
+            visibility: ShaderStages::all(),
+            ty: BindingType::Buffer {
+                ty: BufferBindingType::Storage { read_only: false },
+                has_dynamic_offset: false,
+                min_binding_size: BufferSize::new(PATCH_SIZE),
+            },
+            count: None,
+        },
+    ],
+};
 
 impl RenderAsset for PreparationData {
     type ExtractedAsset = PreparationData;
@@ -254,6 +302,8 @@ impl RenderAsset for PreparationData {
         let quadtree_texture = preparation.create_quadtree_texture(&device, &queue);
 
         let (node_temp_buffers, node_final_buffer) = preparation.create_node_buffers(device);
+
+        let patch_buffer = preparation.create_patch_buffer(device);
 
         let config = &preparation.config;
 
@@ -387,17 +437,32 @@ impl RenderAsset for PreparationData {
             })
             .collect();
 
+        let patch_buffer_bind_group = device.create_bind_group(&BindGroupDescriptor {
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: BindingResource::TextureView(&quadtree_view),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: node_final_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 2,
+                    resource: patch_buffer.as_entire_binding(),
+                },
+            ],
+            label: None,
+            layout: &pipeline.patch_buffer_bind_group_layout,
+        });
+
         Ok(GpuPreparationData {
             lod_count: config.lod_count as usize,
-            quadtree_texture,
             quadtree_data,
-            node_temp_buffers,
-            node_final_buffer,
-            parameter_buffer,
             indirect_buffer,
-            config_uniform,
             node_buffer_bind_groups,
             node_parameter_bind_group,
+            patch_buffer_bind_group,
         })
     }
 }
@@ -406,6 +471,7 @@ pub struct TerrainComputePipeline {
     pub(crate) update_quadtree_bind_group_layout: BindGroupLayout,
     pub(crate) node_buffer_bind_group_layout: BindGroupLayout,
     pub(crate) node_parameter_bind_group_layout: BindGroupLayout,
+    pub(crate) patch_buffer_bind_group_layout: BindGroupLayout,
     pub(crate) update_quadtree_pipeline: ComputePipeline,
     pub(crate) build_area_list_pipeline: ComputePipeline,
     pub(crate) build_node_list_pipeline: ComputePipeline,
@@ -413,6 +479,8 @@ pub struct TerrainComputePipeline {
     pub(crate) reset_node_list_pipeline: ComputePipeline,
     pub(crate) prepare_next_node_list_pipeline: ComputePipeline,
     pub(crate) prepare_render_node_list_pipeline: ComputePipeline,
+    pub(crate) build_patch_list_pipeline: ComputePipeline,
+    pub(crate) prepare_patch_list_pipeline: ComputePipeline,
 }
 
 impl TerrainComputePipeline {
@@ -481,7 +549,12 @@ impl TerrainComputePipeline {
     fn create_update_node_list_pipelines(
         device: &RenderDevice,
         bind_group_layout: &BindGroupLayout,
-    ) -> (ComputePipeline, ComputePipeline, ComputePipeline) {
+    ) -> (
+        ComputePipeline,
+        ComputePipeline,
+        ComputePipeline,
+        ComputePipeline,
+    ) {
         let shader_source = include_str!("../../../assets/shaders/update_node_list.wgsl");
         let shader = device.create_shader_module(&ShaderModuleDescriptor {
             label: None,
@@ -511,9 +584,39 @@ impl TerrainComputePipeline {
                 label: None,
                 layout: Some(&pipeline_layout),
                 module: &shader,
+                entry_point: "prepare_patch",
+            }),
+            device.create_compute_pipeline(&ComputePipelineDescriptor {
+                label: None,
+                layout: Some(&pipeline_layout),
+                module: &shader,
                 entry_point: "prepare_render",
             }),
         )
+    }
+
+    fn create_build_patch_list_pipeline(
+        device: &RenderDevice,
+        bind_group_layout: &BindGroupLayout,
+    ) -> ComputePipeline {
+        let shader_source = include_str!("../../../assets/shaders/build_patch_list.wgsl");
+        let shader = device.create_shader_module(&ShaderModuleDescriptor {
+            label: None,
+            source: ShaderSource::Wgsl(shader_source.into()),
+        });
+
+        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[bind_group_layout],
+            push_constant_ranges: &[],
+        });
+
+        device.create_compute_pipeline(&ComputePipelineDescriptor {
+            label: None,
+            layout: Some(&pipeline_layout),
+            module: &shader,
+            entry_point: "build_patch_list",
+        })
     }
 }
 
@@ -526,6 +629,7 @@ impl FromWorld for TerrainComputePipeline {
         let node_buffer_bind_group_layout = device.create_bind_group_layout(&NODE_BUFFER_LAYOUT);
         let node_parameter_bind_group_layout =
             device.create_bind_group_layout(&NODE_PARAMETER_LAYOUT);
+        let patch_buffer_bind_group_layout = device.create_bind_group_layout(&PATCH_BUFFER_LAYOUT);
 
         let update_quadtree_pipeline = TerrainComputePipeline::create_update_quadtree_pipeline(
             device,
@@ -538,9 +642,15 @@ impl FromWorld for TerrainComputePipeline {
                 &node_buffer_bind_group_layout,
             );
 
+        let build_patch_list_pipeline = TerrainComputePipeline::create_build_patch_list_pipeline(
+            device,
+            &patch_buffer_bind_group_layout,
+        );
+
         let (
             reset_node_list_pipeline,
             prepare_next_node_list_pipeline,
+            prepare_patch_list_pipeline,
             prepare_render_node_list_pipeline,
         ) = TerrainComputePipeline::create_update_node_list_pipelines(
             device,
@@ -551,6 +661,7 @@ impl FromWorld for TerrainComputePipeline {
             update_quadtree_bind_group_layout,
             node_buffer_bind_group_layout,
             node_parameter_bind_group_layout,
+            patch_buffer_bind_group_layout,
             update_quadtree_pipeline,
             build_area_list_pipeline,
             build_node_list_pipeline,
@@ -558,6 +669,8 @@ impl FromWorld for TerrainComputePipeline {
             reset_node_list_pipeline,
             prepare_next_node_list_pipeline,
             prepare_render_node_list_pipeline,
+            prepare_patch_list_pipeline,
+            build_patch_list_pipeline,
         }
     }
 }
@@ -640,6 +753,14 @@ impl render_graph::Node for TerrainComputeNode {
             pass.dispatch_indirect(&gpu_preparation_data.indirect_buffer, 0);
 
             pass.set_bind_group(0, &gpu_preparation_data.node_parameter_bind_group, &[]);
+            pass.set_pipeline(&pipeline.prepare_patch_list_pipeline);
+            pass.dispatch(1, 1, 1);
+
+            pass.set_bind_group(0, &gpu_preparation_data.patch_buffer_bind_group, &[]);
+            pass.set_pipeline(&pipeline.build_patch_list_pipeline);
+            pass.dispatch_indirect(&gpu_preparation_data.indirect_buffer, 0);
+
+            pass.set_bind_group(0, &gpu_preparation_data.node_parameter_bind_group, &[]);
             pass.set_pipeline(&pipeline.prepare_render_node_list_pipeline);
             pass.dispatch(1, 1, 1);
         }
@@ -670,7 +791,7 @@ impl<const I: usize> EntityRenderCommand for SetPreparationDataBindGroup<I> {
             None => return RenderCommandResult::Failure,
         };
 
-        pass.set_bind_group(I, &gpu_preparation_data.node_buffer_bind_groups[0], &[]);
+        pass.set_bind_group(I, &gpu_preparation_data.patch_buffer_bind_group, &[]);
 
         RenderCommandResult::Success
     }

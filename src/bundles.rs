@@ -41,9 +41,9 @@ impl TerrainBundle {
             quadtree: Quadtree::new(&config),
             tree_update: TreeUpdate::new(&config),
             nodes: Nodes::new(16),
-            node_atlas: NodeAtlas::new(128),
+            node_atlas: NodeAtlas::new(12800),
             quadtree_update: QuadtreeUpdate::default(),
-            mesh: meshes.add(Tile::new(8, true).to_mesh()),
+            mesh: meshes.add(Tile::new(4, true).to_mesh()),
             terrain_data: terrain_data.add(RenderData { height_texture }),
             preparation_data: preparation_data.add(PreparationData { config }),
 
