@@ -1,5 +1,6 @@
-use crate::compute::{PreparationData, TerrainComputePipeline};
+use crate::render::preparation_pipeline::TerrainComputePipeline;
 use crate::terrain::TerrainConfig;
+use crate::PreparationData;
 use bevy::core::Pod;
 use bevy::core::Zeroable;
 use bevy::ecs::query::QueryItem;

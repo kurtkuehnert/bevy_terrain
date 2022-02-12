@@ -1,7 +1,45 @@
 use bevy::prelude::*;
-
+use bevy::render::render_resource::std140::AsStd140;
+use bevy::render::render_resource::{BufferAddress, BufferSize};
 use itertools::{iproduct, Product};
+use std::mem;
 use std::ops::Range;
+
+#[derive(Clone, Default, AsStd140)]
+pub(crate) struct TerrainConfigUniform {
+    lod_count: u32,
+    chunk_size: u32,
+    area_count: UVec2,
+    scale: f32,
+    height: f32,
+}
+
+impl From<TerrainConfig> for TerrainConfigUniform {
+    fn from(config: TerrainConfig) -> Self {
+        let TerrainConfig {
+            lod_count,
+            chunk_size,
+            area_count,
+            scale,
+            height,
+            ..
+        } = config;
+
+        Self {
+            lod_count,
+            chunk_size,
+            area_count,
+            scale,
+            height,
+        }
+    }
+}
+
+impl TerrainConfigUniform {
+    pub(crate) const fn buffer_size() -> BufferAddress {
+        mem::size_of::<<Self as AsStd140>::Output>() as BufferAddress
+    }
+}
 
 #[derive(Clone, Debug, Component)]
 pub struct TerrainConfig {
@@ -12,15 +50,23 @@ pub struct TerrainConfig {
     pub chunk_count: UVec2,
     pub area_size: u32,
     pub area_count: UVec2,
-    pub map_size: UVec2,
+    pub terrain_size: UVec2,
+    pub scale: f32,
+    pub height: f32,
 }
 
 impl TerrainConfig {
-    pub fn new(chunk_size: u32, lod_count: u32, area_count: UVec2) -> Self {
+    pub fn new(
+        chunk_size: u32,
+        lod_count: u32,
+        area_count: UVec2,
+        scale: f32,
+        height: f32,
+    ) -> Self {
         let patch_count = 8;
         let patch_size = chunk_size / patch_count;
         let area_size = chunk_size * (1 << (lod_count - 1));
-        let map_size = area_count * area_size;
+        let terrain_size = area_count * area_size;
         let chunk_count = area_count * (1 << (lod_count - 1));
 
         Self {
@@ -31,7 +77,9 @@ impl TerrainConfig {
             chunk_count,
             area_size,
             area_count,
-            map_size,
+            terrain_size,
+            scale,
+            height,
         }
     }
 
@@ -40,8 +88,9 @@ impl TerrainConfig {
         iproduct!(0..self.area_count.x, 0..self.area_count.y)
     }
 
+    // Todo: consider storing these values as constants in arrays for each lod
     #[inline]
-    pub fn nodes_count(&self, lod: u32) -> UVec2 {
+    pub fn node_count(&self, lod: u32) -> UVec2 {
         self.area_count * self.nodes_per_area(lod)
     }
 
