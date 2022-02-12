@@ -1,10 +1,10 @@
-use crate::compute::{PreparationData, TerrainComputeNode, TerrainComputePipeline};
 use crate::debug::{info, TerrainDebugInfo};
 use crate::quadtree::ViewDistance;
 use crate::quadtree_update::queue_quadtree_update;
+use crate::render::preparation_data::PreparationData;
 use crate::render::{
-    pipeline::{queue_terrain, DrawTerrain, TerrainPipeline},
-    render_data::RenderData,
+    terrain_data::TerrainData,
+    terrain_pipeline::{queue_terrain, DrawTerrain, TerrainPipeline},
 };
 use bevy::core_pipeline::node::MAIN_PASS_DEPENDENCIES;
 use bevy::render::render_graph::RenderGraph;
@@ -19,10 +19,10 @@ use bevy::{
 };
 use bevy_inspector_egui::RegisterInspectable;
 use quadtree_update::QuadtreeUpdate;
+use render::preparation_pipeline::{TerrainComputeNode, TerrainComputePipeline};
 use systems::{traverse_quadtree, update_load_status, update_nodes};
 
 pub mod bundles;
-pub mod compute;
 pub mod debug;
 pub mod node_atlas;
 pub mod preprocess;
@@ -38,11 +38,11 @@ impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
         register_inspectable(app);
 
-        app.add_asset::<RenderData>()
+        app.add_asset::<TerrainData>()
             .add_asset::<PreparationData>()
-            .add_plugin(RenderAssetPlugin::<RenderData>::default())
+            .add_plugin(RenderAssetPlugin::<TerrainData>::default())
             .add_plugin(RenderAssetPlugin::<PreparationData>::default())
-            .add_plugin(ExtractComponentPlugin::<Handle<RenderData>>::default())
+            .add_plugin(ExtractComponentPlugin::<Handle<TerrainData>>::default())
             .add_plugin(ExtractComponentPlugin::<Handle<PreparationData>>::default())
             .add_plugin(ExtractComponentPlugin::<QuadtreeUpdate>::default());
 

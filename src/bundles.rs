@@ -1,9 +1,10 @@
 use crate::node_atlas::NodeAtlas;
+use crate::render::preparation_data::PreparationData;
 use crate::render::tile::Tile;
 use crate::{
     quadtree::{Nodes, Quadtree, TreeUpdate},
     terrain::TerrainConfig,
-    PreparationData, QuadtreeUpdate, RenderData, TerrainDebugInfo,
+    QuadtreeUpdate, TerrainData, TerrainDebugInfo,
 };
 use bevy::{prelude::*, render::primitives::Aabb};
 
@@ -16,7 +17,7 @@ pub struct TerrainBundle {
     node_atlas: NodeAtlas,
     quadtree_update: QuadtreeUpdate,
     mesh: Handle<Mesh>,
-    terrain_data: Handle<RenderData>,
+    terrain_data: Handle<TerrainData>,
     preparation_data: Handle<PreparationData>,
 
     terrain_debug_info: TerrainDebugInfo,
@@ -32,7 +33,7 @@ impl TerrainBundle {
     pub fn new(
         config: TerrainConfig,
         meshes: &mut Assets<Mesh>,
-        terrain_data: &mut Assets<RenderData>,
+        terrain_data: &mut Assets<TerrainData>,
         preparation_data: &mut Assets<PreparationData>,
         height_texture: Handle<Image>,
     ) -> Self {
@@ -44,7 +45,10 @@ impl TerrainBundle {
             node_atlas: NodeAtlas::new(12800),
             quadtree_update: QuadtreeUpdate::default(),
             mesh: meshes.add(Tile::new(4, true).to_mesh()),
-            terrain_data: terrain_data.add(RenderData { height_texture }),
+            terrain_data: terrain_data.add(TerrainData {
+                config: config.clone(),
+                height_texture,
+            }),
             preparation_data: preparation_data.add(PreparationData { config }),
 
             terrain_debug_info: TerrainDebugInfo::default(),

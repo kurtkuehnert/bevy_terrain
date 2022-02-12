@@ -13,7 +13,7 @@ where
 
     let map_size: UVec2 = source.dimensions().into();
 
-    assert_eq!(map_size, config.map_size);
+    assert_eq!(map_size, config.terrain_size);
 
     let section_size = (config.chunk_size + 1) as u32;
 
