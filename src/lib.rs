@@ -1,11 +1,9 @@
 use crate::debug::{info, TerrainDebugInfo};
 use crate::quadtree::ViewDistance;
-use crate::quadtree_update::queue_quadtree_update;
-use crate::render::preparation_data::PreparationData;
-use crate::render::{
-    terrain_data::TerrainData,
-    terrain_pipeline::{queue_terrain, DrawTerrain, TerrainPipeline},
-};
+use crate::quadtree_update::prepare_quadtree_update;
+
+use crate::render::terrain_data::TerrainData;
+use crate::render::terrain_pipeline::{queue_terrain, DrawTerrain, TerrainPipeline};
 use bevy::core_pipeline::node::MAIN_PASS_DEPENDENCIES;
 use bevy::render::render_graph::RenderGraph;
 use bevy::{
@@ -39,11 +37,8 @@ impl Plugin for TerrainPlugin {
         register_inspectable(app);
 
         app.add_asset::<TerrainData>()
-            .add_asset::<PreparationData>()
             .add_plugin(RenderAssetPlugin::<TerrainData>::default())
-            .add_plugin(RenderAssetPlugin::<PreparationData>::default())
             .add_plugin(ExtractComponentPlugin::<Handle<TerrainData>>::default())
-            .add_plugin(ExtractComponentPlugin::<Handle<PreparationData>>::default())
             .add_plugin(ExtractComponentPlugin::<QuadtreeUpdate>::default());
 
         app.add_system(traverse_quadtree.before("update_nodes"))
@@ -55,9 +50,9 @@ impl Plugin for TerrainPlugin {
             .sub_app_mut(RenderApp)
             .add_render_command::<Opaque3d, DrawTerrain>()
             .init_resource::<TerrainComputePipeline>()
-            .add_system_to_stage(RenderStage::Queue, queue_quadtree_update)
             .init_resource::<TerrainPipeline>()
             .init_resource::<SpecializedPipelines<TerrainPipeline>>()
+            .add_system_to_stage(RenderStage::Prepare, prepare_quadtree_update)
             .add_system_to_stage(RenderStage::Queue, queue_terrain);
 
         let compute_node = TerrainComputeNode::from_world(&mut render_app.world);

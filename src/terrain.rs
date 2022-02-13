@@ -14,9 +14,9 @@ pub(crate) struct TerrainConfigUniform {
     height: f32,
 }
 
-impl From<TerrainConfig> for TerrainConfigUniform {
-    fn from(config: TerrainConfig) -> Self {
-        let TerrainConfig {
+impl From<&TerrainConfig> for TerrainConfigUniform {
+    fn from(config: &TerrainConfig) -> Self {
+        let &TerrainConfig {
             lod_count,
             chunk_size,
             area_count,

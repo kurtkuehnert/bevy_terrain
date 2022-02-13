@@ -1,8 +1,7 @@
 use crate::{
     quadtree_update::{GpuQuadtreeUpdate, NodeUpdate},
-    render::preparation_data::{
-        PreparationData, CONFIG_BUFFER_SIZE, INDIRECT_BUFFER_SIZE, PARAMETER_BUFFER_SIZE,
-        PATCH_SIZE,
+    render::terrain_data::{
+        TerrainData, CONFIG_BUFFER_SIZE, INDIRECT_BUFFER_SIZE, PARAMETER_BUFFER_SIZE, PATCH_SIZE,
     },
 };
 use bevy::{
@@ -377,7 +376,7 @@ impl FromWorld for TerrainComputePipeline {
 }
 
 pub struct TerrainComputeNode {
-    query: QueryState<(Read<GpuQuadtreeUpdate>, Read<Handle<PreparationData>>)>,
+    query: QueryState<(Read<GpuQuadtreeUpdate>, Read<Handle<TerrainData>>)>,
 }
 
 impl FromWorld for TerrainComputeNode {
@@ -400,9 +399,7 @@ impl render_graph::Node for TerrainComputeNode {
         world: &World,
     ) -> Result<(), render_graph::NodeRunError> {
         let pipeline = world.get_resource::<TerrainComputePipeline>().unwrap();
-        let preparation_data = world
-            .get_resource::<RenderAssets<PreparationData>>()
-            .unwrap();
+        let terrain_data = world.get_resource::<RenderAssets<TerrainData>>().unwrap();
 
         let mut pass = context
             .command_encoder
@@ -420,7 +417,7 @@ impl render_graph::Node for TerrainComputeNode {
                 pass.dispatch(*count, 1, 1);
             }
 
-            let gpu_preparation_data = preparation_data.get(handle).unwrap();
+            let gpu_preparation_data = terrain_data.get(handle).unwrap();
 
             pass.set_bind_group(0, &gpu_preparation_data.node_parameter_bind_group, &[]);
             pass.set_pipeline(&pipeline.reset_node_list_pipeline);

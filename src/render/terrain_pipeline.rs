@@ -1,6 +1,6 @@
-use crate::render::preparation_data::{PreparationData, PATCH_SIZE};
 use crate::render::preparation_pipeline::{NODE_BUFFER_LAYOUT, PATCH_BUFFER_LAYOUT};
-use crate::render::terrain_data::TerrainData;
+
+use crate::render::terrain_data::{TerrainData, PATCH_SIZE};
 use crate::terrain::TerrainConfigUniform;
 use crate::TerrainComputePipeline;
 use bevy::{
@@ -34,17 +34,6 @@ pub(crate) const TERRAIN_DATA_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayou
                 ty: BufferBindingType::Uniform,
                 has_dynamic_offset: false,
                 min_binding_size: BufferSize::new(TerrainConfigUniform::buffer_size()),
-            },
-            count: None,
-        },
-        // height texture
-        BindGroupLayoutEntry {
-            binding: 1,
-            visibility: ShaderStages::VERTEX,
-            ty: BindingType::Texture {
-                multisampled: false,
-                sample_type: TextureSampleType::Uint,
-                view_dimension: TextureViewDimension::D2,
             },
             count: None,
         },
@@ -126,17 +115,17 @@ pub(crate) struct DrawTerrainCommand;
 impl EntityRenderCommand for DrawTerrainCommand {
     type Param = (
         SRes<RenderAssets<Mesh>>,
-        SRes<RenderAssets<PreparationData>>,
-        SQuery<(Read<Handle<Mesh>>, Read<Handle<PreparationData>>)>,
+        SRes<RenderAssets<TerrainData>>,
+        SQuery<(Read<Handle<Mesh>>, Read<Handle<TerrainData>>)>,
     );
     #[inline]
     fn render<'w>(
         _view: Entity,
         item: Entity,
-        (meshes, preparation_data, terrain_query): SystemParamItem<'w, '_, Self::Param>,
+        (meshes, terrain_data, terrain_query): SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let (mesh, preparation_handle) = terrain_query.get(item).unwrap();
+        let (mesh, handle) = terrain_query.get(item).unwrap();
 
         let gpu_mesh = match meshes.into_inner().get(mesh) {
             Some(gpu_mesh) => gpu_mesh,
@@ -144,8 +133,8 @@ impl EntityRenderCommand for DrawTerrainCommand {
         };
 
         // Todo: consider moving the indirect buffer somewhere else
-        let gpu_preparation_data = match preparation_data.into_inner().get(preparation_handle) {
-            Some(gpu_preparation_data) => gpu_preparation_data,
+        let gpu_terrain_data = match terrain_data.into_inner().get(handle) {
+            Some(gpu_terrain_data) => gpu_terrain_data,
             None => return RenderCommandResult::Failure,
         };
 
@@ -158,7 +147,7 @@ impl EntityRenderCommand for DrawTerrainCommand {
                 pass.set_vertex_buffer(0, gpu_mesh.vertex_buffer.slice(..));
                 pass.set_index_buffer(buffer.slice(..), 0, *index_format);
                 pass.inner()
-                    .draw_indexed_indirect(&gpu_preparation_data.indirect_buffer, 0);
+                    .draw_indexed_indirect(&gpu_terrain_data.indirect_buffer, 0);
 
                 RenderCommandResult::Success
             }
@@ -187,7 +176,7 @@ impl<const I: usize> EntityRenderCommand for SetTerrainDataBindGroup<I> {
             None => return RenderCommandResult::Failure,
         };
 
-        pass.set_bind_group(I, &gpu_terrain_data.bind_group, &[]);
+        pass.set_bind_group(I, &gpu_terrain_data.terrain_data_bind_group, &[]);
 
         RenderCommandResult::Success
     }
@@ -197,24 +186,24 @@ pub struct SetPatchListBindGroup<const I: usize>;
 
 impl<const I: usize> EntityRenderCommand for SetPatchListBindGroup<I> {
     type Param = (
-        SRes<RenderAssets<PreparationData>>,
-        SQuery<Read<Handle<PreparationData>>>,
+        SRes<RenderAssets<TerrainData>>,
+        SQuery<Read<Handle<TerrainData>>>,
     );
 
     #[inline]
     fn render<'w>(
         _view: Entity,
         item: Entity,
-        (preparation_data, preparation_query): SystemParamItem<'w, '_, Self::Param>,
+        (terrain_data, terrain_query): SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let handle = preparation_query.get(item).unwrap();
-        let gpu_preparation_data = match preparation_data.into_inner().get(handle) {
-            Some(gpu_preparation_data) => gpu_preparation_data,
+        let handle = terrain_query.get(item).unwrap();
+        let gpu_terrain_data = match terrain_data.into_inner().get(handle) {
+            Some(gpu_terrain_data) => gpu_terrain_data,
             None => return RenderCommandResult::Failure,
         };
 
-        pass.set_bind_group(I, &gpu_preparation_data.patch_list_bind_group, &[]);
+        pass.set_bind_group(I, &gpu_terrain_data.patch_list_bind_group, &[]);
 
         RenderCommandResult::Success
     }
