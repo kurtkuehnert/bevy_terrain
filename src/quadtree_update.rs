@@ -1,6 +1,7 @@
 use crate::render::preparation_pipeline::TerrainComputePipeline;
+use crate::render::terrain_data::GpuTerrainData;
 use crate::terrain::TerrainConfig;
-use crate::PreparationData;
+use crate::TerrainData;
 use bevy::core::Pod;
 use bevy::core::Zeroable;
 use bevy::ecs::query::QueryItem;
@@ -36,20 +37,22 @@ impl ExtractComponent for QuadtreeUpdate {
 #[derive(Component)]
 pub struct GpuQuadtreeUpdate(pub(crate) Vec<(u32, BindGroup)>);
 
-// Todo: change to prepare
-pub(crate) fn queue_quadtree_update(
+pub(crate) fn prepare_quadtree_update(
     mut commands: Commands,
     mut device: ResMut<RenderDevice>,
     mut queue: ResMut<RenderQueue>,
     pipeline: Res<TerrainComputePipeline>,
-    preparation_data: ResMut<RenderAssets<PreparationData>>,
-    terrain_query: Query<(Entity, &QuadtreeUpdate, &Handle<PreparationData>)>,
+    terrain_data: ResMut<RenderAssets<TerrainData>>,
+    terrain_query: Query<(Entity, &QuadtreeUpdate, &Handle<TerrainData>)>,
 ) {
-    let preparation_data = preparation_data.into_inner();
+    let terrain_data = terrain_data.into_inner();
 
     for (entity, update, handle) in terrain_query.iter() {
-        let gpu_preparation_data = preparation_data.get_mut(handle).unwrap();
-        let quadtree_data = &mut gpu_preparation_data.quadtree_data;
+        let gpu_terrain_data = match terrain_data.get_mut(handle) {
+            None => continue,
+            Some(gpu_terrain_data) => gpu_terrain_data,
+        };
+        let quadtree_data = &mut gpu_terrain_data.quadtree_data;
 
         // insert the node update into the buffer corresponding to its lod
         update.0.iter().for_each(|&data| {
