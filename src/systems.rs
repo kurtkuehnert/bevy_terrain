@@ -4,8 +4,11 @@ use crate::{
     AssetEvent, AssetServer, Camera, EventReader, GlobalTransform, Image, QuadtreeUpdate, Query,
     Res, ViewDistance, With,
 };
+use bevy::asset::Assets;
 use bevy::math::Vec3Swizzles;
+use bevy::prelude::ResMut;
 use std::mem;
+use wgpu::TextureUsages;
 
 /// Traverses all quadtrees and generates a new tree update.
 pub fn traverse_quadtree(
@@ -63,7 +66,7 @@ pub fn update_nodes(
             };
         }
 
-        // queue all nodes that have finished loading for activation
+        // queue all nodes, that have finished loading, for activation
         load_statuses.retain(|&id, status| {
             if status.finished {
                 nodes_to_activate.push(loading_nodes.remove(&id).unwrap());
@@ -75,13 +78,13 @@ pub fn update_nodes(
         // deactivate all no longer required nodes
         for id in mem::take(&mut tree_update.nodes_to_deactivate) {
             let mut node = active_nodes.remove(&id).unwrap();
-            node_atlas.remove_node(&mut node, &mut node_updates.0);
+            node_atlas.deactivate_node(&mut node, &mut node_updates.0);
             inactive_nodes.put(id, node);
         }
 
-        // activate as many nodes as there are available atlas ids
+        // activate as all nodes ready for activation
         for mut node in nodes_to_activate {
-            node_atlas.add_node(&mut node, &mut node_updates.0);
+            node_atlas.activate_node(&mut node, &mut node_updates.0);
             tree_update.activated_nodes.insert(node.id);
             active_nodes.insert(node.id, node);
         }
@@ -91,12 +94,18 @@ pub fn update_nodes(
 /// Updates the load status of a node for all of it newly loaded assets.
 pub fn update_load_status(
     mut asset_events: EventReader<AssetEvent<Image>>,
+    mut images: ResMut<Assets<Image>>,
     mut terrain_query: Query<&mut Nodes>,
 ) {
     for event in asset_events.iter() {
         if let AssetEvent::Created { handle } = event {
             for mut nodes in terrain_query.iter_mut() {
                 if let Some(id) = nodes.handle_mapping.remove(&handle.id) {
+                    let image = images.get_mut(handle).unwrap();
+
+                    image.texture_descriptor.usage = TextureUsages::COPY_SRC
+                        | TextureUsages::COPY_DST
+                        | TextureUsages::TEXTURE_BINDING;
                     let status = nodes.load_statuses.get_mut(&id).unwrap();
                     status.finished = true;
                     break;

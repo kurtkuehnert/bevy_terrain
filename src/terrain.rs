@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy::render::render_resource::std140::AsStd140;
-use bevy::render::render_resource::{BufferAddress, BufferSize};
+use bevy::render::render_resource::BufferAddress;
 use itertools::{iproduct, Product};
 use std::mem;
 use std::ops::Range;
@@ -48,11 +48,13 @@ pub struct TerrainConfig {
     pub patch_count: u32,
     pub chunk_size: u32,
     pub chunk_count: UVec2,
+    pub texture_size: u32,
     pub area_size: u32,
     pub area_count: UVec2,
     pub terrain_size: UVec2,
     pub scale: f32,
     pub height: f32,
+    pub node_atlas_size: u16,
 }
 
 impl TerrainConfig {
@@ -62,10 +64,12 @@ impl TerrainConfig {
         area_count: UVec2,
         scale: f32,
         height: f32,
+        node_atlas_size: u16,
     ) -> Self {
         let patch_count = 8;
         let patch_size = chunk_size / patch_count;
         let area_size = chunk_size * (1 << (lod_count - 1));
+        let texture_size = chunk_size + 1;
         let terrain_size = area_count * area_size;
         let chunk_count = area_count * (1 << (lod_count - 1));
 
@@ -74,12 +78,14 @@ impl TerrainConfig {
             patch_size,
             patch_count,
             chunk_size,
+            texture_size,
             chunk_count,
             area_size,
             area_count,
             terrain_size,
             scale,
             height,
+            node_atlas_size,
         }
     }
 

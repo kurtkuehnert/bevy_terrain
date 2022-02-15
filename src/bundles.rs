@@ -33,20 +33,16 @@ impl TerrainBundle {
         config: TerrainConfig,
         meshes: &mut Assets<Mesh>,
         terrain_data: &mut Assets<TerrainData>,
-        height_texture: Handle<Image>,
     ) -> Self {
         Self {
             terrain_config: config.clone(),
             quadtree: Quadtree::new(&config),
             tree_update: TreeUpdate::new(&config),
             nodes: Nodes::new(16),
-            node_atlas: NodeAtlas::new(12800),
+            node_atlas: NodeAtlas::new(config.node_atlas_size),
             quadtree_update: QuadtreeUpdate::default(),
-            mesh: meshes.add(Tile::new(4, true).to_mesh()),
-            terrain_data: terrain_data.add(TerrainData {
-                config,
-                height_texture,
-            }),
+            mesh: meshes.add(Tile::new(config.patch_size as u8, true).to_mesh()),
+            terrain_data: terrain_data.add(TerrainData { config }),
 
             terrain_debug_info: TerrainDebugInfo::default(),
 

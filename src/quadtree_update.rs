@@ -1,18 +1,17 @@
-use crate::render::preparation_pipeline::TerrainComputePipeline;
-use crate::render::terrain_data::GpuTerrainData;
-use crate::terrain::TerrainConfig;
-use crate::TerrainData;
-use bevy::core::Pod;
-use bevy::core::Zeroable;
-use bevy::ecs::query::QueryItem;
-use bevy::ecs::system::lifetimeless::Write;
-use bevy::prelude::*;
-use bevy::render::render_asset::RenderAssets;
-use bevy::render::render_component::ExtractComponent;
-use bevy::render::render_resource::{
-    BindGroup, BindGroupDescriptor, BindGroupEntry, BindingResource,
+use crate::{
+    render::preparation_pipeline::TerrainComputePipeline, terrain::TerrainConfig, TerrainData,
 };
-use bevy::render::renderer::{RenderDevice, RenderQueue};
+use bevy::{
+    core::{Pod, Zeroable},
+    ecs::{query::QueryItem, system::lifetimeless::Write},
+    prelude::*,
+    render::{
+        render_asset::RenderAssets,
+        render_component::ExtractComponent,
+        render_resource::{BindGroup, BindGroupDescriptor, BindGroupEntry, BindingResource},
+        renderer::{RenderDevice, RenderQueue},
+    },
+};
 use std::mem;
 
 #[repr(C)]
@@ -37,7 +36,7 @@ impl ExtractComponent for QuadtreeUpdate {
 #[derive(Component)]
 pub struct GpuQuadtreeUpdate(pub(crate) Vec<(u32, BindGroup)>);
 
-pub(crate) fn prepare_quadtree_update(
+pub(crate) fn queue_quadtree_update(
     mut commands: Commands,
     mut device: ResMut<RenderDevice>,
     mut queue: ResMut<RenderQueue>,
