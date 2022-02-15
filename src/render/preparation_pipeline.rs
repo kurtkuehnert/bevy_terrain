@@ -431,7 +431,7 @@ impl render_graph::Node for TerrainComputeNode {
             pass.set_pipeline(&pipeline.prepare_next_node_list_pipeline);
             pass.dispatch(1, 1, 1);
 
-            for i in 0..gpu_preparation_data.lod_count - 1 {
+            for i in 0..gpu_preparation_data.config.lod_count as usize - 1 {
                 let index = i % 2;
 
                 pass.set_bind_group(0, &gpu_preparation_data.node_buffer_bind_groups[index], &[]);
@@ -443,7 +443,7 @@ impl render_graph::Node for TerrainComputeNode {
                 pass.dispatch(1, 1, 1);
             }
 
-            let index = (gpu_preparation_data.lod_count - 1) % 2;
+            let index = (gpu_preparation_data.config.lod_count as usize - 1) % 2;
 
             // build chunk list
             pass.set_bind_group(0, &gpu_preparation_data.node_buffer_bind_groups[index], &[]);

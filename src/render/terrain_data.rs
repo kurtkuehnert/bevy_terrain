@@ -1,30 +1,33 @@
-use crate::node_atlas::NodeAtlas;
-use crate::quadtree_update::{GpuQuadtreeUpdate, NodeUpdate};
-use crate::terrain::{TerrainConfig, TerrainConfigUniform};
-use crate::{TerrainComputePipeline, TerrainPipeline};
-use bevy::ecs::system::lifetimeless::{Read, SQuery, SRes};
-use bevy::ecs::system::SystemParamItem;
-use bevy::reflect::TypeUuid;
-use bevy::render::render_asset::{PrepareAssetError, RenderAsset, RenderAssets};
-use bevy::render::render_phase::{EntityRenderCommand, RenderCommandResult, TrackedRenderPass};
-use bevy::render::render_resource::std140::AsStd140;
-use bevy::render::render_resource::std140::Std140;
-use bevy::render::renderer::{RenderDevice, RenderQueue};
+use crate::{
+    node_atlas::NodeAtlas,
+    quadtree_update::NodeUpdate,
+    terrain::{TerrainConfig, TerrainConfigUniform},
+    TerrainComputePipeline, TerrainPipeline,
+};
 use bevy::{
+    ecs::system::{lifetimeless::SRes, SystemParamItem},
     prelude::*,
+    reflect::TypeUuid,
     render::{
-        render_graph::{self},
-        render_resource::*,
-        renderer::RenderContext,
+        render_asset::{PrepareAssetError, RenderAsset},
+        render_resource::{
+            std140::{AsStd140, Std140},
+            *,
+        },
+        renderer::{RenderDevice, RenderQueue},
+        texture::GpuImage,
     },
 };
 use bytemuck::cast_slice;
-use std::mem;
-use std::num::NonZeroU32;
-use std::ops::Deref;
+use std::{mem, num::NonZeroU32, ops::Deref};
+
+pub(crate) const INDIRECT_BUFFER_SIZE: BufferAddress = 5 * mem::size_of::<u32>() as BufferAddress;
+pub(crate) const PARAMETER_BUFFER_SIZE: BufferAddress = 4 * mem::size_of::<u32>() as BufferAddress; // minimum buffer size = 16
+pub(crate) const CONFIG_BUFFER_SIZE: BufferAddress = 4 * mem::size_of::<u32>() as BufferAddress;
+pub(crate) const PATCH_SIZE: BufferAddress = 6 * mem::size_of::<u32>() as BufferAddress;
 
 pub struct GpuTerrainData {
-    pub(crate) lod_count: usize,
+    pub(crate) config: TerrainConfig,
     pub(crate) quadtree_data: Vec<(BufferVec<NodeUpdate>, TextureView)>,
     pub(crate) indirect_buffer: Buffer,
     pub(crate) node_buffer_bind_groups: [BindGroup; 2],
@@ -32,13 +35,13 @@ pub struct GpuTerrainData {
     pub(crate) patch_buffer_bind_group: BindGroup,
     pub(crate) patch_list_bind_group: BindGroup,
     pub(crate) terrain_data_bind_group: BindGroup,
+    pub(crate) height_atlas: GpuImage,
 }
 
 #[derive(Debug, Clone, TypeUuid)]
 #[uuid = "32a1cd80-cef4-4534-b0ec-bc3a3d0800a9"]
 pub struct TerrainData {
     pub(crate) config: TerrainConfig,
-    pub height_texture: Handle<Image>, // Todo: replace in favor of the node atlas
 }
 
 impl TerrainData {
@@ -130,12 +133,61 @@ impl TerrainData {
 
         device.create_buffer(&buffer_descriptor)
     }
-}
 
-pub(crate) const INDIRECT_BUFFER_SIZE: BufferAddress = 5 * mem::size_of::<u32>() as BufferAddress;
-pub(crate) const PARAMETER_BUFFER_SIZE: BufferAddress = 4 * mem::size_of::<u32>() as BufferAddress; // minimum buffer size = 16
-pub(crate) const CONFIG_BUFFER_SIZE: BufferAddress = 4 * mem::size_of::<u32>() as BufferAddress;
-pub(crate) const PATCH_SIZE: BufferAddress = 6 * mem::size_of::<u32>() as BufferAddress;
+    fn create_node_atlas(&mut self, device: &RenderDevice) -> GpuImage {
+        let texture_size = self.config.texture_size;
+        let node_atlas_size = self.config.node_atlas_size as u32; // array layers count
+
+        let texture = device.create_texture(&TextureDescriptor {
+            label: None,
+            size: Extent3d {
+                width: texture_size,
+                height: texture_size,
+                depth_or_array_layers: node_atlas_size,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::R16Uint,
+            usage: TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING,
+        });
+
+        let sampler = device.create_sampler(&SamplerDescriptor {
+            label: None,
+            address_mode_u: AddressMode::ClampToEdge,
+            address_mode_v: AddressMode::ClampToEdge,
+            address_mode_w: AddressMode::ClampToEdge,
+            mag_filter: FilterMode::Linear,
+            min_filter: FilterMode::Linear,
+            mipmap_filter: FilterMode::Linear,
+            lod_min_clamp: 0.0,
+            lod_max_clamp: f32::MAX,
+            compare: None,
+            anisotropy_clamp: None,
+            border_color: None,
+        });
+
+        let texture_view = texture.create_view(&TextureViewDescriptor {
+            label: None,
+            format: None,
+            dimension: Some(TextureViewDimension::D2Array),
+            aspect: TextureAspect::All,
+            base_mip_level: 0,
+            mip_level_count: None,
+            base_array_layer: 0,
+            array_layer_count: None,
+        });
+
+        let height_atlas = GpuImage {
+            texture,
+            texture_view,
+            sampler,
+            size: Size::new(texture_size as f32, texture_size as f32),
+        };
+
+        height_atlas
+    }
+}
 
 impl RenderAsset for TerrainData {
     type ExtractedAsset = TerrainData;
@@ -155,7 +207,7 @@ impl RenderAsset for TerrainData {
         mut terrain_data: Self::ExtractedAsset,
         (device, queue, terrain_pipeline, compute_pipeline): &mut SystemParamItem<Self::Param>,
     ) -> Result<Self::PreparedAsset, PrepareAssetError<Self::ExtractedAsset>> {
-        println!("initializing terrain data");
+        info!("initializing terrain data");
 
         let quadtree_texture = terrain_data.create_quadtree_texture(&device, &queue);
 
@@ -163,7 +215,9 @@ impl RenderAsset for TerrainData {
 
         let patch_buffer = terrain_data.create_patch_buffer(device);
 
-        let config = &terrain_data.config;
+        let height_atlas = terrain_data.create_node_atlas(device);
+
+        let config = terrain_data.config;
 
         let config_uniform = device.create_buffer_with_data(&BufferInitDescriptor {
             label: None,
@@ -322,7 +376,7 @@ impl RenderAsset for TerrainData {
             layout: &terrain_pipeline.patch_list_layout,
         });
 
-        let terrain_config_uniform: TerrainConfigUniform = config.into();
+        let terrain_config_uniform: TerrainConfigUniform = (&config).into();
         let terrain_config_buffer = device.create_buffer_with_data(&BufferInitDescriptor {
             label: None,
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
@@ -330,18 +384,25 @@ impl RenderAsset for TerrainData {
         });
 
         let terrain_data_bind_group = device.create_bind_group(&BindGroupDescriptor {
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: terrain_config_buffer.as_entire_binding(),
-            }],
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: terrain_config_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: BindingResource::TextureView(&height_atlas.texture_view),
+                },
+            ],
             label: None,
             layout: &terrain_pipeline.terrain_data_layout,
         });
 
         Ok(GpuTerrainData {
-            lod_count: config.lod_count as usize,
+            config,
             quadtree_data,
             indirect_buffer,
+            height_atlas,
             node_buffer_bind_groups,
             node_parameter_bind_group,
             patch_buffer_bind_group,

@@ -1,13 +1,12 @@
-use crate::render::preparation_pipeline::{NODE_BUFFER_LAYOUT, PATCH_BUFFER_LAYOUT};
-
-use crate::render::terrain_data::{TerrainData, PATCH_SIZE};
-use crate::terrain::TerrainConfigUniform;
-use crate::TerrainComputePipeline;
+use crate::{
+    render::terrain_data::{TerrainData, PATCH_SIZE},
+    terrain::TerrainConfigUniform,
+};
 use bevy::{
     core_pipeline::Opaque3d,
-    ecs::{
-        system::lifetimeless::{Read, SQuery},
-        system::{lifetimeless::SRes, SystemParamItem},
+    ecs::system::{
+        lifetimeless::{Read, SQuery, SRes},
+        SystemParamItem,
     },
     pbr::{MeshPipeline, MeshPipelineKey, SetMeshBindGroup, SetMeshViewBindGroup},
     prelude::*,
@@ -37,7 +36,18 @@ pub(crate) const TERRAIN_DATA_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayou
             },
             count: None,
         },
-        // Todo: add Chunk Map and Node Atlas here
+        // height atlas
+        BindGroupLayoutEntry {
+            binding: 1,
+            visibility: ShaderStages::VERTEX,
+            ty: BindingType::Texture {
+                sample_type: TextureSampleType::Uint,
+                view_dimension: TextureViewDimension::D2Array,
+                multisampled: false,
+            },
+            count: None,
+        },
+        // Todo: add Chunk Map here
     ],
 };
 
@@ -126,17 +136,8 @@ impl EntityRenderCommand for DrawTerrainCommand {
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
         let (mesh, handle) = terrain_query.get(item).unwrap();
-
-        let gpu_mesh = match meshes.into_inner().get(mesh) {
-            Some(gpu_mesh) => gpu_mesh,
-            None => return RenderCommandResult::Failure,
-        };
-
-        // Todo: consider moving the indirect buffer somewhere else
-        let gpu_terrain_data = match terrain_data.into_inner().get(handle) {
-            Some(gpu_terrain_data) => gpu_terrain_data,
-            None => return RenderCommandResult::Failure,
-        };
+        let gpu_mesh = meshes.into_inner().get(mesh).unwrap();
+        let gpu_terrain_data = terrain_data.into_inner().get(handle).unwrap();
 
         match &gpu_mesh.buffer_info {
             GpuBufferInfo::Indexed {
@@ -171,10 +172,7 @@ impl<const I: usize> EntityRenderCommand for SetTerrainDataBindGroup<I> {
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
         let handle = terrain_query.get(item).unwrap();
-        let gpu_terrain_data = match terrain_data.into_inner().get(handle) {
-            Some(gpu_terrain_data) => gpu_terrain_data,
-            None => return RenderCommandResult::Failure,
-        };
+        let gpu_terrain_data = terrain_data.into_inner().get(handle).unwrap();
 
         pass.set_bind_group(I, &gpu_terrain_data.terrain_data_bind_group, &[]);
 
@@ -198,10 +196,7 @@ impl<const I: usize> EntityRenderCommand for SetPatchListBindGroup<I> {
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
         let handle = terrain_query.get(item).unwrap();
-        let gpu_terrain_data = match terrain_data.into_inner().get(handle) {
-            Some(gpu_terrain_data) => gpu_terrain_data,
-            None => return RenderCommandResult::Failure,
-        };
+        let gpu_terrain_data = terrain_data.into_inner().get(handle).unwrap();
 
         pass.set_bind_group(I, &gpu_terrain_data.patch_list_bind_group, &[]);
 
