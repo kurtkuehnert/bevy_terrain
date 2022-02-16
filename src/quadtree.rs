@@ -1,5 +1,4 @@
-use crate::node_atlas::NodeAtlas;
-use crate::terrain::TerrainConfig;
+use crate::{node_atlas::NodeAtlas, terrain::TerrainConfig};
 use bevy::{
     asset::{HandleId, LoadState},
     prelude::*,
@@ -8,6 +7,7 @@ use bevy::{
 use bevy_inspector_egui::Inspectable;
 use itertools::iproduct;
 use lru::LruCache;
+use std::mem;
 
 /// Marks a camera as the viewer of the terrain.
 /// The view distance is a multiplier, which increases the amount of loaded nodes.
@@ -93,33 +93,6 @@ impl Nodes {
     }
 }
 
-#[derive(Component)]
-pub struct TreeUpdate {
-    /// Newly activated nodes since last traversal.
-    pub(crate) activated_nodes: HashSet<u32>,
-    /// Nodes that are no longer required and should be deactivated.
-    pub(crate) nodes_to_deactivate: Vec<u32>,
-    /// Nodes that are required and should be loaded and scheduled for activation.
-    pub(crate) nodes_to_activate: Vec<u32>,
-}
-
-impl TreeUpdate {
-    pub(crate) fn new(config: &TerrainConfig) -> Self {
-        let lod = config.lod_count - 1;
-
-        let nodes_to_activate = config
-            .area_iter()
-            .map(|(x, y)| TerrainConfig::node_id(lod, x, y))
-            .collect();
-
-        Self {
-            activated_nodes: Default::default(),
-            nodes_to_deactivate: vec![],
-            nodes_to_activate,
-        }
-    }
-}
-
 #[derive(PartialOrd, PartialEq)]
 enum NodeState {
     Nonexisting,
@@ -159,9 +132,9 @@ impl TreeNode {
         }
     }
 
-    fn traverse(&mut self, tree_update: &mut TreeUpdate, viewer: Viewer) {
+    fn traverse(&mut self, quadtree: &mut Quadtree, viewer: Viewer) {
         // check whether the node has been activated since the last traversal and update it accordingly
-        if self.state == NodeState::Loading && tree_update.activated_nodes.contains(&self.id) {
+        if self.state == NodeState::Loading && quadtree.activated_nodes.contains(&self.id) {
             self.state = NodeState::Active;
         }
 
@@ -175,12 +148,12 @@ impl TreeNode {
             (false, NodeState::Inactive) => false, // can't have active children
             (false, NodeState::Loading) => true, // Todo: should this be ignored? cancel into cache
             (false, NodeState::Active) => {
-                tree_update.nodes_to_deactivate.push(self.id);
+                quadtree.nodes_to_deactivate.push(self.id);
                 self.state = NodeState::Inactive;
                 true
             }
             (true, NodeState::Inactive) => {
-                tree_update.nodes_to_activate.push(self.id);
+                quadtree.nodes_to_activate.push(self.id);
                 self.state = NodeState::Loading;
                 true
             }
@@ -192,7 +165,7 @@ impl TreeNode {
 
         if traverse_children {
             for child in &mut self.children {
-                child.traverse(tree_update, viewer);
+                child.traverse(quadtree, viewer);
             }
         }
     }
@@ -203,11 +176,22 @@ pub struct Quadtree {
     /// The children of the root nodes.
     /// Root nodes stay always loaded, so they don't need to be traversed.
     nodes: Vec<TreeNode>,
+    /// Newly activated nodes since last traversal.
+    pub(crate) activated_nodes: HashSet<u32>,
+    /// Nodes that are no longer required and should be deactivated.
+    pub(crate) nodes_to_deactivate: Vec<u32>,
+    /// Nodes that are required and should be loaded and scheduled for activation.
+    pub(crate) nodes_to_activate: Vec<u32>,
 }
 
 impl Quadtree {
     pub(crate) fn new(config: &TerrainConfig) -> Self {
         let lod = config.lod_count - 1;
+
+        let nodes_to_activate = config
+            .area_iter()
+            .map(|(x, y)| TerrainConfig::node_id(lod, x, y))
+            .collect();
 
         let nodes = match lod {
             0 => Vec::new(),
@@ -220,12 +204,21 @@ impl Quadtree {
                 .collect(),
         };
 
-        Self { nodes }
+        Self {
+            nodes,
+            activated_nodes: Default::default(),
+            nodes_to_deactivate: Default::default(),
+            nodes_to_activate,
+        }
     }
 
-    pub(crate) fn traverse(&mut self, tree_update: &mut TreeUpdate, viewer: Viewer) {
-        for node in &mut self.nodes {
-            node.traverse(tree_update, viewer);
+    pub(crate) fn traverse(&mut self, viewer: Viewer) {
+        let mut nodes = mem::take(&mut self.nodes);
+
+        for node in &mut nodes {
+            node.traverse(self, viewer);
         }
+
+        self.nodes = nodes;
     }
 }

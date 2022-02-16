@@ -1,6 +1,6 @@
+use crate::node_atlas::NodeUpdate;
 use crate::{
     node_atlas::NodeAtlas,
-    quadtree_update::NodeUpdate,
     terrain::{TerrainConfig, TerrainConfigUniform},
     TerrainComputePipeline, TerrainPipeline,
 };

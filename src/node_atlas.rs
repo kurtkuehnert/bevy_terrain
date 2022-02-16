@@ -1,4 +1,10 @@
-use crate::{quadtree::NodeData, quadtree_update::NodeUpdate, TerrainData};
+use crate::terrain::TerrainConfig;
+use crate::{quadtree::NodeData, TerrainComputePipeline, TerrainData};
+use bevy::core::{Pod, Zeroable};
+use bevy::render::render_resource::std430::{AsStd430, Std430};
+use bevy::render::render_resource::{
+    BindGroup, BindGroupDescriptor, BindGroupEntry, BindingResource, BufferAddress,
+};
 use bevy::{
     ecs::{query::QueryItem, system::lifetimeless::Write},
     prelude::*,
@@ -11,14 +17,24 @@ use bevy::{
         renderer::{RenderDevice, RenderQueue},
     },
 };
+use bytemuck::cast_slice;
 use std::mem;
 
-pub struct NodeAtlasUpdate {}
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Default, Zeroable, Pod)]
+pub(crate) struct NodeUpdate {
+    pub(crate) node_id: u32,
+    pub(crate) atlas_index: u32, // u16 not supported by std 140
+}
+
+#[derive(Component)]
+pub struct GpuQuadtreeUpdate(pub(crate) Vec<(u32, BindGroup)>);
 
 /// Maps the assets to the corresponding active nodes and tracks the node updates.
 #[derive(Component)]
 pub struct NodeAtlas {
     pub(crate) available_ids: Vec<u16>,
+    pub(crate) quadtree_update: Vec<NodeUpdate>,
     activated_height_maps: Vec<(u16, Handle<Image>)>,
 }
 
@@ -29,16 +45,17 @@ impl NodeAtlas {
     pub fn new(atlas_size: u16) -> Self {
         Self {
             available_ids: (0..atlas_size).collect(),
-            activated_height_maps: vec![],
+            quadtree_update: Default::default(),
+            activated_height_maps: Default::default(),
         }
     }
 
-    pub(crate) fn activate_node(&mut self, node: &mut NodeData, updates: &mut Vec<NodeUpdate>) {
+    pub(crate) fn activate_node(&mut self, node: &mut NodeData) {
         let atlas_index = self.available_ids.pop().expect("Out of atlas ids.");
 
         node.atlas_index = atlas_index;
 
-        updates.push(NodeUpdate {
+        self.quadtree_update.push(NodeUpdate {
             node_id: node.id,
             atlas_index: node.atlas_index as u32,
         });
@@ -47,12 +64,12 @@ impl NodeAtlas {
             .push((atlas_index, node.height_map.as_weak()));
     }
 
-    pub(crate) fn deactivate_node(&mut self, node: &mut NodeData, updates: &mut Vec<NodeUpdate>) {
+    pub(crate) fn deactivate_node(&mut self, node: &mut NodeData) {
         self.available_ids.push(node.atlas_index);
 
         node.atlas_index = Self::INACTIVE_ID;
 
-        updates.push(NodeUpdate {
+        self.quadtree_update.push(NodeUpdate {
             node_id: node.id,
             atlas_index: node.atlas_index as u32,
         });
@@ -66,6 +83,7 @@ impl ExtractComponent for NodeAtlas {
     fn extract_component(mut item: QueryItem<Self::Query>) -> Self {
         Self {
             available_ids: Vec::new(),
+            quadtree_update: mem::take(&mut item.quadtree_update),
             activated_height_maps: mem::take(&mut item.activated_height_maps),
         }
     }
@@ -113,4 +131,57 @@ pub(crate) fn queue_atlas_updates(
     }
 
     queue.submit(vec![command_encoder.finish()]);
+}
+
+pub(crate) fn queue_quadtree_update(
+    mut commands: Commands,
+    mut device: ResMut<RenderDevice>,
+    mut queue: ResMut<RenderQueue>,
+    pipeline: Res<TerrainComputePipeline>,
+    terrain_data: ResMut<RenderAssets<TerrainData>>,
+    terrain_query: Query<(Entity, &NodeAtlas, &Handle<TerrainData>)>,
+) {
+    let terrain_data = terrain_data.into_inner();
+
+    for (entity, node_atlas, handle) in terrain_query.iter() {
+        let gpu_terrain_data = terrain_data.get_mut(handle).unwrap();
+        let quadtree_data = &mut gpu_terrain_data.quadtree_data;
+
+        // insert the node update into the buffer corresponding to its lod
+        node_atlas.quadtree_update.iter().for_each(|&data| {
+            let lod = TerrainConfig::node_position(data.node_id).0 as usize;
+            quadtree_data[lod].0.push(data);
+        });
+
+        // create the bind groups for each lod
+        let data = quadtree_data
+            .iter_mut()
+            .map(|(buffer, view)| {
+                buffer.write_buffer(&mut device, &mut queue);
+
+                let count = buffer.len() as u32;
+
+                let bind_group = device.create_bind_group(&BindGroupDescriptor {
+                    label: None,
+                    layout: &pipeline.update_quadtree_bind_group_layout,
+                    entries: &[
+                        BindGroupEntry {
+                            binding: 0,
+                            resource: BindingResource::TextureView(view),
+                        },
+                        BindGroupEntry {
+                            binding: 1,
+                            resource: buffer.buffer().unwrap().as_entire_binding(),
+                        },
+                    ],
+                });
+
+                buffer.clear(); // reset buffer for next frame
+
+                (count, bind_group)
+            })
+            .collect();
+
+        commands.entity(entity).insert(GpuQuadtreeUpdate(data));
+    }
 }
