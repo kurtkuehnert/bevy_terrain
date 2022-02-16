@@ -1,7 +1,10 @@
-use crate::node_atlas::NodeAtlas;
-use crate::render::terrain_data::TerrainData;
-use crate::render::tile::Tile;
-use crate::{config::TerrainConfig, quadtree::Quadtree, TerrainDebugInfo};
+use crate::{
+    config::TerrainConfig,
+    node_atlas::NodeAtlas,
+    quadtree::Quadtree,
+    render::{terrain_data::TerrainData, tile::Tile},
+    TerrainDebugInfo,
+};
 use bevy::{prelude::*, render::primitives::Aabb};
 
 #[derive(Bundle)]

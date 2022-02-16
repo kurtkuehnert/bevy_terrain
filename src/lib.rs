@@ -17,7 +17,7 @@ use bevy::{
     },
 };
 use bevy_inspector_egui::RegisterInspectable;
-use render::preparation_pipeline::{TerrainComputeNode, TerrainComputePipeline};
+use render::compute_pipeline::{TerrainComputeNode, TerrainComputePipeline};
 
 pub mod bundles;
 pub mod config;

@@ -1,9 +1,6 @@
-use bevy::{
-    prelude::*,
-    render::{render_resource::std140::AsStd140, render_resource::BufferAddress},
-};
+use bevy::{prelude::*, render::render_resource::std140::AsStd140};
 use itertools::{iproduct, Product};
-use std::{mem, ops::Range};
+use std::ops::Range;
 
 #[derive(Clone, Default, AsStd140)]
 pub(crate) struct TerrainConfigUniform {
@@ -12,33 +9,6 @@ pub(crate) struct TerrainConfigUniform {
     area_count: UVec2,
     scale: f32,
     height: f32,
-}
-
-impl From<&TerrainConfig> for TerrainConfigUniform {
-    fn from(config: &TerrainConfig) -> Self {
-        let &TerrainConfig {
-            lod_count,
-            chunk_size,
-            area_count,
-            scale,
-            height,
-            ..
-        } = config;
-
-        Self {
-            lod_count,
-            chunk_size,
-            area_count,
-            scale,
-            height,
-        }
-    }
-}
-
-impl TerrainConfigUniform {
-    pub(crate) const fn buffer_size() -> BufferAddress {
-        mem::size_of::<<Self as AsStd140>::Output>() as BufferAddress
-    }
 }
 
 #[derive(Clone, Debug, Component)]
@@ -87,6 +57,17 @@ impl TerrainConfig {
             height,
             node_atlas_size,
         }
+    }
+
+    pub(crate) fn as_std140(&self) -> Std140TerrainConfigUniform {
+        TerrainConfigUniform {
+            lod_count: self.lod_count,
+            chunk_size: self.chunk_size,
+            area_count: self.area_count,
+            scale: self.scale,
+            height: self.height,
+        }
+        .as_std140()
     }
 
     #[inline]

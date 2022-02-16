@@ -1,7 +1,7 @@
-use crate::node_atlas::NodeUpdate;
 use crate::{
-    config::{TerrainConfig, TerrainConfigUniform},
-    node_atlas::NodeAtlas,
+    config::TerrainConfig,
+    node_atlas::{NodeAtlas, NodeUpdate},
+    render::layouts::*,
     TerrainComputePipeline, TerrainPipeline,
 };
 use bevy::{
@@ -10,31 +10,22 @@ use bevy::{
     reflect::TypeUuid,
     render::{
         render_asset::{PrepareAssetError, RenderAsset},
-        render_resource::{
-            std140::{AsStd140, Std140},
-            *,
-        },
+        render_resource::{std140::Std140, *},
         renderer::{RenderDevice, RenderQueue},
         texture::GpuImage,
     },
 };
-use bytemuck::cast_slice;
-use std::{mem, num::NonZeroU32, ops::Deref};
-
-pub(crate) const INDIRECT_BUFFER_SIZE: BufferAddress = 5 * mem::size_of::<u32>() as BufferAddress;
-pub(crate) const PARAMETER_BUFFER_SIZE: BufferAddress = 4 * mem::size_of::<u32>() as BufferAddress; // minimum buffer size = 16
-pub(crate) const CONFIG_BUFFER_SIZE: BufferAddress = 4 * mem::size_of::<u32>() as BufferAddress;
-pub(crate) const PATCH_SIZE: BufferAddress = 6 * mem::size_of::<u32>() as BufferAddress;
+use std::{num::NonZeroU32, ops::Deref};
 
 pub struct GpuTerrainData {
     pub(crate) config: TerrainConfig,
-    pub(crate) quadtree_data: Vec<(BufferVec<NodeUpdate>, TextureView)>,
     pub(crate) indirect_buffer: Buffer,
-    pub(crate) node_buffer_bind_groups: [BindGroup; 2],
-    pub(crate) node_parameter_bind_group: BindGroup,
-    pub(crate) patch_buffer_bind_group: BindGroup,
-    pub(crate) patch_list_bind_group: BindGroup,
+    pub(crate) prepare_indirect_bind_group: BindGroup,
+    pub(crate) quadtree_data: Vec<(BufferVec<NodeUpdate>, TextureView)>,
+    pub(crate) build_node_list_bind_groups: [BindGroup; 2],
+    pub(crate) build_patch_list_bind_group: BindGroup,
     pub(crate) terrain_data_bind_group: BindGroup,
+    pub(crate) patch_list_bind_group: BindGroup,
     pub(crate) height_atlas: GpuImage,
 }
 
@@ -45,7 +36,11 @@ pub struct TerrainData {
 }
 
 impl TerrainData {
-    fn create_quadtree_texture(&mut self, device: &RenderDevice, queue: &RenderQueue) -> Texture {
+    fn create_quadtree(
+        &mut self,
+        device: &RenderDevice,
+        queue: &RenderQueue,
+    ) -> (Texture, TextureView) {
         let config = &self.config;
 
         let texture_descriptor = TextureDescriptor {
@@ -96,42 +91,18 @@ impl TerrainData {
             queue.write_texture(texture, bytemuck::cast_slice(&data), data_layout, size);
         }
 
-        quadtree_texture
-    }
-
-    fn create_node_buffers(&mut self, device: &RenderDevice) -> ([Buffer; 2], Buffer) {
-        let max_node_count = self.config.chunk_count.x * self.config.chunk_count.y;
-
-        let buffer_descriptor = BufferDescriptor {
+        let quadtree_view = quadtree_texture.create_view(&TextureViewDescriptor {
             label: None,
-            size: (max_node_count * mem::size_of::<u32>() as u32) as BufferAddress,
-            usage: BufferUsages::STORAGE,
-            mapped_at_creation: false,
-        };
+            format: Some(TextureFormat::R16Uint),
+            dimension: Some(TextureViewDimension::D2),
+            aspect: TextureAspect::All,
+            base_mip_level: 0,
+            mip_level_count: None,
+            base_array_layer: 0,
+            array_layer_count: None,
+        });
 
-        (
-            [
-                device.create_buffer(&buffer_descriptor),
-                device.create_buffer(&buffer_descriptor),
-            ],
-            device.create_buffer(&buffer_descriptor),
-        )
-    }
-
-    fn create_patch_buffer(&mut self, device: &RenderDevice) -> Buffer {
-        let max_patch_count = self.config.chunk_count.x
-            * self.config.chunk_count.y
-            * self.config.patch_count
-            * self.config.patch_count;
-
-        let buffer_descriptor = BufferDescriptor {
-            label: None,
-            size: PATCH_SIZE * max_patch_count as BufferAddress,
-            usage: BufferUsages::STORAGE,
-            mapped_at_creation: false,
-        };
-
-        device.create_buffer(&buffer_descriptor)
+        (quadtree_texture, quadtree_view)
     }
 
     fn create_node_atlas(&mut self, device: &RenderDevice) -> GpuImage {
@@ -178,6 +149,7 @@ impl TerrainData {
             array_layer_count: None,
         });
 
+        // Todo: consider using custom struct with only texture and view instead
         let height_atlas = GpuImage {
             texture,
             texture_view,
@@ -186,6 +158,66 @@ impl TerrainData {
         };
 
         height_atlas
+    }
+
+    fn create_indirect_buffer(&mut self, device: &RenderDevice) -> Buffer {
+        device.create_buffer_with_data(&BufferInitDescriptor {
+            label: None,
+            usage: BufferUsages::STORAGE | BufferUsages::INDIRECT,
+            contents: &[0; INDIRECT_BUFFER_SIZE as usize],
+        })
+    }
+
+    fn create_config_buffer(&mut self, device: &RenderDevice) -> Buffer {
+        device.create_buffer_with_data(&BufferInitDescriptor {
+            label: None,
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            contents: self.config.as_std140().as_bytes(),
+        })
+    }
+
+    fn create_parameter_buffer(&mut self, device: &RenderDevice) -> Buffer {
+        device.create_buffer(&BufferDescriptor {
+            label: None,
+            size: PARAMETER_BUFFER_SIZE,
+            usage: BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        })
+    }
+
+    fn create_node_buffers(&mut self, device: &RenderDevice) -> ([Buffer; 2], Buffer) {
+        let max_node_count = self.config.chunk_count.x * self.config.chunk_count.y;
+
+        let buffer_descriptor = BufferDescriptor {
+            label: None,
+            size: NODE_SIZE * max_node_count as BufferAddress,
+            usage: BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        };
+
+        (
+            [
+                device.create_buffer(&buffer_descriptor),
+                device.create_buffer(&buffer_descriptor),
+            ],
+            device.create_buffer(&buffer_descriptor),
+        )
+    }
+
+    fn create_patch_buffer(&mut self, device: &RenderDevice) -> Buffer {
+        let max_patch_count = self.config.chunk_count.x
+            * self.config.chunk_count.y
+            * self.config.patch_count
+            * self.config.patch_count;
+
+        let buffer_descriptor = BufferDescriptor {
+            label: None,
+            size: PATCH_SIZE * max_patch_count as BufferAddress,
+            usage: BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        };
+
+        device.create_buffer(&buffer_descriptor)
     }
 }
 
@@ -209,126 +241,16 @@ impl RenderAsset for TerrainData {
     ) -> Result<Self::PreparedAsset, PrepareAssetError<Self::ExtractedAsset>> {
         info!("initializing terrain data");
 
-        let quadtree_texture = terrain_data.create_quadtree_texture(&device, &queue);
-
-        let (node_temp_buffers, node_final_buffer) = terrain_data.create_node_buffers(device);
-
-        let patch_buffer = terrain_data.create_patch_buffer(device);
-
+        let (quadtree_texture, quadtree_view) = terrain_data.create_quadtree(&device, &queue);
         let height_atlas = terrain_data.create_node_atlas(device);
 
-        let config = terrain_data.config;
+        let indirect_buffer = terrain_data.create_indirect_buffer(device);
+        let config_buffer = terrain_data.create_config_buffer(device);
+        let parameter_buffer = terrain_data.create_parameter_buffer(device);
+        let (temp_node_buffers, final_node_buffer) = terrain_data.create_node_buffers(device);
+        let patch_buffer = terrain_data.create_patch_buffer(device);
 
-        let config_uniform = device.create_buffer_with_data(&BufferInitDescriptor {
-            label: None,
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            contents: cast_slice(&[
-                config.area_count.x,
-                config.area_count.y,
-                config.lod_count,
-                0,
-            ]),
-        });
-
-        let indirect_buffer = device.create_buffer_with_data(&BufferInitDescriptor {
-            label: None,
-            usage: BufferUsages::STORAGE | BufferUsages::INDIRECT,
-            contents: &[0; INDIRECT_BUFFER_SIZE as usize],
-        });
-
-        let parameter_buffer = device.create_buffer(&BufferDescriptor {
-            label: None,
-            size: PARAMETER_BUFFER_SIZE,
-            usage: BufferUsages::STORAGE,
-            mapped_at_creation: false,
-        });
-
-        let quadtree_view = quadtree_texture.create_view(&TextureViewDescriptor {
-            label: None,
-            format: Some(TextureFormat::R16Uint),
-            dimension: Some(TextureViewDimension::D2),
-            aspect: TextureAspect::All,
-            base_mip_level: 0,
-            mip_level_count: None,
-            base_array_layer: 0,
-            array_layer_count: None,
-        });
-
-        let node_buffer_bind_groups = [
-            device.create_bind_group(&BindGroupDescriptor {
-                entries: &[
-                    BindGroupEntry {
-                        binding: 0,
-                        resource: BindingResource::TextureView(&quadtree_view),
-                    },
-                    BindGroupEntry {
-                        binding: 1,
-                        resource: parameter_buffer.as_entire_binding(),
-                    },
-                    BindGroupEntry {
-                        binding: 2,
-                        resource: node_temp_buffers[0].as_entire_binding(),
-                    },
-                    BindGroupEntry {
-                        binding: 3,
-                        resource: node_temp_buffers[1].as_entire_binding(),
-                    },
-                    BindGroupEntry {
-                        binding: 4,
-                        resource: node_final_buffer.as_entire_binding(),
-                    },
-                ],
-                label: None,
-                layout: &compute_pipeline.node_buffer_bind_group_layout,
-            }),
-            device.create_bind_group(&BindGroupDescriptor {
-                entries: &[
-                    BindGroupEntry {
-                        binding: 0,
-                        resource: BindingResource::TextureView(&quadtree_view),
-                    },
-                    BindGroupEntry {
-                        binding: 1,
-                        resource: parameter_buffer.as_entire_binding(),
-                    },
-                    BindGroupEntry {
-                        binding: 2,
-                        resource: node_temp_buffers[1].as_entire_binding(),
-                    },
-                    BindGroupEntry {
-                        binding: 3,
-                        resource: node_temp_buffers[0].as_entire_binding(),
-                    },
-                    BindGroupEntry {
-                        binding: 4,
-                        resource: node_final_buffer.as_entire_binding(),
-                    },
-                ],
-                label: None,
-                layout: &compute_pipeline.node_buffer_bind_group_layout,
-            }),
-        ];
-
-        let node_parameter_bind_group = device.create_bind_group(&BindGroupDescriptor {
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: indirect_buffer.as_entire_binding(),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: parameter_buffer.as_entire_binding(),
-                },
-                BindGroupEntry {
-                    binding: 2,
-                    resource: config_uniform.as_entire_binding(),
-                },
-            ],
-            label: None,
-            layout: &compute_pipeline.node_parameter_bind_group_layout,
-        });
-
-        let quadtree_data = (0..config.lod_count)
+        let quadtree_data = (0..terrain_data.config.lod_count)
             .map(|lod| {
                 let mut buffer = BufferVec::default();
                 buffer.reserve(1, device);
@@ -348,7 +270,82 @@ impl RenderAsset for TerrainData {
             })
             .collect();
 
-        let patch_buffer_bind_group = device.create_bind_group(&BindGroupDescriptor {
+        let prepare_indirect_bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: None,
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: config_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: indirect_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 2,
+                    resource: parameter_buffer.as_entire_binding(),
+                },
+            ],
+            layout: &compute_pipeline.prepare_indirect_layout,
+        });
+
+        let build_node_list_bind_groups = [
+            device.create_bind_group(&BindGroupDescriptor {
+                label: None,
+                entries: &[
+                    BindGroupEntry {
+                        binding: 0,
+                        resource: BindingResource::TextureView(&quadtree_view),
+                    },
+                    BindGroupEntry {
+                        binding: 1,
+                        resource: parameter_buffer.as_entire_binding(),
+                    },
+                    BindGroupEntry {
+                        binding: 2,
+                        resource: temp_node_buffers[0].as_entire_binding(),
+                    },
+                    BindGroupEntry {
+                        binding: 3,
+                        resource: temp_node_buffers[1].as_entire_binding(),
+                    },
+                    BindGroupEntry {
+                        binding: 4,
+                        resource: final_node_buffer.as_entire_binding(),
+                    },
+                ],
+                layout: &compute_pipeline.build_node_list_layout,
+            }),
+            device.create_bind_group(&BindGroupDescriptor {
+                label: None,
+                entries: &[
+                    BindGroupEntry {
+                        binding: 0,
+                        resource: BindingResource::TextureView(&quadtree_view),
+                    },
+                    BindGroupEntry {
+                        binding: 1,
+                        resource: parameter_buffer.as_entire_binding(),
+                    },
+                    BindGroupEntry {
+                        binding: 2,
+                        resource: temp_node_buffers[1].as_entire_binding(),
+                    },
+                    BindGroupEntry {
+                        binding: 3,
+                        resource: temp_node_buffers[0].as_entire_binding(),
+                    },
+                    BindGroupEntry {
+                        binding: 4,
+                        resource: final_node_buffer.as_entire_binding(),
+                    },
+                ],
+                layout: &compute_pipeline.build_node_list_layout,
+            }),
+        ];
+
+        let build_patch_list_bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: None,
             entries: &[
                 BindGroupEntry {
                     binding: 0,
@@ -356,58 +353,50 @@ impl RenderAsset for TerrainData {
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: node_final_buffer.as_entire_binding(),
+                    resource: final_node_buffer.as_entire_binding(),
                 },
                 BindGroupEntry {
                     binding: 2,
                     resource: patch_buffer.as_entire_binding(),
                 },
             ],
-            label: None,
-            layout: &compute_pipeline.patch_buffer_bind_group_layout,
-        });
-
-        let patch_list_bind_group = device.create_bind_group(&BindGroupDescriptor {
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: patch_buffer.as_entire_binding(),
-            }],
-            label: None,
-            layout: &terrain_pipeline.patch_list_layout,
-        });
-
-        let terrain_config_uniform: TerrainConfigUniform = (&config).into();
-        let terrain_config_buffer = device.create_buffer_with_data(&BufferInitDescriptor {
-            label: None,
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            contents: terrain_config_uniform.as_std140().as_bytes(),
+            layout: &compute_pipeline.build_patch_list_layout,
         });
 
         let terrain_data_bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: None,
             entries: &[
                 BindGroupEntry {
                     binding: 0,
-                    resource: terrain_config_buffer.as_entire_binding(),
+                    resource: config_buffer.as_entire_binding(),
                 },
                 BindGroupEntry {
                     binding: 1,
                     resource: BindingResource::TextureView(&height_atlas.texture_view),
                 },
             ],
-            label: None,
             layout: &terrain_pipeline.terrain_data_layout,
         });
 
+        let patch_list_bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: None,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: patch_buffer.as_entire_binding(),
+            }],
+            layout: &terrain_pipeline.patch_list_layout,
+        });
+
         Ok(GpuTerrainData {
-            config,
-            quadtree_data,
+            config: terrain_data.config,
             indirect_buffer,
-            height_atlas,
-            node_buffer_bind_groups,
-            node_parameter_bind_group,
-            patch_buffer_bind_group,
-            patch_list_bind_group,
+            quadtree_data,
+            prepare_indirect_bind_group,
+            build_node_list_bind_groups,
+            build_patch_list_bind_group,
             terrain_data_bind_group,
+            patch_list_bind_group,
+            height_atlas,
         })
     }
 }
