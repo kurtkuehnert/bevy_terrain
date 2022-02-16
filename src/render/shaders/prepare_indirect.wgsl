@@ -1,6 +1,8 @@
 struct TerrainConfig {
     lod_count: u32;
     chunk_size: u32;
+    patch_size: u32;
+    index_count: u32;
     area_count: vec2<u32>;
     scale: f32;
     height: f32;
@@ -52,7 +54,7 @@ fn prepare_patch_list() {
 
 [[stage(compute), workgroup_size(1, 1, 1)]]
 fn prepare_render() {
-    indirect_buffer.workgroup_count_x = 160u; // vertex count
+    indirect_buffer.workgroup_count_x = config.index_count;
     indirect_buffer.workgroup_count_y = 64u * atomicLoad(&parameters.final_index);
     indirect_buffer.workgroup_count_z = 0u;
 }

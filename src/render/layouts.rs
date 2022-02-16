@@ -131,6 +131,16 @@ pub(crate) const BUILD_PATCH_LIST_LAYOUT: BindGroupLayoutDescriptor = BindGroupL
         BindGroupLayoutEntry {
             binding: 0,
             visibility: ShaderStages::COMPUTE,
+            ty: BindingType::Buffer {
+                ty: BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: BufferSize::new(CONFIG_BUFFER_SIZE),
+            },
+            count: None,
+        },
+        BindGroupLayoutEntry {
+            binding: 1,
+            visibility: ShaderStages::COMPUTE,
             ty: BindingType::Texture {
                 sample_type: TextureSampleType::Uint,
                 view_dimension: TextureViewDimension::D2,
@@ -139,7 +149,7 @@ pub(crate) const BUILD_PATCH_LIST_LAYOUT: BindGroupLayoutDescriptor = BindGroupL
             count: None,
         },
         BindGroupLayoutEntry {
-            binding: 1,
+            binding: 2,
             visibility: ShaderStages::COMPUTE,
             ty: BindingType::Buffer {
                 ty: BufferBindingType::Storage { read_only: true },
@@ -149,7 +159,7 @@ pub(crate) const BUILD_PATCH_LIST_LAYOUT: BindGroupLayoutDescriptor = BindGroupL
             count: None,
         },
         BindGroupLayoutEntry {
-            binding: 2,
+            binding: 3,
             visibility: ShaderStages::COMPUTE,
             ty: BindingType::Buffer {
                 ty: BufferBindingType::Storage { read_only: false },
