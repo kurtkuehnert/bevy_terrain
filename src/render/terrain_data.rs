@@ -1,7 +1,7 @@
 use crate::node_atlas::NodeUpdate;
 use crate::{
+    config::{TerrainConfig, TerrainConfigUniform},
     node_atlas::NodeAtlas,
-    terrain::{TerrainConfig, TerrainConfigUniform},
     TerrainComputePipeline, TerrainPipeline,
 };
 use bevy::{

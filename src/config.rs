@@ -1,9 +1,9 @@
-use bevy::prelude::*;
-use bevy::render::render_resource::std140::AsStd140;
-use bevy::render::render_resource::BufferAddress;
+use bevy::{
+    prelude::*,
+    render::{render_resource::std140::AsStd140, render_resource::BufferAddress},
+};
 use itertools::{iproduct, Product};
-use std::mem;
-use std::ops::Range;
+use std::{mem, ops::Range};
 
 #[derive(Clone, Default, AsStd140)]
 pub(crate) struct TerrainConfigUniform {

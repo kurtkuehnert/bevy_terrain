@@ -1,18 +1,13 @@
 use crate::node_atlas::NodeAtlas;
 use crate::render::terrain_data::TerrainData;
 use crate::render::tile::Tile;
-use crate::{
-    quadtree::{Nodes, Quadtree},
-    terrain::TerrainConfig,
-    TerrainDebugInfo,
-};
+use crate::{config::TerrainConfig, quadtree::Quadtree, TerrainDebugInfo};
 use bevy::{prelude::*, render::primitives::Aabb};
 
 #[derive(Bundle)]
 pub struct TerrainBundle {
     terrain_config: TerrainConfig,
     quadtree: Quadtree,
-    nodes: Nodes,
     node_atlas: NodeAtlas,
     mesh: Handle<Mesh>,
     terrain_data: Handle<TerrainData>,
@@ -34,8 +29,7 @@ impl TerrainBundle {
     ) -> Self {
         Self {
             terrain_config: config.clone(),
-            quadtree: Quadtree::new(&config),
-            nodes: Nodes::new(16),
+            quadtree: Quadtree::new(&config, 16),
             node_atlas: NodeAtlas::new(config.node_atlas_size),
             mesh: meshes.add(Tile::new(config.patch_size as u8, true).to_mesh()),
             terrain_data: terrain_data.add(TerrainData { config }),

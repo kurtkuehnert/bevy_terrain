@@ -1,4 +1,4 @@
-use crate::terrain::TerrainConfig;
+use crate::config::TerrainConfig;
 use bevy::prelude::UVec2;
 use image::{ImageBuffer, Luma};
 use itertools::iproduct;

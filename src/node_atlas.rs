@@ -1,9 +1,8 @@
-use crate::terrain::TerrainConfig;
+use crate::config::TerrainConfig;
 use crate::{quadtree::NodeData, TerrainComputePipeline, TerrainData};
 use bevy::core::{Pod, Zeroable};
-use bevy::render::render_resource::std430::{AsStd430, Std430};
 use bevy::render::render_resource::{
-    BindGroup, BindGroupDescriptor, BindGroupEntry, BindingResource, BufferAddress,
+    BindGroup, BindGroupDescriptor, BindGroupEntry, BindingResource,
 };
 use bevy::{
     ecs::{query::QueryItem, system::lifetimeless::Write},
@@ -17,7 +16,6 @@ use bevy::{
         renderer::{RenderDevice, RenderQueue},
     },
 };
-use bytemuck::cast_slice;
 use std::mem;
 
 #[repr(C)]
