@@ -1,15 +1,12 @@
-use crate::config::TerrainConfig;
-use crate::{quadtree::NodeData, TerrainComputePipeline, TerrainData};
-use bevy::core::{Pod, Zeroable};
-use bevy::render::render_resource::{
-    BindGroup, BindGroupDescriptor, BindGroupEntry, BindingResource,
-};
+use crate::{config::TerrainConfig, quadtree::NodeData, TerrainComputePipeline, TerrainData};
 use bevy::{
+    core::{Pod, Zeroable},
     ecs::{query::QueryItem, system::lifetimeless::Write},
     prelude::*,
     render::{
         render_asset::RenderAssets,
         render_component::ExtractComponent,
+        render_resource::{BindGroup, BindGroupDescriptor, BindGroupEntry, BindingResource},
         render_resource::{
             CommandEncoderDescriptor, Extent3d, ImageCopyTexture, Origin3d, TextureAspect,
         },
@@ -161,7 +158,7 @@ pub(crate) fn queue_quadtree_update(
 
                 let bind_group = device.create_bind_group(&BindGroupDescriptor {
                     label: None,
-                    layout: &pipeline.update_quadtree_bind_group_layout,
+                    layout: &pipeline.update_quadtree_layout,
                     entries: &[
                         BindGroupEntry {
                             binding: 0,

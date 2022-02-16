@@ -1,6 +1,6 @@
-use crate::{
-    config::TerrainConfigUniform,
-    render::terrain_data::{TerrainData, PATCH_SIZE},
+use crate::render::{
+    layouts::{PATCH_LIST_LAYOUT, TERRAIN_DATA_LAYOUT},
+    terrain_data::TerrainData,
 };
 use bevy::{
     core_pipeline::Opaque3d,
@@ -20,49 +20,6 @@ use bevy::{
         render_resource::*,
         renderer::RenderDevice,
     },
-};
-
-pub(crate) const TERRAIN_DATA_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
-    label: None,
-    entries: &[
-        // terrain config
-        BindGroupLayoutEntry {
-            binding: 0,
-            visibility: ShaderStages::VERTEX,
-            ty: BindingType::Buffer {
-                ty: BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: BufferSize::new(TerrainConfigUniform::buffer_size()),
-            },
-            count: None,
-        },
-        // height atlas
-        BindGroupLayoutEntry {
-            binding: 1,
-            visibility: ShaderStages::VERTEX,
-            ty: BindingType::Texture {
-                sample_type: TextureSampleType::Uint,
-                view_dimension: TextureViewDimension::D2Array,
-                multisampled: false,
-            },
-            count: None,
-        },
-        // Todo: add Chunk Map here
-    ],
-};
-
-pub(crate) const PATCH_LIST_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
-    label: None,
-    entries: &[BindGroupLayoutEntry {
-        binding: 0,
-        visibility: ShaderStages::VERTEX,
-        ty: BindingType::Buffer {
-            ty: BufferBindingType::Storage { read_only: true },
-            has_dynamic_offset: false,
-            min_binding_size: BufferSize::new(PATCH_SIZE),
-        },
-        count: None,
-    }],
 };
 
 /// The pipeline used to render the terrain entities.
