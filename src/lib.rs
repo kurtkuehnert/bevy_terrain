@@ -1,32 +1,31 @@
-use crate::debug::{info, TerrainDebugInfo};
-use crate::quadtree::ViewDistance;
-
-use crate::node_atlas::{queue_atlas_updates, queue_quadtree_update, NodeAtlas};
-use crate::render::terrain_data::TerrainData;
-use crate::render::terrain_pipeline::{queue_terrain, DrawTerrain, TerrainPipeline};
-use bevy::core_pipeline::node::MAIN_PASS_DEPENDENCIES;
-use bevy::render::render_graph::RenderGraph;
+use crate::{
+    debug::{info, TerrainDebugInfo},
+    node_atlas::{queue_atlas_updates, queue_quadtree_update, NodeAtlas},
+    quadtree::{traverse_quadtree, update_load_status, update_nodes, ViewDistance},
+    render::{
+        terrain_data::TerrainData,
+        terrain_pipeline::{queue_terrain, DrawTerrain, TerrainPipeline},
+    },
+};
 use bevy::{
-    core_pipeline::Opaque3d,
+    core_pipeline::{node::MAIN_PASS_DEPENDENCIES, Opaque3d},
     prelude::*,
     render::{
         render_asset::RenderAssetPlugin, render_component::ExtractComponentPlugin,
-        render_phase::AddRenderCommand, render_resource::SpecializedPipelines, RenderApp,
-        RenderStage,
+        render_graph::RenderGraph, render_phase::AddRenderCommand,
+        render_resource::SpecializedPipelines, RenderApp, RenderStage,
     },
 };
 use bevy_inspector_egui::RegisterInspectable;
 use render::preparation_pipeline::{TerrainComputeNode, TerrainComputePipeline};
-use systems::{traverse_quadtree, update_load_status, update_nodes};
 
 pub mod bundles;
+pub mod config;
 pub mod debug;
 pub mod node_atlas;
 pub mod preprocess;
 pub mod quadtree;
 pub mod render;
-pub mod systems;
-pub mod terrain;
 
 pub struct TerrainPlugin;
 

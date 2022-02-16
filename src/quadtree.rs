@@ -1,7 +1,9 @@
-use crate::{node_atlas::NodeAtlas, terrain::TerrainConfig};
+use crate::{config::TerrainConfig, node_atlas::NodeAtlas};
 use bevy::{
     asset::{HandleId, LoadState},
+    math::Vec3Swizzles,
     prelude::*,
+    render::render_resource::TextureUsages,
     utils::{HashMap, HashSet},
 };
 use bevy_inspector_egui::Inspectable;
@@ -64,33 +66,6 @@ impl NodeData {
 #[derive(Default)]
 pub(crate) struct LoadStatus {
     pub(crate) finished: bool,
-}
-
-/// Stores all information about the current nodes.
-#[derive(Component)]
-pub struct Nodes {
-    /// Maps the id of an asset to the corresponding node id.
-    pub(crate) handle_mapping: HashMap<HandleId, u32>,
-    /// Statuses of all currently loading nodes.
-    pub(crate) load_statuses: HashMap<u32, LoadStatus>,
-    /// Stores the currently loading nodes.
-    pub(crate) loading_nodes: HashMap<u32, NodeData>,
-    /// Stores the currently active nodes.
-    pub(crate) active_nodes: HashMap<u32, NodeData>,
-    /// Caches the recently deactivated nodes.
-    pub(crate) inactive_nodes: LruCache<u32, NodeData>,
-}
-
-impl Nodes {
-    pub(crate) fn new(cache_size: usize) -> Self {
-        Self {
-            handle_mapping: Default::default(),
-            load_statuses: Default::default(),
-            loading_nodes: Default::default(),
-            active_nodes: HashMap::default(),
-            inactive_nodes: LruCache::new(cache_size),
-        }
-    }
 }
 
 #[derive(PartialOrd, PartialEq)]
@@ -176,6 +151,16 @@ pub struct Quadtree {
     /// The children of the root nodes.
     /// Root nodes stay always loaded, so they don't need to be traversed.
     nodes: Vec<TreeNode>,
+    /// Maps the id of an asset to the corresponding node id.
+    pub(crate) handle_mapping: HashMap<HandleId, u32>,
+    /// Statuses of all currently loading nodes.
+    pub(crate) load_statuses: HashMap<u32, LoadStatus>,
+    /// Stores the currently loading nodes.
+    pub(crate) loading_nodes: HashMap<u32, NodeData>,
+    /// Stores the currently active nodes.
+    pub(crate) active_nodes: HashMap<u32, NodeData>,
+    /// Caches the recently deactivated nodes.
+    pub(crate) inactive_nodes: LruCache<u32, NodeData>,
     /// Newly activated nodes since last traversal.
     pub(crate) activated_nodes: HashSet<u32>,
     /// Nodes that are no longer required and should be deactivated.
@@ -185,7 +170,7 @@ pub struct Quadtree {
 }
 
 impl Quadtree {
-    pub(crate) fn new(config: &TerrainConfig) -> Self {
+    pub(crate) fn new(config: &TerrainConfig, cache_size: usize) -> Self {
         let lod = config.lod_count - 1;
 
         let nodes_to_activate = config
@@ -206,6 +191,11 @@ impl Quadtree {
 
         Self {
             nodes,
+            handle_mapping: Default::default(),
+            load_statuses: Default::default(),
+            loading_nodes: Default::default(),
+            active_nodes: HashMap::default(),
+            inactive_nodes: LruCache::new(cache_size),
             activated_nodes: Default::default(),
             nodes_to_deactivate: Default::default(),
             nodes_to_activate,
@@ -220,5 +210,109 @@ impl Quadtree {
         }
 
         self.nodes = nodes;
+    }
+}
+
+/// Traverses all quadtrees and generates a new tree update.
+pub fn traverse_quadtree(
+    viewer_query: Query<(&GlobalTransform, &ViewDistance), With<Camera>>,
+    mut terrain_query: Query<(&GlobalTransform, &mut Quadtree)>,
+) {
+    for (terrain_transform, mut quadtree) in terrain_query.iter_mut() {
+        for (camera_transform, view_distance) in viewer_query.iter() {
+            let viewer = Viewer {
+                position: (camera_transform.translation - terrain_transform.translation).xz(),
+                view_distance: view_distance.view_distance,
+            };
+
+            quadtree.traverse(viewer);
+        }
+    }
+}
+
+/// Updates the node atlas according to the corresponding tree update and the load statuses.
+pub fn update_nodes(
+    asset_server: Res<AssetServer>,
+    mut terrain_query: Query<(&mut Quadtree, &mut NodeAtlas)>,
+) {
+    for (mut quadtree, mut node_atlas) in terrain_query.iter_mut() {
+        let Quadtree {
+            ref mut handle_mapping,
+            ref mut load_statuses,
+            ref mut loading_nodes,
+            ref mut inactive_nodes,
+            ref mut active_nodes,
+            ref mut activated_nodes,
+            ref mut nodes_to_activate,
+            ref mut nodes_to_deactivate,
+            ..
+        } = quadtree.as_mut();
+
+        // clear the previously activated nodes
+        activated_nodes.clear();
+
+        let mut activation_queue = Vec::new();
+        let deactivation_queue = mem::take(nodes_to_deactivate);
+
+        // load required nodes from cache or disk
+        for id in mem::take(nodes_to_activate) {
+            if let Some(node) = inactive_nodes.pop(&id) {
+                // queue cached node for activation
+                activation_queue.push(node);
+            } else {
+                // load node before activation
+                loading_nodes.insert(
+                    id,
+                    NodeData::load(id, &asset_server, load_statuses, handle_mapping),
+                );
+            };
+        }
+
+        // queue all nodes, that have finished loading, for activation
+        load_statuses.retain(|&id, status| {
+            if status.finished {
+                activation_queue.push(loading_nodes.remove(&id).unwrap());
+            }
+
+            !status.finished
+        });
+
+        // deactivate all no longer required nodes
+        for id in deactivation_queue {
+            let mut node = active_nodes.remove(&id).unwrap();
+            node_atlas.deactivate_node(&mut node);
+            inactive_nodes.put(id, node);
+        }
+
+        // activate as all nodes ready for activation
+        for mut node in activation_queue {
+            node_atlas.activate_node(&mut node);
+            activated_nodes.insert(node.id);
+            active_nodes.insert(node.id, node);
+        }
+    }
+}
+
+/// Updates the load status of a node for all of it newly loaded assets.
+pub fn update_load_status(
+    mut asset_events: EventReader<AssetEvent<Image>>,
+    mut images: ResMut<Assets<Image>>,
+    mut terrain_query: Query<&mut Quadtree>,
+) {
+    for event in asset_events.iter() {
+        if let AssetEvent::Created { handle } = event {
+            for mut quadtree in terrain_query.iter_mut() {
+                if let Some(id) = quadtree.handle_mapping.remove(&handle.id) {
+                    let image = images.get_mut(handle).unwrap();
+
+                    image.texture_descriptor.usage = TextureUsages::COPY_SRC
+                        | TextureUsages::COPY_DST
+                        | TextureUsages::TEXTURE_BINDING;
+                    let status = quadtree.load_statuses.get_mut(&id).unwrap();
+                    status.finished = true;
+                    break;
+                }
+            }
+        }
     }
 }

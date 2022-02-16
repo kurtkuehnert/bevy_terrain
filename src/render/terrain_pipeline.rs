@@ -1,6 +1,6 @@
 use crate::{
+    config::TerrainConfigUniform,
     render::terrain_data::{TerrainData, PATCH_SIZE},
-    terrain::TerrainConfigUniform,
 };
 use bevy::{
     core_pipeline::Opaque3d,
