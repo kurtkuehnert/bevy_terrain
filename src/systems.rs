@@ -1,28 +1,28 @@
 use crate::node_atlas::NodeAtlas;
-use crate::quadtree::{NodeData, Nodes, Quadtree, TreeUpdate, Viewer};
+use crate::quadtree::{NodeData, Nodes, Quadtree, Viewer};
 use crate::{
-    AssetEvent, AssetServer, Camera, EventReader, GlobalTransform, Image, QuadtreeUpdate, Query,
-    Res, ViewDistance, With,
+    AssetEvent, AssetServer, Camera, EventReader, GlobalTransform, Image, Query, Res, ViewDistance,
+    With,
 };
 use bevy::asset::Assets;
 use bevy::math::Vec3Swizzles;
 use bevy::prelude::ResMut;
+use bevy::render::render_resource::TextureUsages;
 use std::mem;
-use wgpu::TextureUsages;
 
 /// Traverses all quadtrees and generates a new tree update.
 pub fn traverse_quadtree(
     viewer_query: Query<(&GlobalTransform, &ViewDistance), With<Camera>>,
-    mut terrain_query: Query<(&GlobalTransform, &mut Quadtree, &mut TreeUpdate)>,
+    mut terrain_query: Query<(&GlobalTransform, &mut Quadtree)>,
 ) {
-    for (terrain_transform, mut quadtree, mut tree_update) in terrain_query.iter_mut() {
+    for (terrain_transform, mut quadtree) in terrain_query.iter_mut() {
         for (camera_transform, view_distance) in viewer_query.iter() {
             let viewer = Viewer {
                 position: (camera_transform.translation - terrain_transform.translation).xz(),
                 view_distance: view_distance.view_distance,
             };
 
-            quadtree.traverse(&mut tree_update, viewer);
+            quadtree.traverse(viewer);
         }
     }
 }
@@ -31,14 +31,9 @@ pub fn traverse_quadtree(
 /// and the load statuses.
 pub fn update_nodes(
     asset_server: Res<AssetServer>,
-    mut terrain_query: Query<(
-        &mut TreeUpdate,
-        &mut Nodes,
-        &mut NodeAtlas,
-        &mut QuadtreeUpdate,
-    )>,
+    mut terrain_query: Query<(&mut Quadtree, &mut Nodes, &mut NodeAtlas)>,
 ) {
-    for (mut tree_update, mut nodes, mut node_atlas, mut node_updates) in terrain_query.iter_mut() {
+    for (mut quadtree, mut nodes, mut node_atlas) in terrain_query.iter_mut() {
         let Nodes {
             ref mut handle_mapping,
             ref mut load_statuses,
@@ -48,12 +43,12 @@ pub fn update_nodes(
         } = nodes.as_mut();
 
         // clear the previously activated nodes
-        tree_update.activated_nodes.clear();
+        quadtree.activated_nodes.clear();
 
         let mut nodes_to_activate: Vec<NodeData> = Vec::new();
 
         // load required nodes from cache or disk
-        for id in mem::take(&mut tree_update.nodes_to_activate) {
+        for id in mem::take(&mut quadtree.nodes_to_activate) {
             if let Some(node) = inactive_nodes.pop(&id) {
                 // queue cached node for activation
                 nodes_to_activate.push(node);
@@ -76,16 +71,16 @@ pub fn update_nodes(
         });
 
         // deactivate all no longer required nodes
-        for id in mem::take(&mut tree_update.nodes_to_deactivate) {
+        for id in mem::take(&mut quadtree.nodes_to_deactivate) {
             let mut node = active_nodes.remove(&id).unwrap();
-            node_atlas.deactivate_node(&mut node, &mut node_updates.0);
+            node_atlas.deactivate_node(&mut node);
             inactive_nodes.put(id, node);
         }
 
         // activate as all nodes ready for activation
         for mut node in nodes_to_activate {
-            node_atlas.activate_node(&mut node, &mut node_updates.0);
-            tree_update.activated_nodes.insert(node.id);
+            node_atlas.activate_node(&mut node);
+            quadtree.activated_nodes.insert(node.id);
             active_nodes.insert(node.id, node);
         }
     }

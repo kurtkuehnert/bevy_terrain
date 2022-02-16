@@ -1,8 +1,7 @@
 use crate::debug::{info, TerrainDebugInfo};
 use crate::quadtree::ViewDistance;
-use crate::quadtree_update::queue_quadtree_update;
 
-use crate::node_atlas::{queue_atlas_updates, NodeAtlas};
+use crate::node_atlas::{queue_atlas_updates, queue_quadtree_update, NodeAtlas};
 use crate::render::terrain_data::TerrainData;
 use crate::render::terrain_pipeline::{queue_terrain, DrawTerrain, TerrainPipeline};
 use bevy::core_pipeline::node::MAIN_PASS_DEPENDENCIES;
@@ -17,7 +16,6 @@ use bevy::{
     },
 };
 use bevy_inspector_egui::RegisterInspectable;
-use quadtree_update::QuadtreeUpdate;
 use render::preparation_pipeline::{TerrainComputeNode, TerrainComputePipeline};
 use systems::{traverse_quadtree, update_load_status, update_nodes};
 
@@ -26,7 +24,6 @@ pub mod debug;
 pub mod node_atlas;
 pub mod preprocess;
 pub mod quadtree;
-pub mod quadtree_update;
 pub mod render;
 pub mod systems;
 pub mod terrain;
@@ -40,7 +37,6 @@ impl Plugin for TerrainPlugin {
         app.add_asset::<TerrainData>()
             .add_plugin(RenderAssetPlugin::<TerrainData>::default())
             .add_plugin(ExtractComponentPlugin::<Handle<TerrainData>>::default())
-            .add_plugin(ExtractComponentPlugin::<QuadtreeUpdate>::default())
             .add_plugin(ExtractComponentPlugin::<NodeAtlas>::default());
 
         app.add_system(traverse_quadtree.before("update_nodes"))

@@ -1,8 +1,6 @@
-use crate::{
-    quadtree_update::{GpuQuadtreeUpdate, NodeUpdate},
-    render::terrain_data::{
-        TerrainData, CONFIG_BUFFER_SIZE, INDIRECT_BUFFER_SIZE, PARAMETER_BUFFER_SIZE, PATCH_SIZE,
-    },
+use crate::node_atlas::{GpuQuadtreeUpdate, NodeUpdate};
+use crate::render::terrain_data::{
+    TerrainData, CONFIG_BUFFER_SIZE, INDIRECT_BUFFER_SIZE, PARAMETER_BUFFER_SIZE, PATCH_SIZE,
 };
 use bevy::{
     ecs::system::lifetimeless::Read,
@@ -417,48 +415,48 @@ impl render_graph::Node for TerrainComputeNode {
                 pass.dispatch(*count, 1, 1);
             }
 
-            let gpu_preparation_data = terrain_data.get(handle).unwrap();
+            let gpu_terrain_data = terrain_data.get(handle).unwrap();
 
-            pass.set_bind_group(0, &gpu_preparation_data.node_parameter_bind_group, &[]);
+            pass.set_bind_group(0, &gpu_terrain_data.node_parameter_bind_group, &[]);
             pass.set_pipeline(&pipeline.reset_node_list_pipeline);
             pass.dispatch(1, 1, 1);
 
-            pass.set_bind_group(0, &gpu_preparation_data.node_buffer_bind_groups[1], &[]);
+            pass.set_bind_group(0, &gpu_terrain_data.node_buffer_bind_groups[1], &[]);
             pass.set_pipeline(&pipeline.build_area_list_pipeline);
-            pass.dispatch_indirect(&gpu_preparation_data.indirect_buffer, 0);
+            pass.dispatch_indirect(&gpu_terrain_data.indirect_buffer, 0);
 
-            pass.set_bind_group(0, &gpu_preparation_data.node_parameter_bind_group, &[]);
+            pass.set_bind_group(0, &gpu_terrain_data.node_parameter_bind_group, &[]);
             pass.set_pipeline(&pipeline.prepare_next_node_list_pipeline);
             pass.dispatch(1, 1, 1);
 
-            for i in 0..gpu_preparation_data.config.lod_count as usize - 1 {
+            for i in 0..gpu_terrain_data.config.lod_count as usize - 1 {
                 let index = i % 2;
 
-                pass.set_bind_group(0, &gpu_preparation_data.node_buffer_bind_groups[index], &[]);
+                pass.set_bind_group(0, &gpu_terrain_data.node_buffer_bind_groups[index], &[]);
                 pass.set_pipeline(&pipeline.build_node_list_pipeline);
-                pass.dispatch_indirect(&gpu_preparation_data.indirect_buffer, 0);
+                pass.dispatch_indirect(&gpu_terrain_data.indirect_buffer, 0);
 
-                pass.set_bind_group(0, &gpu_preparation_data.node_parameter_bind_group, &[]);
+                pass.set_bind_group(0, &gpu_terrain_data.node_parameter_bind_group, &[]);
                 pass.set_pipeline(&pipeline.prepare_next_node_list_pipeline);
                 pass.dispatch(1, 1, 1);
             }
 
-            let index = (gpu_preparation_data.config.lod_count as usize - 1) % 2;
+            let index = (gpu_terrain_data.config.lod_count as usize - 1) % 2;
 
             // build chunk list
-            pass.set_bind_group(0, &gpu_preparation_data.node_buffer_bind_groups[index], &[]);
+            pass.set_bind_group(0, &gpu_terrain_data.node_buffer_bind_groups[index], &[]);
             pass.set_pipeline(&pipeline.build_chunk_list_pipeline);
-            pass.dispatch_indirect(&gpu_preparation_data.indirect_buffer, 0);
+            pass.dispatch_indirect(&gpu_terrain_data.indirect_buffer, 0);
 
-            pass.set_bind_group(0, &gpu_preparation_data.node_parameter_bind_group, &[]);
+            pass.set_bind_group(0, &gpu_terrain_data.node_parameter_bind_group, &[]);
             pass.set_pipeline(&pipeline.prepare_patch_list_pipeline);
             pass.dispatch(1, 1, 1);
 
-            pass.set_bind_group(0, &gpu_preparation_data.patch_buffer_bind_group, &[]);
+            pass.set_bind_group(0, &gpu_terrain_data.patch_buffer_bind_group, &[]);
             pass.set_pipeline(&pipeline.build_patch_list_pipeline);
-            pass.dispatch_indirect(&gpu_preparation_data.indirect_buffer, 0);
+            pass.dispatch_indirect(&gpu_terrain_data.indirect_buffer, 0);
 
-            pass.set_bind_group(0, &gpu_preparation_data.node_parameter_bind_group, &[]);
+            pass.set_bind_group(0, &gpu_terrain_data.node_parameter_bind_group, &[]);
             pass.set_pipeline(&pipeline.prepare_render_node_list_pipeline);
             pass.dispatch(1, 1, 1);
         }
