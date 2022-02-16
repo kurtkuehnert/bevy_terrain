@@ -205,10 +205,8 @@ impl TerrainData {
     }
 
     fn create_patch_buffer(&mut self, device: &RenderDevice) -> Buffer {
-        let max_patch_count = self.config.chunk_count.x
-            * self.config.chunk_count.y
-            * self.config.patch_count
-            * self.config.patch_count;
+        let max_patch_count =
+            self.config.chunk_count.x * self.config.chunk_count.y * TerrainConfig::PATCHES_PER_NODE;
 
         let buffer_descriptor = BufferDescriptor {
             label: None,
@@ -349,14 +347,18 @@ impl RenderAsset for TerrainData {
             entries: &[
                 BindGroupEntry {
                     binding: 0,
-                    resource: BindingResource::TextureView(&quadtree_view),
+                    resource: config_buffer.as_entire_binding(),
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: final_node_buffer.as_entire_binding(),
+                    resource: BindingResource::TextureView(&quadtree_view),
                 },
                 BindGroupEntry {
                     binding: 2,
+                    resource: final_node_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 3,
                     resource: patch_buffer.as_entire_binding(),
                 },
             ],

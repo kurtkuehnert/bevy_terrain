@@ -6,6 +6,8 @@ use std::ops::Range;
 pub(crate) struct TerrainConfigUniform {
     lod_count: u32,
     chunk_size: u32,
+    patch_size: u32,
+    index_count: u32,
     area_count: UVec2,
     scale: f32,
     height: f32,
@@ -15,19 +17,22 @@ pub(crate) struct TerrainConfigUniform {
 pub struct TerrainConfig {
     pub lod_count: u32,
     pub patch_size: u32,
-    pub patch_count: u32,
     pub chunk_size: u32,
     pub chunk_count: UVec2,
     pub texture_size: u32,
     pub area_size: u32,
     pub area_count: UVec2,
     pub terrain_size: UVec2,
+    pub index_count: u32,
     pub scale: f32,
     pub height: f32,
     pub node_atlas_size: u16,
 }
 
 impl TerrainConfig {
+    pub const PATCH_COUNT: u32 = 8;
+    pub const PATCHES_PER_NODE: u32 = 64;
+
     pub fn new(
         chunk_size: u32,
         lod_count: u32,
@@ -36,23 +41,23 @@ impl TerrainConfig {
         height: f32,
         node_atlas_size: u16,
     ) -> Self {
-        let patch_count = 8;
-        let patch_size = chunk_size / patch_count;
+        let patch_size = chunk_size / Self::PATCH_COUNT;
         let area_size = chunk_size * (1 << (lod_count - 1));
         let texture_size = chunk_size + 1;
         let terrain_size = area_count * area_size;
         let chunk_count = area_count * (1 << (lod_count - 1));
+        let index_count = 160;
 
         Self {
             lod_count,
             patch_size,
-            patch_count,
             chunk_size,
             texture_size,
             chunk_count,
             area_size,
             area_count,
             terrain_size,
+            index_count,
             scale,
             height,
             node_atlas_size,
@@ -63,6 +68,8 @@ impl TerrainConfig {
         TerrainConfigUniform {
             lod_count: self.lod_count,
             chunk_size: self.chunk_size,
+            patch_size: self.patch_size,
+            index_count: self.index_count,
             area_count: self.area_count,
             scale: self.scale,
             height: self.height,
