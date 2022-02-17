@@ -1,3 +1,4 @@
+use crate::render::terrain_pipeline::extract_terrain;
 use crate::{
     debug::{info, TerrainDebugInfo},
     node_atlas::{queue_atlas_updates, queue_quadtree_update, NodeAtlas},
@@ -49,6 +50,7 @@ impl Plugin for TerrainPlugin {
             .init_resource::<TerrainComputePipeline>()
             .init_resource::<TerrainPipeline>()
             .init_resource::<SpecializedPipelines<TerrainPipeline>>()
+            .add_system_to_stage(RenderStage::Extract, extract_terrain)
             .add_system_to_stage(RenderStage::Queue, queue_quadtree_update)
             .add_system_to_stage(RenderStage::Queue, queue_atlas_updates)
             .add_system_to_stage(RenderStage::Queue, queue_terrain);
