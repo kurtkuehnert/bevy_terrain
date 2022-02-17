@@ -1,11 +1,12 @@
-use crate::render::terrain_pipeline::extract_terrain;
+use crate::render::{extract_terrain, queue_terrain, DrawTerrain};
 use crate::{
     debug::{info, TerrainDebugInfo},
-    node_atlas::{queue_atlas_updates, queue_quadtree_update, NodeAtlas},
+    node_atlas::{queue_node_atlas_updates, GpuNodeAtlas},
     quadtree::{traverse_quadtree, update_load_status, update_nodes, ViewDistance},
     render::{
+        compute_pipelines::{TerrainComputeNode, TerrainComputePipelines},
         terrain_data::TerrainData,
-        terrain_pipeline::{queue_terrain, DrawTerrain, TerrainPipeline},
+        terrain_pipeline::TerrainPipeline,
     },
 };
 use bevy::{
@@ -18,7 +19,6 @@ use bevy::{
     },
 };
 use bevy_inspector_egui::RegisterInspectable;
-use render::compute_pipeline::{TerrainComputeNode, TerrainComputePipeline};
 
 pub mod bundles;
 pub mod config;
@@ -37,7 +37,7 @@ impl Plugin for TerrainPlugin {
         app.add_asset::<TerrainData>()
             .add_plugin(RenderAssetPlugin::<TerrainData>::default())
             .add_plugin(ExtractComponentPlugin::<Handle<TerrainData>>::default())
-            .add_plugin(ExtractComponentPlugin::<NodeAtlas>::default());
+            .add_plugin(ExtractComponentPlugin::<GpuNodeAtlas>::default());
 
         app.add_system(traverse_quadtree.before("update_nodes"))
             .add_system(update_nodes.label("update_nodes"))
@@ -47,13 +47,12 @@ impl Plugin for TerrainPlugin {
         let render_app = app
             .sub_app_mut(RenderApp)
             .add_render_command::<Opaque3d, DrawTerrain>()
-            .init_resource::<TerrainComputePipeline>()
+            .init_resource::<TerrainComputePipelines>()
             .init_resource::<TerrainPipeline>()
             .init_resource::<SpecializedPipelines<TerrainPipeline>>()
             .add_system_to_stage(RenderStage::Extract, extract_terrain)
-            .add_system_to_stage(RenderStage::Queue, queue_quadtree_update)
-            .add_system_to_stage(RenderStage::Queue, queue_atlas_updates)
-            .add_system_to_stage(RenderStage::Queue, queue_terrain);
+            .add_system_to_stage(RenderStage::Queue, queue_terrain)
+            .add_system_to_stage(RenderStage::Queue, queue_node_atlas_updates);
 
         let compute_node = TerrainComputeNode::from_world(&mut render_app.world);
 

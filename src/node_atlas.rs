@@ -1,18 +1,19 @@
-use crate::{config::TerrainConfig, quadtree::NodeData, TerrainComputePipeline, TerrainData};
+use crate::{config::TerrainConfig, quadtree::NodeData, TerrainData};
 use bevy::{
     core::{Pod, Zeroable},
-    ecs::{query::QueryItem, system::lifetimeless::Write},
+    ecs::{
+        query::QueryItem,
+        system::lifetimeless::{Read, Write},
+    },
     prelude::*,
     render::{
         render_asset::RenderAssets,
         render_component::ExtractComponent,
-        render_resource::{BindGroup, BindGroupDescriptor, BindGroupEntry, BindingResource},
-        render_resource::{
-            CommandEncoderDescriptor, Extent3d, ImageCopyTexture, Origin3d, TextureAspect,
-        },
+        render_resource::*,
         renderer::{RenderDevice, RenderQueue},
     },
 };
+use bytemuck::cast_slice;
 use std::mem;
 
 #[repr(C)]
@@ -23,13 +24,17 @@ pub(crate) struct NodeUpdate {
 }
 
 #[derive(Component)]
-pub struct GpuQuadtreeUpdate(pub(crate) Vec<(u32, BindGroup)>);
+pub struct GpuNodeAtlas {
+    pub(crate) node_update_counts: Vec<u32>,
+    quadtree_update: Vec<Vec<NodeUpdate>>,
+    activated_height_maps: Vec<(u16, Handle<Image>)>,
+}
 
 /// Maps the assets to the corresponding active nodes and tracks the node updates.
 #[derive(Component)]
 pub struct NodeAtlas {
     pub(crate) available_ids: Vec<u16>,
-    pub(crate) quadtree_update: Vec<NodeUpdate>,
+    quadtree_update: Vec<Vec<NodeUpdate>>,
     activated_height_maps: Vec<(u16, Handle<Image>)>,
 }
 
@@ -37,10 +42,10 @@ impl NodeAtlas {
     // pub(crate) const NONEXISTING_ID: u16 = u16::MAX;
     pub(crate) const INACTIVE_ID: u16 = u16::MAX - 1;
 
-    pub fn new(atlas_size: u16) -> Self {
+    pub fn new(config: &TerrainConfig) -> Self {
         Self {
-            available_ids: (0..atlas_size).collect(),
-            quadtree_update: Default::default(),
+            available_ids: (0..config.node_atlas_size).collect(),
+            quadtree_update: vec![Vec::new(); config.lod_count as usize],
             activated_height_maps: Default::default(),
         }
     }
@@ -50,13 +55,14 @@ impl NodeAtlas {
 
         node.atlas_index = atlas_index;
 
-        self.quadtree_update.push(NodeUpdate {
+        self.activated_height_maps
+            .push((atlas_index, node.height_map.as_weak()));
+
+        let lod = TerrainConfig::node_position(node.id).0 as usize;
+        self.quadtree_update[lod].push(NodeUpdate {
             node_id: node.id,
             atlas_index: node.atlas_index as u32,
         });
-
-        self.activated_height_maps
-            .push((atlas_index, node.height_map.as_weak()));
     }
 
     pub(crate) fn deactivate_node(&mut self, node: &mut NodeData) {
@@ -64,39 +70,45 @@ impl NodeAtlas {
 
         node.atlas_index = Self::INACTIVE_ID;
 
-        self.quadtree_update.push(NodeUpdate {
+        let lod = TerrainConfig::node_position(node.id).0 as usize;
+        self.quadtree_update[lod].push(NodeUpdate {
             node_id: node.id,
             atlas_index: node.atlas_index as u32,
         });
     }
 }
 
-impl ExtractComponent for NodeAtlas {
-    type Query = Write<NodeAtlas>;
+impl ExtractComponent for GpuNodeAtlas {
+    type Query = (Write<NodeAtlas>, Read<TerrainConfig>);
     type Filter = Changed<NodeAtlas>;
 
-    fn extract_component(mut item: QueryItem<Self::Query>) -> Self {
+    fn extract_component(item: QueryItem<Self::Query>) -> Self {
+        let (mut node_atlas, config) = item;
+
         Self {
-            available_ids: Vec::new(),
-            quadtree_update: mem::take(&mut item.quadtree_update),
-            activated_height_maps: mem::take(&mut item.activated_height_maps),
+            node_update_counts: Vec::new(),
+            quadtree_update: mem::replace(
+                &mut node_atlas.quadtree_update,
+                vec![Vec::new(); config.lod_count as usize],
+            ),
+            activated_height_maps: mem::take(&mut node_atlas.activated_height_maps),
         }
     }
 }
 
-pub(crate) fn queue_atlas_updates(
+pub(crate) fn queue_node_atlas_updates(
     device: Res<RenderDevice>,
     queue: Res<RenderQueue>,
     images: Res<RenderAssets<Image>>,
     terrain_data: Res<RenderAssets<TerrainData>>,
-    terrain_query: Query<(&NodeAtlas, &Handle<TerrainData>)>,
+    mut terrain_query: Query<(&mut GpuNodeAtlas, &Handle<TerrainData>)>,
 ) {
     let mut command_encoder = device.create_command_encoder(&CommandEncoderDescriptor::default());
 
-    for (atlas, handle) in terrain_query.iter() {
+    for (mut gpu_node_atlas, handle) in terrain_query.iter_mut() {
         let gpu_terrain_data = terrain_data.get(handle).unwrap();
 
-        for (index, image) in &atlas.activated_height_maps {
+        for (index, image) in &gpu_node_atlas.activated_height_maps {
             let image = images.get(&image).unwrap();
 
             command_encoder.copy_texture_to_texture(
@@ -123,60 +135,19 @@ pub(crate) fn queue_atlas_updates(
                 },
             );
         }
-    }
 
-    queue.submit(vec![command_encoder.finish()]);
-}
-
-pub(crate) fn queue_quadtree_update(
-    mut commands: Commands,
-    mut device: ResMut<RenderDevice>,
-    mut queue: ResMut<RenderQueue>,
-    pipeline: Res<TerrainComputePipeline>,
-    terrain_data: ResMut<RenderAssets<TerrainData>>,
-    terrain_query: Query<(Entity, &NodeAtlas, &Handle<TerrainData>)>,
-) {
-    let terrain_data = terrain_data.into_inner();
-
-    for (entity, node_atlas, handle) in terrain_query.iter() {
-        let gpu_terrain_data = terrain_data.get_mut(handle).unwrap();
-        let quadtree_data = &mut gpu_terrain_data.quadtree_data;
-
-        // insert the node update into the buffer corresponding to its lod
-        node_atlas.quadtree_update.iter().for_each(|&data| {
-            let lod = TerrainConfig::node_position(data.node_id).0 as usize;
-            quadtree_data[lod].0.push(data);
-        });
-
-        // create the bind groups for each lod
-        let data = quadtree_data
-            .iter_mut()
-            .map(|(buffer, view)| {
-                buffer.write_buffer(&mut device, &mut queue);
-
-                let count = buffer.len() as u32;
-
-                let bind_group = device.create_bind_group(&BindGroupDescriptor {
-                    label: None,
-                    layout: &pipeline.update_quadtree_layout,
-                    entries: &[
-                        BindGroupEntry {
-                            binding: 0,
-                            resource: BindingResource::TextureView(view),
-                        },
-                        BindGroupEntry {
-                            binding: 1,
-                            resource: buffer.buffer().unwrap().as_entire_binding(),
-                        },
-                    ],
-                });
-
-                buffer.clear(); // reset buffer for next frame
-
-                (count, bind_group)
+        let counts = gpu_terrain_data
+            .quadtree_update_buffers
+            .iter()
+            .zip(&gpu_node_atlas.quadtree_update)
+            .map(|(buffer, quadtree_update)| {
+                queue.write_buffer(buffer, 0, cast_slice(quadtree_update));
+                quadtree_update.len() as u32
             })
             .collect();
 
-        commands.entity(entity).insert(GpuQuadtreeUpdate(data));
+        gpu_node_atlas.node_update_counts = counts;
     }
+
+    queue.submit(vec![command_encoder.finish()]);
 }

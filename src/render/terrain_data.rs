@@ -1,8 +1,6 @@
 use crate::{
-    config::TerrainConfig,
-    node_atlas::{NodeAtlas, NodeUpdate},
-    render::layouts::*,
-    TerrainComputePipeline, TerrainPipeline,
+    config::TerrainConfig, node_atlas::NodeAtlas, render::layouts::*, TerrainComputePipelines,
+    TerrainPipeline,
 };
 use bevy::{
     ecs::system::{lifetimeless::SRes, SystemParamItem},
@@ -20,8 +18,9 @@ use std::{num::NonZeroU32, ops::Deref};
 pub struct GpuTerrainData {
     pub(crate) config: TerrainConfig,
     pub(crate) indirect_buffer: Buffer,
+    pub(crate) quadtree_update_buffers: Vec<Buffer>,
     pub(crate) prepare_indirect_bind_group: BindGroup,
-    pub(crate) quadtree_data: Vec<(BufferVec<NodeUpdate>, TextureView)>,
+    pub(crate) update_quadtree_bind_groups: Vec<BindGroup>,
     pub(crate) build_node_list_bind_groups: [BindGroup; 2],
     pub(crate) build_patch_list_bind_group: BindGroup,
     pub(crate) terrain_data_bind_group: BindGroup,
@@ -40,7 +39,8 @@ impl TerrainData {
         &mut self,
         device: &RenderDevice,
         queue: &RenderQueue,
-    ) -> (Texture, TextureView) {
+        layout: &BindGroupLayout,
+    ) -> (TextureView, Vec<Buffer>, Vec<BindGroup>) {
         let config = &self.config;
 
         let texture_descriptor = TextureDescriptor {
@@ -102,7 +102,49 @@ impl TerrainData {
             array_layer_count: None,
         });
 
-        (quadtree_texture, quadtree_view)
+        let (quadtree_buffers, quadtree_bind_groups) = (0..self.config.lod_count)
+            .map(|lod| {
+                let node_count = self.config.node_count(lod);
+                let max_node_count = (node_count.x * node_count.y) as BufferAddress;
+
+                let buffer = device.create_buffer(&BufferDescriptor {
+                    label: None,
+                    size: NODE_UPDATE_SIZE * max_node_count,
+                    usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
+                });
+
+                let view = quadtree_texture.create_view(&TextureViewDescriptor {
+                    label: None,
+                    format: Some(TextureFormat::R16Uint),
+                    dimension: Some(TextureViewDimension::D2),
+                    aspect: TextureAspect::All,
+                    base_mip_level: lod,
+                    mip_level_count: NonZeroU32::new(1),
+                    base_array_layer: 0,
+                    array_layer_count: None,
+                });
+
+                let bind_group = device.create_bind_group(&BindGroupDescriptor {
+                    label: None,
+                    layout: &layout,
+                    entries: &[
+                        BindGroupEntry {
+                            binding: 0,
+                            resource: BindingResource::TextureView(&view),
+                        },
+                        BindGroupEntry {
+                            binding: 1,
+                            resource: buffer.as_entire_binding(),
+                        },
+                    ],
+                });
+
+                (buffer, bind_group)
+            })
+            .unzip();
+
+        (quadtree_view, quadtree_buffers, quadtree_bind_groups)
     }
 
     fn create_node_atlas(&mut self, device: &RenderDevice) -> GpuImage {
@@ -226,7 +268,7 @@ impl RenderAsset for TerrainData {
         SRes<RenderDevice>,
         SRes<RenderQueue>,
         SRes<TerrainPipeline>,
-        SRes<TerrainComputePipeline>,
+        SRes<TerrainComputePipelines>,
     );
 
     fn extract_asset(&self) -> Self::ExtractedAsset {
@@ -235,11 +277,12 @@ impl RenderAsset for TerrainData {
 
     fn prepare_asset(
         mut terrain_data: Self::ExtractedAsset,
-        (device, queue, terrain_pipeline, compute_pipeline): &mut SystemParamItem<Self::Param>,
+        (device, queue, terrain_pipeline, compute_pipelines): &mut SystemParamItem<Self::Param>,
     ) -> Result<Self::PreparedAsset, PrepareAssetError<Self::ExtractedAsset>> {
         info!("initializing terrain data");
 
-        let (quadtree_texture, quadtree_view) = terrain_data.create_quadtree(&device, &queue);
+        let (quadtree_view, quadtree_update_buffers, update_quadtree_bind_groups) = terrain_data
+            .create_quadtree(&device, &queue, &compute_pipelines.update_quadtree_layout);
         let height_atlas = terrain_data.create_node_atlas(device);
 
         let indirect_buffer = terrain_data.create_indirect_buffer(device);
@@ -247,26 +290,6 @@ impl RenderAsset for TerrainData {
         let parameter_buffer = terrain_data.create_parameter_buffer(device);
         let (temp_node_buffers, final_node_buffer) = terrain_data.create_node_buffers(device);
         let patch_buffer = terrain_data.create_patch_buffer(device);
-
-        let quadtree_data = (0..terrain_data.config.lod_count)
-            .map(|lod| {
-                let mut buffer = BufferVec::default();
-                buffer.reserve(1, device);
-
-                let view = quadtree_texture.create_view(&TextureViewDescriptor {
-                    label: None,
-                    format: Some(TextureFormat::R16Uint),
-                    dimension: Some(TextureViewDimension::D2),
-                    aspect: TextureAspect::All,
-                    base_mip_level: lod,
-                    mip_level_count: NonZeroU32::new(1),
-                    base_array_layer: 0,
-                    array_layer_count: None,
-                });
-
-                (buffer, view)
-            })
-            .collect();
 
         let prepare_indirect_bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: None,
@@ -284,7 +307,7 @@ impl RenderAsset for TerrainData {
                     resource: parameter_buffer.as_entire_binding(),
                 },
             ],
-            layout: &compute_pipeline.prepare_indirect_layout,
+            layout: &compute_pipelines.prepare_indirect_layout,
         });
 
         let build_node_list_bind_groups = [
@@ -312,7 +335,7 @@ impl RenderAsset for TerrainData {
                         resource: final_node_buffer.as_entire_binding(),
                     },
                 ],
-                layout: &compute_pipeline.build_node_list_layout,
+                layout: &compute_pipelines.build_node_list_layout,
             }),
             device.create_bind_group(&BindGroupDescriptor {
                 label: None,
@@ -338,7 +361,7 @@ impl RenderAsset for TerrainData {
                         resource: final_node_buffer.as_entire_binding(),
                     },
                 ],
-                layout: &compute_pipeline.build_node_list_layout,
+                layout: &compute_pipelines.build_node_list_layout,
             }),
         ];
 
@@ -362,7 +385,7 @@ impl RenderAsset for TerrainData {
                     resource: patch_buffer.as_entire_binding(),
                 },
             ],
-            layout: &compute_pipeline.build_patch_list_layout,
+            layout: &compute_pipelines.build_patch_list_layout,
         });
 
         let terrain_data_bind_group = device.create_bind_group(&BindGroupDescriptor {
@@ -392,8 +415,9 @@ impl RenderAsset for TerrainData {
         Ok(GpuTerrainData {
             config: terrain_data.config,
             indirect_buffer,
-            quadtree_data,
+            quadtree_update_buffers,
             prepare_indirect_bind_group,
+            update_quadtree_bind_groups,
             build_node_list_bind_groups,
             build_patch_list_bind_group,
             terrain_data_bind_group,

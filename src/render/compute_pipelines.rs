@@ -1,5 +1,5 @@
 use crate::{
-    node_atlas::GpuQuadtreeUpdate,
+    node_atlas::GpuNodeAtlas,
     render::{layouts::*, terrain_data::GpuTerrainData, terrain_data::TerrainData},
 };
 use bevy::{
@@ -14,7 +14,7 @@ use bevy::{
 };
 use wgpu::ComputePass;
 
-pub struct TerrainComputePipeline {
+pub struct TerrainComputePipelines {
     pub(crate) prepare_indirect_layout: BindGroupLayout,
     pub(crate) update_quadtree_layout: BindGroupLayout,
     pub(crate) build_node_list_layout: BindGroupLayout,
@@ -30,7 +30,7 @@ pub struct TerrainComputePipeline {
     build_patch_list_pipeline: ComputePipeline,
 }
 
-impl TerrainComputePipeline {
+impl TerrainComputePipelines {
     fn create_prepare_indirect_pipelines(
         device: &RenderDevice,
         bind_group_layout: &BindGroupLayout,
@@ -167,7 +167,7 @@ impl TerrainComputePipeline {
     }
 }
 
-impl FromWorld for TerrainComputePipeline {
+impl FromWorld for TerrainComputePipelines {
     fn from_world(world: &mut World) -> Self {
         let device = world.get_resource::<RenderDevice>().unwrap();
 
@@ -181,28 +181,28 @@ impl FromWorld for TerrainComputePipeline {
             prepare_node_list_pipeline,
             prepare_patch_list_pipeline,
             prepare_render_pipeline,
-        ) = TerrainComputePipeline::create_prepare_indirect_pipelines(
+        ) = TerrainComputePipelines::create_prepare_indirect_pipelines(
             device,
             &prepare_indirect_layout,
         );
 
-        let update_quadtree_pipeline = TerrainComputePipeline::create_update_quadtree_pipeline(
+        let update_quadtree_pipeline = TerrainComputePipelines::create_update_quadtree_pipeline(
             device,
             &update_quadtree_layout,
         );
 
         let (build_area_list_pipeline, build_node_list_pipeline, build_chunk_list_pipeline) =
-            TerrainComputePipeline::create_build_node_list_pipelines(
+            TerrainComputePipelines::create_build_node_list_pipelines(
                 device,
                 &build_node_list_layout,
             );
 
-        let build_patch_list_pipeline = TerrainComputePipeline::create_build_patch_list_pipeline(
+        let build_patch_list_pipeline = TerrainComputePipelines::create_build_patch_list_pipeline(
             device,
             &build_patch_list_layout,
         );
 
-        TerrainComputePipeline {
+        TerrainComputePipelines {
             prepare_indirect_layout,
             update_quadtree_layout,
             build_node_list_layout,
@@ -221,25 +221,50 @@ impl FromWorld for TerrainComputePipeline {
 }
 
 pub struct TerrainComputeNode {
-    query: QueryState<(Read<GpuQuadtreeUpdate>, Read<Handle<TerrainData>>)>,
+    query: QueryState<(Option<Read<GpuNodeAtlas>>, Read<Handle<TerrainData>>)>,
+}
+
+impl FromWorld for TerrainComputeNode {
+    fn from_world(world: &mut World) -> Self {
+        Self {
+            query: world.query(),
+        }
+    }
 }
 
 impl TerrainComputeNode {
+    fn update_quadtree<'a>(
+        pass: &mut ComputePass<'a>,
+        gpu_node_atlas: Option<&GpuNodeAtlas>,
+        gpu_terrain_data: &'a GpuTerrainData,
+    ) {
+        if let Some(gpu_node_atlas) = gpu_node_atlas {
+            for (count, bind_group) in gpu_node_atlas
+                .node_update_counts
+                .iter()
+                .zip(&gpu_terrain_data.update_quadtree_bind_groups)
+            {
+                pass.set_bind_group(0, bind_group, &[]);
+                pass.dispatch(*count, 1, 1);
+            }
+        }
+    }
+
     fn build_node_list<'a>(
         pass: &mut ComputePass<'a>,
-        pipeline: &'a TerrainComputePipeline,
+        compute_pipelines: &'a TerrainComputePipelines,
         gpu_terrain_data: &'a GpuTerrainData,
     ) {
         pass.set_bind_group(0, &gpu_terrain_data.prepare_indirect_bind_group, &[]);
-        pass.set_pipeline(&pipeline.prepare_area_list_pipeline);
+        pass.set_pipeline(&compute_pipelines.prepare_area_list_pipeline);
         pass.dispatch(1, 1, 1);
 
         pass.set_bind_group(0, &gpu_terrain_data.build_node_list_bind_groups[1], &[]);
-        pass.set_pipeline(&pipeline.build_area_list_pipeline);
+        pass.set_pipeline(&compute_pipelines.build_area_list_pipeline);
         pass.dispatch_indirect(&gpu_terrain_data.indirect_buffer, 0);
 
         pass.set_bind_group(0, &gpu_terrain_data.prepare_indirect_bind_group, &[]);
-        pass.set_pipeline(&pipeline.prepare_node_list_pipeline);
+        pass.set_pipeline(&compute_pipelines.prepare_node_list_pipeline);
         pass.dispatch(1, 1, 1);
 
         let count = gpu_terrain_data.config.lod_count as usize - 1;
@@ -248,11 +273,11 @@ impl TerrainComputeNode {
             let index = i % 2;
 
             pass.set_bind_group(0, &gpu_terrain_data.build_node_list_bind_groups[index], &[]);
-            pass.set_pipeline(&pipeline.build_node_list_pipeline);
+            pass.set_pipeline(&compute_pipelines.build_node_list_pipeline);
             pass.dispatch_indirect(&gpu_terrain_data.indirect_buffer, 0);
 
             pass.set_bind_group(0, &gpu_terrain_data.prepare_indirect_bind_group, &[]);
-            pass.set_pipeline(&pipeline.prepare_node_list_pipeline);
+            pass.set_pipeline(&compute_pipelines.prepare_node_list_pipeline);
             pass.dispatch(1, 1, 1);
         }
 
@@ -262,16 +287,26 @@ impl TerrainComputeNode {
             &gpu_terrain_data.build_node_list_bind_groups[count % 2],
             &[],
         );
-        pass.set_pipeline(&pipeline.build_chunk_list_pipeline);
+        pass.set_pipeline(&compute_pipelines.build_chunk_list_pipeline);
         pass.dispatch_indirect(&gpu_terrain_data.indirect_buffer, 0);
     }
-}
 
-impl FromWorld for TerrainComputeNode {
-    fn from_world(world: &mut World) -> Self {
-        Self {
-            query: world.query(),
-        }
+    fn build_patch_list<'a>(
+        pass: &mut ComputePass<'a>,
+        compute_pipelines: &'a TerrainComputePipelines,
+        gpu_terrain_data: &'a GpuTerrainData,
+    ) {
+        pass.set_bind_group(0, &gpu_terrain_data.prepare_indirect_bind_group, &[]);
+        pass.set_pipeline(&compute_pipelines.prepare_patch_list_pipeline);
+        pass.dispatch(1, 1, 1);
+
+        pass.set_bind_group(0, &gpu_terrain_data.build_patch_list_bind_group, &[]);
+        pass.set_pipeline(&compute_pipelines.build_patch_list_pipeline);
+        pass.dispatch_indirect(&gpu_terrain_data.indirect_buffer, 0);
+
+        pass.set_bind_group(0, &gpu_terrain_data.prepare_indirect_bind_group, &[]);
+        pass.set_pipeline(&compute_pipelines.prepare_render_pipeline);
+        pass.dispatch(1, 1, 1);
     }
 }
 
@@ -286,40 +321,21 @@ impl render_graph::Node for TerrainComputeNode {
         context: &mut RenderContext,
         world: &World,
     ) -> Result<(), render_graph::NodeRunError> {
-        let pipeline = world.get_resource::<TerrainComputePipeline>().unwrap();
+        let compute_pipelines = world.get_resource::<TerrainComputePipelines>().unwrap();
         let terrain_data = world.get_resource::<RenderAssets<TerrainData>>().unwrap();
 
         let mut pass = context
             .command_encoder
             .begin_compute_pass(&ComputePassDescriptor::default());
 
-        pass.set_pipeline(&pipeline.update_quadtree_pipeline);
+        pass.set_pipeline(&compute_pipelines.update_quadtree_pipeline);
 
-        for (gpu_quadtree_update, handle) in self.query.iter_manual(world) {
-            for (count, bind_group) in &gpu_quadtree_update.0 {
-                if *count == 0 {
-                    continue;
-                }
-
-                pass.set_bind_group(0, bind_group, &[]);
-                pass.dispatch(*count, 1, 1);
-            }
-
+        for (gpu_node_atlas, handle) in self.query.iter_manual(world) {
             let gpu_terrain_data = terrain_data.get(handle).unwrap();
 
-            TerrainComputeNode::build_node_list(&mut pass, pipeline, gpu_terrain_data);
-
-            pass.set_bind_group(0, &gpu_terrain_data.prepare_indirect_bind_group, &[]);
-            pass.set_pipeline(&pipeline.prepare_patch_list_pipeline);
-            pass.dispatch(1, 1, 1);
-
-            pass.set_bind_group(0, &gpu_terrain_data.build_patch_list_bind_group, &[]);
-            pass.set_pipeline(&pipeline.build_patch_list_pipeline);
-            pass.dispatch_indirect(&gpu_terrain_data.indirect_buffer, 0);
-
-            pass.set_bind_group(0, &gpu_terrain_data.prepare_indirect_bind_group, &[]);
-            pass.set_pipeline(&pipeline.prepare_render_pipeline);
-            pass.dispatch(1, 1, 1);
+            TerrainComputeNode::update_quadtree(&mut pass, gpu_node_atlas, gpu_terrain_data);
+            TerrainComputeNode::build_node_list(&mut pass, compute_pipelines, gpu_terrain_data);
+            TerrainComputeNode::build_patch_list(&mut pass, compute_pipelines, gpu_terrain_data);
         }
 
         Ok(())
