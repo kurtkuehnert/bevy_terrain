@@ -20,7 +20,7 @@ impl TerrainBundle {
         Self {
             terrain_config: config.clone(),
             quadtree: Quadtree::new(&config, 16),
-            node_atlas: NodeAtlas::new(config.node_atlas_size),
+            node_atlas: NodeAtlas::new(&config),
             terrain_data: terrain_data.add(TerrainData { config }),
             terrain_debug_info: TerrainDebugInfo::default(),
             transform: Default::default(),
