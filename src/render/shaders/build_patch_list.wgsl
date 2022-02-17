@@ -2,7 +2,7 @@ struct TerrainConfig {
     lod_count: u32;
     chunk_size: u32;
     patch_size: u32;
-    index_count: u32;
+    vertices_per_row: u32;
     area_count: vec2<u32>;
     scale: f32;
     height: f32;
@@ -54,8 +54,8 @@ fn build_patch_list(
     let node_position = node_position(node_id);
 
     var patch: Patch;
-    patch.size = config.patch_size * (1u << node_position.lod);
-    patch.position = (8u * vec2<u32>(node_position.x, node_position.y) + patch_id) * patch.size;
+    patch.size = 1u << node_position.lod;
+    patch.position = (8u * vec2<u32>(node_position.x, node_position.y) + patch_id) * patch.size * config.patch_size;
     patch.atlas_index = textureLoad(quadtree, vec2<i32>(i32(node_position.x), i32(node_position.y)), i32(node_position.lod)).x;
     patch.coord_offset = 8u * patch_id.y + patch_id.x;
     patch.lod = node_position.lod;

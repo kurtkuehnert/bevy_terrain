@@ -7,7 +7,7 @@ pub(crate) struct TerrainConfigUniform {
     lod_count: u32,
     chunk_size: u32,
     patch_size: u32,
-    index_count: u32,
+    vertices_per_row: u32,
     area_count: UVec2,
     scale: f32,
     height: f32,
@@ -23,7 +23,7 @@ pub struct TerrainConfig {
     pub area_size: u32,
     pub area_count: UVec2,
     pub terrain_size: UVec2,
-    pub index_count: u32,
+    pub vertices_per_row: u32,
     pub scale: f32,
     pub height: f32,
     pub node_atlas_size: u16,
@@ -46,7 +46,7 @@ impl TerrainConfig {
         let texture_size = chunk_size + 1;
         let terrain_size = area_count * area_size;
         let chunk_count = area_count * (1 << (lod_count - 1));
-        let index_count = 160;
+        let vertices_per_row = (patch_size + 2) << 1;
 
         Self {
             lod_count,
@@ -57,7 +57,7 @@ impl TerrainConfig {
             area_size,
             area_count,
             terrain_size,
-            index_count,
+            vertices_per_row,
             scale,
             height,
             node_atlas_size,
@@ -69,7 +69,7 @@ impl TerrainConfig {
             lod_count: self.lod_count,
             chunk_size: self.chunk_size,
             patch_size: self.patch_size,
-            index_count: self.index_count,
+            vertices_per_row: self.vertices_per_row,
             area_count: self.area_count,
             scale: self.scale,
             height: self.height,
