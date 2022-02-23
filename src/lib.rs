@@ -1,12 +1,14 @@
-use crate::render::{extract_terrain, queue_terrain, DrawTerrain};
 use crate::{
     debug::{info, TerrainDebugInfo},
     node_atlas::{queue_node_atlas_updates, GpuNodeAtlas},
     quadtree::{traverse_quadtree, update_load_status, update_nodes, ViewDistance},
     render::{
         compute_pipelines::{TerrainComputeNode, TerrainComputePipelines},
+        culling::queue_terrain_culling_bind_group,
+        extract_terrain, queue_terrain,
         terrain_data::TerrainData,
         terrain_pipeline::TerrainPipeline,
+        DrawTerrain,
     },
 };
 use bevy::{
@@ -52,7 +54,8 @@ impl Plugin for TerrainPlugin {
             .init_resource::<SpecializedPipelines<TerrainPipeline>>()
             .add_system_to_stage(RenderStage::Extract, extract_terrain)
             .add_system_to_stage(RenderStage::Queue, queue_terrain)
-            .add_system_to_stage(RenderStage::Queue, queue_node_atlas_updates);
+            .add_system_to_stage(RenderStage::Queue, queue_node_atlas_updates)
+            .add_system_to_stage(RenderStage::Queue, queue_terrain_culling_bind_group);
 
         let compute_node = TerrainComputeNode::from_world(&mut render_app.world);
 
