@@ -1,6 +1,10 @@
 use crate::{
     node_atlas::GpuNodeAtlas,
-    render::{layouts::*, terrain_data::GpuTerrainData, terrain_data::TerrainData},
+    render::{
+        culling::CullingBindGroup,
+        layouts::*,
+        terrain_data::{GpuTerrainData, TerrainData},
+    },
 };
 use bevy::{
     ecs::system::lifetimeless::Read,
@@ -19,6 +23,7 @@ pub struct TerrainComputePipelines {
     pub(crate) update_quadtree_layout: BindGroupLayout,
     pub(crate) build_node_list_layout: BindGroupLayout,
     pub(crate) build_patch_list_layout: BindGroupLayout,
+    pub(crate) cull_data_layout: BindGroupLayout,
     prepare_area_list_pipeline: ComputePipeline,
     prepare_node_list_pipeline: ComputePipeline,
     prepare_patch_list_pipeline: ComputePipeline,
@@ -145,6 +150,7 @@ impl TerrainComputePipelines {
     fn create_build_patch_list_pipeline(
         device: &RenderDevice,
         bind_group_layout: &BindGroupLayout,
+        cull_data_layout: &BindGroupLayout,
     ) -> ComputePipeline {
         let shader_source = include_str!("shaders/build_patch_list.wgsl");
         let shader = device.create_shader_module(&ShaderModuleDescriptor {
@@ -154,7 +160,7 @@ impl TerrainComputePipelines {
 
         let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[bind_group_layout],
+            bind_group_layouts: &[bind_group_layout, cull_data_layout],
             push_constant_ranges: &[],
         });
 
@@ -175,7 +181,7 @@ impl FromWorld for TerrainComputePipelines {
         let build_node_list_layout = device.create_bind_group_layout(&BUILD_NODE_LIST_LAYOUT);
         let prepare_indirect_layout = device.create_bind_group_layout(&PREPARE_INDIRECT_LAYOUT);
         let build_patch_list_layout = device.create_bind_group_layout(&BUILD_PATCH_LIST_LAYOUT);
-
+        let cull_data_layout = device.create_bind_group_layout(&CULL_DATA_LAYOUT);
         let (
             prepare_area_list_pipeline,
             prepare_node_list_pipeline,
@@ -200,6 +206,7 @@ impl FromWorld for TerrainComputePipelines {
         let build_patch_list_pipeline = TerrainComputePipelines::create_build_patch_list_pipeline(
             device,
             &build_patch_list_layout,
+            &cull_data_layout,
         );
 
         TerrainComputePipelines {
@@ -207,6 +214,7 @@ impl FromWorld for TerrainComputePipelines {
             update_quadtree_layout,
             build_node_list_layout,
             build_patch_list_layout,
+            cull_data_layout,
             prepare_area_list_pipeline,
             prepare_node_list_pipeline,
             prepare_patch_list_pipeline,
@@ -221,7 +229,11 @@ impl FromWorld for TerrainComputePipelines {
 }
 
 pub struct TerrainComputeNode {
-    query: QueryState<(Option<Read<GpuNodeAtlas>>, Read<Handle<TerrainData>>)>,
+    query: QueryState<(
+        Option<Read<GpuNodeAtlas>>,
+        Read<Handle<TerrainData>>,
+        Read<CullingBindGroup>,
+    )>,
 }
 
 impl FromWorld for TerrainComputeNode {
@@ -330,11 +342,13 @@ impl render_graph::Node for TerrainComputeNode {
 
         pass.set_pipeline(&compute_pipelines.update_quadtree_pipeline);
 
-        for (gpu_node_atlas, handle) in self.query.iter_manual(world) {
+        for (gpu_node_atlas, handle, culling_bind_group) in self.query.iter_manual(world) {
             let gpu_terrain_data = terrain_data.get(handle).unwrap();
 
             TerrainComputeNode::update_quadtree(&mut pass, gpu_node_atlas, gpu_terrain_data);
             TerrainComputeNode::build_node_list(&mut pass, compute_pipelines, gpu_terrain_data);
+
+            pass.set_bind_group(1, &culling_bind_group.value, &[]);
             TerrainComputeNode::build_patch_list(&mut pass, compute_pipelines, gpu_terrain_data);
         }
 

@@ -378,10 +378,14 @@ impl RenderAsset for TerrainData {
                 },
                 BindGroupEntry {
                     binding: 2,
-                    resource: final_node_buffer.as_entire_binding(),
+                    resource: parameter_buffer.as_entire_binding(),
                 },
                 BindGroupEntry {
                     binding: 3,
+                    resource: final_node_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 4,
                     resource: patch_buffer.as_entire_binding(),
                 },
             ],

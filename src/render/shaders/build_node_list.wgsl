@@ -21,6 +21,7 @@ struct NodeList {
 struct Parameters {
     child_index: atomic<u32>;
     final_index: atomic<u32>;
+    patch_index: atomic<u32>;
     lod: u32;
 };
 

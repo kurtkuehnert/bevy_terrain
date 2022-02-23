@@ -17,6 +17,7 @@ struct IndirectBuffer {
 struct Parameters {
     child_index: atomic<u32>;
     final_index: atomic<u32>;
+    patch_index: atomic<u32>;
     lod: u32;
 };
 
@@ -55,6 +56,6 @@ fn prepare_patch_list() {
 [[stage(compute), workgroup_size(1, 1, 1)]]
 fn prepare_render() {
     indirect_buffer.workgroup_count_x = config.vertices_per_row * config.patch_size;
-    indirect_buffer.workgroup_count_y = 64u * atomicLoad(&parameters.final_index);
+    indirect_buffer.workgroup_count_y = atomicExchange(&parameters.patch_index, 0u);
     indirect_buffer.workgroup_count_z = 0u;
 }
