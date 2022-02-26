@@ -35,6 +35,7 @@ struct Patch {
     atlas_index: u32;
     coord_offset: u32;
     lod: u32;
+    lod_delta: u32; // should be u16
 };
 
 struct PatchList {
@@ -56,37 +57,47 @@ var<storage, read_write> parameters: Parameters;
 var<storage> node_list: NodeList;
 [[group(0), binding(4)]]
 var<storage, read_write> patch_list: PatchList;
+[[group(0), binding(5)]]
+var lod_map: texture_2d<u32>;
 [[group(1), binding(0)]]
 var<uniform> cull_data: CullData;
 
-[[stage(compute), workgroup_size(8, 8, 1)]]
-fn build_patch_list(
-    [[builtin(workgroup_id)]] workgroup_id: vec3<u32>,
-    [[builtin(local_invocation_id)]] local_id: vec3<u32>
-) {
-    let patch_id = local_id.xy;
-    let node_index = workgroup_id.x;
-    let node_id = node_list.data[node_index];
-    let node_position = node_position(node_id);
+fn calculate_lod_transition(patch_id: vec2<u32>, node_position: NodePosition, scale: u32) -> u32 {
+    let position = vec2<i32>(
+        i32(node_position.x * scale + patch_id.x * (scale >> 3u)),
+        i32(node_position.y * scale + patch_id.y * (scale >> 3u))
+    );
 
-    var patch: Patch;
-    patch.scale = 1u << node_position.lod;
-    let patch_size = patch.scale * config.patch_size;
-    patch.position = (8u * vec2<u32>(node_position.x, node_position.y) + patch_id) * patch_size;
-    patch.atlas_index = textureLoad(quadtree, vec2<i32>(i32(node_position.x), i32(node_position.y)), i32(node_position.lod)).x;
-    patch.coord_offset = 8u * patch_id.y + patch_id.x;
-    patch.lod = node_position.lod;
+    let lod = i32(node_position.lod);
+    var lod_delta = 0u;
 
-    // frustum culling
+    if (patch_id.x == 0u) {
+        let left_lod = i32(textureLoad(lod_map, position + vec2<i32>(-1, 0), 0).x);
+        lod_delta = lod_delta | (u32(max(left_lod - lod, 0)) << 12u);
+    }
+    if (patch_id.y == 0u) {
+        let top_lod = i32(textureLoad(lod_map, position + vec2<i32>(0, -1), 0).x);
+        lod_delta = lod_delta | (u32(max(top_lod - lod, 0)) << 8u);
+    }
+    if (patch_id.x == 7u) {
+        let right_lod = i32(textureLoad(lod_map, position + vec2<i32>(i32(scale), 0), 0).x);
+        lod_delta = lod_delta | (u32(max(right_lod - lod, 0)) << 4u);
+    }
+    if (patch_id.y == 7u) {
+        let bottom_lod = i32(textureLoad(lod_map, position + vec2<i32>(0, i32(scale)), 0).x);
+        lod_delta = lod_delta | u32(max(bottom_lod - lod, 0));
+    }
 
+    return lod_delta;
+}
+
+fn frustum_cull(position: vec2<f32>, size: f32) -> bool {
     let model_view_proj = cull_data.view_proj * cull_data.model;
 
     // getting the min and max y height correct is crucial or there will be boundig boxes,
     // where all points are outside the frustum (overfitting)
-    let aabb_min = vec3<f32>(f32(patch.position.x), 0.0, f32(patch.position.y));
-    let aabb_max = vec3<f32>(f32(patch.position.x + patch_size), 2000.0,
-                             f32(patch.position.y + patch_size));
-
+    let aabb_min = vec3<f32>(position.x, 0.0, position.y);
+    let aabb_max = vec3<f32>(position.x + size, 2000.0, position.y + size);
 
     var corners = array<vec4<f32>, 8>(
         vec4<f32>(aabb_min.x, aabb_min.y, aabb_min.z, 1.0),
@@ -99,18 +110,44 @@ fn build_patch_list(
         vec4<f32>(aabb_max.x, aabb_max.y, aabb_max.z, 1.0)
     );
 
-    var inside = false;
+    var visible = false;
 
     for (var i = 0; i < 8; i = i + 1) {
         let corner = model_view_proj * corners[i];
 
-        inside = inside ||
+        visible = visible ||
             (-corner.w <= corner.x && corner.x <= corner.w &&
              -corner.w <= corner.y && corner.y <= corner.w &&
                    0.0 <= corner.z && corner.z <= corner.w);
     }
 
-    if (inside) {
+    return visible;
+}
+
+[[stage(compute), workgroup_size(8, 8, 1)]]
+fn build_patch_list(
+    [[builtin(workgroup_id)]] workgroup_id: vec3<u32>,
+    [[builtin(local_invocation_id)]] local_id: vec3<u32>
+) {
+    let patch_id = local_id.xy;
+    let node_index = workgroup_id.x;
+    let node_id = node_list.data[node_index];
+    let node_position = node_position(node_id);
+
+    let scale = 1u << node_position.lod;
+    let patch_size = scale * config.patch_size;
+
+    var patch: Patch;
+    patch.position = patch_size * (vec2<u32>(node_position.x << 3u, node_position.y << 3u) + patch_id);
+    patch.scale = scale;
+    patch.atlas_index = textureLoad(quadtree, vec2<i32>(i32(node_position.x), i32(node_position.y)), i32(node_position.lod)).x;
+    patch.coord_offset = patch_id.x | (patch_id.y << 3u);
+    patch.lod = node_position.lod;
+    patch.lod_delta = calculate_lod_transition(patch_id, node_position, scale);
+
+    let visible = frustum_cull(vec2<f32>(patch.position), f32(patch_size));
+
+    if (visible) {
         let patch_index = atomicAdd(&parameters.patch_index, 1u);
         patch_list.data[patch_index] = patch;
     }

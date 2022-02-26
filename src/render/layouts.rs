@@ -7,7 +7,7 @@ use std::mem;
 
 pub(crate) const NODE_UPDATE_SIZE: BufferAddress = mem::size_of::<NodeUpdate>() as BufferAddress;
 pub(crate) const NODE_SIZE: BufferAddress = mem::size_of::<u32>() as BufferAddress;
-pub(crate) const PATCH_SIZE: BufferAddress = 6 * mem::size_of::<u32>() as BufferAddress;
+pub(crate) const PATCH_SIZE: BufferAddress = 8 * mem::size_of::<u32>() as BufferAddress;
 pub(crate) const INDIRECT_BUFFER_SIZE: BufferAddress = 5 * mem::size_of::<u32>() as BufferAddress;
 pub(crate) const PARAMETER_BUFFER_SIZE: BufferAddress = 21 * mem::size_of::<u32>() as BufferAddress; // minimum buffer size = 16
 pub(crate) const CONFIG_BUFFER_SIZE: BufferAddress =
@@ -17,6 +17,7 @@ pub(crate) const CULL_DATA_BUFFER_SIZE: BufferAddress = 2 * mem::size_of::<Mat4>
 pub(crate) const PREPARE_INDIRECT_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
     label: None,
     entries: &[
+        // config buffer
         BindGroupLayoutEntry {
             binding: 0,
             visibility: ShaderStages::COMPUTE,
@@ -27,6 +28,7 @@ pub(crate) const PREPARE_INDIRECT_LAYOUT: BindGroupLayoutDescriptor = BindGroupL
             },
             count: None,
         },
+        // indirect buffer
         BindGroupLayoutEntry {
             binding: 1,
             visibility: ShaderStages::COMPUTE,
@@ -37,6 +39,7 @@ pub(crate) const PREPARE_INDIRECT_LAYOUT: BindGroupLayoutDescriptor = BindGroupL
             },
             count: None,
         },
+        // parameter buffer
         BindGroupLayoutEntry {
             binding: 2,
             visibility: ShaderStages::COMPUTE,
@@ -52,6 +55,7 @@ pub(crate) const PREPARE_INDIRECT_LAYOUT: BindGroupLayoutDescriptor = BindGroupL
 pub(crate) const UPDATE_QUADTREE_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
     label: None,
     entries: &[
+        // quadtree layer
         BindGroupLayoutEntry {
             binding: 0,
             visibility: ShaderStages::COMPUTE,
@@ -62,6 +66,7 @@ pub(crate) const UPDATE_QUADTREE_LAYOUT: BindGroupLayoutDescriptor = BindGroupLa
             },
             count: None,
         },
+        // node update buffer
         BindGroupLayoutEntry {
             binding: 1,
             visibility: ShaderStages::COMPUTE,
@@ -77,6 +82,7 @@ pub(crate) const UPDATE_QUADTREE_LAYOUT: BindGroupLayoutDescriptor = BindGroupLa
 pub(crate) const BUILD_NODE_LIST_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
     label: None,
     entries: &[
+        // config buffer
         BindGroupLayoutEntry {
             binding: 0,
             visibility: ShaderStages::COMPUTE,
@@ -87,6 +93,7 @@ pub(crate) const BUILD_NODE_LIST_LAYOUT: BindGroupLayoutDescriptor = BindGroupLa
             },
             count: None,
         },
+        // parameter buffer
         BindGroupLayoutEntry {
             binding: 1,
             visibility: ShaderStages::COMPUTE,
@@ -97,6 +104,7 @@ pub(crate) const BUILD_NODE_LIST_LAYOUT: BindGroupLayoutDescriptor = BindGroupLa
             },
             count: None,
         },
+        // parent node list
         BindGroupLayoutEntry {
             binding: 2,
             visibility: ShaderStages::COMPUTE,
@@ -107,6 +115,7 @@ pub(crate) const BUILD_NODE_LIST_LAYOUT: BindGroupLayoutDescriptor = BindGroupLa
             },
             count: None,
         },
+        // child node list
         BindGroupLayoutEntry {
             binding: 3,
             visibility: ShaderStages::COMPUTE,
@@ -117,6 +126,7 @@ pub(crate) const BUILD_NODE_LIST_LAYOUT: BindGroupLayoutDescriptor = BindGroupLa
             },
             count: None,
         },
+        // final node list
         BindGroupLayoutEntry {
             binding: 4,
             visibility: ShaderStages::COMPUTE,
@@ -132,6 +142,7 @@ pub(crate) const BUILD_NODE_LIST_LAYOUT: BindGroupLayoutDescriptor = BindGroupLa
 pub(crate) const BUILD_PATCH_LIST_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
     label: None,
     entries: &[
+        // config buffer
         BindGroupLayoutEntry {
             binding: 0,
             visibility: ShaderStages::COMPUTE,
@@ -142,6 +153,7 @@ pub(crate) const BUILD_PATCH_LIST_LAYOUT: BindGroupLayoutDescriptor = BindGroupL
             },
             count: None,
         },
+        // quadtree
         BindGroupLayoutEntry {
             binding: 1,
             visibility: ShaderStages::COMPUTE,
@@ -152,6 +164,7 @@ pub(crate) const BUILD_PATCH_LIST_LAYOUT: BindGroupLayoutDescriptor = BindGroupL
             },
             count: None,
         },
+        // parameter buffer
         BindGroupLayoutEntry {
             binding: 2,
             visibility: ShaderStages::COMPUTE,
@@ -162,6 +175,7 @@ pub(crate) const BUILD_PATCH_LIST_LAYOUT: BindGroupLayoutDescriptor = BindGroupL
             },
             count: None,
         },
+        // node list
         BindGroupLayoutEntry {
             binding: 3,
             visibility: ShaderStages::COMPUTE,
@@ -172,6 +186,7 @@ pub(crate) const BUILD_PATCH_LIST_LAYOUT: BindGroupLayoutDescriptor = BindGroupL
             },
             count: None,
         },
+        // patch list
         BindGroupLayoutEntry {
             binding: 4,
             visibility: ShaderStages::COMPUTE,
@@ -182,11 +197,23 @@ pub(crate) const BUILD_PATCH_LIST_LAYOUT: BindGroupLayoutDescriptor = BindGroupL
             },
             count: None,
         },
+        // lod map
+        BindGroupLayoutEntry {
+            binding: 5,
+            visibility: ShaderStages::COMPUTE,
+            ty: BindingType::Texture {
+                sample_type: TextureSampleType::Uint,
+                view_dimension: TextureViewDimension::D2,
+                multisampled: false,
+            },
+            count: None,
+        },
     ],
 };
 pub(crate) const BUILD_CHUNK_MAPS_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
     label: None,
     entries: &[
+        // config buffer
         BindGroupLayoutEntry {
             binding: 0,
             visibility: ShaderStages::COMPUTE,
@@ -197,6 +224,7 @@ pub(crate) const BUILD_CHUNK_MAPS_LAYOUT: BindGroupLayoutDescriptor = BindGroupL
             },
             count: None,
         },
+        // quadtree
         BindGroupLayoutEntry {
             binding: 1,
             visibility: ShaderStages::COMPUTE,
@@ -207,6 +235,7 @@ pub(crate) const BUILD_CHUNK_MAPS_LAYOUT: BindGroupLayoutDescriptor = BindGroupL
             },
             count: None,
         },
+        // parameter buffer
         BindGroupLayoutEntry {
             binding: 2,
             visibility: ShaderStages::COMPUTE,
@@ -217,6 +246,7 @@ pub(crate) const BUILD_CHUNK_MAPS_LAYOUT: BindGroupLayoutDescriptor = BindGroupL
             },
             count: None,
         },
+        // node list
         BindGroupLayoutEntry {
             binding: 3,
             visibility: ShaderStages::COMPUTE,
@@ -227,6 +257,7 @@ pub(crate) const BUILD_CHUNK_MAPS_LAYOUT: BindGroupLayoutDescriptor = BindGroupL
             },
             count: None,
         },
+        // lod map
         BindGroupLayoutEntry {
             binding: 4,
             visibility: ShaderStages::COMPUTE,
@@ -237,6 +268,7 @@ pub(crate) const BUILD_CHUNK_MAPS_LAYOUT: BindGroupLayoutDescriptor = BindGroupL
             },
             count: None,
         },
+        // atlas map
         BindGroupLayoutEntry {
             binding: 5,
             visibility: ShaderStages::COMPUTE,
@@ -250,6 +282,7 @@ pub(crate) const BUILD_CHUNK_MAPS_LAYOUT: BindGroupLayoutDescriptor = BindGroupL
     ],
 };
 pub(crate) const CULL_DATA_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
+    // cull data
     label: None,
     entries: &[BindGroupLayoutEntry {
         binding: 0,
@@ -287,7 +320,7 @@ pub(crate) const TERRAIN_DATA_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayou
             },
             count: None,
         },
-        // chunk map
+        // atlas map
         BindGroupLayoutEntry {
             binding: 2,
             visibility: ShaderStages::VERTEX,
