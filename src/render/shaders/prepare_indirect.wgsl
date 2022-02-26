@@ -19,6 +19,8 @@ struct Parameters {
     final_index: atomic<u32>;
     patch_index: atomic<u32>;
     lod: u32;
+    previous_node_count: u32;
+    node_counts: array<u32, 16>;
 };
 
 [[group(0), binding(0)]]
@@ -37,6 +39,7 @@ fn prepare_area_list() {
     atomicStore(&parameters.child_index, 0u);
     atomicStore(&parameters.final_index, 0u);
 
+    parameters.previous_node_count = 0u;
     parameters.lod = config.lod_count;
 }
 
@@ -45,12 +48,18 @@ fn prepare_node_list() {
     indirect_buffer.workgroup_count_x = atomicExchange(&parameters.child_index, 0u);
     indirect_buffer.workgroup_count_y = 1u;
 
+    let node_count = atomicLoad(&parameters.final_index);
+
+    parameters.node_counts[parameters.lod] = node_count - parameters.previous_node_count;
+    parameters.previous_node_count = node_count;
     parameters.lod = parameters.lod - 1u;
 }
 
 [[stage(compute), workgroup_size(1, 1, 1)]]
 fn prepare_patch_list() {
     indirect_buffer.workgroup_count_x = atomicLoad(&parameters.final_index);
+
+    parameters.node_counts[0] = atomicLoad(&parameters.final_index) - parameters.previous_node_count;
 }
 
 [[stage(compute), workgroup_size(1, 1, 1)]]
