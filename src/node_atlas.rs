@@ -14,6 +14,7 @@ use bevy::{
     },
 };
 use bytemuck::cast_slice;
+use std::collections::VecDeque;
 use std::mem;
 
 #[repr(C)]
@@ -33,7 +34,7 @@ pub struct GpuNodeAtlas {
 /// Maps the assets to the corresponding active nodes and tracks the node updates.
 #[derive(Component)]
 pub struct NodeAtlas {
-    pub(crate) available_ids: Vec<u16>,
+    pub(crate) available_ids: VecDeque<u16>,
     quadtree_update: Vec<Vec<NodeUpdate>>,
     activated_height_maps: Vec<(u16, Handle<Image>)>,
 }
@@ -51,7 +52,7 @@ impl NodeAtlas {
     }
 
     pub(crate) fn activate_node(&mut self, node: &mut NodeData) {
-        let atlas_index = self.available_ids.pop().expect("Out of atlas ids.");
+        let atlas_index = self.available_ids.pop_front().expect("Out of atlas ids.");
 
         node.atlas_index = atlas_index;
 
@@ -66,7 +67,7 @@ impl NodeAtlas {
     }
 
     pub(crate) fn deactivate_node(&mut self, node: &mut NodeData) {
-        self.available_ids.push(node.atlas_index);
+        self.available_ids.push_front(node.atlas_index);
 
         node.atlas_index = Self::INACTIVE_ID;
 

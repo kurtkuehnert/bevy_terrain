@@ -23,6 +23,8 @@ struct Parameters {
     final_index: atomic<u32>;
     patch_index: atomic<u32>;
     lod: u32;
+    previous_node_count: u32;
+    node_counts: array<u32, 16>;
 };
 
 [[group(0), binding(0)]]
@@ -46,10 +48,15 @@ fn build_area_list(
     let id = node_id(lod, x, y);
     let atlas_id = textureLoad(quadtree, vec2<i32>(i32(x), i32(y)), i32(lod)).x;
 
-    if (atlas_id < INACTIVE_ID) {
-        let child_index = atomicAdd(&parameters.child_index, 1u);
-        child_list.data[child_index] = id;
-    }
+    // assume that area nodes are allways loaded
+    //
+    // if (atlas_id < INACTIVE_ID) {
+    //     let child_index = atomicAdd(&parameters.child_index, 1u);
+    //     child_list.data[child_index] = id;
+    // }
+
+    let child_index = atomicAdd(&parameters.child_index, 1u);
+    child_list.data[child_index] = id;
 }
 
 [[stage(compute), workgroup_size(1, 1, 1)]]

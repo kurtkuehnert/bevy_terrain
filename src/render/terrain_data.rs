@@ -23,6 +23,7 @@ pub struct GpuTerrainData {
     pub(crate) update_quadtree_bind_groups: Vec<BindGroup>,
     pub(crate) build_node_list_bind_groups: [BindGroup; 2],
     pub(crate) build_patch_list_bind_group: BindGroup,
+    pub(crate) build_chunk_maps_bind_group: BindGroup,
     pub(crate) terrain_data_bind_group: BindGroup,
     pub(crate) patch_list_bind_group: BindGroup,
     pub(crate) height_atlas: GpuImage,
@@ -259,6 +260,66 @@ impl TerrainData {
 
         device.create_buffer(&buffer_descriptor)
     }
+
+    fn create_chunk_maps(&mut self, device: &RenderDevice) -> (TextureView, TextureView) {
+        let chunk_count = self.config.chunk_count;
+
+        let lod_map = device.create_texture(&TextureDescriptor {
+            label: None,
+            size: Extent3d {
+                width: chunk_count.x,
+                height: chunk_count.y,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::R8Uint,
+            usage: TextureUsages::COPY_DST
+                | TextureUsages::STORAGE_BINDING
+                | TextureUsages::TEXTURE_BINDING,
+        });
+
+        let atlas_map = device.create_texture(&TextureDescriptor {
+            label: None,
+            size: Extent3d {
+                width: chunk_count.x,
+                height: chunk_count.y,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: TextureFormat::R16Uint,
+            usage: TextureUsages::COPY_DST
+                | TextureUsages::STORAGE_BINDING
+                | TextureUsages::TEXTURE_BINDING,
+        });
+
+        let lod_map_view = lod_map.create_view(&TextureViewDescriptor {
+            label: None,
+            format: Some(TextureFormat::R8Uint),
+            dimension: Some(TextureViewDimension::D2),
+            aspect: TextureAspect::All,
+            base_mip_level: 0,
+            mip_level_count: None,
+            base_array_layer: 0,
+            array_layer_count: None,
+        });
+
+        let atlas_map_view = atlas_map.create_view(&TextureViewDescriptor {
+            label: None,
+            format: Some(TextureFormat::R16Uint),
+            dimension: Some(TextureViewDimension::D2),
+            aspect: TextureAspect::All,
+            base_mip_level: 0,
+            mip_level_count: None,
+            base_array_layer: 0,
+            array_layer_count: None,
+        });
+
+        (lod_map_view, atlas_map_view)
+    }
 }
 
 impl RenderAsset for TerrainData {
@@ -290,6 +351,8 @@ impl RenderAsset for TerrainData {
         let parameter_buffer = terrain_data.create_parameter_buffer(device);
         let (temp_node_buffers, final_node_buffer) = terrain_data.create_node_buffers(device);
         let patch_buffer = terrain_data.create_patch_buffer(device);
+
+        let (lod_map_view, atlas_map_view) = terrain_data.create_chunk_maps(device);
 
         let prepare_indirect_bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: None,
@@ -392,6 +455,37 @@ impl RenderAsset for TerrainData {
             layout: &compute_pipelines.build_patch_list_layout,
         });
 
+        let build_chunk_maps_bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: None,
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: config_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: BindingResource::TextureView(&quadtree_view),
+                },
+                BindGroupEntry {
+                    binding: 2,
+                    resource: parameter_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 3,
+                    resource: final_node_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 4,
+                    resource: BindingResource::TextureView(&lod_map_view),
+                },
+                BindGroupEntry {
+                    binding: 5,
+                    resource: BindingResource::TextureView(&atlas_map_view),
+                },
+            ],
+            layout: &compute_pipelines.build_chunk_maps_layout,
+        });
+
         let terrain_data_bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: None,
             entries: &[
@@ -402,6 +496,10 @@ impl RenderAsset for TerrainData {
                 BindGroupEntry {
                     binding: 1,
                     resource: BindingResource::TextureView(&height_atlas.texture_view),
+                },
+                BindGroupEntry {
+                    binding: 2,
+                    resource: BindingResource::TextureView(&atlas_map_view),
                 },
             ],
             layout: &terrain_pipeline.terrain_data_layout,
@@ -424,6 +522,7 @@ impl RenderAsset for TerrainData {
             update_quadtree_bind_groups,
             build_node_list_bind_groups,
             build_patch_list_bind_group,
+            build_chunk_maps_bind_group,
             terrain_data_bind_group,
             patch_list_bind_group,
             height_atlas,
