@@ -342,8 +342,8 @@ impl RenderAsset for TerrainData {
     ) -> Result<Self::PreparedAsset, PrepareAssetError<Self::ExtractedAsset>> {
         info!("initializing terrain data");
 
-        let (quadtree_view, quadtree_update_buffers, update_quadtree_bind_groups) = terrain_data
-            .create_quadtree(&device, &queue, &compute_pipelines.update_quadtree_layout);
+        let (quadtree_view, quadtree_update_buffers, update_quadtree_bind_groups) =
+            terrain_data.create_quadtree(device, queue, &compute_pipelines.update_quadtree_layout);
         let height_atlas = terrain_data.create_node_atlas(device);
 
         let indirect_buffer = terrain_data.create_indirect_buffer(device);
@@ -450,6 +450,10 @@ impl RenderAsset for TerrainData {
                 BindGroupEntry {
                     binding: 4,
                     resource: patch_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 5,
+                    resource: BindingResource::TextureView(&lod_map_view),
                 },
             ],
             layout: &compute_pipelines.build_patch_list_layout,
