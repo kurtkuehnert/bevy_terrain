@@ -34,7 +34,7 @@ pub struct TerrainPlugin;
 
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
-        register_inspectable(app);
+        // register_inspectable(app);
 
         app.add_asset::<TerrainData>()
             .add_plugin(RenderAssetPlugin::<TerrainData>::default())
@@ -67,7 +67,7 @@ impl Plugin for TerrainPlugin {
     }
 }
 
-fn register_inspectable(app: &mut App) {
-    app.register_inspectable::<ViewDistance>()
-        .register_inspectable::<TerrainDebugInfo>();
-}
+// fn register_inspectable(app: &mut App) {
+//     app.register_inspectable::<ViewDistance>()
+//         .register_inspectable::<TerrainDebugInfo>();
+// }

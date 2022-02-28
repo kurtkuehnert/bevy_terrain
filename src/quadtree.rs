@@ -13,9 +13,9 @@ use std::mem;
 
 /// Marks a camera as the viewer of the terrain.
 /// The view distance is a multiplier, which increases the amount of loaded nodes.
-#[derive(Component, Inspectable)]
+#[derive(Component)] // , Inspectable)]
 pub struct ViewDistance {
-    #[inspectable(min = 1.0)]
+    // #[inspectable(min = 1.0)]
     pub view_distance: f32,
 }
 

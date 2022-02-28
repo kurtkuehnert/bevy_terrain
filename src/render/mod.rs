@@ -90,8 +90,7 @@ impl EntityRenderCommand for DrawTerrainCommand {
         let handle = terrain_query.get(item).unwrap();
         let gpu_terrain_data = terrain_data.into_inner().get(handle).unwrap();
 
-        pass.inner()
-            .draw_indirect(&gpu_terrain_data.indirect_buffer, 0);
+        pass.draw_indirect(&gpu_terrain_data.indirect_buffer, 0);
 
         RenderCommandResult::Success
     }
