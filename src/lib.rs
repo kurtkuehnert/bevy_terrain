@@ -1,7 +1,7 @@
 use crate::{
     debug::{info, TerrainDebugInfo},
     node_atlas::{queue_node_atlas_updates, GpuNodeAtlas},
-    quadtree::{traverse_quadtree, update_load_status, update_nodes, ViewDistance},
+    quadtree::{traverse_quadtree, update_load_status, update_nodes},
     render::{
         compute_pipelines::{TerrainComputeNode, TerrainComputePipelines},
         culling::queue_terrain_culling_bind_group,
@@ -20,7 +20,6 @@ use bevy::{
         render_resource::SpecializedPipelines, RenderApp, RenderStage,
     },
 };
-use bevy_inspector_egui::RegisterInspectable;
 
 pub mod bundles;
 pub mod config;
@@ -59,7 +58,7 @@ impl Plugin for TerrainPlugin {
 
         let compute_node = TerrainComputeNode::from_world(&mut render_app.world);
 
-        let mut render_graph = render_app.world.get_resource_mut::<RenderGraph>().unwrap();
+        let mut render_graph = render_app.world.resource_mut::<RenderGraph>();
         render_graph.add_node("terrain_compute", compute_node);
         render_graph
             .add_node_edge("terrain_compute", MAIN_PASS_DEPENDENCIES)

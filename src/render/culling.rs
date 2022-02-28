@@ -1,10 +1,10 @@
 use crate::{TerrainComputePipelines, TerrainData};
 use bevy::{
+    core::cast_slice,
     pbr::MeshUniform,
     prelude::*,
     render::{render_resource::*, renderer::RenderDevice, view::ExtractedView},
 };
-use bytemuck::cast_slice;
 
 #[derive(Component)]
 pub struct CullingBindGroup {

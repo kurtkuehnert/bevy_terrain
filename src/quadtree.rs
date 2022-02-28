@@ -6,14 +6,13 @@ use bevy::{
     render::render_resource::TextureUsages,
     utils::{HashMap, HashSet},
 };
-use bevy_inspector_egui::Inspectable;
 use itertools::iproduct;
 use lru::LruCache;
 use std::mem;
 
 /// Marks a camera as the viewer of the terrain.
 /// The view distance is a multiplier, which increases the amount of loaded nodes.
-#[derive(Component)] // , Inspectable)]
+#[derive(Component)]
 pub struct ViewDistance {
     // #[inspectable(min = 1.0)]
     pub view_distance: f32,

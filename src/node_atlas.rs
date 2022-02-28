@@ -1,6 +1,6 @@
 use crate::{config::TerrainConfig, quadtree::NodeData, TerrainData};
 use bevy::{
-    core::{Pod, Zeroable},
+    core::{cast_slice, Pod, Zeroable},
     ecs::{
         query::QueryItem,
         system::lifetimeless::{Read, Write},
@@ -13,9 +13,7 @@ use bevy::{
         renderer::{RenderDevice, RenderQueue},
     },
 };
-use bytemuck::cast_slice;
-use std::collections::VecDeque;
-use std::mem;
+use std::{collections::VecDeque, mem};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, Zeroable, Pod)]

@@ -47,9 +47,10 @@ pub struct TerrainPipeline {
 
 impl FromWorld for TerrainPipeline {
     fn from_world(world: &mut World) -> Self {
-        let device = world.get_resource::<RenderDevice>().unwrap();
-        let asset_server = world.get_resource::<AssetServer>().unwrap();
-        let mesh_pipeline = world.get_resource::<MeshPipeline>().unwrap();
+        let device = world.resource::<RenderDevice>();
+        let asset_server = world.resource::<AssetServer>();
+        let mesh_pipeline = world.resource::<MeshPipeline>();
+
         let view_layout = mesh_pipeline.view_layout.clone();
         let mesh_layout = mesh_pipeline.mesh_layout.clone();
         let terrain_data_layout = device.create_bind_group_layout(&TERRAIN_DATA_LAYOUT);
