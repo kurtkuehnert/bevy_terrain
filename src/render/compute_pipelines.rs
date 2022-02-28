@@ -201,7 +201,7 @@ impl TerrainComputePipelines {
 
 impl FromWorld for TerrainComputePipelines {
     fn from_world(world: &mut World) -> Self {
-        let device = world.get_resource::<RenderDevice>().unwrap();
+        let device = world.resource::<RenderDevice>();
 
         let update_quadtree_layout = device.create_bind_group_layout(&UPDATE_QUADTREE_LAYOUT);
         let build_node_list_layout = device.create_bind_group_layout(&BUILD_NODE_LIST_LAYOUT);
@@ -363,8 +363,8 @@ impl render_graph::Node for TerrainComputeNode {
         context: &mut RenderContext,
         world: &World,
     ) -> Result<(), render_graph::NodeRunError> {
-        let compute_pipelines = world.get_resource::<TerrainComputePipelines>().unwrap();
-        let terrain_data = world.get_resource::<RenderAssets<TerrainData>>().unwrap();
+        let compute_pipelines = world.resource::<TerrainComputePipelines>();
+        let terrain_data = world.resource::<RenderAssets<TerrainData>>();
 
         let mut pass = context
             .command_encoder

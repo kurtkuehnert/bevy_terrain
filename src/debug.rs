@@ -1,8 +1,7 @@
 use crate::{node_atlas::NodeAtlas, quadtree::Quadtree};
 use bevy::prelude::*;
-use bevy_inspector_egui::Inspectable;
 
-#[derive(Default, Component)] // , Inspectable)]
+#[derive(Default, Component)]
 pub struct TerrainDebugInfo {
     available_ids_len: usize,
     handle_mapping_len: usize,

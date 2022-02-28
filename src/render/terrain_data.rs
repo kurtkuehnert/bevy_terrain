@@ -2,6 +2,7 @@ use crate::{
     config::TerrainConfig, node_atlas::NodeAtlas, render::layouts::*, TerrainComputePipelines,
     TerrainPipeline,
 };
+use bevy::core::cast_slice;
 use bevy::{
     ecs::system::{lifetimeless::SRes, SystemParamItem},
     prelude::*,
@@ -89,7 +90,7 @@ impl TerrainData {
             let data: Vec<u16> =
                 vec![NodeAtlas::INACTIVE_ID; (node_count.x * node_count.y) as usize];
 
-            queue.write_texture(texture, bytemuck::cast_slice(&data), data_layout, size);
+            queue.write_texture(texture, cast_slice(&data), data_layout, size);
         }
 
         let quadtree_view = quadtree_texture.create_view(&TextureViewDescriptor {
