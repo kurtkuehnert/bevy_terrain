@@ -190,13 +190,13 @@ impl Quadtree {
 
         Self {
             nodes,
-            handle_mapping: Default::default(),
-            load_statuses: Default::default(),
-            loading_nodes: Default::default(),
-            active_nodes: HashMap::default(),
+            handle_mapping: default(),
+            load_statuses: default(),
+            loading_nodes: default(),
+            active_nodes: default(),
             inactive_nodes: LruCache::new(cache_size),
-            activated_nodes: Default::default(),
-            nodes_to_deactivate: Default::default(),
+            activated_nodes: default(),
+            nodes_to_deactivate: default(),
             nodes_to_activate,
         }
     }
