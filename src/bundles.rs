@@ -22,9 +22,9 @@ impl TerrainBundle {
             quadtree: Quadtree::new(&config, 16),
             node_atlas: NodeAtlas::new(&config),
             terrain_data: terrain_data.add(TerrainData { config }),
-            terrain_debug_info: TerrainDebugInfo::default(),
-            transform: Default::default(),
-            global_transform: Default::default(),
+            terrain_debug_info: default(),
+            transform: default(),
+            global_transform: default(),
         }
     }
 }

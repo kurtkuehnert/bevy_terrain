@@ -45,7 +45,7 @@ impl NodeAtlas {
         Self {
             available_ids: (0..config.node_atlas_size).collect(),
             quadtree_update: vec![Vec::new(); config.lod_count as usize],
-            activated_height_maps: Default::default(),
+            activated_height_maps: default(),
         }
     }
 
