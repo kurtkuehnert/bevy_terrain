@@ -13,7 +13,7 @@ where
 
     let map_size: UVec2 = source.dimensions().into();
 
-    assert_eq!(map_size, config.terrain_size);
+    // assert_eq!(map_size, config.terrain_size);
 
     let section_size = (config.chunk_size + 1) as u32;
 
@@ -61,13 +61,16 @@ fn sample_section(
         *pixel = if tx == width || ty == height {
             Luma([0])
         } else {
-            let value: f64 = iproduct!(0..mapping, 0..mapping)
+            let value = iproduct!(0..mapping, 0..mapping)
                 .map(|(offset_x, offset_y)| {
                     source.get_pixel(tx + offset_x, ty + offset_y).0[0] as f64
                 })
-                .sum();
+                .sum::<f64>()
+                / sample_count;
 
-            Luma([(value / sample_count) as u16])
+            let value = source.get_pixel(tx, ty).0[0] as f64;
+
+            Luma([value as u16])
         }
     }
 

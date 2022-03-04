@@ -146,6 +146,7 @@ fn build_patch_list(
     patch.lod_delta = calculate_lod_transition(patch_id, node_position, scale);
 
     let visible = frustum_cull(vec2<f32>(patch.position), f32(patch_size));
+    let visible = true;
 
     if (visible) {
         let patch_index = atomicAdd(&parameters.patch_index, 1u);
