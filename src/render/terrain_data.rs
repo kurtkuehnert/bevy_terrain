@@ -500,11 +500,15 @@ impl RenderAsset for TerrainData {
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: BindingResource::TextureView(&height_atlas.texture_view),
+                    resource: BindingResource::TextureView(&atlas_map_view),
                 },
                 BindGroupEntry {
                     binding: 2,
-                    resource: BindingResource::TextureView(&atlas_map_view),
+                    resource: BindingResource::TextureView(&height_atlas.texture_view),
+                },
+                BindGroupEntry {
+                    binding: 3,
+                    resource: BindingResource::Sampler(&height_atlas.sampler),
                 },
             ],
             layout: &terrain_pipeline.terrain_data_layout,

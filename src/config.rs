@@ -5,12 +5,17 @@ use std::ops::Range;
 #[derive(Clone, Default, AsStd140)]
 pub(crate) struct TerrainConfigUniform {
     lod_count: u32,
-    chunk_size: u32,
     patch_size: u32,
-    vertices_per_row: u32,
+    chunk_size: u32,
+    chunk_count: UVec2,
+    texture_size: u32,
+    area_size: u32,
     area_count: UVec2,
+    terrain_size: UVec2,
+    vertices_per_row: u32,
     scale: f32,
     height: f32,
+    node_atlas_size: u32,
 }
 
 #[derive(Clone, Debug, Component)]
@@ -68,11 +73,16 @@ impl TerrainConfig {
         TerrainConfigUniform {
             lod_count: self.lod_count,
             chunk_size: self.chunk_size,
+            chunk_count: self.chunk_count,
+            texture_size: self.texture_size,
             patch_size: self.patch_size,
             vertices_per_row: self.vertices_per_row,
             area_count: self.area_count,
             scale: self.scale,
             height: self.height,
+            area_size: self.area_size,
+            terrain_size: self.terrain_size,
+            node_atlas_size: self.node_atlas_size as u32,
         }
         .as_std140()
     }

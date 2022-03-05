@@ -309,10 +309,21 @@ pub(crate) const TERRAIN_DATA_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayou
             },
             count: None,
         },
-        // height atlas
+        // atlas map
         BindGroupLayoutEntry {
             binding: 1,
             visibility: ShaderStages::VERTEX,
+            ty: BindingType::Texture {
+                sample_type: TextureSampleType::Uint,
+                view_dimension: TextureViewDimension::D2,
+                multisampled: false,
+            },
+            count: None,
+        },
+        // height atlas
+        BindGroupLayoutEntry {
+            binding: 2,
+            visibility: ShaderStages::VERTEX_FRAGMENT,
             ty: BindingType::Texture {
                 sample_type: TextureSampleType::Uint,
                 view_dimension: TextureViewDimension::D2Array,
@@ -320,15 +331,10 @@ pub(crate) const TERRAIN_DATA_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayou
             },
             count: None,
         },
-        // atlas map
         BindGroupLayoutEntry {
-            binding: 2,
-            visibility: ShaderStages::VERTEX,
-            ty: BindingType::Texture {
-                sample_type: TextureSampleType::Uint,
-                view_dimension: TextureViewDimension::D2,
-                multisampled: false,
-            },
+            binding: 3,
+            visibility: ShaderStages::VERTEX_FRAGMENT,
+            ty: BindingType::Sampler(SamplerBindingType::Filtering),
             count: None,
         },
     ],
