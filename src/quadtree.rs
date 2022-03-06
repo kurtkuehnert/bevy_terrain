@@ -3,7 +3,7 @@ use bevy::{
     asset::{HandleId, LoadState},
     math::Vec3Swizzles,
     prelude::*,
-    render::render_resource::TextureUsages,
+    render::render_resource::{TextureFormat, TextureUsages},
     utils::{HashMap, HashSet},
 };
 use itertools::iproduct;
@@ -304,6 +304,7 @@ pub fn update_load_status(
                 if let Some(id) = quadtree.handle_mapping.remove(&handle.id) {
                     let image = images.get_mut(handle).unwrap();
 
+                    image.texture_descriptor.format = TextureFormat::R16Unorm;
                     image.texture_descriptor.usage = TextureUsages::COPY_SRC
                         | TextureUsages::COPY_DST
                         | TextureUsages::TEXTURE_BINDING;

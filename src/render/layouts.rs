@@ -301,7 +301,7 @@ pub(crate) const TERRAIN_DATA_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayou
         // terrain config
         BindGroupLayoutEntry {
             binding: 0,
-            visibility: ShaderStages::VERTEX,
+            visibility: ShaderStages::VERTEX_FRAGMENT,
             ty: BindingType::Buffer {
                 ty: BufferBindingType::Uniform,
                 has_dynamic_offset: false,
@@ -325,7 +325,7 @@ pub(crate) const TERRAIN_DATA_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayou
             binding: 2,
             visibility: ShaderStages::VERTEX_FRAGMENT,
             ty: BindingType::Texture {
-                sample_type: TextureSampleType::Uint,
+                sample_type: TextureSampleType::Float { filterable: true },
                 view_dimension: TextureViewDimension::D2Array,
                 multisampled: false,
             },
