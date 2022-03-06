@@ -163,7 +163,7 @@ impl TerrainData {
             mip_level_count: 1,
             sample_count: 1,
             dimension: TextureDimension::D2,
-            format: TextureFormat::R16Uint,
+            format: TextureFormat::R16Unorm,
             usage: TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING,
         });
 
