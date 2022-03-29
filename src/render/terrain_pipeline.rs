@@ -57,7 +57,7 @@ impl FromWorld for TerrainPipeline {
         let patch_list_layout = device.create_bind_group_layout(&PATCH_LIST_LAYOUT);
         let shader = asset_server.load("shaders/terrain.wgsl");
 
-        TerrainPipeline {
+        Self {
             view_layout,
             mesh_layout,
             terrain_data_layout,

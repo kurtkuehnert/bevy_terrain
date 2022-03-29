@@ -4,19 +4,19 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-default = [
-    # "bevy/dynamic",
-]
+default = []
 
 [dependencies]
-bevy = { git="https://github.com/ku95/bevy", branch="texture-formats" }
+bevy = { git = "https://github.com/ku95/bevy", branch = "texture-formats" }
 # bevy-inspector-egui = { git="https://github.com/jakobhellermann/bevy-inspector-egui" }
 
 itertools = "*"
 image = "*"
 lru = "*"
 bitflags = "*"
+strum = "*"
+strum_macros = "*"
 
 # should be removed in the future (already included in bevy)
 wgpu = "0.12.0" # required for ComputePass
-bytemuck = "*" # required for Pod and Zeroable derive macros
+bytemuck = "*"  # required for Pod and Zeroable derive macros

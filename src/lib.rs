@@ -15,9 +15,12 @@ use bevy::{
     core_pipeline::{node::MAIN_PASS_DEPENDENCIES, Opaque3d},
     prelude::*,
     render::{
-        render_asset::RenderAssetPlugin, render_component::ExtractComponentPlugin,
-        render_graph::RenderGraph, render_phase::AddRenderCommand,
-        render_resource::SpecializedRenderPipelines, RenderApp, RenderStage,
+        render_asset::RenderAssetPlugin,
+        render_component::ExtractComponentPlugin,
+        render_graph::RenderGraph,
+        render_phase::AddRenderCommand,
+        render_resource::{SpecializedComputePipelines, SpecializedRenderPipelines},
+        RenderApp, RenderStage,
     },
 };
 
@@ -49,6 +52,7 @@ impl Plugin for TerrainPlugin {
             .sub_app_mut(RenderApp)
             .add_render_command::<Opaque3d, DrawTerrain>()
             .init_resource::<TerrainComputePipelines>()
+            .init_resource::<SpecializedComputePipelines<TerrainComputePipelines>>()
             .init_resource::<TerrainPipeline>()
             .init_resource::<SpecializedRenderPipelines<TerrainPipeline>>()
             .add_system_to_stage(RenderStage::Extract, extract_terrain)

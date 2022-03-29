@@ -40,7 +40,7 @@ var<storage, read_write> final_list: NodeList;
 
 [[stage(compute), workgroup_size(1, 1, 1)]]
 fn build_area_list(
-    [[builtin(global_invocation_id)]] invocation_id: vec3<u32>
+    [[builtin(global_invocation_id)]] invocation_id: vec3<u32>,
 ) {
     let x = invocation_id.x;
     let y = invocation_id.y;
@@ -61,7 +61,7 @@ fn build_area_list(
 
 [[stage(compute), workgroup_size(1, 1, 1)]]
 fn build_node_list(
-    [[builtin(global_invocation_id)]] invocation_id: vec3<u32>
+    [[builtin(global_invocation_id)]] invocation_id: vec3<u32>,
 ) {
     let parent_index = invocation_id.x;
     let parent_id = parent_list.data[parent_index];
@@ -96,7 +96,7 @@ fn build_node_list(
 
 [[stage(compute), workgroup_size(1, 1, 1)]]
 fn build_chunk_list(
-    [[builtin(global_invocation_id)]] invocation_id: vec3<u32>
+    [[builtin(global_invocation_id)]] invocation_id: vec3<u32>,
 ) {
     let parent_index = invocation_id.x;
 
