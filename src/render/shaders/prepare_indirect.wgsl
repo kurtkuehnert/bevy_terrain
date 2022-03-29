@@ -1,31 +1,10 @@
-struct TerrainConfig {
-    lod_count: u32;
-    patch_size: u32;
-    chunk_size: u32;
-    chunk_count: vec2<u32>;
-    texture_size: u32;
-    area_size: u32;
-    area_count: vec2<u32>;
-    terrain_size: vec2<u32>;
-    vertices_per_row: u32;
-    scale: f32;
-    height: f32;
-    node_atlas_size: u32;
-};
+#import bevy_terrain::config
+#import bevy_terrain::parameters
 
 struct IndirectBuffer {
     workgroup_count_x: u32;
     workgroup_count_y: u32;
     workgroup_count_z: u32;
-};
-
-struct Parameters {
-    child_index: atomic<u32>;
-    final_index: atomic<u32>;
-    patch_index: atomic<u32>;
-    lod: u32;
-    previous_node_count: u32;
-    node_counts: array<u32, 16>;
 };
 
 [[group(0), binding(0)]]
