@@ -127,8 +127,8 @@ pub(crate) fn queue_terrain(
     terrain_pipeline: Res<TerrainPipeline>,
     draw_functions: Res<DrawFunctions<Opaque3d>>,
     msaa: Res<Msaa>,
-    mut pipelines: ResMut<SpecializedPipelines<TerrainPipeline>>,
-    mut pipeline_cache: ResMut<RenderPipelineCache>,
+    mut pipelines: ResMut<SpecializedRenderPipelines<TerrainPipeline>>,
+    mut pipeline_cache: ResMut<PipelineCache>,
     mut view_query: Query<&mut RenderPhase<Opaque3d>>,
     terrain_query: Query<(Entity, Option<&Wireframe>), With<Handle<TerrainData>>>,
 ) {

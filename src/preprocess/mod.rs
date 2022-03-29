@@ -1,3 +1,5 @@
+pub mod parse;
+
 use crate::config::TerrainConfig;
 use bevy::prelude::UVec2;
 use image::{ImageBuffer, Luma};

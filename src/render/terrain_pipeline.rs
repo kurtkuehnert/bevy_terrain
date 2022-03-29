@@ -67,7 +67,7 @@ impl FromWorld for TerrainPipeline {
     }
 }
 
-impl SpecializedPipeline for TerrainPipeline {
+impl SpecializedRenderPipeline for TerrainPipeline {
     type Key = TerrainPipelineKey;
 
     fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {

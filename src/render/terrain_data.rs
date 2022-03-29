@@ -197,6 +197,7 @@ impl TerrainData {
         let height_atlas = GpuImage {
             texture,
             texture_view,
+            texture_format: TextureFormat::R16Unorm,
             sampler,
             size: Size::new(texture_size as f32, texture_size as f32),
         };
