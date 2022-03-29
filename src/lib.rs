@@ -11,6 +11,8 @@ use crate::{
         DrawTerrain,
     },
 };
+use bevy::asset::load_internal_asset;
+use bevy::reflect::TypeUuid;
 use bevy::{
     core_pipeline::{node::MAIN_PASS_DEPENDENCIES, Opaque3d},
     prelude::*,
@@ -32,11 +34,38 @@ pub mod preprocess;
 pub mod quadtree;
 pub mod render;
 
+const CONFIG_HANDLE: HandleUntyped =
+    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 907665645684322571);
+const NODE_HANDLE: HandleUntyped =
+    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 456563743231345678);
+const PATCH_HANDLE: HandleUntyped =
+    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 556563744564564658);
+const PARAMETERS_HANDLE: HandleUntyped =
+    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 656456784512075658);
+
 pub struct TerrainPlugin;
 
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
         // register_inspectable(app);
+
+        let mut assets = app.world.resource_mut::<Assets<_>>();
+        assets.set_untracked(
+            CONFIG_HANDLE,
+            Shader::from_wgsl(include_str!("render/shaders/config.wgsl")),
+        );
+        assets.set_untracked(
+            NODE_HANDLE,
+            Shader::from_wgsl(include_str!("render/shaders/node.wgsl")),
+        );
+        assets.set_untracked(
+            PATCH_HANDLE,
+            Shader::from_wgsl(include_str!("render/shaders/patch.wgsl")),
+        );
+        assets.set_untracked(
+            PARAMETERS_HANDLE,
+            Shader::from_wgsl(include_str!("render/shaders/parameters.wgsl")),
+        );
 
         app.add_asset::<TerrainData>()
             .add_plugin(RenderAssetPlugin::<TerrainData>::default())
