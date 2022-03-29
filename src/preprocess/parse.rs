@@ -1,5 +1,4 @@
 use image::{ImageBuffer, Luma};
-use itertools::Itertools;
 use std::fs;
 
 fn parse_height(value: &str) -> u16 {
@@ -22,7 +21,7 @@ pub fn parse_file() {
 
     assert_eq!(data.len() as u32, dimension * dimension);
 
-    let mut section: ImageBuffer<Luma<u16>, Vec<u16>> =
+    let section: ImageBuffer<Luma<u16>, Vec<u16>> =
         ImageBuffer::from_vec(dimension, dimension, data).unwrap();
 
     section.save("assets/heightmaps/map3.png").unwrap();

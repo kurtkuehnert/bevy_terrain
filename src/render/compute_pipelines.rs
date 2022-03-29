@@ -1,11 +1,12 @@
+use crate::render::terrain_data::GpuTerrainData;
 use crate::{
     node_atlas::GpuNodeAtlas,
-    render::{
-        culling::CullingBindGroup,
-        layouts::*,
-        terrain_data::{GpuTerrainData, TerrainData},
-    },
+    render::{culling::CullingBindGroup, layouts::*, terrain_data::TerrainData},
 };
+use bevy::asset::load_internal_asset;
+use bevy::ecs::system::lifetimeless::{SRes, SResMut};
+use bevy::ecs::system::SystemState;
+use bevy::reflect::TypeUuid;
 use bevy::{
     ecs::system::lifetimeless::Read,
     prelude::*,
@@ -16,7 +17,23 @@ use bevy::{
         renderer::{RenderContext, RenderDevice},
     },
 };
-use wgpu::ComputePass;
+use itertools::Itertools;
+use strum::{EnumCount, IntoEnumIterator};
+use strum_macros::{EnumCount, EnumIter};
+
+#[derive(Copy, Clone, Hash, PartialEq, Eq, EnumIter, EnumCount)]
+pub enum TerrainPipelineKey {
+    UpdateQuadtree,
+    BuildChunkMaps,
+    BuildAreaList,
+    BuildNodeList,
+    BuildChunkList,
+    BuildPatchList,
+    PrepareAreaList,
+    PrepareNodeList,
+    PreparePatchList,
+    PrepareRender,
+}
 
 pub struct TerrainComputePipelines {
     pub(crate) prepare_indirect_layout: BindGroupLayout,
@@ -25,183 +42,17 @@ pub struct TerrainComputePipelines {
     pub(crate) build_patch_list_layout: BindGroupLayout,
     pub(crate) build_chunk_maps_layout: BindGroupLayout,
     pub(crate) cull_data_layout: BindGroupLayout,
-    prepare_area_list_pipeline: ComputePipeline,
-    prepare_node_list_pipeline: ComputePipeline,
-    prepare_patch_list_pipeline: ComputePipeline,
-    prepare_render_pipeline: ComputePipeline,
-    update_quadtree_pipeline: ComputePipeline,
-    build_area_list_pipeline: ComputePipeline,
-    build_node_list_pipeline: ComputePipeline,
-    build_chunk_list_pipeline: ComputePipeline,
-    build_patch_list_pipeline: ComputePipeline,
-    build_chunk_maps_pipeline: ComputePipeline,
-}
-
-impl TerrainComputePipelines {
-    fn create_prepare_indirect_pipelines(
-        device: &RenderDevice,
-        bind_group_layout: &BindGroupLayout,
-    ) -> (
-        ComputePipeline,
-        ComputePipeline,
-        ComputePipeline,
-        ComputePipeline,
-    ) {
-        let shader_source = include_str!("shaders/prepare_indirect.wgsl");
-        let shader = device.create_shader_module(&ShaderModuleDescriptor {
-            label: None,
-            source: ShaderSource::Wgsl(shader_source.into()),
-        });
-
-        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[bind_group_layout],
-            push_constant_ranges: &[],
-        });
-
-        (
-            device.create_compute_pipeline(&RawComputePipelineDescriptor {
-                label: None,
-                layout: Some(&pipeline_layout),
-                module: &shader,
-                entry_point: "prepare_area_list",
-            }),
-            device.create_compute_pipeline(&RawComputePipelineDescriptor {
-                label: None,
-                layout: Some(&pipeline_layout),
-                module: &shader,
-                entry_point: "prepare_node_list",
-            }),
-            device.create_compute_pipeline(&RawComputePipelineDescriptor {
-                label: None,
-                layout: Some(&pipeline_layout),
-                module: &shader,
-                entry_point: "prepare_patch_list",
-            }),
-            device.create_compute_pipeline(&RawComputePipelineDescriptor {
-                label: None,
-                layout: Some(&pipeline_layout),
-                module: &shader,
-                entry_point: "prepare_render",
-            }),
-        )
-    }
-
-    fn create_update_quadtree_pipeline(
-        device: &RenderDevice,
-        bind_group_layout: &BindGroupLayout,
-    ) -> ComputePipeline {
-        let shader_source = include_str!("shaders/update_quadtree.wgsl");
-        let shader = device.create_shader_module(&ShaderModuleDescriptor {
-            label: None,
-            source: ShaderSource::Wgsl(shader_source.into()),
-        });
-
-        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[bind_group_layout],
-            push_constant_ranges: &[],
-        });
-
-        device.create_compute_pipeline(&RawComputePipelineDescriptor {
-            label: None,
-            layout: Some(&pipeline_layout),
-            module: &shader,
-            entry_point: "update_quadtree",
-        })
-    }
-
-    fn create_build_node_list_pipelines(
-        device: &RenderDevice,
-        bind_group_layout: &BindGroupLayout,
-    ) -> (ComputePipeline, ComputePipeline, ComputePipeline) {
-        let shader_source = include_str!("shaders/build_node_list.wgsl");
-        let shader = device.create_shader_module(&ShaderModuleDescriptor {
-            label: None,
-            source: ShaderSource::Wgsl(shader_source.into()),
-        });
-
-        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[bind_group_layout],
-            push_constant_ranges: &[],
-        });
-
-        (
-            device.create_compute_pipeline(&RawComputePipelineDescriptor {
-                label: None,
-                layout: Some(&pipeline_layout),
-                module: &shader,
-                entry_point: "build_area_list",
-            }),
-            device.create_compute_pipeline(&RawComputePipelineDescriptor {
-                label: None,
-                layout: Some(&pipeline_layout),
-                module: &shader,
-                entry_point: "build_node_list",
-            }),
-            device.create_compute_pipeline(&RawComputePipelineDescriptor {
-                label: None,
-                layout: Some(&pipeline_layout),
-                module: &shader,
-                entry_point: "build_chunk_list",
-            }),
-        )
-    }
-
-    fn create_build_patch_list_pipeline(
-        device: &RenderDevice,
-        bind_group_layout: &BindGroupLayout,
-        cull_data_layout: &BindGroupLayout,
-    ) -> ComputePipeline {
-        let shader_source = include_str!("shaders/build_patch_list.wgsl");
-        let shader = device.create_shader_module(&ShaderModuleDescriptor {
-            label: None,
-            source: ShaderSource::Wgsl(shader_source.into()),
-        });
-
-        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[bind_group_layout, cull_data_layout],
-            push_constant_ranges: &[],
-        });
-
-        device.create_compute_pipeline(&RawComputePipelineDescriptor {
-            label: None,
-            layout: Some(&pipeline_layout),
-            module: &shader,
-            entry_point: "build_patch_list",
-        })
-    }
-
-    fn create_build_chunk_maps_pipeline(
-        device: &RenderDevice,
-        bind_group_layout: &BindGroupLayout,
-    ) -> ComputePipeline {
-        let shader_source = include_str!("shaders/build_chunk_maps.wgsl");
-        let shader = device.create_shader_module(&ShaderModuleDescriptor {
-            label: None,
-            source: ShaderSource::Wgsl(shader_source.into()),
-        });
-
-        let pipeline_layout = device.create_pipeline_layout(&PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[bind_group_layout],
-            push_constant_ranges: &[],
-        });
-
-        device.create_compute_pipeline(&RawComputePipelineDescriptor {
-            label: None,
-            layout: Some(&pipeline_layout),
-            module: &shader,
-            entry_point: "build_chunk_maps",
-        })
-    }
+    prepare_indirect_shader: Handle<Shader>,
+    update_quadtree_shader: Handle<Shader>,
+    build_node_list_shader: Handle<Shader>,
+    build_patch_list_shader: Handle<Shader>,
+    build_chunk_maps_shader: Handle<Shader>,
 }
 
 impl FromWorld for TerrainComputePipelines {
     fn from_world(world: &mut World) -> Self {
         let device = world.resource::<RenderDevice>();
+        let asset_server = world.resource::<AssetServer>();
 
         let update_quadtree_layout = device.create_bind_group_layout(&UPDATE_QUADTREE_LAYOUT);
         let build_node_list_layout = device.create_bind_group_layout(&BUILD_NODE_LIST_LAYOUT);
@@ -209,37 +60,17 @@ impl FromWorld for TerrainComputePipelines {
         let build_patch_list_layout = device.create_bind_group_layout(&BUILD_PATCH_LIST_LAYOUT);
         let build_chunk_maps_layout = device.create_bind_group_layout(&BUILD_CHUNK_MAPS_LAYOUT);
         let cull_data_layout = device.create_bind_group_layout(&CULL_DATA_LAYOUT);
-        let (
-            prepare_area_list_pipeline,
-            prepare_node_list_pipeline,
-            prepare_patch_list_pipeline,
-            prepare_render_pipeline,
-        ) = TerrainComputePipelines::create_prepare_indirect_pipelines(
-            device,
-            &prepare_indirect_layout,
-        );
 
-        let update_quadtree_pipeline = TerrainComputePipelines::create_update_quadtree_pipeline(
-            device,
-            &update_quadtree_layout,
-        );
-
-        let (build_area_list_pipeline, build_node_list_pipeline, build_chunk_list_pipeline) =
-            TerrainComputePipelines::create_build_node_list_pipelines(
-                device,
-                &build_node_list_layout,
-            );
-
-        let build_patch_list_pipeline = TerrainComputePipelines::create_build_patch_list_pipeline(
-            device,
-            &build_patch_list_layout,
-            &cull_data_layout,
-        );
-
-        let build_chunk_maps_pipeline = TerrainComputePipelines::create_build_chunk_maps_pipeline(
-            device,
-            &build_chunk_maps_layout,
-        );
+        let prepare_indirect_shader =
+            asset_server.load("../plugins/bevy_terrain/src/render/shaders/prepare_indirect.wgsl");
+        let update_quadtree_shader =
+            asset_server.load("../plugins/bevy_terrain/src/render/shaders/update_quadtree.wgsl");
+        let build_node_list_shader =
+            asset_server.load("../plugins/bevy_terrain/src/render/shaders/build_node_list.wgsl");
+        let build_patch_list_shader =
+            asset_server.load("../plugins/bevy_terrain/src/render/shaders/build_patch_list.wgsl");
+        let build_chunk_maps_shader =
+            asset_server.load("../plugins/bevy_terrain/src/render/shaders/build_chunk_maps.wgsl");
 
         TerrainComputePipelines {
             prepare_indirect_layout,
@@ -248,16 +79,85 @@ impl FromWorld for TerrainComputePipelines {
             build_patch_list_layout,
             build_chunk_maps_layout,
             cull_data_layout,
-            prepare_area_list_pipeline,
-            prepare_node_list_pipeline,
-            prepare_patch_list_pipeline,
-            prepare_render_pipeline,
-            update_quadtree_pipeline,
-            build_area_list_pipeline,
-            build_node_list_pipeline,
-            build_chunk_list_pipeline,
-            build_patch_list_pipeline,
-            build_chunk_maps_pipeline,
+            prepare_indirect_shader,
+            update_quadtree_shader,
+            build_node_list_shader,
+            build_patch_list_shader,
+            build_chunk_maps_shader,
+        }
+    }
+}
+
+impl SpecializedComputePipeline for TerrainComputePipelines {
+    type Key = TerrainPipelineKey;
+
+    fn specialize(&self, key: Self::Key) -> ComputePipelineDescriptor {
+        let layout;
+        let shader;
+        let entry_point;
+
+        match key {
+            TerrainPipelineKey::UpdateQuadtree => {
+                layout = Some(vec![self.update_quadtree_layout.clone()]);
+                shader = self.update_quadtree_shader.clone();
+                entry_point = "update_quadtree".into();
+            }
+            TerrainPipelineKey::BuildChunkMaps => {
+                layout = Some(vec![self.build_chunk_maps_layout.clone()]);
+                shader = self.build_chunk_maps_shader.clone_weak();
+                entry_point = "build_chunk_maps".into();
+            }
+            TerrainPipelineKey::BuildAreaList => {
+                layout = Some(vec![self.build_node_list_layout.clone()]);
+                shader = self.build_node_list_shader.clone();
+                entry_point = "build_area_list".into();
+            }
+            TerrainPipelineKey::BuildNodeList => {
+                layout = Some(vec![self.build_node_list_layout.clone()]);
+                shader = self.build_node_list_shader.clone();
+                entry_point = "build_node_list".into();
+            }
+            TerrainPipelineKey::BuildChunkList => {
+                layout = Some(vec![self.build_node_list_layout.clone()]);
+                shader = self.build_node_list_shader.clone();
+                entry_point = "build_chunk_list".into();
+            }
+            TerrainPipelineKey::BuildPatchList => {
+                layout = Some(vec![
+                    self.build_patch_list_layout.clone(),
+                    self.cull_data_layout.clone(),
+                ]);
+                shader = self.build_patch_list_shader.clone();
+                entry_point = "build_patch_list".into();
+            }
+            TerrainPipelineKey::PrepareAreaList => {
+                layout = Some(vec![self.prepare_indirect_layout.clone()]);
+                shader = self.prepare_indirect_shader.clone();
+                entry_point = "prepare_area_list".into();
+            }
+            TerrainPipelineKey::PrepareNodeList => {
+                layout = Some(vec![self.prepare_indirect_layout.clone()]);
+                shader = self.prepare_indirect_shader.clone();
+                entry_point = "prepare_node_list".into();
+            }
+            TerrainPipelineKey::PreparePatchList => {
+                layout = Some(vec![self.prepare_indirect_layout.clone()]);
+                shader = self.prepare_indirect_shader.clone();
+                entry_point = "prepare_patch_list".into();
+            }
+            TerrainPipelineKey::PrepareRender => {
+                layout = Some(vec![self.prepare_indirect_layout.clone()]);
+                shader = self.prepare_indirect_shader.clone();
+                entry_point = "prepare_render".into();
+            }
+        }
+
+        ComputePipelineDescriptor {
+            label: None,
+            layout,
+            shader,
+            shader_defs: Vec::new(),
+            entry_point,
         }
     }
 }
@@ -268,12 +168,20 @@ pub struct TerrainComputeNode {
         Read<Handle<TerrainData>>,
         Read<CullingBindGroup>,
     )>,
+    system_state: SystemState<(
+        SResMut<PipelineCache>,
+        SResMut<SpecializedComputePipelines<TerrainComputePipelines>>,
+        SRes<TerrainComputePipelines>,
+    )>,
+    pipelines: [CachedComputePipelineId; TerrainPipelineKey::COUNT],
 }
 
 impl FromWorld for TerrainComputeNode {
     fn from_world(world: &mut World) -> Self {
         Self {
             query: world.query(),
+            system_state: SystemState::new(world),
+            pipelines: [CachedComputePipelineId::INVALID; TerrainPipelineKey::COUNT],
         }
     }
 }
@@ -281,9 +189,12 @@ impl FromWorld for TerrainComputeNode {
 impl TerrainComputeNode {
     fn update_quadtree<'a>(
         pass: &mut ComputePass<'a>,
+        pipelines: &'a Vec<&'a ComputePipeline>,
         gpu_node_atlas: Option<&GpuNodeAtlas>,
         gpu_terrain_data: &'a GpuTerrainData,
     ) {
+        pass.set_pipeline(pipelines[TerrainPipelineKey::UpdateQuadtree as usize]);
+
         if let Some(gpu_node_atlas) = gpu_node_atlas {
             for (count, bind_group) in gpu_node_atlas
                 .node_update_counts
@@ -298,56 +209,65 @@ impl TerrainComputeNode {
 
     fn build_node_list<'a>(
         pass: &mut ComputePass<'a>,
-        compute_pipelines: &'a TerrainComputePipelines,
+        pipelines: &'a Vec<&'a ComputePipeline>,
         gpu_terrain_data: &'a GpuTerrainData,
     ) {
         pass.set_bind_group(0, &gpu_terrain_data.prepare_indirect_bind_group, &[]);
-        pass.set_pipeline(&compute_pipelines.prepare_area_list_pipeline);
+        pass.set_pipeline(pipelines[TerrainPipelineKey::PrepareAreaList as usize]);
         pass.dispatch(1, 1, 1);
 
         pass.set_bind_group(0, &gpu_terrain_data.build_node_list_bind_groups[1], &[]);
-        pass.set_pipeline(&compute_pipelines.build_area_list_pipeline);
+        pass.set_pipeline(pipelines[TerrainPipelineKey::BuildAreaList as usize]);
         pass.dispatch_indirect(&gpu_terrain_data.indirect_buffer, 0);
 
         pass.set_bind_group(0, &gpu_terrain_data.prepare_indirect_bind_group, &[]);
-        pass.set_pipeline(&compute_pipelines.prepare_node_list_pipeline);
+        pass.set_pipeline(pipelines[TerrainPipelineKey::PrepareNodeList as usize]);
         pass.dispatch(1, 1, 1);
 
         let count = gpu_terrain_data.config.lod_count as usize - 1;
 
         for i in 0..count {
-            let index = i % 2;
-
-            pass.set_bind_group(0, &gpu_terrain_data.build_node_list_bind_groups[index], &[]);
-            pass.set_pipeline(&compute_pipelines.build_node_list_pipeline);
+            pass.set_bind_group(0, &gpu_terrain_data.build_node_list_bind_groups[i % 2], &[]);
+            pass.set_pipeline(pipelines[TerrainPipelineKey::BuildNodeList as usize]);
             pass.dispatch_indirect(&gpu_terrain_data.indirect_buffer, 0);
 
             pass.set_bind_group(0, &gpu_terrain_data.prepare_indirect_bind_group, &[]);
-            pass.set_pipeline(&compute_pipelines.prepare_node_list_pipeline);
+            pass.set_pipeline(pipelines[TerrainPipelineKey::PrepareNodeList as usize]);
             pass.dispatch(1, 1, 1);
         }
 
-        // build chunk list
         pass.set_bind_group(
             0,
             &gpu_terrain_data.build_node_list_bind_groups[count % 2],
             &[],
         );
-        pass.set_pipeline(&compute_pipelines.build_chunk_list_pipeline);
+        pass.set_pipeline(pipelines[TerrainPipelineKey::BuildChunkList as usize]);
         pass.dispatch_indirect(&gpu_terrain_data.indirect_buffer, 0);
     }
 
     fn build_patch_list<'a>(
         pass: &mut ComputePass<'a>,
-        compute_pipelines: &'a TerrainComputePipelines,
+        pipelines: &'a Vec<&'a ComputePipeline>,
         gpu_terrain_data: &'a GpuTerrainData,
     ) {
+        pass.set_bind_group(0, &gpu_terrain_data.prepare_indirect_bind_group, &[]);
+        pass.set_pipeline(pipelines[TerrainPipelineKey::PreparePatchList as usize]);
+        pass.dispatch(1, 1, 1);
+
+        pass.set_bind_group(0, &gpu_terrain_data.build_chunk_maps_bind_group, &[]);
+        pass.set_pipeline(pipelines[TerrainPipelineKey::BuildChunkMaps as usize]);
+        pass.dispatch(
+            gpu_terrain_data.config.chunk_count.x * gpu_terrain_data.config.chunk_count.y,
+            1,
+            1,
+        );
+
         pass.set_bind_group(0, &gpu_terrain_data.build_patch_list_bind_group, &[]);
-        pass.set_pipeline(&compute_pipelines.build_patch_list_pipeline);
+        pass.set_pipeline(pipelines[TerrainPipelineKey::BuildPatchList as usize]);
         pass.dispatch_indirect(&gpu_terrain_data.indirect_buffer, 0);
 
         pass.set_bind_group(0, &gpu_terrain_data.prepare_indirect_bind_group, &[]);
-        pass.set_pipeline(&compute_pipelines.prepare_render_pipeline);
+        pass.set_pipeline(pipelines[TerrainPipelineKey::PrepareRender as usize]);
         pass.dispatch(1, 1, 1);
     }
 }
@@ -355,6 +275,13 @@ impl TerrainComputeNode {
 impl render_graph::Node for TerrainComputeNode {
     fn update(&mut self, world: &mut World) {
         self.query.update_archetypes(world);
+
+        let (mut pipeline_cache, mut pipelines, pipeline) = self.system_state.get_mut(world);
+
+        for key in TerrainPipelineKey::iter() {
+            self.pipelines[key as usize] =
+                pipelines.specialize(&mut pipeline_cache, &pipeline, key);
+        }
     }
 
     fn run(
@@ -363,35 +290,29 @@ impl render_graph::Node for TerrainComputeNode {
         context: &mut RenderContext,
         world: &World,
     ) -> Result<(), render_graph::NodeRunError> {
-        let compute_pipelines = world.resource::<TerrainComputePipelines>();
         let terrain_data = world.resource::<RenderAssets<TerrainData>>();
+        let pipeline_cache = world.resource::<PipelineCache>();
 
-        let mut pass = context
+        let pipelines = &match TerrainPipelineKey::iter()
+            .map(|key| pipeline_cache.get_compute_pipeline(self.pipelines[key as usize]))
+            .collect::<Option<Vec<_>>>()
+        {
+            None => return Ok(()), // some pipelines are not loaded yet
+            Some(pipelines) => pipelines,
+        };
+
+        let mut pass = &mut context
             .command_encoder
             .begin_compute_pass(&ComputePassDescriptor::default());
-
-        pass.set_pipeline(&compute_pipelines.update_quadtree_pipeline);
 
         for (gpu_node_atlas, handle, culling_bind_group) in self.query.iter_manual(world) {
             let gpu_terrain_data = terrain_data.get(handle).unwrap();
 
-            TerrainComputeNode::update_quadtree(&mut pass, gpu_node_atlas, gpu_terrain_data);
-            TerrainComputeNode::build_node_list(&mut pass, compute_pipelines, gpu_terrain_data);
-
-            pass.set_bind_group(0, &gpu_terrain_data.prepare_indirect_bind_group, &[]);
-            pass.set_pipeline(&compute_pipelines.prepare_patch_list_pipeline);
-            pass.dispatch(1, 1, 1);
-
-            pass.set_bind_group(0, &gpu_terrain_data.build_chunk_maps_bind_group, &[]);
-            pass.set_pipeline(&compute_pipelines.build_chunk_maps_pipeline);
-            pass.dispatch(
-                gpu_terrain_data.config.chunk_count.x * gpu_terrain_data.config.chunk_count.y,
-                1,
-                1,
-            );
-
             pass.set_bind_group(1, &culling_bind_group.value, &[]);
-            TerrainComputeNode::build_patch_list(&mut pass, compute_pipelines, gpu_terrain_data);
+
+            TerrainComputeNode::update_quadtree(pass, pipelines, gpu_node_atlas, gpu_terrain_data);
+            TerrainComputeNode::build_node_list(pass, pipelines, gpu_terrain_data);
+            TerrainComputeNode::build_patch_list(pass, pipelines, gpu_terrain_data);
         }
 
         Ok(())
