@@ -60,25 +60,25 @@ impl TerrainComputePipelines {
         });
 
         (
-            device.create_compute_pipeline(&ComputePipelineDescriptor {
+            device.create_compute_pipeline(&RawComputePipelineDescriptor {
                 label: None,
                 layout: Some(&pipeline_layout),
                 module: &shader,
                 entry_point: "prepare_area_list",
             }),
-            device.create_compute_pipeline(&ComputePipelineDescriptor {
+            device.create_compute_pipeline(&RawComputePipelineDescriptor {
                 label: None,
                 layout: Some(&pipeline_layout),
                 module: &shader,
                 entry_point: "prepare_node_list",
             }),
-            device.create_compute_pipeline(&ComputePipelineDescriptor {
+            device.create_compute_pipeline(&RawComputePipelineDescriptor {
                 label: None,
                 layout: Some(&pipeline_layout),
                 module: &shader,
                 entry_point: "prepare_patch_list",
             }),
-            device.create_compute_pipeline(&ComputePipelineDescriptor {
+            device.create_compute_pipeline(&RawComputePipelineDescriptor {
                 label: None,
                 layout: Some(&pipeline_layout),
                 module: &shader,
@@ -103,7 +103,7 @@ impl TerrainComputePipelines {
             push_constant_ranges: &[],
         });
 
-        device.create_compute_pipeline(&ComputePipelineDescriptor {
+        device.create_compute_pipeline(&RawComputePipelineDescriptor {
             label: None,
             layout: Some(&pipeline_layout),
             module: &shader,
@@ -128,19 +128,19 @@ impl TerrainComputePipelines {
         });
 
         (
-            device.create_compute_pipeline(&ComputePipelineDescriptor {
+            device.create_compute_pipeline(&RawComputePipelineDescriptor {
                 label: None,
                 layout: Some(&pipeline_layout),
                 module: &shader,
                 entry_point: "build_area_list",
             }),
-            device.create_compute_pipeline(&ComputePipelineDescriptor {
+            device.create_compute_pipeline(&RawComputePipelineDescriptor {
                 label: None,
                 layout: Some(&pipeline_layout),
                 module: &shader,
                 entry_point: "build_node_list",
             }),
-            device.create_compute_pipeline(&ComputePipelineDescriptor {
+            device.create_compute_pipeline(&RawComputePipelineDescriptor {
                 label: None,
                 layout: Some(&pipeline_layout),
                 module: &shader,
@@ -166,7 +166,7 @@ impl TerrainComputePipelines {
             push_constant_ranges: &[],
         });
 
-        device.create_compute_pipeline(&ComputePipelineDescriptor {
+        device.create_compute_pipeline(&RawComputePipelineDescriptor {
             label: None,
             layout: Some(&pipeline_layout),
             module: &shader,
@@ -190,7 +190,7 @@ impl TerrainComputePipelines {
             push_constant_ranges: &[],
         });
 
-        device.create_compute_pipeline(&ComputePipelineDescriptor {
+        device.create_compute_pipeline(&RawComputePipelineDescriptor {
             label: None,
             layout: Some(&pipeline_layout),
             module: &shader,

@@ -17,7 +17,7 @@ use bevy::{
     render::{
         render_asset::RenderAssetPlugin, render_component::ExtractComponentPlugin,
         render_graph::RenderGraph, render_phase::AddRenderCommand,
-        render_resource::SpecializedPipelines, RenderApp, RenderStage,
+        render_resource::SpecializedRenderPipelines, RenderApp, RenderStage,
     },
 };
 
@@ -50,7 +50,7 @@ impl Plugin for TerrainPlugin {
             .add_render_command::<Opaque3d, DrawTerrain>()
             .init_resource::<TerrainComputePipelines>()
             .init_resource::<TerrainPipeline>()
-            .init_resource::<SpecializedPipelines<TerrainPipeline>>()
+            .init_resource::<SpecializedRenderPipelines<TerrainPipeline>>()
             .add_system_to_stage(RenderStage::Extract, extract_terrain)
             .add_system_to_stage(RenderStage::Queue, queue_terrain)
             .add_system_to_stage(RenderStage::Queue, queue_node_atlas_updates)
