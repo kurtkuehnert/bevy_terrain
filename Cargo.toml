@@ -16,6 +16,7 @@ lru = "*"
 bitflags = "*"
 strum = "*"
 strum_macros = "*"
+ron = { version = "*", features = ["indexmap"] }
 
 # should be removed in the future (already included in bevy)
 bytemuck = "*"  # required for Pod and Zeroable derive macros
