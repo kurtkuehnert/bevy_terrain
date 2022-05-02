@@ -1,5 +1,3 @@
-pub mod parse;
-
 use crate::config::TerrainConfig;
 use bevy::prelude::UVec2;
 use image::{ImageBuffer, Luma};
@@ -12,10 +10,6 @@ where
 {
     let source = image::open(source_path).unwrap();
     let source = source.as_luma16().unwrap();
-
-    let map_size: UVec2 = source.dimensions().into();
-
-    // assert_eq!(map_size, config.terrain_size);
 
     let section_size = (config.chunk_size + 1) as u32;
 
@@ -36,10 +30,6 @@ where
             section
                 .save(format!("{}{}.png", output_path, node_id))
                 .unwrap();
-
-            // section
-            //     .save(format!("{}{}_{}_{}.png", output_path, x, y, lod))
-            //     .unwrap();
         }
     }
 }
@@ -60,7 +50,7 @@ fn sample_section(
         let tx = source_x + section_x * mapping;
         let ty = source_y + section_y * mapping;
 
-        *pixel = if tx == width || ty == height {
+        *pixel = if tx >= width || ty >= height {
             Luma([0])
         } else {
             let value = iproduct!(0..mapping, 0..mapping)

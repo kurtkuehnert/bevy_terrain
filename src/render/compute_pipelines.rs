@@ -1,15 +1,15 @@
-use crate::render::terrain_data::GpuTerrainData;
 use crate::{
     node_atlas::GpuNodeAtlas,
+    render::terrain_data::GpuTerrainData,
     render::{culling::CullingBindGroup, layouts::*, terrain_data::TerrainData},
 };
-use bevy::asset::load_internal_asset;
-use bevy::ecs::system::lifetimeless::{SRes, SResMut};
-use bevy::ecs::system::SystemState;
-use bevy::reflect::TypeUuid;
 use bevy::{
-    ecs::system::lifetimeless::Read,
+    ecs::system::{
+        lifetimeless::{Read, SRes, SResMut},
+        SystemState,
+    },
     prelude::*,
+    reflect::TypeUuid,
     render::{
         render_asset::RenderAssets,
         render_graph::{self},
@@ -301,7 +301,7 @@ impl render_graph::Node for TerrainComputeNode {
             Some(pipelines) => pipelines,
         };
 
-        let mut pass = &mut context
+        let pass = &mut context
             .command_encoder
             .begin_compute_pass(&ComputePassDescriptor::default());
 

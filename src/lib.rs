@@ -11,9 +11,8 @@ use crate::{
         DrawTerrain,
     },
 };
-use bevy::asset::load_internal_asset;
-use bevy::reflect::TypeUuid;
 use bevy::{
+    reflect::TypeUuid,
     core_pipeline::{node::MAIN_PASS_DEPENDENCIES, Opaque3d},
     prelude::*,
     render::{
@@ -23,7 +22,7 @@ use bevy::{
         render_phase::AddRenderCommand,
         render_resource::{SpecializedComputePipelines, SpecializedRenderPipelines},
         RenderApp, RenderStage,
-    },
+    }
 };
 
 pub mod bundles;
