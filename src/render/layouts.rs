@@ -1,4 +1,4 @@
-use crate::{config::TerrainConfigUniform, node_atlas::NodeUpdate};
+use crate::{config::TerrainConfigUniform, quadtree::NodeUpdate};
 use bevy::{
     prelude::*,
     render::{render_resource::std140::AsStd140, render_resource::*},

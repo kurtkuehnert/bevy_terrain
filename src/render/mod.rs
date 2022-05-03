@@ -20,6 +20,8 @@ use bevy::{
 pub(crate) mod bind_groups;
 pub(crate) mod compute_pipelines;
 pub(crate) mod culling;
+pub(crate) mod gpu_node_atlas;
+pub(crate) mod gpu_quadtree;
 pub(crate) mod height_map;
 pub(crate) mod layouts;
 pub(crate) mod render_pipeline;

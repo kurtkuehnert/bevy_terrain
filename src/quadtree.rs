@@ -1,6 +1,7 @@
 use crate::{config::TerrainConfig, node_atlas::NodeAtlas};
 use bevy::{
     asset::{HandleId, LoadState},
+    core::{Pod, Zeroable},
     math::Vec3Swizzles,
     prelude::*,
     render::render_resource::{TextureFormat, TextureUsages},
@@ -28,6 +29,13 @@ impl Default for ViewDistance {
 pub struct Viewer {
     pub(crate) position: Vec2,
     pub(crate) view_distance: f32,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Default, Zeroable, Pod)]
+pub(crate) struct NodeUpdate {
+    pub(crate) node_id: u32,
+    pub(crate) atlas_index: u32, // u16 not supported by std 140
 }
 
 #[derive(Clone)]
@@ -167,17 +175,21 @@ pub struct Quadtree {
     pub(crate) nodes_to_deactivate: Vec<u32>,
     /// Nodes that are required and should be loaded and scheduled for activation.
     pub(crate) nodes_to_activate: Vec<u32>,
+    /// All newly generate updates of nodes, which were activated or deactivated.
+    pub(crate) node_updates: Vec<Vec<NodeUpdate>>,
 }
 
 impl Quadtree {
     pub(crate) fn new(config: &TerrainConfig, cache_size: usize) -> Self {
         let lod = config.lod_count - 1;
 
+        // activate root nodes
         let nodes_to_activate = config
             .area_iter()
             .map(|(x, y)| TerrainConfig::node_id(lod, x, y))
             .collect();
 
+        // create all nodes of the tree
         let nodes = match lod {
             0 => Vec::new(),
             _ => config
@@ -199,6 +211,7 @@ impl Quadtree {
             activated_nodes: default(),
             nodes_to_deactivate: default(),
             nodes_to_activate,
+            node_updates: vec![Vec::new(); config.lod_count as usize],
         }
     }
 
@@ -245,6 +258,7 @@ pub fn update_nodes(
             ref mut activated_nodes,
             ref mut nodes_to_activate,
             ref mut nodes_to_deactivate,
+            node_updates: ref mut quadtree_update,
             ..
         } = quadtree.as_mut();
 
@@ -278,15 +292,31 @@ pub fn update_nodes(
         });
 
         // deactivate all no longer required nodes
-        for id in deactivation_queue {
-            let mut node = active_nodes.remove(&id).unwrap();
+        for mut node in deactivation_queue
+            .iter()
+            .map(|id| active_nodes.remove(&id).unwrap())
+        {
             node_atlas.deactivate_node(&mut node);
-            inactive_nodes.put(id, node);
+
+            let lod = TerrainConfig::node_position(node.id).0 as usize;
+            quadtree_update[lod].push(NodeUpdate {
+                node_id: node.id,
+                atlas_index: node.atlas_index as u32,
+            });
+
+            inactive_nodes.put(node.id, node);
         }
 
         // activate as all nodes ready for activation
         for mut node in activation_queue {
             node_atlas.activate_node(&mut node);
+
+            let lod = TerrainConfig::node_position(node.id).0 as usize;
+            quadtree_update[lod].push(NodeUpdate {
+                node_id: node.id,
+                atlas_index: node.atlas_index as u32,
+            });
+
             activated_nodes.insert(node.id);
             active_nodes.insert(node.id, node);
         }

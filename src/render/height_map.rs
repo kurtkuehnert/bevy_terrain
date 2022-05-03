@@ -1,16 +1,17 @@
-use crate::node_atlas::NodeAttachment;
-use crate::render::InitTerrain;
-use crate::{GpuNodeAtlas, PersistentComponent, TerrainConfig};
-use bevy::render::render_asset::RenderAssets;
+use crate::{
+    render::{
+        gpu_node_atlas::{GpuNodeAtlas, NodeAttachment},
+        InitTerrain,
+    },
+    PersistentComponent, TerrainConfig,
+};
 use bevy::{
     prelude::*,
     render::{
+        render_asset::RenderAssets,
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
-        texture::GpuImage,
-        RenderWorld,
     },
-    utils::HashMap,
 };
 
 /// Runs in prepare.
@@ -62,7 +63,7 @@ pub(crate) fn init_height_attachment(
             array_layer_count: None,
         });
 
-        let mut gpu_node_atlas = gpu_node_atlases.get_mut(&entity).unwrap();
+        let gpu_node_atlas = gpu_node_atlases.get_mut(&entity).unwrap();
         gpu_node_atlas.atlas_attachments.insert(
             "heightmap".into(),
             NodeAttachment::Texture {
