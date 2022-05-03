@@ -37,7 +37,7 @@ impl TerrainPipelineKey {
 }
 
 /// The pipeline used to render the terrain entities.
-pub struct TerrainPipeline {
+pub struct TerrainRenderPipeline {
     pub(crate) view_layout: BindGroupLayout,
     pub(crate) mesh_layout: BindGroupLayout,
     pub(crate) terrain_data_layout: BindGroupLayout,
@@ -45,7 +45,7 @@ pub struct TerrainPipeline {
     pub(crate) shader: Handle<Shader>, // Todo: make fragment shader customizable
 }
 
-impl FromWorld for TerrainPipeline {
+impl FromWorld for TerrainRenderPipeline {
     fn from_world(world: &mut World) -> Self {
         let device = world.resource::<RenderDevice>();
         let asset_server = world.resource::<AssetServer>();
@@ -67,7 +67,7 @@ impl FromWorld for TerrainPipeline {
     }
 }
 
-impl SpecializedRenderPipeline for TerrainPipeline {
+impl SpecializedRenderPipeline for TerrainRenderPipeline {
     type Key = TerrainPipelineKey;
 
     fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {

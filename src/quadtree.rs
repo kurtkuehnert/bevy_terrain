@@ -70,7 +70,7 @@ pub(crate) struct LoadStatus {
 
 #[derive(PartialOrd, PartialEq)]
 enum NodeState {
-    Nonexisting,
+    Nonexistent,
     Inactive,
     Loading,
     Active,
@@ -119,7 +119,7 @@ impl TreeNode {
 
         // update the state and determine whether to travers the children
         let traverse_children = match (should_be_active, &self.state) {
-            (_, NodeState::Nonexisting) => false,  // does not have children
+            (_, NodeState::Nonexistent) => false,  // does not have children
             (false, NodeState::Inactive) => false, // can't have active children
             (false, NodeState::Loading) => true, // Todo: should this be ignored? cancel into cache
             (false, NodeState::Active) => {

@@ -1,27 +1,24 @@
-use crate::render::layouts::NODE_UPDATE_SIZE;
-use crate::render::resources::NodeAttachment;
-use crate::render::{InitTerrain, PersistentComponent};
-use crate::{config::TerrainConfig, quadtree::NodeData};
-use bevy::render::texture::GpuImage;
-use bevy::render::RenderWorld;
-use bevy::utils::HashMap;
+use crate::{
+    config::TerrainConfig,
+    quadtree::NodeData,
+    render::{
+        layouts::NODE_UPDATE_SIZE, resources::NodeAttachment, InitTerrain, PersistentComponent,
+    },
+};
 use bevy::{
     core::{cast_slice, Pod, Zeroable},
-    ecs::{
-        query::QueryItem,
-        system::lifetimeless::{Read, Write},
-    },
     prelude::*,
     render::{
         render_asset::RenderAssets,
-        render_component::ExtractComponent,
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
+        texture::GpuImage,
+        RenderWorld,
     },
+    utils::HashMap,
 };
-use std::num::NonZeroU32;
-use std::ops::Deref;
-use std::{collections::VecDeque, mem};
+use image::EncodableLayout;
+use std::{collections::VecDeque, mem, num::NonZeroU32};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, Zeroable, Pod)]
@@ -39,7 +36,7 @@ pub struct NodeAtlas {
 }
 
 impl NodeAtlas {
-    // pub(crate) const NONEXISTING_ID: u16 = u16::MAX;
+    // pub(crate) const NONEXISTENT_ID: u16 = u16::MAX;
     pub(crate) const INACTIVE_ID: u16 = u16::MAX - 1;
 
     pub fn new(config: &TerrainConfig) -> Self {
@@ -114,56 +111,36 @@ impl GpuNodeAtlas {
         device: &RenderDevice,
         queue: &RenderQueue,
     ) -> (TextureView, Vec<Buffer>, Vec<TextureView>) {
-        let texture_descriptor = TextureDescriptor {
-            label: None,
-            size: Extent3d {
-                width: config.chunk_count.x,
-                height: config.chunk_count.y,
-                depth_or_array_layers: 1,
+        let data = vec![
+            NodeAtlas::INACTIVE_ID;
+            (0..config.lod_count)
+                .map(|lod| {
+                    let node_count = config.node_count(lod);
+                    node_count.x * node_count.y
+                })
+                .sum::<u32>() as usize
+        ];
+
+        let quadtree_texture = device.create_texture_with_data(
+            queue,
+            &TextureDescriptor {
+                label: "quadtree_texture".into(),
+                size: Extent3d {
+                    width: config.chunk_count.x,
+                    height: config.chunk_count.y,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: config.lod_count,
+                sample_count: 1,
+                dimension: TextureDimension::D2,
+                format: TextureFormat::R16Uint,
+                usage: TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING,
             },
-            mip_level_count: config.lod_count,
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            format: TextureFormat::R16Uint,
-            usage: TextureUsages::COPY_DST
-                | TextureUsages::STORAGE_BINDING
-                | TextureUsages::TEXTURE_BINDING,
-        };
-
-        let quadtree_texture = device.create_texture(&texture_descriptor);
-
-        // Todo: use https://docs.rs/wgpu/latest/wgpu/util/trait.DeviceExt.html#tymethod.create_buffer_init once its added to bevy
-
-        for lod in 0..config.lod_count {
-            let node_count = config.node_count(lod);
-
-            let texture = ImageCopyTextureBase {
-                texture: quadtree_texture.deref(),
-                mip_level: lod,
-                origin: Origin3d::ZERO,
-                aspect: TextureAspect::All,
-            };
-
-            let data_layout = ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(NonZeroU32::try_from(node_count.x * 2).unwrap()),
-                rows_per_image: Some(NonZeroU32::try_from(node_count.y).unwrap()),
-            };
-
-            let size = Extent3d {
-                width: node_count.x,
-                height: node_count.y,
-                depth_or_array_layers: 1,
-            };
-
-            let data: Vec<u16> =
-                vec![NodeAtlas::INACTIVE_ID; (node_count.x * node_count.y) as usize];
-
-            queue.write_texture(texture, cast_slice(&data), data_layout, size);
-        }
+            data.as_bytes(),
+        );
 
         let quadtree_view = quadtree_texture.create_view(&TextureViewDescriptor {
-            label: None,
+            label: "quadtree_view".into(),
             format: Some(TextureFormat::R16Uint),
             dimension: Some(TextureViewDimension::D2),
             aspect: TextureAspect::All,
@@ -179,14 +156,14 @@ impl GpuNodeAtlas {
                 let max_node_count = (node_count.x * node_count.y) as BufferAddress;
 
                 let buffer = device.create_buffer(&BufferDescriptor {
-                    label: None,
+                    label: "quadtree_buffer".into(),
                     size: NODE_UPDATE_SIZE * max_node_count,
                     usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
                     mapped_at_creation: false,
                 });
 
                 let view = quadtree_texture.create_view(&TextureViewDescriptor {
-                    label: None,
+                    label: "quadtree_view".into(),
                     format: Some(TextureFormat::R16Uint),
                     dimension: Some(TextureViewDimension::D2),
                     aspect: TextureAspect::All,

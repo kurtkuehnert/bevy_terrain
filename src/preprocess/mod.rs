@@ -1,12 +1,9 @@
 use crate::config::TerrainConfig;
-use bevy::prelude::UVec2;
 use bevy::utils::HashMap;
 use image::{ImageBuffer, Luma};
-use itertools::{iproduct, Itertools};
-use ron::ser::to_string_pretty;
-use ron::{to_string, Map};
-use std::fs;
-use std::path::Path;
+use itertools::iproduct;
+use ron::to_string;
+use std::{fs, path::Path};
 
 struct Node {
     height_data: ImageBuffer<Luma<u16>, Vec<u16>>,
@@ -14,7 +11,7 @@ struct Node {
     max_height: u16,
 }
 
-pub fn generate_node_textures<P>(config: &TerrainConfig, source_path: P, mut output_path: P)
+pub fn generate_node_textures<P>(config: &TerrainConfig, source_path: P, output_path: P)
 where
     P: AsRef<Path>,
 {
@@ -75,7 +72,7 @@ fn sample_node(
         let source_y = origin_y + node_y * stride;
 
         if source_x < width && source_y < height {
-            let value = (iproduct!(0..stride, 0..stride)
+            let _value = (iproduct!(0..stride, 0..stride)
                 .map(|(offset_x, offset_y)| {
                     source.get_pixel(source_x + offset_x, source_y + offset_y).0[0] as f64
                 })
