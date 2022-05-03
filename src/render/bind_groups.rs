@@ -1,8 +1,10 @@
-use crate::node_atlas::NodeAttachment;
 use crate::{
-    node_atlas::GpuNodeAtlas,
-    render::{resources::TerrainResources, InitTerrain, PersistentComponent},
-    TerrainComputePipelines, TerrainRenderPipeline,
+    render::{
+        gpu_node_atlas::{GpuNodeAtlas, NodeAttachment},
+        resources::TerrainResources,
+        InitTerrain, PersistentComponent,
+    },
+    GpuQuadtree, TerrainComputePipelines, TerrainRenderPipeline,
 };
 use bevy::{
     prelude::*,
@@ -13,7 +15,7 @@ use std::mem;
 pub struct TerrainBindGroups {
     pub(crate) indirect_buffer: Buffer,
     pub(crate) prepare_indirect_bind_group: BindGroup,
-    pub(crate) update_quadtree_bind_groups: Vec<BindGroup>,
+
     pub(crate) build_node_list_bind_groups: [BindGroup; 2],
     pub(crate) build_patch_list_bind_group: BindGroup,
     pub(crate) build_chunk_maps_bind_group: BindGroup,
@@ -24,6 +26,7 @@ pub struct TerrainBindGroups {
 impl TerrainBindGroups {
     pub(crate) fn new(
         resources: &mut TerrainResources,
+        gpu_quadtree: &GpuQuadtree,
         gpu_node_atlas: &GpuNodeAtlas,
         device: &RenderDevice,
         terrain_pipeline: &TerrainRenderPipeline,
@@ -40,10 +43,12 @@ impl TerrainBindGroups {
             ref atlas_map_view,
         } = resources;
 
+        let GpuQuadtree {
+            view: ref quadtree_view,
+            ..
+        } = gpu_quadtree;
+
         let GpuNodeAtlas {
-            ref quadtree_view,
-            ref quadtree_update_buffers,
-            ref quadtree_views,
             ref atlas_attachments,
             ref attachment_order,
             ..
@@ -187,27 +192,6 @@ impl TerrainBindGroups {
             layout: &compute_pipelines.build_chunk_maps_layout,
         });
 
-        let update_quadtree_bind_groups = quadtree_update_buffers
-            .iter()
-            .zip(quadtree_views.iter())
-            .map(|(buffer, view)| {
-                device.create_bind_group(&BindGroupDescriptor {
-                    label: None,
-                    layout: &compute_pipelines.update_quadtree_layout,
-                    entries: &[
-                        BindGroupEntry {
-                            binding: 0,
-                            resource: BindingResource::TextureView(view),
-                        },
-                        BindGroupEntry {
-                            binding: 1,
-                            resource: buffer.as_entire_binding(),
-                        },
-                    ],
-                })
-            })
-            .collect();
-
         let mut entries = vec![
             BindGroupEntry {
                 binding: 0,
@@ -258,7 +242,6 @@ impl TerrainBindGroups {
         Self {
             indirect_buffer,
             prepare_indirect_bind_group,
-            update_quadtree_bind_groups,
             build_node_list_bind_groups,
             build_patch_list_bind_group,
             build_chunk_maps_bind_group,
@@ -273,20 +256,23 @@ pub(crate) fn init_terrain_bind_groups(
     device: Res<RenderDevice>,
     terrain_pipeline: Res<TerrainRenderPipeline>,
     compute_pipelines: Res<TerrainComputePipelines>,
-    gpu_node_atlases: ResMut<PersistentComponent<GpuNodeAtlas>>,
+    gpu_quadtrees: Res<PersistentComponent<GpuQuadtree>>,
+    gpu_node_atlases: Res<PersistentComponent<GpuNodeAtlas>>,
     mut terrain_bind_groups: ResMut<PersistentComponent<TerrainBindGroups>>,
     mut terrain_query: Query<(Entity, &mut TerrainResources), With<InitTerrain>>,
 ) {
     for (entity, mut resources) in terrain_query.iter_mut() {
         info!("initializing terrain bind groups");
 
-        let node_atlas = gpu_node_atlases.get(&entity).unwrap();
+        let gpu_quadtree = gpu_quadtrees.get(&entity).unwrap();
+        let gpu_node_atlas = gpu_node_atlases.get(&entity).unwrap();
 
         terrain_bind_groups.insert(
             entity,
             TerrainBindGroups::new(
                 &mut resources,
-                &node_atlas,
+                gpu_quadtree,
+                gpu_node_atlas,
                 &device,
                 &terrain_pipeline,
                 &compute_pipelines,

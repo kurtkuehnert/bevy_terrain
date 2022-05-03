@@ -1,9 +1,8 @@
 use crate::{
-    node_atlas::GpuNodeAtlas,
     render::{
         bind_groups::TerrainBindGroups, culling::CullingBindGroup, layouts::*, PersistentComponent,
     },
-    TerrainConfig,
+    GpuQuadtree, TerrainConfig,
 };
 use bevy::{
     ecs::system::{
@@ -185,18 +184,13 @@ impl TerrainComputeNode {
     fn update_quadtree<'a>(
         pass: &mut ComputePass<'a>,
         pipelines: &'a Vec<&'a ComputePipeline>,
-        gpu_node_atlas: &GpuNodeAtlas,
-        bind_groups: &'a TerrainBindGroups,
+        gpu_quadtree: &'a GpuQuadtree,
     ) {
         pass.set_pipeline(pipelines[TerrainComputePipelineKey::UpdateQuadtree as usize]);
 
-        for (&count, bind_group) in gpu_node_atlas
-            .node_update_counts
-            .iter()
-            .zip(&bind_groups.update_quadtree_bind_groups)
-        {
+        for (count, _, bind_group) in &gpu_quadtree.update {
             pass.set_bind_group(0, bind_group, &[]);
-            pass.dispatch(count, 1, 1);
+            pass.dispatch(*count, 1, 1);
         }
     }
 
@@ -279,7 +273,7 @@ impl render_graph::Node for TerrainComputeNode {
     ) -> Result<(), render_graph::NodeRunError> {
         let pipeline_cache = world.resource::<PipelineCache>();
         let terrain_bind_groups = world.resource::<PersistentComponent<TerrainBindGroups>>();
-        let gpu_node_atlases = world.resource::<PersistentComponent<GpuNodeAtlas>>();
+        let gpu_quadtrees = world.resource::<PersistentComponent<GpuQuadtree>>();
 
         let pipelines = &match TerrainComputePipelineKey::iter()
             .map(|key| pipeline_cache.get_compute_pipeline(self.pipelines[key as usize]))
@@ -294,12 +288,12 @@ impl render_graph::Node for TerrainComputeNode {
             .begin_compute_pass(&ComputePassDescriptor::default());
 
         for (entity, config, culling_bind_group) in self.query.iter_manual(world) {
+            let gpu_quadtree = gpu_quadtrees.get(&entity).unwrap();
             let bind_groups = terrain_bind_groups.get(&entity).unwrap();
-            let gpu_node_atlas = gpu_node_atlases.get(&entity).unwrap();
 
             pass.set_bind_group(1, &culling_bind_group.value, &[]);
 
-            TerrainComputeNode::update_quadtree(pass, pipelines, gpu_node_atlas, bind_groups);
+            TerrainComputeNode::update_quadtree(pass, pipelines, gpu_quadtree);
             TerrainComputeNode::build_node_list(pass, pipelines, config, bind_groups);
             TerrainComputeNode::build_patch_list(pass, pipelines, config, bind_groups);
         }

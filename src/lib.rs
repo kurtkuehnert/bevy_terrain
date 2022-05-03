@@ -1,14 +1,16 @@
-use crate::render::height_map::{init_height_attachment, queue_height_attachment_updates};
 use crate::{
     config::TerrainConfig,
     debug::info,
-    node_atlas::{extract_node_atlas, init_node_atlas, queue_node_atlas_updates, GpuNodeAtlas},
     quadtree::{traverse_quadtree, update_load_status, update_nodes},
     render::{
         bind_groups::{init_terrain_bind_groups, TerrainBindGroups},
         compute_pipelines::{TerrainComputeNode, TerrainComputePipelines},
         culling::queue_terrain_culling_bind_group,
-        extract_terrain, notify_init_terrain, queue_terrain,
+        extract_terrain,
+        gpu_node_atlas::{extract_node_atlas, init_node_atlas, GpuNodeAtlas},
+        gpu_quadtree::{extract_quadtree, init_gpu_quadtree, queue_quadtree_updates, GpuQuadtree},
+        height_map::{init_height_attachment, queue_height_attachment_updates},
+        notify_init_terrain, queue_terrain,
         render_pipeline::TerrainRenderPipeline,
         resources::init_terrain_resources,
         DrawTerrain, PersistentComponent,
@@ -81,12 +83,15 @@ impl Plugin for TerrainPlugin {
             .init_resource::<SpecializedComputePipelines<TerrainComputePipelines>>()
             .init_resource::<TerrainRenderPipeline>()
             .init_resource::<SpecializedRenderPipelines<TerrainRenderPipeline>>()
+            .init_resource::<PersistentComponent<GpuQuadtree>>()
             .init_resource::<PersistentComponent<GpuNodeAtlas>>()
             .init_resource::<PersistentComponent<TerrainBindGroups>>()
-            .add_system_to_stage(RenderStage::Extract, extract_terrain)
             .add_system_to_stage(RenderStage::Extract, notify_init_terrain)
+            .add_system_to_stage(RenderStage::Extract, extract_terrain)
+            .add_system_to_stage(RenderStage::Extract, extract_quadtree)
             .add_system_to_stage(RenderStage::Extract, extract_node_atlas)
             .add_system_to_stage(RenderStage::Prepare, init_terrain_resources)
+            .add_system_to_stage(RenderStage::Prepare, init_gpu_quadtree)
             .add_system_to_stage(RenderStage::Prepare, init_node_atlas)
             .add_system_to_stage(
                 RenderStage::Prepare,
@@ -94,7 +99,7 @@ impl Plugin for TerrainPlugin {
             )
             .add_system_to_stage(RenderStage::Queue, init_terrain_bind_groups)
             .add_system_to_stage(RenderStage::Queue, queue_terrain)
-            .add_system_to_stage(RenderStage::Queue, queue_node_atlas_updates)
+            .add_system_to_stage(RenderStage::Queue, queue_quadtree_updates)
             .add_system_to_stage(RenderStage::Queue, queue_terrain_culling_bind_group)
             .add_system_to_stage(RenderStage::Queue, queue_height_attachment_updates);
 
