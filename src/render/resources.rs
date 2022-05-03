@@ -10,8 +10,6 @@ use bevy::{
     },
 };
 
-pub enum NodeAttachment {}
-
 #[derive(Component)]
 pub struct TerrainResources {
     pub(crate) indirect_buffer: Option<Buffer>,

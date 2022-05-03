@@ -1,3 +1,4 @@
+use crate::render::height_map::{init_height_attachment, queue_height_attachment_updates};
 use crate::{
     config::TerrainConfig,
     debug::info,
@@ -87,10 +88,15 @@ impl Plugin for TerrainPlugin {
             .add_system_to_stage(RenderStage::Extract, extract_node_atlas)
             .add_system_to_stage(RenderStage::Prepare, init_terrain_resources)
             .add_system_to_stage(RenderStage::Prepare, init_node_atlas)
+            .add_system_to_stage(
+                RenderStage::Prepare,
+                init_height_attachment.after(init_node_atlas),
+            )
             .add_system_to_stage(RenderStage::Queue, init_terrain_bind_groups)
             .add_system_to_stage(RenderStage::Queue, queue_terrain)
             .add_system_to_stage(RenderStage::Queue, queue_node_atlas_updates)
-            .add_system_to_stage(RenderStage::Queue, queue_terrain_culling_bind_group);
+            .add_system_to_stage(RenderStage::Queue, queue_terrain_culling_bind_group)
+            .add_system_to_stage(RenderStage::Queue, queue_height_attachment_updates);
 
         let compute_node = TerrainComputeNode::from_world(&mut render_app.world);
 
