@@ -1,3 +1,4 @@
+use crate::node_atlas::NodeAttachment;
 use crate::{
     node_atlas::GpuNodeAtlas,
     render::{resources::TerrainResources, InitTerrain, PersistentComponent},
@@ -23,7 +24,7 @@ pub struct TerrainBindGroups {
 impl TerrainBindGroups {
     pub(crate) fn new(
         resources: &mut TerrainResources,
-        node_atlas: &GpuNodeAtlas,
+        gpu_node_atlas: &GpuNodeAtlas,
         device: &RenderDevice,
         terrain_pipeline: &TerrainRenderPipeline,
         compute_pipelines: &TerrainComputePipelines,
@@ -43,9 +44,10 @@ impl TerrainBindGroups {
             ref quadtree_view,
             ref quadtree_update_buffers,
             ref quadtree_views,
-            ref height_atlas,
+            ref atlas_attachments,
+            ref attachment_order,
             ..
-        } = node_atlas;
+        } = gpu_node_atlas;
 
         let indirect_buffer = mem::take(indirect_buffer).unwrap();
 
@@ -185,38 +187,6 @@ impl TerrainBindGroups {
             layout: &compute_pipelines.build_chunk_maps_layout,
         });
 
-        let terrain_data_bind_group = device.create_bind_group(&BindGroupDescriptor {
-            label: None,
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: config_buffer.as_entire_binding(),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: BindingResource::TextureView(&atlas_map_view),
-                },
-                BindGroupEntry {
-                    binding: 2,
-                    resource: BindingResource::TextureView(&height_atlas.texture_view),
-                },
-                BindGroupEntry {
-                    binding: 3,
-                    resource: BindingResource::Sampler(&height_atlas.sampler),
-                },
-            ],
-            layout: &terrain_pipeline.terrain_data_layout,
-        });
-
-        let patch_list_bind_group = device.create_bind_group(&BindGroupDescriptor {
-            label: None,
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: patch_buffer.as_entire_binding(),
-            }],
-            layout: &terrain_pipeline.patch_list_layout,
-        });
-
         let update_quadtree_bind_groups = quadtree_update_buffers
             .iter()
             .zip(quadtree_views.iter())
@@ -237,6 +207,53 @@ impl TerrainBindGroups {
                 })
             })
             .collect();
+
+        let mut entries = vec![
+            BindGroupEntry {
+                binding: 0,
+                resource: config_buffer.as_entire_binding(),
+            },
+            BindGroupEntry {
+                binding: 1,
+                resource: BindingResource::TextureView(&atlas_map_view),
+            },
+        ];
+
+        for identifier in attachment_order {
+            let attachment = atlas_attachments.get(identifier).unwrap();
+
+            match attachment {
+                NodeAttachment::Buffer(buffer) => entries.push(BindGroupEntry {
+                    binding: entries.len() as u32,
+                    resource: buffer.as_entire_binding(),
+                }),
+                NodeAttachment::Texture { view, sampler, .. } => {
+                    entries.push(BindGroupEntry {
+                        binding: entries.len() as u32,
+                        resource: BindingResource::TextureView(&view),
+                    });
+                    entries.push(BindGroupEntry {
+                        binding: entries.len() as u32,
+                        resource: BindingResource::Sampler(&sampler),
+                    });
+                }
+            }
+        }
+
+        let terrain_data_bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: None,
+            entries: &entries,
+            layout: &terrain_pipeline.terrain_data_layout,
+        });
+
+        let patch_list_bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: None,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: patch_buffer.as_entire_binding(),
+            }],
+            layout: &terrain_pipeline.patch_list_layout,
+        });
 
         Self {
             indirect_buffer,

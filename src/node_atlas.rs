@@ -1,9 +1,7 @@
 use crate::{
     config::TerrainConfig,
     quadtree::NodeData,
-    render::{
-        layouts::NODE_UPDATE_SIZE, resources::NodeAttachment, InitTerrain, PersistentComponent,
-    },
+    render::{layouts::NODE_UPDATE_SIZE, InitTerrain, PersistentComponent},
 };
 use bevy::{
     core::{cast_slice, Pod, Zeroable},
@@ -19,6 +17,15 @@ use bevy::{
 };
 use image::EncodableLayout;
 use std::{collections::VecDeque, mem, num::NonZeroU32};
+
+pub enum NodeAttachment {
+    Buffer(Buffer),
+    Texture {
+        texture: Texture,
+        view: TextureView,
+        sampler: Sampler,
+    },
+}
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, Zeroable, Pod)]
@@ -83,9 +90,9 @@ pub struct GpuNodeAtlas {
     pub(crate) quadtree_views: Vec<TextureView>,
     pub(crate) node_update_counts: Vec<u32>,
     pub(crate) quadtree_update: Vec<Vec<NodeUpdate>>,
+    pub(crate) attachment_order: Vec<String>,
     pub(crate) atlas_attachments: HashMap<String, NodeAttachment>,
     pub(crate) activated_nodes: Vec<(u16, NodeData)>, // make generic on NodeData
-    pub(crate) height_atlas: GpuImage,
 }
 
 impl GpuNodeAtlas {
@@ -93,19 +100,18 @@ impl GpuNodeAtlas {
         let (quadtree_view, quadtree_update_buffers, quadtree_views) =
             Self::create_quadtree(config, device, queue);
 
-        let height_atlas = Self::create_node_atlas(config, device);
-
         Self {
             quadtree_view,
             quadtree_update_buffers,
             quadtree_views,
             node_update_counts: vec![],
             quadtree_update: vec![],
+            attachment_order: vec!["heightmap".into()],
             atlas_attachments: Default::default(),
             activated_nodes: vec![],
-            height_atlas,
         }
     }
+
     fn create_quadtree(
         config: &TerrainConfig,
         device: &RenderDevice,
@@ -179,59 +185,6 @@ impl GpuNodeAtlas {
 
         (quadtree_view, quadtree_buffers, quadtree_views)
     }
-
-    fn create_node_atlas(config: &TerrainConfig, device: &RenderDevice) -> GpuImage {
-        let texture = device.create_texture(&TextureDescriptor {
-            label: None,
-            size: Extent3d {
-                width: config.texture_size,
-                height: config.texture_size,
-                depth_or_array_layers: config.node_atlas_size as u32,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            format: TextureFormat::R16Unorm,
-            usage: TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING,
-        });
-
-        let sampler = device.create_sampler(&SamplerDescriptor {
-            label: None,
-            address_mode_u: AddressMode::ClampToEdge,
-            address_mode_v: AddressMode::ClampToEdge,
-            address_mode_w: AddressMode::ClampToEdge,
-            mag_filter: FilterMode::Linear,
-            min_filter: FilterMode::Linear,
-            mipmap_filter: FilterMode::Linear,
-            lod_min_clamp: 0.0,
-            lod_max_clamp: f32::MAX,
-            compare: None,
-            anisotropy_clamp: None,
-            border_color: None,
-        });
-
-        let texture_view = texture.create_view(&TextureViewDescriptor {
-            label: None,
-            format: None,
-            dimension: Some(TextureViewDimension::D2Array),
-            aspect: TextureAspect::All,
-            base_mip_level: 0,
-            mip_level_count: None,
-            base_array_layer: 0,
-            array_layer_count: None,
-        });
-
-        // Todo: consider using custom struct with only texture and view instead
-        let height_atlas = GpuImage {
-            texture,
-            texture_view,
-            texture_format: TextureFormat::R16Unorm,
-            sampler,
-            size: Size::new(config.texture_size as f32, config.texture_size as f32),
-        };
-
-        height_atlas
-    }
 }
 
 pub(crate) fn extract_node_atlas(
@@ -270,44 +223,12 @@ pub(crate) fn init_node_atlas(
 }
 
 pub(crate) fn queue_node_atlas_updates(
-    device: Res<RenderDevice>,
     queue: Res<RenderQueue>,
-    images: Res<RenderAssets<Image>>,
     mut gpu_node_atlases: ResMut<PersistentComponent<GpuNodeAtlas>>,
-    terrain_query: Query<(Entity, &TerrainConfig), ()>,
+    terrain_query: Query<Entity, With<TerrainConfig>>,
 ) {
-    let mut command_encoder = device.create_command_encoder(&CommandEncoderDescriptor::default());
-
-    for (entity, config) in terrain_query.iter() {
+    for entity in terrain_query.iter() {
         let gpu_node_atlas = gpu_node_atlases.get_mut(&entity).unwrap();
-
-        for (index, node_data) in &gpu_node_atlas.activated_nodes {
-            let image = images.get(&node_data.height_map).unwrap();
-
-            command_encoder.copy_texture_to_texture(
-                ImageCopyTexture {
-                    texture: &image.texture,
-                    mip_level: 0,
-                    origin: Origin3d { x: 0, y: 0, z: 0 },
-                    aspect: TextureAspect::All,
-                },
-                ImageCopyTexture {
-                    texture: &gpu_node_atlas.height_atlas.texture,
-                    mip_level: 0,
-                    origin: Origin3d {
-                        x: 0,
-                        y: 0,
-                        z: *index as u32,
-                    },
-                    aspect: TextureAspect::All,
-                },
-                Extent3d {
-                    width: config.texture_size,
-                    height: config.texture_size,
-                    depth_or_array_layers: 1,
-                },
-            );
-        }
 
         let counts = gpu_node_atlas
             .quadtree_update_buffers
@@ -321,6 +242,4 @@ pub(crate) fn queue_node_atlas_updates(
 
         gpu_node_atlas.node_update_counts = counts;
     }
-
-    queue.submit(vec![command_encoder.finish()]);
 }
