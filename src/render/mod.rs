@@ -1,30 +1,28 @@
-use crate::render::bind_groups::TerrainBindGroups;
-use crate::{render::terrain_pipeline::TerrainPipelineKey, TerrainConfig, TerrainPipeline};
-use bevy::utils::HashMap;
+use crate::{
+    render::{bind_groups::TerrainBindGroups, render_pipeline::TerrainPipelineKey},
+    TerrainConfig, TerrainRenderPipeline,
+};
 use bevy::{
     core_pipeline::Opaque3d,
-    ecs::system::{
-        lifetimeless::{Read, SQuery, SRes},
-        SystemParamItem,
-    },
+    ecs::system::{lifetimeless::SRes, SystemParamItem},
     pbr::{wireframe::Wireframe, MeshUniform, SetMeshBindGroup, SetMeshViewBindGroup},
     prelude::*,
     render::{
-        render_asset::RenderAssets,
         render_phase::{
             DrawFunctions, EntityRenderCommand, RenderCommandResult, RenderPhase, SetItemPipeline,
             TrackedRenderPass,
         },
         render_resource::*,
     },
+    utils::HashMap,
 };
 
-pub mod bind_groups;
-pub mod compute_pipelines;
-pub mod culling;
-pub mod layouts;
-pub mod resources;
-pub mod terrain_pipeline;
+pub(crate) mod bind_groups;
+pub(crate) mod compute_pipelines;
+pub(crate) mod culling;
+pub(crate) mod layouts;
+pub(crate) mod render_pipeline;
+pub(crate) mod resources;
 
 pub type PersistentComponent<A> = HashMap<Entity, A>;
 
@@ -123,10 +121,10 @@ pub(crate) fn extract_terrain(
 
 /// Queses all terrain entities for rendering via the terrain pipeline.
 pub(crate) fn queue_terrain(
-    terrain_pipeline: Res<TerrainPipeline>,
+    terrain_pipeline: Res<TerrainRenderPipeline>,
     draw_functions: Res<DrawFunctions<Opaque3d>>,
     msaa: Res<Msaa>,
-    mut pipelines: ResMut<SpecializedRenderPipelines<TerrainPipeline>>,
+    mut pipelines: ResMut<SpecializedRenderPipelines<TerrainRenderPipeline>>,
     mut pipeline_cache: ResMut<PipelineCache>,
     mut view_query: Query<&mut RenderPhase<Opaque3d>>,
     terrain_query: Query<(Entity, Option<&Wireframe>), With<TerrainConfig>>,

@@ -1,7 +1,8 @@
-use bevy::ecs::query::QueryItem;
-use bevy::ecs::system::lifetimeless::Read;
-use bevy::render::render_component::ExtractComponent;
-use bevy::{prelude::*, render::render_resource::std140::AsStd140};
+use bevy::{
+    ecs::{query::QueryItem, system::lifetimeless::Read},
+    prelude::*,
+    render::{render_component::ExtractComponent, render_resource::std140::AsStd140},
+};
 use itertools::{iproduct, Product};
 use std::ops::Range;
 

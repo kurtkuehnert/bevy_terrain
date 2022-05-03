@@ -1,12 +1,11 @@
-use crate::{config::TerrainConfig, node_atlas::NodeAtlas, quadtree::Quadtree, TerrainDebugInfo};
+use crate::{config::TerrainConfig, node_atlas::NodeAtlas, quadtree::Quadtree};
 use bevy::prelude::*;
 
 #[derive(Bundle)]
 pub struct TerrainBundle {
-    terrain_config: TerrainConfig,
+    config: TerrainConfig,
     quadtree: Quadtree,
     node_atlas: NodeAtlas,
-    terrain_debug_info: TerrainDebugInfo,
     transform: Transform,
     global_transform: GlobalTransform,
 }
@@ -14,10 +13,9 @@ pub struct TerrainBundle {
 impl TerrainBundle {
     pub fn new(config: TerrainConfig) -> Self {
         Self {
-            terrain_config: config.clone(),
+            config: config.clone(),
             quadtree: Quadtree::new(&config, 16),
             node_atlas: NodeAtlas::new(&config),
-            terrain_debug_info: default(),
             transform: default(),
             global_transform: default(),
         }

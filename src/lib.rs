@@ -1,18 +1,16 @@
-use crate::config::TerrainConfig;
-use crate::node_atlas::{extract_node_atlas, init_node_atlas, GpuNodeAtlas};
-use crate::render::bind_groups::{init_terrain_bind_groups, TerrainBindGroups};
-use crate::render::resources::init_terrain_resources;
-use crate::render::{notify_init_terrain, PersistentComponent};
 use crate::{
-    debug::{info, TerrainDebugInfo},
-    node_atlas::queue_node_atlas_updates,
+    config::TerrainConfig,
+    debug::info,
+    node_atlas::{extract_node_atlas, init_node_atlas, queue_node_atlas_updates, GpuNodeAtlas},
     quadtree::{traverse_quadtree, update_load_status, update_nodes},
     render::{
+        bind_groups::{init_terrain_bind_groups, TerrainBindGroups},
         compute_pipelines::{TerrainComputeNode, TerrainComputePipelines},
         culling::queue_terrain_culling_bind_group,
-        extract_terrain, queue_terrain,
-        terrain_pipeline::TerrainPipeline,
-        DrawTerrain,
+        extract_terrain, notify_init_terrain, queue_terrain,
+        render_pipeline::TerrainRenderPipeline,
+        resources::init_terrain_resources,
+        DrawTerrain, PersistentComponent,
     },
 };
 use bevy::{
@@ -69,20 +67,19 @@ impl Plugin for TerrainPlugin {
             Shader::from_wgsl(include_str!("render/shaders/parameters.wgsl")),
         );
 
-        app.add_plugin(ExtractComponentPlugin::<TerrainConfig>::default());
-
-        app.add_system(traverse_quadtree.before("update_nodes"))
-            .add_system(update_nodes.label("update_nodes"))
-            .add_system(update_load_status)
-            .add_system(info.after("update_nodes"));
+        app.add_plugin(ExtractComponentPlugin::<TerrainConfig>::default())
+            .add_system(traverse_quadtree.before(update_nodes))
+            .add_system(update_nodes)
+            .add_system(info.after(update_nodes))
+            .add_system(update_load_status);
 
         let render_app = app
             .sub_app_mut(RenderApp)
             .add_render_command::<Opaque3d, DrawTerrain>()
             .init_resource::<TerrainComputePipelines>()
             .init_resource::<SpecializedComputePipelines<TerrainComputePipelines>>()
-            .init_resource::<TerrainPipeline>()
-            .init_resource::<SpecializedRenderPipelines<TerrainPipeline>>()
+            .init_resource::<TerrainRenderPipeline>()
+            .init_resource::<SpecializedRenderPipelines<TerrainRenderPipeline>>()
             .init_resource::<PersistentComponent<GpuNodeAtlas>>()
             .init_resource::<PersistentComponent<TerrainBindGroups>>()
             .add_system_to_stage(RenderStage::Extract, extract_terrain)

@@ -1,3 +1,7 @@
+use crate::{
+    config::TerrainConfig,
+    render::{layouts::*, InitTerrain},
+};
 use bevy::{
     prelude::*,
     render::{
@@ -5,9 +9,6 @@ use bevy::{
         renderer::RenderDevice,
     },
 };
-
-use crate::render::InitTerrain;
-use crate::{config::TerrainConfig, render::layouts::*};
 
 pub enum NodeAttachment {}
 
@@ -24,13 +25,13 @@ pub struct TerrainResources {
 }
 
 impl TerrainResources {
-    pub(crate) fn new(config: &TerrainConfig, device: &RenderDevice) -> Self {
+    pub(crate) fn new(device: &RenderDevice, config: &TerrainConfig) -> Self {
         let indirect_buffer = Some(Self::create_indirect_buffer(device));
         let parameter_buffer = Self::create_parameter_buffer(device);
-        let config_buffer = Self::create_config_buffer(config, device);
-        let (temp_node_buffers, final_node_buffer) = Self::create_node_buffers(config, device);
-        let patch_buffer = Self::create_patch_buffer(config, device);
-        let (lod_map_view, atlas_map_view) = Self::create_chunk_maps(config, device);
+        let config_buffer = Self::create_config_buffer(device, config);
+        let (temp_node_buffers, final_node_buffer) = Self::create_node_buffers(device, config);
+        let patch_buffer = Self::create_patch_buffer(device, config);
+        let (lod_map_view, atlas_map_view) = Self::create_chunk_maps(device, config);
 
         Self {
             indirect_buffer,
@@ -46,15 +47,15 @@ impl TerrainResources {
 
     fn create_indirect_buffer(device: &RenderDevice) -> Buffer {
         device.create_buffer_with_data(&BufferInitDescriptor {
-            label: None,
+            label: "indirect_buffer".into(),
             usage: BufferUsages::STORAGE | BufferUsages::INDIRECT,
             contents: &[0; INDIRECT_BUFFER_SIZE as usize],
         })
     }
 
-    fn create_config_buffer(config: &TerrainConfig, device: &RenderDevice) -> Buffer {
+    fn create_config_buffer(device: &RenderDevice, config: &TerrainConfig) -> Buffer {
         device.create_buffer_with_data(&BufferInitDescriptor {
-            label: None,
+            label: "config_buffer".into(),
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
             contents: config.as_std140().as_bytes(),
         })
@@ -62,18 +63,18 @@ impl TerrainResources {
 
     fn create_parameter_buffer(device: &RenderDevice) -> Buffer {
         device.create_buffer(&BufferDescriptor {
-            label: None,
+            label: "parameter_buffer".into(),
             size: PARAMETER_BUFFER_SIZE,
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
         })
     }
 
-    fn create_node_buffers(config: &TerrainConfig, device: &RenderDevice) -> ([Buffer; 2], Buffer) {
+    fn create_node_buffers(device: &RenderDevice, config: &TerrainConfig) -> ([Buffer; 2], Buffer) {
         let max_node_count = config.chunk_count.x * config.chunk_count.y;
 
         let buffer_descriptor = BufferDescriptor {
-            label: None,
+            label: "node_buffer".into(),
             size: NODE_SIZE * max_node_count as BufferAddress,
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
@@ -88,12 +89,12 @@ impl TerrainResources {
         )
     }
 
-    fn create_patch_buffer(config: &TerrainConfig, device: &RenderDevice) -> Buffer {
+    fn create_patch_buffer(device: &RenderDevice, config: &TerrainConfig) -> Buffer {
         let max_patch_count =
             config.chunk_count.x * config.chunk_count.y * TerrainConfig::PATCHES_PER_NODE;
 
         let buffer_descriptor = BufferDescriptor {
-            label: None,
+            label: "patch_buffer".into(),
             size: PATCH_SIZE * max_patch_count as BufferAddress,
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
@@ -103,16 +104,14 @@ impl TerrainResources {
     }
 
     fn create_chunk_maps(
-        config: &TerrainConfig,
         device: &RenderDevice,
+        config: &TerrainConfig,
     ) -> (TextureView, TextureView) {
-        let chunk_count = config.chunk_count;
-
         let lod_map = device.create_texture(&TextureDescriptor {
-            label: None,
+            label: "lod_map".into(),
             size: Extent3d {
-                width: chunk_count.x,
-                height: chunk_count.y,
+                width: config.chunk_count.x,
+                height: config.chunk_count.y,
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
@@ -125,10 +124,10 @@ impl TerrainResources {
         });
 
         let atlas_map = device.create_texture(&TextureDescriptor {
-            label: None,
+            label: "atlas_map".into(),
             size: Extent3d {
-                width: chunk_count.x,
-                height: chunk_count.y,
+                width: config.chunk_count.x,
+                height: config.chunk_count.y,
                 depth_or_array_layers: 1,
             },
             mip_level_count: 1,
@@ -141,7 +140,7 @@ impl TerrainResources {
         });
 
         let lod_map_view = lod_map.create_view(&TextureViewDescriptor {
-            label: None,
+            label: "lod_map_view".into(),
             format: Some(TextureFormat::R8Uint),
             dimension: Some(TextureViewDimension::D2),
             aspect: TextureAspect::All,
@@ -152,7 +151,7 @@ impl TerrainResources {
         });
 
         let atlas_map_view = atlas_map.create_view(&TextureViewDescriptor {
-            label: None,
+            label: "atlas_map_view".into(),
             format: Some(TextureFormat::R16Uint),
             dimension: Some(TextureViewDimension::D2),
             aspect: TextureAspect::All,
@@ -177,6 +176,6 @@ pub(crate) fn init_terrain_resources(
 
         commands
             .get_or_spawn(entity)
-            .insert(TerrainResources::new(config, &device));
+            .insert(TerrainResources::new(&device, config));
     }
 }

@@ -1,20 +1,11 @@
-use crate::node_atlas::GpuNodeAtlas;
-use crate::render::resources::TerrainResources;
-use crate::render::{InitTerrain, PersistentComponent};
 use crate::{
-    config::TerrainConfig, node_atlas::NodeAtlas, render::layouts::*, TerrainComputePipelines,
-    TerrainPipeline,
+    node_atlas::GpuNodeAtlas,
+    render::{resources::TerrainResources, InitTerrain, PersistentComponent},
+    TerrainComputePipelines, TerrainRenderPipeline,
 };
 use bevy::{
-    ecs::system::{lifetimeless::SRes, SystemParamItem},
     prelude::*,
-    reflect::TypeUuid,
-    render::{
-        render_asset::{PrepareAssetError, RenderAsset},
-        render_resource::{std140::Std140, *},
-        renderer::{RenderDevice, RenderQueue},
-        texture::GpuImage,
-    },
+    render::{render_resource::*, renderer::RenderDevice},
 };
 use std::mem;
 
@@ -34,7 +25,7 @@ impl TerrainBindGroups {
         resources: &mut TerrainResources,
         node_atlas: &GpuNodeAtlas,
         device: &RenderDevice,
-        terrain_pipeline: &TerrainPipeline,
+        terrain_pipeline: &TerrainRenderPipeline,
         compute_pipelines: &TerrainComputePipelines,
     ) -> Self {
         let TerrainResources {
@@ -263,7 +254,7 @@ impl TerrainBindGroups {
 /// Runs in queue.
 pub(crate) fn init_terrain_bind_groups(
     device: Res<RenderDevice>,
-    terrain_pipeline: Res<TerrainPipeline>,
+    terrain_pipeline: Res<TerrainRenderPipeline>,
     compute_pipelines: Res<TerrainComputePipelines>,
     gpu_node_atlases: ResMut<PersistentComponent<GpuNodeAtlas>>,
     mut terrain_bind_groups: ResMut<PersistentComponent<TerrainBindGroups>>,
