@@ -13,7 +13,7 @@ pub struct TerrainDebugInfo {
 
 pub fn info(mut terrain_query: Query<(&mut TerrainDebugInfo, &NodeAtlas, &Quadtree)>) {
     for (mut debug_info, node_atlas, quadtree) in terrain_query.iter_mut() {
-        debug_info.available_ids_len = node_atlas.available_ids.len();
+        debug_info.available_ids_len = node_atlas.available_indices.len();
         debug_info.handle_mapping_len = quadtree.handle_mapping.len();
         debug_info.load_statuses_len = quadtree.load_statuses.len();
         debug_info.loading_nodes_len = quadtree.loading_nodes.len();

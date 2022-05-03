@@ -1,3 +1,6 @@
+use bevy::ecs::query::QueryItem;
+use bevy::ecs::system::lifetimeless::Read;
+use bevy::render::render_component::ExtractComponent;
 use bevy::{prelude::*, render::render_resource::std140::AsStd140};
 use itertools::{iproduct, Product};
 use std::ops::Range;
@@ -116,6 +119,15 @@ impl TerrainConfig {
 
     pub fn node_position(id: u32) -> (u32, u32, u32) {
         ((id >> 28) & 0xF, (id >> 14) & 0x3FFF, id & 0x3FFF)
+    }
+}
+
+impl ExtractComponent for TerrainConfig {
+    type Query = Read<TerrainConfig>;
+    type Filter = ();
+
+    fn extract_component(item: QueryItem<Self::Query>) -> Self {
+        item.clone() // Todo consider persisting the config in the render world
     }
 }
 

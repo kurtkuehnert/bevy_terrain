@@ -23,6 +23,7 @@ use bevy::{
 pub mod compute_pipelines;
 pub mod culling;
 pub mod layouts;
+pub mod resources;
 pub mod terrain_data;
 pub mod terrain_pipeline;
 

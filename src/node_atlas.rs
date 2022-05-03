@@ -32,7 +32,7 @@ pub struct GpuNodeAtlas {
 /// Maps the assets to the corresponding active nodes and tracks the node updates.
 #[derive(Component)]
 pub struct NodeAtlas {
-    pub(crate) available_ids: VecDeque<u16>,
+    pub(crate) available_indices: VecDeque<u16>,
     quadtree_update: Vec<Vec<NodeUpdate>>,
     activated_height_maps: Vec<(u16, Handle<Image>)>,
 }
@@ -43,14 +43,17 @@ impl NodeAtlas {
 
     pub fn new(config: &TerrainConfig) -> Self {
         Self {
-            available_ids: (0..config.node_atlas_size).collect(),
+            available_indices: (0..config.node_atlas_size).collect(),
             quadtree_update: vec![Vec::new(); config.lod_count as usize],
             activated_height_maps: default(),
         }
     }
 
     pub(crate) fn activate_node(&mut self, node: &mut NodeData) {
-        let atlas_index = self.available_ids.pop_front().expect("Out of atlas ids.");
+        let atlas_index = self
+            .available_indices
+            .pop_front()
+            .expect("Out of atlas ids.");
 
         node.atlas_index = atlas_index;
 
@@ -65,7 +68,7 @@ impl NodeAtlas {
     }
 
     pub(crate) fn deactivate_node(&mut self, node: &mut NodeData) {
-        self.available_ids.push_front(node.atlas_index);
+        self.available_indices.push_front(node.atlas_index);
 
         node.atlas_index = Self::INACTIVE_ID;
 
