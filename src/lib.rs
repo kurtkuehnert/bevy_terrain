@@ -1,8 +1,8 @@
 use crate::config::TerrainConfig;
-use crate::render::resources::{
-    init_node_atlas, init_terrain_bind_groups, init_terrain_resources, notify_init_terrain,
-    GpuNodeAtlas, PersistentComponent, TerrainBindGroups, TerrainResources,
-};
+use crate::node_atlas::{extract_node_atlas, init_node_atlas, GpuNodeAtlas};
+use crate::render::bind_groups::{init_terrain_bind_groups, TerrainBindGroups};
+use crate::render::resources::init_terrain_resources;
+use crate::render::{notify_init_terrain, PersistentComponent};
 use crate::{
     debug::{info, TerrainDebugInfo},
     node_atlas::queue_node_atlas_updates,
@@ -11,7 +11,6 @@ use crate::{
         compute_pipelines::{TerrainComputeNode, TerrainComputePipelines},
         culling::queue_terrain_culling_bind_group,
         extract_terrain, queue_terrain,
-        terrain_data::TerrainData,
         terrain_pipeline::TerrainPipeline,
         DrawTerrain,
     },
@@ -21,7 +20,6 @@ use bevy::{
     prelude::*,
     reflect::TypeUuid,
     render::{
-        render_asset::RenderAssetPlugin,
         render_component::ExtractComponentPlugin,
         render_graph::RenderGraph,
         render_phase::AddRenderCommand,
@@ -71,11 +69,7 @@ impl Plugin for TerrainPlugin {
             Shader::from_wgsl(include_str!("render/shaders/parameters.wgsl")),
         );
 
-        app.add_asset::<TerrainData>()
-            .add_plugin(RenderAssetPlugin::<TerrainData>::default())
-            .add_plugin(ExtractComponentPlugin::<TerrainConfig>::default())
-            .add_plugin(ExtractComponentPlugin::<Handle<TerrainData>>::default())
-            .add_plugin(ExtractComponentPlugin::<node_atlas::GpuNodeAtlas>::default());
+        app.add_plugin(ExtractComponentPlugin::<TerrainConfig>::default());
 
         app.add_system(traverse_quadtree.before("update_nodes"))
             .add_system(update_nodes.label("update_nodes"))
@@ -93,6 +87,7 @@ impl Plugin for TerrainPlugin {
             .init_resource::<PersistentComponent<TerrainBindGroups>>()
             .add_system_to_stage(RenderStage::Extract, extract_terrain)
             .add_system_to_stage(RenderStage::Extract, notify_init_terrain)
+            .add_system_to_stage(RenderStage::Extract, extract_node_atlas)
             .add_system_to_stage(RenderStage::Prepare, init_terrain_resources)
             .add_system_to_stage(RenderStage::Prepare, init_node_atlas)
             .add_system_to_stage(RenderStage::Queue, init_terrain_bind_groups)
