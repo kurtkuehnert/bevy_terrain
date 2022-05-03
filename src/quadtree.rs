@@ -30,6 +30,7 @@ pub struct Viewer {
     pub(crate) view_distance: f32,
 }
 
+#[derive(Clone)]
 pub struct NodeData {
     pub(crate) id: u32,
     pub(crate) atlas_index: u16,

@@ -1,7 +1,6 @@
-use crate::{
-    render::{terrain_data::TerrainData, terrain_pipeline::TerrainPipelineKey},
-    TerrainPipeline,
-};
+use crate::render::bind_groups::TerrainBindGroups;
+use crate::{render::terrain_pipeline::TerrainPipelineKey, TerrainConfig, TerrainPipeline};
+use bevy::utils::HashMap;
 use bevy::{
     core_pipeline::Opaque3d,
     ecs::system::{
@@ -20,32 +19,32 @@ use bevy::{
     },
 };
 
+pub mod bind_groups;
 pub mod compute_pipelines;
 pub mod culling;
 pub mod layouts;
 pub mod resources;
-pub mod terrain_data;
 pub mod terrain_pipeline;
+
+pub type PersistentComponent<A> = HashMap<Entity, A>;
+
+#[derive(Component)]
+pub(crate) struct InitTerrain;
 
 pub struct SetTerrainDataBindGroup<const I: usize>;
 
 impl<const I: usize> EntityRenderCommand for SetTerrainDataBindGroup<I> {
-    type Param = (
-        SRes<RenderAssets<TerrainData>>,
-        SQuery<Read<Handle<TerrainData>>>,
-    );
+    type Param = SRes<PersistentComponent<TerrainBindGroups>>;
+
     #[inline]
     fn render<'w>(
         _view: Entity,
         item: Entity,
-        (terrain_data, terrain_query): SystemParamItem<'w, '_, Self::Param>,
+        terrain_bind_groups: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let handle = terrain_query.get(item).unwrap();
-        let gpu_terrain_data = terrain_data.into_inner().get(handle).unwrap();
-
-        pass.set_bind_group(I, &gpu_terrain_data.terrain_data_bind_group, &[]);
-
+        let bind_groups = terrain_bind_groups.into_inner().get(&item).unwrap();
+        pass.set_bind_group(I, &bind_groups.terrain_data_bind_group, &[]);
         RenderCommandResult::Success
     }
 }
@@ -53,23 +52,17 @@ impl<const I: usize> EntityRenderCommand for SetTerrainDataBindGroup<I> {
 pub struct SetPatchListBindGroup<const I: usize>;
 
 impl<const I: usize> EntityRenderCommand for SetPatchListBindGroup<I> {
-    type Param = (
-        SRes<RenderAssets<TerrainData>>,
-        SQuery<Read<Handle<TerrainData>>>,
-    );
+    type Param = SRes<PersistentComponent<TerrainBindGroups>>;
 
     #[inline]
     fn render<'w>(
         _view: Entity,
         item: Entity,
-        (terrain_data, terrain_query): SystemParamItem<'w, '_, Self::Param>,
+        terrain_bind_groups: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let handle = terrain_query.get(item).unwrap();
-        let gpu_terrain_data = terrain_data.into_inner().get(handle).unwrap();
-
-        pass.set_bind_group(I, &gpu_terrain_data.patch_list_bind_group, &[]);
-
+        let bind_groups = terrain_bind_groups.into_inner().get(&item).unwrap();
+        pass.set_bind_group(I, &bind_groups.patch_list_bind_group, &[]);
         RenderCommandResult::Success
     }
 }
@@ -77,22 +70,17 @@ impl<const I: usize> EntityRenderCommand for SetPatchListBindGroup<I> {
 pub(crate) struct DrawTerrainCommand;
 
 impl EntityRenderCommand for DrawTerrainCommand {
-    type Param = (
-        SRes<RenderAssets<TerrainData>>,
-        SQuery<Read<Handle<TerrainData>>>,
-    );
+    type Param = SRes<PersistentComponent<TerrainBindGroups>>;
+
     #[inline]
     fn render<'w>(
         _view: Entity,
         item: Entity,
-        (terrain_data, terrain_query): SystemParamItem<'w, '_, Self::Param>,
+        terrain_bind_groups: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let handle = terrain_query.get(item).unwrap();
-        let gpu_terrain_data = terrain_data.into_inner().get(handle).unwrap();
-
-        pass.draw_indirect(&gpu_terrain_data.indirect_buffer, 0);
-
+        let bind_groups = terrain_bind_groups.into_inner().get(&item).unwrap();
+        pass.draw_indirect(&bind_groups.indirect_buffer, 0);
         RenderCommandResult::Success
     }
 }
@@ -108,9 +96,19 @@ pub(crate) type DrawTerrain = (
     DrawTerrainCommand,
 );
 
+/// Runs in extract.
+pub(crate) fn notify_init_terrain(
+    mut commands: Commands,
+    terrain_query: Query<Entity, Changed<TerrainConfig>>,
+) {
+    for entity in terrain_query.iter() {
+        commands.get_or_spawn(entity).insert(InitTerrain);
+    }
+}
+
 pub(crate) fn extract_terrain(
     mut commands: Commands,
-    terrain_query: Query<(Entity, &GlobalTransform), With<Handle<TerrainData>>>,
+    terrain_query: Query<(Entity, &GlobalTransform), With<TerrainConfig>>,
 ) {
     for (entity, transform) in terrain_query.iter() {
         let transform = transform.compute_matrix();
@@ -131,7 +129,7 @@ pub(crate) fn queue_terrain(
     mut pipelines: ResMut<SpecializedRenderPipelines<TerrainPipeline>>,
     mut pipeline_cache: ResMut<PipelineCache>,
     mut view_query: Query<&mut RenderPhase<Opaque3d>>,
-    terrain_query: Query<(Entity, Option<&Wireframe>), With<Handle<TerrainData>>>,
+    terrain_query: Query<(Entity, Option<&Wireframe>), With<TerrainConfig>>,
 ) {
     let draw_function = draw_functions.read().get_id::<DrawTerrain>().unwrap();
 
