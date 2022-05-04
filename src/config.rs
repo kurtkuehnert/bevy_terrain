@@ -1,3 +1,5 @@
+use crate::render::gpu_node_atlas::NodeAttachmentConfig;
+use bevy::utils::HashMap;
 use bevy::{
     ecs::{query::QueryItem, system::lifetimeless::Read},
     prelude::*,
@@ -22,7 +24,7 @@ pub(crate) struct TerrainConfigUniform {
     node_atlas_size: u32,
 }
 
-#[derive(Clone, Debug, Component)]
+#[derive(Clone, Component)]
 pub struct TerrainConfig {
     pub lod_count: u32,
     pub patch_size: u32,
@@ -36,6 +38,7 @@ pub struct TerrainConfig {
     pub scale: f32,
     pub height: f32,
     pub node_atlas_size: u16,
+    pub(crate) node_attachment_configs: Option<HashMap<String, NodeAttachmentConfig>>,
 }
 
 impl TerrainConfig {
@@ -70,7 +73,19 @@ impl TerrainConfig {
             scale,
             height,
             node_atlas_size,
+            node_attachment_configs: Some(HashMap::new()),
         }
+    }
+
+    pub fn add_node_attachment_config(
+        &mut self,
+        label: String,
+        attachment_config: NodeAttachmentConfig,
+    ) {
+        self.node_attachment_configs
+            .as_mut()
+            .unwrap()
+            .insert(label, attachment_config);
     }
 
     pub(crate) fn as_std140(&self) -> Std140TerrainConfigUniform {

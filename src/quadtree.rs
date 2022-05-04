@@ -258,7 +258,7 @@ pub fn update_nodes(
             ref mut activated_nodes,
             ref mut nodes_to_activate,
             ref mut nodes_to_deactivate,
-            node_updates: ref mut quadtree_update,
+            ref mut node_updates,
             ..
         } = quadtree.as_mut();
 
@@ -299,7 +299,7 @@ pub fn update_nodes(
             node_atlas.deactivate_node(&mut node);
 
             let lod = TerrainConfig::node_position(node.id).0 as usize;
-            quadtree_update[lod].push(NodeUpdate {
+            node_updates[lod].push(NodeUpdate {
                 node_id: node.id,
                 atlas_index: node.atlas_index as u32,
             });
@@ -312,7 +312,7 @@ pub fn update_nodes(
             node_atlas.activate_node(&mut node);
 
             let lod = TerrainConfig::node_position(node.id).0 as usize;
-            quadtree_update[lod].push(NodeUpdate {
+            node_updates[lod].push(NodeUpdate {
                 node_id: node.id,
                 atlas_index: node.atlas_index as u32,
             });

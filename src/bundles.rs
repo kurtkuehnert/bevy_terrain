@@ -3,9 +3,9 @@ use bevy::prelude::*;
 
 #[derive(Bundle)]
 pub struct TerrainBundle {
-    config: TerrainConfig,
     quadtree: Quadtree,
     node_atlas: NodeAtlas,
+    config: TerrainConfig,
     transform: Transform,
     global_transform: GlobalTransform,
 }
@@ -13,9 +13,9 @@ pub struct TerrainBundle {
 impl TerrainBundle {
     pub fn new(config: TerrainConfig) -> Self {
         Self {
-            config: config.clone(),
             quadtree: Quadtree::new(&config, 16),
             node_atlas: NodeAtlas::new(&config),
+            config,
             transform: default(),
             global_transform: default(),
         }
