@@ -2,6 +2,7 @@ use crate::{
     render::gpu_node_atlas::{GpuNodeAtlas, NodeAttachment, NodeAttachmentConfig},
     PersistentComponent, TerrainConfig,
 };
+use bevy::render::texture::BevyDefault;
 use bevy::{
     prelude::*,
     render::{
@@ -11,18 +12,20 @@ use bevy::{
     },
 };
 
-pub fn add_height_attachment_config(config: &mut TerrainConfig) {
+const ALBEDO_SIZE: u32 = 128 * 5;
+
+pub fn add_albedo_attachment_config(config: &mut TerrainConfig) {
     let texture_descriptor = TextureDescriptor {
         label: None,
         size: Extent3d {
-            width: config.texture_size,
-            height: config.texture_size,
+            width: ALBEDO_SIZE,
+            height: ALBEDO_SIZE,
             depth_or_array_layers: config.node_atlas_size as u32,
         },
         mip_level_count: 1,
         sample_count: 1,
         dimension: TextureDimension::D2,
-        format: TextureFormat::R16Unorm,
+        format: TextureFormat::Rgba8UnormSrgb,
         usage: TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING,
     };
 
@@ -53,10 +56,10 @@ pub fn add_height_attachment_config(config: &mut TerrainConfig) {
     };
 
     config.add_node_attachment_config(
-        "height_map".into(),
+        "albedo_map".into(),
         NodeAttachmentConfig::Texture {
-            view_binding: 2,
-            sampler_binding: 3,
+            view_binding: 4,
+            sampler_binding: 5,
             texture_descriptor,
             view_descriptor,
             sampler_descriptor,
@@ -64,7 +67,7 @@ pub fn add_height_attachment_config(config: &mut TerrainConfig) {
     );
 }
 
-pub(crate) fn queue_height_attachment_updates(
+pub(crate) fn queue_albedo_attachment_updates(
     device: Res<RenderDevice>,
     queue: Res<RenderQueue>,
     images: Res<RenderAssets<Image>>,
@@ -77,14 +80,14 @@ pub(crate) fn queue_height_attachment_updates(
         let gpu_node_atlas = gpu_node_atlases.get_mut(&entity).unwrap();
 
         for (index, node_data) in &gpu_node_atlas.activated_nodes {
-            let image = images.get(&node_data.height_map).unwrap();
+            let image = images.get(&node_data.albedo_map).unwrap();
 
-            let height_texture = gpu_node_atlas
+            let albedo_texture = gpu_node_atlas
                 .atlas_attachments
-                .get("height_map".into())
+                .get("albedo_map".into())
                 .unwrap();
 
-            let height_texture = match height_texture {
+            let albedo_texture = match albedo_texture {
                 NodeAttachment::Buffer { .. } => continue,
                 NodeAttachment::Texture { texture, .. } => texture,
             };
@@ -97,7 +100,7 @@ pub(crate) fn queue_height_attachment_updates(
                     aspect: TextureAspect::All,
                 },
                 ImageCopyTexture {
-                    texture: height_texture,
+                    texture: albedo_texture,
                     mip_level: 0,
                     origin: Origin3d {
                         x: 0,
@@ -107,8 +110,8 @@ pub(crate) fn queue_height_attachment_updates(
                     aspect: TextureAspect::All,
                 },
                 Extent3d {
-                    width: config.texture_size,
-                    height: config.texture_size,
+                    width: ALBEDO_SIZE,
+                    height: ALBEDO_SIZE,
                     depth_or_array_layers: 1,
                 },
             );

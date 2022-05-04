@@ -1,6 +1,8 @@
 use crate::config::TerrainConfig;
+
 use bevy::utils::HashMap;
-use image::{ImageBuffer, Luma};
+use image::io::Reader;
+use image::{ImageBuffer, Luma, Rgb, RgbImage, Rgba, RgbaImage};
 use itertools::iproduct;
 use ron::to_string;
 use std::{fs, path::Path};
@@ -89,4 +91,73 @@ fn sample_node(
     }
 
     node
+}
+
+pub fn generate_albedo_textures<P>(config: &TerrainConfig, source_path: P, output_path: P)
+where
+    P: AsRef<Path>,
+{
+    let mut reader = Reader::open(source_path).unwrap();
+    reader.no_limits();
+
+    let source = reader.decode().unwrap();
+    let source = source.as_rgba8().unwrap();
+
+    for lod in 0..config.lod_count {
+        let node_count = config.nodes_per_area(lod); // number of nodes per area
+        let node_size = config.node_size(lod); // offset in the source image
+        let stride = 1 << lod; // pixel to pixel ratio
+
+        // for every node of the current lod sample a new selection and save it
+        for (y, x) in iproduct!(
+            0..node_count * config.area_count.y,
+            0..node_count * config.area_count.x
+        ) {
+            let node_id = TerrainConfig::node_id(lod, x, y);
+            let albedo = sample_albedo(
+                source,
+                x * node_size * 5,
+                y * node_size * 5,
+                128 * 5,
+                stride,
+            );
+
+            let mut path = output_path.as_ref().join(&node_id.to_string());
+            path.set_extension("png");
+            albedo.save(path).unwrap();
+        }
+    }
+}
+
+fn sample_albedo(
+    source: &RgbaImage,
+    origin_x: u32,
+    origin_y: u32,
+    texture_size: u32,
+    stride: u32,
+) -> RgbaImage {
+    let mut albedo = RgbaImage::new(texture_size, texture_size);
+
+    let (width, height) = source.dimensions();
+    let sample_count = (stride as f64).powf(2.0);
+
+    for (node_x, node_y, pixel) in albedo.enumerate_pixels_mut() {
+        let source_x = origin_x + node_x * stride;
+        let source_y = origin_y + node_y * stride;
+
+        if source_x < width && source_y < height {
+            let _value = (iproduct!(0..stride, 0..stride)
+                .map(|(offset_x, offset_y)| {
+                    source.get_pixel(source_x + offset_x, source_y + offset_y).0[0] as f64
+                })
+                .sum::<f64>()
+                / sample_count) as u16;
+
+            let value = source.get_pixel(source_x, source_y).0;
+
+            *pixel = Rgba(value)
+        }
+    }
+
+    albedo
 }
