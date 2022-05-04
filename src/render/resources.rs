@@ -69,11 +69,9 @@ impl TerrainResources {
     }
 
     fn create_node_buffers(device: &RenderDevice, config: &TerrainConfig) -> ([Buffer; 2], Buffer) {
-        let max_node_count = config.chunk_count.x * config.chunk_count.y;
-
         let buffer_descriptor = BufferDescriptor {
             label: "node_buffer".into(),
-            size: NODE_SIZE * max_node_count as BufferAddress,
+            size: NODE_SIZE * (config.chunk_count.x * config.chunk_count.y) as BufferAddress,
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
         };
