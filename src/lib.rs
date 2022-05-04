@@ -1,3 +1,4 @@
+use crate::render::albedo_attachment::queue_albedo_attachment_updates;
 use crate::{
     config::TerrainConfig,
     debug::info,
@@ -97,7 +98,8 @@ impl Plugin for TerrainPlugin {
             .add_system_to_stage(RenderStage::Queue, queue_terrain)
             .add_system_to_stage(RenderStage::Queue, queue_quadtree_updates)
             .add_system_to_stage(RenderStage::Queue, queue_terrain_culling_bind_group)
-            .add_system_to_stage(RenderStage::Queue, queue_height_attachment_updates);
+            .add_system_to_stage(RenderStage::Queue, queue_height_attachment_updates)
+            .add_system_to_stage(RenderStage::Queue, queue_albedo_attachment_updates);
 
         let compute_node = TerrainComputeNode::from_world(&mut render_app.world);
 

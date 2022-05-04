@@ -43,6 +43,7 @@ pub struct NodeData {
     pub(crate) id: u32,
     pub(crate) atlas_index: u16,
     pub(crate) height_map: Handle<Image>,
+    pub(crate) albedo_map: Handle<Image>,
 }
 
 impl NodeData {
@@ -51,14 +52,23 @@ impl NodeData {
         asset_server: &AssetServer,
         load_statuses: &mut HashMap<u32, LoadStatus>,
         handle_mapping: &mut HashMap<HandleId, u32>,
+        albedo_handle_mapping: &mut HashMap<HandleId, u32>,
     ) -> Self {
-        let height_map: Handle<Image> = asset_server.load(&format!("output/{}.png", id));
+        let height_map: Handle<Image> = asset_server.load(&format!("output/height/{}.png", id));
+        let albedo_map: Handle<Image> = asset_server.load(&format!("output/albedo/{}.png", id));
 
-        let status = if asset_server.get_load_state(height_map.clone()) == LoadState::Loaded {
-            LoadStatus { finished: true }
+        let mut status = LoadStatus::default();
+
+        if asset_server.get_load_state(height_map.clone()) == LoadState::Loaded {
+            status.finished = true;
         } else {
             handle_mapping.insert(height_map.id, id);
-            LoadStatus::default()
+        };
+
+        if asset_server.get_load_state(albedo_map.clone()) == LoadState::Loaded {
+            status.albedo_finished = true;
+        } else {
+            albedo_handle_mapping.insert(albedo_map.id, id);
         };
 
         load_statuses.insert(id, status);
@@ -67,6 +77,7 @@ impl NodeData {
             id,
             atlas_index: NodeAtlas::INACTIVE_ID,
             height_map,
+            albedo_map,
         }
     }
 }
@@ -74,6 +85,7 @@ impl NodeData {
 #[derive(Default)]
 pub(crate) struct LoadStatus {
     pub(crate) finished: bool,
+    pub(crate) albedo_finished: bool,
 }
 
 #[derive(PartialOrd, PartialEq)]
@@ -161,6 +173,7 @@ pub struct Quadtree {
     nodes: Vec<TreeNode>,
     /// Maps the id of an asset to the corresponding node id.
     pub(crate) handle_mapping: HashMap<HandleId, u32>,
+    pub(crate) albedo_handle_mapping: HashMap<HandleId, u32>,
     /// Statuses of all currently loading nodes.
     pub(crate) load_statuses: HashMap<u32, LoadStatus>,
     /// Stores the currently loading nodes.
@@ -204,6 +217,7 @@ impl Quadtree {
         Self {
             nodes,
             handle_mapping: default(),
+            albedo_handle_mapping: default(),
             load_statuses: default(),
             loading_nodes: default(),
             active_nodes: default(),
@@ -251,6 +265,7 @@ pub fn update_nodes(
     for (mut quadtree, mut node_atlas) in terrain_query.iter_mut() {
         let Quadtree {
             ref mut handle_mapping,
+            ref mut albedo_handle_mapping,
             ref mut load_statuses,
             ref mut loading_nodes,
             ref mut inactive_nodes,
@@ -277,18 +292,24 @@ pub fn update_nodes(
                 // load node before activation
                 loading_nodes.insert(
                     id,
-                    NodeData::load(id, &asset_server, load_statuses, handle_mapping),
+                    NodeData::load(
+                        id,
+                        &asset_server,
+                        load_statuses,
+                        handle_mapping,
+                        albedo_handle_mapping,
+                    ),
                 );
             };
         }
 
         // queue all nodes, that have finished loading, for activation
         load_statuses.retain(|&id, status| {
-            if status.finished {
+            if status.finished && status.albedo_finished {
                 activation_queue.push(loading_nodes.remove(&id).unwrap());
             }
 
-            !status.finished
+            !(status.finished && status.albedo_finished)
         });
 
         // deactivate all no longer required nodes
@@ -341,6 +362,17 @@ pub fn update_load_status(
                         | TextureUsages::TEXTURE_BINDING;
                     let status = quadtree.load_statuses.get_mut(&id).unwrap();
                     status.finished = true;
+                    break;
+                }
+
+                if let Some(id) = quadtree.albedo_handle_mapping.remove(&handle.id) {
+                    let image = images.get_mut(handle).unwrap();
+
+                    image.texture_descriptor.usage = TextureUsages::COPY_SRC
+                        | TextureUsages::COPY_DST
+                        | TextureUsages::TEXTURE_BINDING;
+                    let status = quadtree.load_statuses.get_mut(&id).unwrap();
+                    status.albedo_finished = true;
                     break;
                 }
             }

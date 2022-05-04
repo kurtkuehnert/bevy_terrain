@@ -17,6 +17,7 @@ use bevy::{
     utils::HashMap,
 };
 
+pub mod albedo_attachment;
 pub mod bind_groups;
 pub mod compute_pipelines;
 pub mod culling;
