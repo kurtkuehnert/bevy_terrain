@@ -6,45 +6,101 @@ use crate::{
 };
 use bevy::{
     prelude::*,
-    render::{render_resource::*, RenderWorld},
+    render::{render_resource::*, renderer::RenderDevice, RenderWorld},
     utils::HashMap,
 };
 use std::mem;
 
 pub enum NodeAttachment {
-    Buffer(Buffer),
+    Buffer {
+        binding: u32,
+        buffer: Buffer,
+    },
     Texture {
+        view_binding: u32,
+        sampler_binding: u32,
         texture: Texture,
         view: TextureView,
         sampler: Sampler,
     },
 }
 
+#[derive(Clone)]
+pub enum NodeAttachmentConfig {
+    Buffer {
+        binding: u32,
+        descriptor: BufferDescriptor<'static>,
+    },
+    Texture {
+        view_binding: u32,
+        sampler_binding: u32,
+        texture_descriptor: TextureDescriptor<'static>,
+        view_descriptor: TextureViewDescriptor<'static>,
+        sampler_descriptor: SamplerDescriptor<'static>,
+    },
+}
+
 pub struct GpuNodeAtlas {
-    pub(crate) attachment_order: Vec<String>,
     pub(crate) atlas_attachments: HashMap<String, NodeAttachment>,
     pub(crate) activated_nodes: Vec<(u16, NodeData)>, // make generic on NodeData
 }
 
 impl GpuNodeAtlas {
-    fn new() -> Self {
+    fn new(config: &TerrainConfig, device: &RenderDevice) -> Self {
+        let atlas_attachments = config
+            .node_attachment_configs
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|(label, attachment_config)| {
+                let attachment = match attachment_config {
+                    &NodeAttachmentConfig::Buffer {
+                        binding,
+                        ref descriptor,
+                    } => NodeAttachment::Buffer {
+                        binding,
+                        buffer: device.create_buffer(descriptor),
+                    },
+                    &NodeAttachmentConfig::Texture {
+                        view_binding,
+                        sampler_binding,
+                        ref texture_descriptor,
+                        ref view_descriptor,
+                        ref sampler_descriptor,
+                    } => {
+                        let texture = device.create_texture(texture_descriptor);
+
+                        NodeAttachment::Texture {
+                            view_binding,
+                            sampler_binding,
+                            view: texture.create_view(view_descriptor),
+                            sampler: device.create_sampler(sampler_descriptor),
+                            texture,
+                        }
+                    }
+                };
+
+                (label.clone(), attachment)
+            })
+            .collect();
+
         Self {
-            attachment_order: vec!["heightmap".into()],
-            atlas_attachments: Default::default(),
-            activated_nodes: vec![],
+            atlas_attachments,
+            activated_nodes: Vec::new(),
         }
     }
 }
 
 /// Runs in prepare.
-pub(crate) fn init_node_atlas(
+pub(crate) fn init_gpu_node_atlas(
+    device: Res<RenderDevice>,
     mut gpu_node_atlases: ResMut<PersistentComponent<GpuNodeAtlas>>,
-    terrain_query: Query<Entity, With<InitTerrain>>,
+    terrain_query: Query<(Entity, &TerrainConfig), With<InitTerrain>>,
 ) {
-    for entity in terrain_query.iter() {
+    for (entity, config) in terrain_query.iter() {
         info!("initializing gpu node atlas");
 
-        gpu_node_atlases.insert(entity, GpuNodeAtlas::new());
+        gpu_node_atlases.insert(entity, GpuNodeAtlas::new(config, &device));
     }
 }
 

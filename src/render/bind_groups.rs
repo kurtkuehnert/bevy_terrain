@@ -15,11 +15,10 @@ use std::mem;
 pub struct TerrainBindGroups {
     pub(crate) indirect_buffer: Buffer,
     pub(crate) prepare_indirect_bind_group: BindGroup,
-
     pub(crate) build_node_list_bind_groups: [BindGroup; 2],
     pub(crate) build_patch_list_bind_group: BindGroup,
     pub(crate) build_chunk_maps_bind_group: BindGroup,
-    pub(crate) terrain_data_bind_group: BindGroup,
+    pub(crate) terrain_data_bind_group: BindGroup, // Todo: factor out?
     pub(crate) patch_list_bind_group: BindGroup,
 }
 
@@ -47,12 +46,6 @@ impl TerrainBindGroups {
             view: ref quadtree_view,
             ..
         } = gpu_quadtree;
-
-        let GpuNodeAtlas {
-            ref atlas_attachments,
-            ref attachment_order,
-            ..
-        } = gpu_node_atlas;
 
         let indirect_buffer = mem::take(indirect_buffer).unwrap();
 
@@ -203,22 +196,29 @@ impl TerrainBindGroups {
             },
         ];
 
-        for identifier in attachment_order {
-            let attachment = atlas_attachments.get(identifier).unwrap();
-
+        for attachment in gpu_node_atlas.atlas_attachments.values() {
             match attachment {
-                NodeAttachment::Buffer(buffer) => entries.push(BindGroupEntry {
-                    binding: entries.len() as u32,
+                &NodeAttachment::Buffer {
+                    binding,
+                    ref buffer,
+                } => entries.push(BindGroupEntry {
+                    binding,
                     resource: buffer.as_entire_binding(),
                 }),
-                NodeAttachment::Texture { view, sampler, .. } => {
+                &NodeAttachment::Texture {
+                    view_binding,
+                    sampler_binding,
+                    ref view,
+                    ref sampler,
+                    ..
+                } => {
                     entries.push(BindGroupEntry {
-                        binding: entries.len() as u32,
-                        resource: BindingResource::TextureView(&view),
+                        binding: view_binding,
+                        resource: BindingResource::TextureView(view),
                     });
                     entries.push(BindGroupEntry {
-                        binding: entries.len() as u32,
-                        resource: BindingResource::Sampler(&sampler),
+                        binding: sampler_binding,
+                        resource: BindingResource::Sampler(sampler),
                     });
                 }
             }

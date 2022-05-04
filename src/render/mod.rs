@@ -17,15 +17,15 @@ use bevy::{
     utils::HashMap,
 };
 
-pub(crate) mod bind_groups;
-pub(crate) mod compute_pipelines;
-pub(crate) mod culling;
-pub(crate) mod gpu_node_atlas;
-pub(crate) mod gpu_quadtree;
-pub(crate) mod height_map;
-pub(crate) mod layouts;
-pub(crate) mod render_pipeline;
-pub(crate) mod resources;
+pub mod bind_groups;
+pub mod compute_pipelines;
+pub mod culling;
+pub mod gpu_node_atlas;
+pub mod gpu_quadtree;
+pub mod height_attachment;
+pub mod layouts;
+pub mod render_pipeline;
+pub mod resources;
 
 pub type PersistentComponent<A> = HashMap<Entity, A>;
 

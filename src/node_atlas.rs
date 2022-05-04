@@ -1,6 +1,5 @@
 use crate::{config::TerrainConfig, quadtree::NodeData};
 use bevy::prelude::*;
-
 use std::collections::VecDeque;
 
 /// Maps the assets to the corresponding active nodes and tracks the node updates.

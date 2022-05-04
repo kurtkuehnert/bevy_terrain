@@ -7,9 +7,9 @@ use crate::{
         compute_pipelines::{TerrainComputeNode, TerrainComputePipelines},
         culling::queue_terrain_culling_bind_group,
         extract_terrain,
-        gpu_node_atlas::{extract_node_atlas, init_node_atlas, GpuNodeAtlas},
+        gpu_node_atlas::{extract_node_atlas, init_gpu_node_atlas, GpuNodeAtlas},
         gpu_quadtree::{extract_quadtree, init_gpu_quadtree, queue_quadtree_updates, GpuQuadtree},
-        height_map::{init_height_attachment, queue_height_attachment_updates},
+        height_attachment::queue_height_attachment_updates,
         notify_init_terrain, queue_terrain,
         render_pipeline::TerrainRenderPipeline,
         resources::init_terrain_resources,
@@ -92,11 +92,7 @@ impl Plugin for TerrainPlugin {
             .add_system_to_stage(RenderStage::Extract, extract_node_atlas)
             .add_system_to_stage(RenderStage::Prepare, init_terrain_resources)
             .add_system_to_stage(RenderStage::Prepare, init_gpu_quadtree)
-            .add_system_to_stage(RenderStage::Prepare, init_node_atlas)
-            .add_system_to_stage(
-                RenderStage::Prepare,
-                init_height_attachment.after(init_node_atlas),
-            )
+            .add_system_to_stage(RenderStage::Prepare, init_gpu_node_atlas)
             .add_system_to_stage(RenderStage::Queue, init_terrain_bind_groups)
             .add_system_to_stage(RenderStage::Queue, queue_terrain)
             .add_system_to_stage(RenderStage::Queue, queue_quadtree_updates)
