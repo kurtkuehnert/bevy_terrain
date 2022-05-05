@@ -75,7 +75,7 @@ impl TreeNode {
     /// marking nodes to activate/deactivate.
     fn traverse(&mut self, quadtree: &mut Quadtree, viewer: Viewer) {
         // check whether the node has been activated since the last traversal and update it accordingly
-        if self.state == NodeState::Loading && quadtree.activated_nodes.contains(&self.id) {
+        if self.state == NodeState::Loading && quadtree.nodes_activated.contains(&self.id) {
             self.state = NodeState::Active;
         }
 
@@ -119,7 +119,7 @@ pub struct Quadtree {
     /// Root nodes stay always loaded, so they don't need to be traversed.
     nodes: Vec<TreeNode>,
     /// Newly activated nodes since last traversal.
-    pub(crate) activated_nodes: HashSet<NodeId>,
+    pub(crate) nodes_activated: HashSet<NodeId>,
     /// Nodes that are no longer required and should be deactivated.
     pub(crate) nodes_to_deactivate: Vec<NodeId>,
     /// Nodes that are required and should be loaded and scheduled for activation.
@@ -153,7 +153,7 @@ impl Quadtree {
 
         Self {
             nodes,
-            activated_nodes: default(),
+            nodes_activated: default(),
             nodes_to_deactivate: default(),
             nodes_to_activate,
             node_updates: vec![default(); config.lod_count as usize],
@@ -169,6 +169,8 @@ impl Quadtree {
         }
 
         self.nodes = nodes;
+
+        self.nodes_activated.clear();
     }
 }
 

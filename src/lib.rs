@@ -1,6 +1,7 @@
+use crate::attachments::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk};
 use crate::{
     config::TerrainConfig,
-    node_atlas::{update_load_status, update_nodes},
+    node_atlas::update_nodes,
     persistent_component::{PersistentComponentPlugin, PersistentComponents},
     quadtree::traverse_quadtree,
     render::{
@@ -29,6 +30,7 @@ use bevy::{
     },
 };
 
+pub mod attachments;
 pub mod bundles;
 pub mod config;
 pub mod node_atlas;
@@ -76,7 +78,8 @@ impl Plugin for TerrainPlugin {
             .add_plugin(PersistentComponentPlugin::<GpuNodeAtlas>::default())
             .add_system(traverse_quadtree.before(update_nodes))
             .add_system(update_nodes)
-            .add_system(update_load_status);
+            .add_system(start_loading_attachment_from_disk)
+            .add_system(finish_loading_attachment_from_disk);
 
         let render_app = app
             .sub_app_mut(RenderApp)

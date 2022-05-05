@@ -16,7 +16,6 @@ use bevy::{
     },
 };
 
-pub mod attachments;
 pub mod bind_groups;
 pub mod compute_pipelines;
 pub mod culling;

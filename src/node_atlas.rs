@@ -1,12 +1,10 @@
 use crate::{
+    attachments::NodeAttachmentData,
     config::{NodeId, TerrainConfig},
     quadtree::{NodeUpdate, Quadtree},
-    render::gpu_node_atlas::NodeAttachmentData,
 };
 use bevy::{
-    asset::{HandleId, LoadState},
     prelude::*,
-    render::render_resource::{TextureFormat, TextureUsages},
     utils::{HashMap, HashSet},
 };
 use lru::LruCache;
@@ -17,71 +15,41 @@ type AtlasIndex = u16;
 #[derive(Clone)]
 pub struct NodeData {
     pub(crate) atlas_index: AtlasIndex,
-    pub(crate) finished_loading: HashMap<String, bool>,
-    pub(crate) node_attachments: HashMap<String, NodeAttachmentData>,
+    pub(crate) loading_attachments: HashSet<String>,
+    pub(crate) attachment_data: HashMap<String, NodeAttachmentData>,
 }
 
 impl NodeData {
-    pub(crate) fn load(
-        id: NodeId,
-        asset_server: &AssetServer,
-        handle_mapping: &mut HashMap<HandleId, (NodeId, String)>,
-    ) -> Self {
-        // Todo: fix this mess
-        let height_map: Handle<Image> = asset_server.load(&format!("output/height/{}.png", id));
-        let albedo_map: Handle<Image> = asset_server.load(&format!("output/albedo/{}.png", id));
-
-        let mut finished_loading = HashMap::new();
-        let mut node_attachments = HashMap::new();
-
-        if asset_server.get_load_state(height_map.clone()) == LoadState::Loaded {
-            finished_loading.insert("height_map".into(), true);
-        } else {
-            finished_loading.insert("height_map".into(), false);
-            handle_mapping.insert(height_map.id, (id, "height_map".into()));
-        };
-
-        if asset_server.get_load_state(albedo_map.clone()) == LoadState::Loaded {
-            finished_loading.insert("albedo_map".into(), true);
-        } else {
-            finished_loading.insert("albedo_map".into(), false);
-            handle_mapping.insert(albedo_map.id, (id, "albedo_map".into()));
-        };
-
-        node_attachments.insert(
-            "height_map".into(),
-            NodeAttachmentData::Texture { data: height_map },
-        );
-        node_attachments.insert(
-            "albedo_map".into(),
-            NodeAttachmentData::Texture { data: albedo_map },
-        );
-
+    pub(crate) fn new(attachments: HashSet<String>) -> Self {
         Self {
             atlas_index: NodeAtlas::INACTIVE_ID,
-            finished_loading,
-            node_attachments,
+            loading_attachments: attachments,
+            attachment_data: default(),
         }
     }
 
     /// Returns `true` if all of the nodes attachments have finished loading.
     pub(crate) fn is_finished(&self) -> bool {
-        self.finished_loading.values().all(|&finished| finished)
+        self.loading_attachments.is_empty()
     }
 }
 
 /// Maps the assets to the corresponding active nodes and tracks the node updates.
 #[derive(Component)]
 pub struct NodeAtlas {
+    /// Stores the atlas indices, which are not currently taken by the active nodes.
     pub(crate) available_indices: VecDeque<AtlasIndex>,
-    /// Maps the id of an asset to the corresponding node id.
-    pub(crate) handle_mapping: HashMap<HandleId, (NodeId, String)>,
+    /// Specifies which [`NodeAttachmentData`] to load for each node.
+    pub(crate) attachments: HashSet<String>,
+    /// Stores the ids of all nodes, which started loading this frame.
+    pub(crate) started_loading: Vec<NodeId>,
     /// Stores the currently loading nodes.
     pub(crate) loading_nodes: HashMap<NodeId, NodeData>,
     /// Stores the currently active nodes.
     pub(crate) active_nodes: HashMap<NodeId, NodeData>,
     /// Caches the recently deactivated nodes.
     pub(crate) inactive_nodes: LruCache<NodeId, NodeData>,
+    /// Stores the nodes, that where activated this frame.
     pub(crate) activated_nodes: Vec<NodeData>,
 }
 
@@ -90,9 +58,14 @@ impl NodeAtlas {
     pub(crate) const INACTIVE_ID: u16 = u16::MAX - 1;
 
     pub fn new(config: &TerrainConfig, cache_size: usize) -> Self {
+        let mut attachments = HashSet::new();
+        attachments.insert("albedo_map".into());
+        attachments.insert("height_map".into());
+
         Self {
             available_indices: (0..config.node_atlas_size).collect(),
-            handle_mapping: default(),
+            attachments,
+            started_loading: default(),
             loading_nodes: default(),
             active_nodes: default(),
             inactive_nodes: LruCache::new(cache_size),
@@ -105,20 +78,20 @@ impl NodeAtlas {
         &mut self,
         nodes_to_activate: Vec<NodeId>,
         node_updates: &mut Vec<Vec<NodeUpdate>>,
-        q_activated_nodes: &mut HashSet<NodeId>,
-        asset_server: &AssetServer,
+        nodes_activated: &mut HashSet<NodeId>,
     ) {
-        // clear the previously activated nodes
-        q_activated_nodes.clear();
-
         let NodeAtlas {
             ref mut available_indices,
-            ref mut handle_mapping,
+            ref mut attachments,
+            ref mut started_loading,
             ref mut loading_nodes,
             ref mut active_nodes,
             ref mut inactive_nodes,
             ref mut activated_nodes,
+            ..
         } = self;
+
+        started_loading.clear();
 
         // load required nodes from cache or disk
         let mut activation_queue = nodes_to_activate
@@ -129,10 +102,8 @@ impl NodeAtlas {
                     Some((node_id, node))
                 } else {
                     // load node before activation
-                    loading_nodes.insert(
-                        node_id,
-                        NodeData::load(node_id, &asset_server, handle_mapping),
-                    );
+                    started_loading.push(node_id);
+                    loading_nodes.insert(node_id, NodeData::new(attachments.clone()));
                     None
                 }
             })
@@ -150,8 +121,8 @@ impl NodeAtlas {
                 atlas_index: node.atlas_index as u32,
             });
 
-            q_activated_nodes.insert(node_id); // Todo: rename this
-            activated_nodes.push(node.clone()); // Todo: fix this clone
+            nodes_activated.insert(node_id);
+            activated_nodes.push(node.clone());
             active_nodes.insert(node_id, node);
         }
     }
@@ -188,13 +159,10 @@ impl NodeAtlas {
 }
 
 /// Updates the node atlas according to the corresponding quadtree update.
-pub fn update_nodes(
-    asset_server: Res<AssetServer>,
-    mut terrain_query: Query<(&mut Quadtree, &mut NodeAtlas)>,
-) {
+pub fn update_nodes(mut terrain_query: Query<(&mut Quadtree, &mut NodeAtlas)>) {
     for (mut quadtree, mut node_atlas) in terrain_query.iter_mut() {
         let Quadtree {
-            ref mut activated_nodes,
+            ref mut nodes_activated,
             ref mut nodes_to_activate,
             ref mut nodes_to_deactivate,
             ref mut node_updates,
@@ -202,45 +170,6 @@ pub fn update_nodes(
         } = quadtree.as_mut();
 
         node_atlas.deactivate_nodes(mem::take(nodes_to_deactivate), node_updates);
-        node_atlas.activate_nodes(
-            mem::take(nodes_to_activate),
-            node_updates,
-            activated_nodes,
-            &asset_server,
-        );
-    }
-}
-
-/// Updates the load status of a node for all of it newly loaded assets.
-pub fn update_load_status(
-    mut asset_events: EventReader<AssetEvent<Image>>,
-    mut images: ResMut<Assets<Image>>,
-    mut terrain_query: Query<&mut NodeAtlas>,
-) {
-    for event in asset_events.iter() {
-        if let AssetEvent::Created { handle } = event {
-            for mut node_atlas in terrain_query.iter_mut() {
-                if let Some((id, label)) = node_atlas.handle_mapping.remove(&handle.id) {
-                    let image = images.get_mut(handle).unwrap();
-
-                    if label == "height_map" {
-                        image.texture_descriptor.format = TextureFormat::R16Unorm;
-                        image.texture_descriptor.usage = TextureUsages::COPY_SRC
-                            | TextureUsages::COPY_DST
-                            | TextureUsages::TEXTURE_BINDING;
-                    }
-                    if label == "albedo_map" {
-                        image.texture_descriptor.usage = TextureUsages::COPY_SRC
-                            | TextureUsages::COPY_DST
-                            | TextureUsages::TEXTURE_BINDING;
-                    }
-
-                    let node = node_atlas.loading_nodes.get_mut(&id).unwrap();
-                    node.finished_loading.insert(label, true);
-
-                    break;
-                }
-            }
-        }
+        node_atlas.activate_nodes(mem::take(nodes_to_activate), node_updates, nodes_activated);
     }
 }

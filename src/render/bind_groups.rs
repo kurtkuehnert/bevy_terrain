@@ -1,10 +1,8 @@
 use crate::{
-    render::{
-        gpu_node_atlas::{GpuNodeAtlas, NodeAttachment},
-        resources::TerrainResources,
-        InitTerrain,
-    },
-    GpuQuadtree, PersistentComponents, TerrainComputePipelines, TerrainRenderPipeline,
+    attachments::NodeAttachment,
+    render::{resources::TerrainResources, InitTerrain},
+    GpuNodeAtlas, GpuQuadtree, PersistentComponents, TerrainComputePipelines,
+    TerrainRenderPipeline,
 };
 use bevy::{
     prelude::*,
