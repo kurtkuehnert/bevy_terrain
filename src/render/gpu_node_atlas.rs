@@ -1,4 +1,5 @@
 use crate::{
+    attachments::{NodeAttachment, NodeAttachmentConfig, NodeAttachmentData},
     config::TerrainConfig,
     node_atlas::{NodeAtlas, NodeData},
     persistent_component::PersistentComponent,
@@ -20,43 +21,6 @@ use bevy::{
     utils::HashMap,
 };
 use std::mem;
-
-#[derive(Clone)]
-pub enum NodeAttachmentData {
-    Buffer { data: Vec<u8> },
-    Texture { data: Handle<Image> },
-}
-
-pub enum NodeAttachment {
-    Buffer {
-        binding: u32,
-        buffer: Buffer,
-    },
-    Texture {
-        view_binding: u32,
-        sampler_binding: u32,
-        texture_size: u32,
-        texture: Texture,
-        view: TextureView,
-        sampler: Sampler,
-    },
-}
-
-#[derive(Clone)]
-pub enum NodeAttachmentConfig {
-    Buffer {
-        binding: u32,
-        descriptor: BufferDescriptor<'static>,
-    },
-    Texture {
-        view_binding: u32,
-        sampler_binding: u32,
-        texture_size: u32,
-        texture_descriptor: TextureDescriptor<'static>,
-        view_descriptor: TextureViewDescriptor<'static>,
-        sampler_descriptor: SamplerDescriptor<'static>,
-    },
-}
 
 #[derive(Component)]
 pub struct GpuNodeAtlas {
@@ -129,9 +93,6 @@ impl PersistentComponent for GpuNodeAtlas {
     }
 
     fn update_component(&mut self, mut node_atlas: QueryItem<Self::UpdateQuery>) {
-        // node_atlas
-        //     .active_nodes
-        //     .extend(mem::take(&mut gpu_node_atlas.activated_nodes).into_iter());
         self.activated_nodes = mem::take(&mut node_atlas.activated_nodes);
     }
 }
@@ -154,14 +115,14 @@ pub(crate) fn queue_node_attachment_updates(
                     .atlas_attachments
                     .iter()
                     .filter_map(|(label, attachment)| {
-                        let node_attachment = node_data.node_attachments.get(label).unwrap();
+                        let node_attachment = node_data.attachment_data.get(label).unwrap();
 
                         match (node_attachment, attachment) {
                             (NodeAttachmentData::Buffer { .. }, NodeAttachment::Buffer { .. }) => {
                                 None
                             }
                             (
-                                NodeAttachmentData::Texture { data },
+                                NodeAttachmentData::Texture { handle: data },
                                 &NodeAttachment::Texture {
                                     ref texture,
                                     texture_size,

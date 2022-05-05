@@ -1,9 +1,9 @@
-use crate::render::gpu_node_atlas::NodeAttachmentConfig;
-use bevy::utils::HashMap;
+use crate::attachments::NodeAttachmentConfig;
 use bevy::{
     ecs::{query::QueryItem, system::lifetimeless::Read},
     prelude::*,
     render::{render_component::ExtractComponent, render_resource::std140::AsStd140},
+    utils::HashMap,
 };
 use itertools::{iproduct, Product};
 use std::ops::Range;
