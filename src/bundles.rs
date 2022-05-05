@@ -13,8 +13,8 @@ pub struct TerrainBundle {
 impl TerrainBundle {
     pub fn new(config: TerrainConfig) -> Self {
         Self {
-            quadtree: Quadtree::new(&config, 16),
-            node_atlas: NodeAtlas::new(&config),
+            quadtree: Quadtree::new(&config),
+            node_atlas: NodeAtlas::new(&config, 16),
             config,
             transform: default(),
             global_transform: default(),

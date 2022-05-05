@@ -8,6 +8,16 @@ use bevy::{
 use itertools::{iproduct, Product};
 use std::ops::Range;
 
+// Todo: fully reconsider the configuration
+
+pub type NodeId = u32;
+
+pub struct NodePosition {
+    pub lod: u32,
+    pub x: u32,
+    pub y: u32,
+}
+
 #[derive(Clone, Default, AsStd140)]
 pub(crate) struct TerrainConfigUniform {
     lod_count: u32,
@@ -33,6 +43,7 @@ pub struct TerrainConfig {
     pub texture_size: u32,
     pub area_size: u32,
     pub area_count: UVec2,
+    pub node_count: u32,
     pub terrain_size: UVec2,
     pub vertices_per_row: u32,
     pub scale: f32,
@@ -59,6 +70,7 @@ impl TerrainConfig {
         let terrain_size = area_count * area_size;
         let chunk_count = area_count * (1 << (lod_count - 1));
         let vertices_per_row = (patch_size + 2) << 1;
+        let node_count = (area_count.x * area_count.y * ((1 << 2 * lod_count) - 1) / 3); // https://oeis.org/A002450
 
         Self {
             lod_count,
@@ -68,6 +80,7 @@ impl TerrainConfig {
             chunk_count,
             area_size,
             area_count,
+            node_count,
             terrain_size,
             vertices_per_row,
             scale,
@@ -129,12 +142,16 @@ impl TerrainConfig {
 
     /// Calculates a unique identifier for the node at the specified position.
     /// These ids encode the position into 32 bits.
-    pub fn node_id(lod: u32, x: u32, y: u32) -> u32 {
+    pub fn node_id(lod: u32, x: u32, y: u32) -> NodeId {
         (lod & 0xF) << 28 | (x & 0x3FFF) << 14 | (y & 0x3FFF)
     }
 
-    pub fn node_position(id: u32) -> (u32, u32, u32) {
-        ((id >> 28) & 0xF, (id >> 14) & 0x3FFF, id & 0x3FFF)
+    pub fn node_position(id: NodeId) -> NodePosition {
+        NodePosition {
+            lod: (id >> 28) & 0xF,
+            x: (id >> 14) & 0x3FFF,
+            y: id & 0x3FFF,
+        }
     }
 }
 
@@ -148,13 +165,22 @@ impl ExtractComponent for TerrainConfig {
 }
 
 mod tests {
+    use crate::config::NodePosition;
+    use crate::TerrainConfig;
+    use bevy::math::UVec2;
+    use itertools::iproduct;
+
     #[test]
     fn node_conversion() {
-        let config = TerrainConfig::new(128, 3, UVec2::new(2, 2));
+        let config = TerrainConfig::new(128, 3, UVec2::new(2, 2), 1.0, 0.0, 0);
 
         for (lod1, x1, y1) in iproduct!(0..3, 0..8, 0..8) {
             let id = TerrainConfig::node_id(lod1, x1, y1);
-            let (lod2, x2, y2) = TerrainConfig::node_position(id);
+            let NodePosition {
+                lod: lod2,
+                x: x2,
+                y: y2,
+            } = TerrainConfig::node_position(id);
 
             assert_eq!(lod1, lod2);
             assert_eq!(x1, x2);

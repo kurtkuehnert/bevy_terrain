@@ -1,5 +1,5 @@
 use crate::{
-    config::TerrainConfig,
+    config::{NodeId, TerrainConfig},
     node_atlas::NodeAtlas,
     quadtree::{NodeUpdate, Quadtree},
     render::{layouts::NODE_UPDATE_SIZE, InitTerrain, PersistentComponent},
@@ -17,9 +17,15 @@ use bevy::{
 use image::EncodableLayout;
 use std::{mem, num::NonZeroU32};
 
+/// Stores the GPU representation of the [`Quadtree`] alongside the data to update it.
 pub struct GpuQuadtree {
+    /// Readonly view of the entire quadtree, with all of its layers.
     pub(crate) view: TextureView,
-    pub(crate) update: Vec<(u32, Buffer, BindGroup)>,
+    /// The node id, the node update buffer and its bind group for each layer of the quadtree
+    /// used during the quadtree update pipeline.
+    pub(crate) update: Vec<(NodeId, Buffer, BindGroup)>,
+    /// All newly generate updates of nodes, which were activated or deactivated.
+    /// (Taken from the [`Quadtree`] each frame.)
     node_updates: Vec<Vec<NodeUpdate>>,
 }
 
@@ -36,24 +42,17 @@ impl GpuQuadtree {
         Self {
             view,
             update,
-            node_updates: Vec::new(),
+            node_updates: default(),
         }
     }
 
+    /// Creates the quadtree texture and its readonly view.
     fn create_quadtree(
         config: &TerrainConfig,
         device: &RenderDevice,
         queue: &RenderQueue,
     ) -> (Texture, TextureView) {
-        let data = vec![
-            NodeAtlas::INACTIVE_ID;
-            (0..config.lod_count)
-                .map(|lod| {
-                    let node_count = config.node_count(lod);
-                    node_count.x * node_count.y
-                })
-                .sum::<u32>() as usize
-        ];
+        let data = vec![NodeAtlas::INACTIVE_ID; config.node_count as usize];
 
         let quadtree = device.create_texture_with_data(
             queue,
@@ -87,6 +86,7 @@ impl GpuQuadtree {
         (quadtree, view)
     }
 
+    /// Creates the [`NodeUpdate`] buffers, views and bind groups for each layer of the quadtree.
     fn create_quadtree_update(
         quadtree: Texture,
         config: &TerrainConfig,
@@ -135,9 +135,16 @@ impl GpuQuadtree {
             })
             .collect()
     }
+
+    fn extract(&mut self, quadtree: &mut Quadtree) {
+        self.node_updates = mem::replace(
+            &mut quadtree.node_updates,
+            vec![default(); self.update.len()],
+        );
+    }
 }
 
-/// Runs in prepare.
+/// Initializes the [`GpuQuadtree`] of newly created terrains. Runs during the [`Prepare`](bevy::render::RenderStage::Prepare) stage.
 pub(crate) fn init_gpu_quadtree(
     device: Res<RenderDevice>,
     queue: Res<RenderQueue>,
@@ -146,8 +153,6 @@ pub(crate) fn init_gpu_quadtree(
     terrain_query: Query<(Entity, &TerrainConfig), With<InitTerrain>>,
 ) {
     for (entity, config) in terrain_query.iter() {
-        info!("initializing gpu quadtree");
-
         gpu_quadtrees.insert(
             entity,
             GpuQuadtree::new(config, &device, &queue, &compute_pipelines),
@@ -155,25 +160,26 @@ pub(crate) fn init_gpu_quadtree(
     }
 }
 
+/// Extracts the [`NodeUpdate`]s generated this frame from the [`Quadtree`] to the [`GpuQuadtree`].
 pub(crate) fn extract_quadtree(
     mut render_world: ResMut<RenderWorld>,
-    mut terrain_query: Query<(Entity, &mut Quadtree, &TerrainConfig), ()>,
+    mut terrain_query: Query<(Entity, &mut Quadtree), With<TerrainConfig>>,
 ) {
     let mut gpu_quadtrees = render_world.resource_mut::<PersistentComponent<GpuQuadtree>>();
 
-    for (entity, mut quadtree, config) in terrain_query.iter_mut() {
+    for (entity, mut quadtree) in terrain_query.iter_mut() {
         let gpu_quadtree = match gpu_quadtrees.get_mut(&entity) {
             Some(gpu_quadtree) => gpu_quadtree,
             None => continue,
         };
 
-        gpu_quadtree.node_updates = mem::replace(
-            &mut quadtree.node_updates,
-            vec![Vec::new(); config.lod_count as usize],
-        );
+        // Todo: consider factoring this out as a trait of PersistentComponents similar to extract component
+        gpu_quadtree.extract(&mut quadtree);
     }
 }
 
+/// Queues the [`NodeUpdate`]s generated this frame for the quadtree update pipeline,
+/// by filling the node update buffers with them.
 pub(crate) fn queue_quadtree_updates(
     queue: Res<RenderQueue>,
     mut gpu_quadtrees: ResMut<PersistentComponent<GpuQuadtree>>,
