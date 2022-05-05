@@ -1,16 +1,16 @@
-use crate::render::albedo_attachment::queue_albedo_attachment_updates;
+use crate::node_atlas::{update_load_status, update_nodes};
 use crate::{
     config::TerrainConfig,
-    debug::info,
-    quadtree::{traverse_quadtree, update_load_status, update_nodes},
+    quadtree::traverse_quadtree,
     render::{
         bind_groups::{init_terrain_bind_groups, TerrainBindGroups},
         compute_pipelines::{TerrainComputeNode, TerrainComputePipelines},
         culling::queue_terrain_culling_bind_group,
         extract_terrain,
-        gpu_node_atlas::{extract_node_atlas, init_gpu_node_atlas, GpuNodeAtlas},
+        gpu_node_atlas::{
+            extract_node_atlas, init_gpu_node_atlas, queue_node_attachment_updates, GpuNodeAtlas,
+        },
         gpu_quadtree::{extract_quadtree, init_gpu_quadtree, queue_quadtree_updates, GpuQuadtree},
-        height_attachment::queue_height_attachment_updates,
         notify_init_terrain, queue_terrain,
         render_pipeline::TerrainRenderPipeline,
         resources::init_terrain_resources,
@@ -32,11 +32,11 @@ use bevy::{
 
 pub mod bundles;
 pub mod config;
-pub mod debug;
 pub mod node_atlas;
 pub mod preprocess;
 pub mod quadtree;
 pub mod render;
+pub mod viewer;
 
 const CONFIG_HANDLE: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 907665645684322571);
@@ -74,7 +74,6 @@ impl Plugin for TerrainPlugin {
         app.add_plugin(ExtractComponentPlugin::<TerrainConfig>::default())
             .add_system(traverse_quadtree.before(update_nodes))
             .add_system(update_nodes)
-            .add_system(info.after(update_nodes))
             .add_system(update_load_status);
 
         let render_app = app
@@ -98,8 +97,7 @@ impl Plugin for TerrainPlugin {
             .add_system_to_stage(RenderStage::Queue, queue_terrain)
             .add_system_to_stage(RenderStage::Queue, queue_quadtree_updates)
             .add_system_to_stage(RenderStage::Queue, queue_terrain_culling_bind_group)
-            .add_system_to_stage(RenderStage::Queue, queue_height_attachment_updates)
-            .add_system_to_stage(RenderStage::Queue, queue_albedo_attachment_updates);
+            .add_system_to_stage(RenderStage::Queue, queue_node_attachment_updates);
 
         let compute_node = TerrainComputeNode::from_world(&mut render_app.world);
 

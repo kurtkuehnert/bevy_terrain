@@ -17,13 +17,12 @@ use bevy::{
     utils::HashMap,
 };
 
-pub mod albedo_attachment;
+pub mod attachments;
 pub mod bind_groups;
 pub mod compute_pipelines;
 pub mod culling;
 pub mod gpu_node_atlas;
 pub mod gpu_quadtree;
-pub mod height_attachment;
 pub mod layouts;
 pub mod render_pipeline;
 pub mod resources;

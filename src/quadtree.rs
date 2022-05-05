@@ -1,103 +1,46 @@
-use crate::{config::TerrainConfig, node_atlas::NodeAtlas};
+use crate::{
+    config::{NodeId, TerrainConfig},
+    viewer::{ViewDistance, Viewer},
+};
 use bevy::{
-    asset::{HandleId, LoadState},
     core::{Pod, Zeroable},
     math::Vec3Swizzles,
     prelude::*,
-    render::render_resource::{TextureFormat, TextureUsages},
-    utils::{HashMap, HashSet},
+    utils::HashSet,
 };
 use itertools::iproduct;
-use lru::LruCache;
 use std::mem;
 
-/// Marks a camera as the viewer of the terrain.
-/// The view distance is a multiplier, which increases the amount of loaded nodes.
-#[derive(Component)]
-pub struct ViewDistance {
-    // #[inspectable(min = 1.0)]
-    pub view_distance: f32,
-}
-
-impl Default for ViewDistance {
-    fn default() -> Self {
-        Self { view_distance: 8.0 }
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct Viewer {
-    pub(crate) position: Vec2,
-    pub(crate) view_distance: f32,
-}
-
+/// An update to the [`GpuQuadtree`](crate::render::gpu_quadtree::GpuQuadtree).
+/// This update is created whenever a node gets activate/deactivated by the [`NodeAtlas`](crate::node_atlas::NodeAtlas).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, Zeroable, Pod)]
 pub(crate) struct NodeUpdate {
-    pub(crate) node_id: u32,
+    /// The id of the updated node.
+    pub(crate) node_id: NodeId,
+    /// The new atlas index of the node.
     pub(crate) atlas_index: u32, // u16 not supported by std 140
 }
 
-#[derive(Clone)]
-pub struct NodeData {
-    pub(crate) id: u32,
-    pub(crate) atlas_index: u16,
-    pub(crate) height_map: Handle<Image>,
-    pub(crate) albedo_map: Handle<Image>,
-}
-
-impl NodeData {
-    pub(crate) fn load(
-        id: u32,
-        asset_server: &AssetServer,
-        load_statuses: &mut HashMap<u32, LoadStatus>,
-        handle_mapping: &mut HashMap<HandleId, u32>,
-        albedo_handle_mapping: &mut HashMap<HandleId, u32>,
-    ) -> Self {
-        let height_map: Handle<Image> = asset_server.load(&format!("output/height/{}.png", id));
-        let albedo_map: Handle<Image> = asset_server.load(&format!("output/albedo/{}.png", id));
-
-        let mut status = LoadStatus::default();
-
-        if asset_server.get_load_state(height_map.clone()) == LoadState::Loaded {
-            status.finished = true;
-        } else {
-            handle_mapping.insert(height_map.id, id);
-        };
-
-        if asset_server.get_load_state(albedo_map.clone()) == LoadState::Loaded {
-            status.albedo_finished = true;
-        } else {
-            albedo_handle_mapping.insert(albedo_map.id, id);
-        };
-
-        load_statuses.insert(id, status);
-
-        Self {
-            id,
-            atlas_index: NodeAtlas::INACTIVE_ID,
-            height_map,
-            albedo_map,
-        }
-    }
-}
-
-#[derive(Default)]
-pub(crate) struct LoadStatus {
-    pub(crate) finished: bool,
-    pub(crate) albedo_finished: bool,
-}
-
+/// The state of a [`TreeNode`] inside the quadtree.
 #[derive(PartialOrd, PartialEq)]
 enum NodeState {
+    /// This node does not exist. Useful for sparse terrains, which are not rectangular in shape.
     Nonexistent,
+    /// The node is not part of the [`NodeAtlas`](crate::node_atlas::NodeAtlas) and therefore not available for rendering.
+    /// It may or may not be loaded.
     Inactive,
+    /// The node is scheduled for activation, but was not confirmed to be fully loaded and thus
+    /// part of the [`NodeAtlas`](crate::node_atlas::NodeAtlas) yet.
     Loading,
+    /// The node is fully loaded and part of the [`NodeAtlas`](crate::node_atlas::NodeAtlas).
     Active,
 }
 
+/// All information required by the [`Quadtree`] traversal algorithm to determine
+/// the [`NodeState`] the node should be in.
 struct TreeNode {
-    id: u32,
+    id: NodeId,
     state: NodeState,
     position: Vec2,
     size: f32,
@@ -105,6 +48,7 @@ struct TreeNode {
 }
 
 impl TreeNode {
+    /// Creates a new node and its children according to the supplied [`TerrainConfig`].
     fn new(config: &TerrainConfig, lod: u32, x: u32, y: u32) -> Self {
         let id = TerrainConfig::node_id(lod, x, y);
         let state = NodeState::Inactive;
@@ -127,6 +71,8 @@ impl TreeNode {
         }
     }
 
+    /// Traverses the node and its children to update their [`NodeState`]s and
+    /// marking nodes to activate/deactivate.
     fn traverse(&mut self, quadtree: &mut Quadtree, viewer: Viewer) {
         // check whether the node has been activated since the last traversal and update it accordingly
         if self.state == NodeState::Loading && quadtree.activated_nodes.contains(&self.id) {
@@ -156,8 +102,6 @@ impl TreeNode {
             (true, NodeState::Active) => true,
         };
 
-        // let traverse_children = true;
-
         if traverse_children {
             for child in &mut self.children {
                 child.traverse(quadtree, viewer);
@@ -166,34 +110,27 @@ impl TreeNode {
     }
 }
 
+/// Stores all of the [`TreeNode`]s of a terrain and decides which nodes to activate/deactivate.
+/// Additionally it tracks all [`NodeUpdate`]s, which are send to the GPU by the
+/// [`GpuQuadtree`](crate::render::gpu_quadtree::GpuQuadtree).
 #[derive(Component)]
 pub struct Quadtree {
     /// The children of the root nodes.
     /// Root nodes stay always loaded, so they don't need to be traversed.
     nodes: Vec<TreeNode>,
-    /// Maps the id of an asset to the corresponding node id.
-    pub(crate) handle_mapping: HashMap<HandleId, u32>,
-    pub(crate) albedo_handle_mapping: HashMap<HandleId, u32>,
-    /// Statuses of all currently loading nodes.
-    pub(crate) load_statuses: HashMap<u32, LoadStatus>,
-    /// Stores the currently loading nodes.
-    pub(crate) loading_nodes: HashMap<u32, NodeData>,
-    /// Stores the currently active nodes.
-    pub(crate) active_nodes: HashMap<u32, NodeData>,
-    /// Caches the recently deactivated nodes.
-    pub(crate) inactive_nodes: LruCache<u32, NodeData>,
     /// Newly activated nodes since last traversal.
-    pub(crate) activated_nodes: HashSet<u32>,
+    pub(crate) activated_nodes: HashSet<NodeId>,
     /// Nodes that are no longer required and should be deactivated.
-    pub(crate) nodes_to_deactivate: Vec<u32>,
+    pub(crate) nodes_to_deactivate: Vec<NodeId>,
     /// Nodes that are required and should be loaded and scheduled for activation.
-    pub(crate) nodes_to_activate: Vec<u32>,
+    pub(crate) nodes_to_activate: Vec<NodeId>,
     /// All newly generate updates of nodes, which were activated or deactivated.
     pub(crate) node_updates: Vec<Vec<NodeUpdate>>,
 }
 
 impl Quadtree {
-    pub(crate) fn new(config: &TerrainConfig, cache_size: usize) -> Self {
+    /// Creates a new quadtree based on the supplied [`TerrainConfig`].
+    pub(crate) fn new(config: &TerrainConfig) -> Self {
         let lod = config.lod_count - 1;
 
         // activate root nodes
@@ -216,19 +153,14 @@ impl Quadtree {
 
         Self {
             nodes,
-            handle_mapping: default(),
-            albedo_handle_mapping: default(),
-            load_statuses: default(),
-            loading_nodes: default(),
-            active_nodes: default(),
-            inactive_nodes: LruCache::new(cache_size),
             activated_nodes: default(),
             nodes_to_deactivate: default(),
             nodes_to_activate,
-            node_updates: vec![Vec::new(); config.lod_count as usize],
+            node_updates: vec![default(); config.lod_count as usize],
         }
     }
 
+    /// Traverses the quadtree and marks all nodes to activate/deactivate.
     pub(crate) fn traverse(&mut self, viewer: Viewer) {
         let mut nodes = mem::take(&mut self.nodes);
 
@@ -240,7 +172,7 @@ impl Quadtree {
     }
 }
 
-/// Traverses all quadtrees and generates a new tree update.
+/// Traverses all quadtrees and marks all nodes to activate/deactivate.
 pub fn traverse_quadtree(
     viewer_query: Query<(&GlobalTransform, &ViewDistance), With<Camera>>,
     mut terrain_query: Query<(&GlobalTransform, &mut Quadtree)>,
@@ -253,129 +185,6 @@ pub fn traverse_quadtree(
             };
 
             quadtree.traverse(viewer);
-        }
-    }
-}
-
-/// Updates the node atlas according to the corresponding tree update and the load statuses.
-pub fn update_nodes(
-    asset_server: Res<AssetServer>,
-    mut terrain_query: Query<(&mut Quadtree, &mut NodeAtlas)>,
-) {
-    for (mut quadtree, mut node_atlas) in terrain_query.iter_mut() {
-        let Quadtree {
-            ref mut handle_mapping,
-            ref mut albedo_handle_mapping,
-            ref mut load_statuses,
-            ref mut loading_nodes,
-            ref mut inactive_nodes,
-            ref mut active_nodes,
-            ref mut activated_nodes,
-            ref mut nodes_to_activate,
-            ref mut nodes_to_deactivate,
-            ref mut node_updates,
-            ..
-        } = quadtree.as_mut();
-
-        // clear the previously activated nodes
-        activated_nodes.clear();
-
-        let mut activation_queue = Vec::new();
-        let deactivation_queue = mem::take(nodes_to_deactivate);
-
-        // load required nodes from cache or disk
-        for id in mem::take(nodes_to_activate) {
-            if let Some(node) = inactive_nodes.pop(&id) {
-                // queue cached node for activation
-                activation_queue.push(node);
-            } else {
-                // load node before activation
-                loading_nodes.insert(
-                    id,
-                    NodeData::load(
-                        id,
-                        &asset_server,
-                        load_statuses,
-                        handle_mapping,
-                        albedo_handle_mapping,
-                    ),
-                );
-            };
-        }
-
-        // queue all nodes, that have finished loading, for activation
-        load_statuses.retain(|&id, status| {
-            if status.finished && status.albedo_finished {
-                activation_queue.push(loading_nodes.remove(&id).unwrap());
-            }
-
-            !(status.finished && status.albedo_finished)
-        });
-
-        // deactivate all no longer required nodes
-        for mut node in deactivation_queue
-            .iter()
-            .map(|id| active_nodes.remove(&id).unwrap())
-        {
-            node_atlas.deactivate_node(&mut node);
-
-            let lod = TerrainConfig::node_position(node.id).0 as usize;
-            node_updates[lod].push(NodeUpdate {
-                node_id: node.id,
-                atlas_index: node.atlas_index as u32,
-            });
-
-            inactive_nodes.put(node.id, node);
-        }
-
-        // activate as all nodes ready for activation
-        for mut node in activation_queue {
-            node_atlas.activate_node(&mut node);
-
-            let lod = TerrainConfig::node_position(node.id).0 as usize;
-            node_updates[lod].push(NodeUpdate {
-                node_id: node.id,
-                atlas_index: node.atlas_index as u32,
-            });
-
-            activated_nodes.insert(node.id);
-            active_nodes.insert(node.id, node);
-        }
-    }
-}
-
-/// Updates the load status of a node for all of it newly loaded assets.
-pub fn update_load_status(
-    mut asset_events: EventReader<AssetEvent<Image>>,
-    mut images: ResMut<Assets<Image>>,
-    mut terrain_query: Query<&mut Quadtree>,
-) {
-    for event in asset_events.iter() {
-        if let AssetEvent::Created { handle } = event {
-            for mut quadtree in terrain_query.iter_mut() {
-                if let Some(id) = quadtree.handle_mapping.remove(&handle.id) {
-                    let image = images.get_mut(handle).unwrap();
-
-                    image.texture_descriptor.format = TextureFormat::R16Unorm;
-                    image.texture_descriptor.usage = TextureUsages::COPY_SRC
-                        | TextureUsages::COPY_DST
-                        | TextureUsages::TEXTURE_BINDING;
-                    let status = quadtree.load_statuses.get_mut(&id).unwrap();
-                    status.finished = true;
-                    break;
-                }
-
-                if let Some(id) = quadtree.albedo_handle_mapping.remove(&handle.id) {
-                    let image = images.get_mut(handle).unwrap();
-
-                    image.texture_descriptor.usage = TextureUsages::COPY_SRC
-                        | TextureUsages::COPY_DST
-                        | TextureUsages::TEXTURE_BINDING;
-                    let status = quadtree.load_statuses.get_mut(&id).unwrap();
-                    status.albedo_finished = true;
-                    break;
-                }
-            }
         }
     }
 }
