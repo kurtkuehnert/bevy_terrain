@@ -1,23 +1,28 @@
 use crate::{
     config::{NodeId, TerrainConfig},
     node_atlas::NodeAtlas,
+    persistent_component::PersistentComponent,
     quadtree::{NodeUpdate, Quadtree},
-    render::{layouts::NODE_UPDATE_SIZE, InitTerrain, PersistentComponent},
-    TerrainComputePipelines,
+    render::layouts::NODE_UPDATE_SIZE,
+    PersistentComponents, TerrainComputePipelines,
 };
 use bevy::{
     core::cast_slice,
+    ecs::{
+        query::QueryItem,
+        system::{lifetimeless::*, SystemParamItem},
+    },
     prelude::*,
     render::{
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
-        RenderWorld,
     },
 };
 use image::EncodableLayout;
 use std::{mem, num::NonZeroU32};
 
 /// Stores the GPU representation of the [`Quadtree`] alongside the data to update it.
+#[derive(Component)]
 pub struct GpuQuadtree {
     /// Readonly view of the entire quadtree, with all of its layers.
     pub(crate) view: TextureView,
@@ -135,8 +140,29 @@ impl GpuQuadtree {
             })
             .collect()
     }
+}
 
-    fn extract(&mut self, quadtree: &mut Quadtree) {
+impl PersistentComponent for GpuQuadtree {
+    type InsertFilter = Added<Quadtree>;
+    type InitializeQuery = Read<TerrainConfig>;
+    type InitializeParam = (
+        SRes<RenderDevice>,
+        SRes<RenderQueue>,
+        SRes<TerrainComputePipelines>,
+    );
+    type UpdateQuery = Write<Quadtree>;
+    type UpdateFilter = ();
+
+    /// Initializes the [`GpuQuadtree`] of the newly created terrains.
+    fn initialize_component(
+        config: QueryItem<Self::InitializeQuery>,
+        (device, queue, compute_pipelines): &mut SystemParamItem<Self::InitializeParam>,
+    ) -> Self {
+        Self::new(config, &device, &queue, &compute_pipelines)
+    }
+
+    /// Extracts the [`NodeUpdate`]s generated this frame from the [`Quadtree`] to the [`GpuQuadtree`].
+    fn update_component(&mut self, mut quadtree: QueryItem<Self::UpdateQuery>) {
         self.node_updates = mem::replace(
             &mut quadtree.node_updates,
             vec![default(); self.update.len()],
@@ -144,45 +170,11 @@ impl GpuQuadtree {
     }
 }
 
-/// Initializes the [`GpuQuadtree`] of newly created terrains. Runs during the [`Prepare`](bevy::render::RenderStage::Prepare) stage.
-pub(crate) fn init_gpu_quadtree(
-    device: Res<RenderDevice>,
-    queue: Res<RenderQueue>,
-    compute_pipelines: Res<TerrainComputePipelines>,
-    mut gpu_quadtrees: ResMut<PersistentComponent<GpuQuadtree>>,
-    terrain_query: Query<(Entity, &TerrainConfig), With<InitTerrain>>,
-) {
-    for (entity, config) in terrain_query.iter() {
-        gpu_quadtrees.insert(
-            entity,
-            GpuQuadtree::new(config, &device, &queue, &compute_pipelines),
-        );
-    }
-}
-
-/// Extracts the [`NodeUpdate`]s generated this frame from the [`Quadtree`] to the [`GpuQuadtree`].
-pub(crate) fn extract_quadtree(
-    mut render_world: ResMut<RenderWorld>,
-    mut terrain_query: Query<(Entity, &mut Quadtree), With<TerrainConfig>>,
-) {
-    let mut gpu_quadtrees = render_world.resource_mut::<PersistentComponent<GpuQuadtree>>();
-
-    for (entity, mut quadtree) in terrain_query.iter_mut() {
-        let gpu_quadtree = match gpu_quadtrees.get_mut(&entity) {
-            Some(gpu_quadtree) => gpu_quadtree,
-            None => continue,
-        };
-
-        // Todo: consider factoring this out as a trait of PersistentComponents similar to extract component
-        gpu_quadtree.extract(&mut quadtree);
-    }
-}
-
 /// Queues the [`NodeUpdate`]s generated this frame for the quadtree update pipeline,
 /// by filling the node update buffers with them.
 pub(crate) fn queue_quadtree_updates(
     queue: Res<RenderQueue>,
-    mut gpu_quadtrees: ResMut<PersistentComponent<GpuQuadtree>>,
+    mut gpu_quadtrees: ResMut<PersistentComponents<GpuQuadtree>>,
     terrain_query: Query<Entity, With<TerrainConfig>>,
 ) {
     for entity in terrain_query.iter() {

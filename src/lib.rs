@@ -1,20 +1,19 @@
-use crate::node_atlas::{update_load_status, update_nodes};
 use crate::{
     config::TerrainConfig,
+    node_atlas::{update_load_status, update_nodes},
+    persistent_component::{PersistentComponentPlugin, PersistentComponents},
     quadtree::traverse_quadtree,
     render::{
         bind_groups::{init_terrain_bind_groups, TerrainBindGroups},
         compute_pipelines::{TerrainComputeNode, TerrainComputePipelines},
         culling::queue_terrain_culling_bind_group,
         extract_terrain,
-        gpu_node_atlas::{
-            extract_node_atlas, init_gpu_node_atlas, queue_node_attachment_updates, GpuNodeAtlas,
-        },
-        gpu_quadtree::{extract_quadtree, init_gpu_quadtree, queue_quadtree_updates, GpuQuadtree},
+        gpu_node_atlas::{queue_node_attachment_updates, GpuNodeAtlas},
+        gpu_quadtree::{queue_quadtree_updates, GpuQuadtree},
         notify_init_terrain, queue_terrain,
         render_pipeline::TerrainRenderPipeline,
-        resources::init_terrain_resources,
-        DrawTerrain, PersistentComponent,
+        resources::initialize_terrain_resources,
+        DrawTerrain,
     },
 };
 use bevy::{
@@ -33,6 +32,7 @@ use bevy::{
 pub mod bundles;
 pub mod config;
 pub mod node_atlas;
+pub mod persistent_component;
 pub mod preprocess;
 pub mod quadtree;
 pub mod render;
@@ -72,6 +72,8 @@ impl Plugin for TerrainPlugin {
         );
 
         app.add_plugin(ExtractComponentPlugin::<TerrainConfig>::default())
+            .add_plugin(PersistentComponentPlugin::<GpuQuadtree>::default())
+            .add_plugin(PersistentComponentPlugin::<GpuNodeAtlas>::default())
             .add_system(traverse_quadtree.before(update_nodes))
             .add_system(update_nodes)
             .add_system(update_load_status);
@@ -83,16 +85,10 @@ impl Plugin for TerrainPlugin {
             .init_resource::<SpecializedComputePipelines<TerrainComputePipelines>>()
             .init_resource::<TerrainRenderPipeline>()
             .init_resource::<SpecializedRenderPipelines<TerrainRenderPipeline>>()
-            .init_resource::<PersistentComponent<GpuQuadtree>>()
-            .init_resource::<PersistentComponent<GpuNodeAtlas>>()
-            .init_resource::<PersistentComponent<TerrainBindGroups>>()
+            .init_resource::<PersistentComponents<TerrainBindGroups>>()
             .add_system_to_stage(RenderStage::Extract, notify_init_terrain)
             .add_system_to_stage(RenderStage::Extract, extract_terrain)
-            .add_system_to_stage(RenderStage::Extract, extract_quadtree)
-            .add_system_to_stage(RenderStage::Extract, extract_node_atlas)
-            .add_system_to_stage(RenderStage::Prepare, init_terrain_resources)
-            .add_system_to_stage(RenderStage::Prepare, init_gpu_quadtree)
-            .add_system_to_stage(RenderStage::Prepare, init_gpu_node_atlas)
+            .add_system_to_stage(RenderStage::Prepare, initialize_terrain_resources)
             .add_system_to_stage(RenderStage::Queue, init_terrain_bind_groups)
             .add_system_to_stage(RenderStage::Queue, queue_terrain)
             .add_system_to_stage(RenderStage::Queue, queue_quadtree_updates)

@@ -1,6 +1,6 @@
 use crate::{
     render::{bind_groups::TerrainBindGroups, render_pipeline::TerrainPipelineKey},
-    TerrainConfig, TerrainRenderPipeline,
+    PersistentComponents, TerrainConfig, TerrainRenderPipeline,
 };
 use bevy::{
     core_pipeline::Opaque3d,
@@ -14,7 +14,6 @@ use bevy::{
         },
         render_resource::*,
     },
-    utils::HashMap,
 };
 
 pub mod attachments;
@@ -27,15 +26,13 @@ pub mod layouts;
 pub mod render_pipeline;
 pub mod resources;
 
-pub type PersistentComponent<A> = HashMap<Entity, A>;
-
 #[derive(Component)]
-pub(crate) struct InitTerrain;
+pub struct InitTerrain;
 
 pub struct SetTerrainDataBindGroup<const I: usize>;
 
 impl<const I: usize> EntityRenderCommand for SetTerrainDataBindGroup<I> {
-    type Param = SRes<PersistentComponent<TerrainBindGroups>>;
+    type Param = SRes<PersistentComponents<TerrainBindGroups>>;
 
     #[inline]
     fn render<'w>(
@@ -53,7 +50,7 @@ impl<const I: usize> EntityRenderCommand for SetTerrainDataBindGroup<I> {
 pub struct SetPatchListBindGroup<const I: usize>;
 
 impl<const I: usize> EntityRenderCommand for SetPatchListBindGroup<I> {
-    type Param = SRes<PersistentComponent<TerrainBindGroups>>;
+    type Param = SRes<PersistentComponents<TerrainBindGroups>>;
 
     #[inline]
     fn render<'w>(
@@ -71,7 +68,7 @@ impl<const I: usize> EntityRenderCommand for SetPatchListBindGroup<I> {
 pub(crate) struct DrawTerrainCommand;
 
 impl EntityRenderCommand for DrawTerrainCommand {
-    type Param = SRes<PersistentComponent<TerrainBindGroups>>;
+    type Param = SRes<PersistentComponents<TerrainBindGroups>>;
 
     #[inline]
     fn render<'w>(

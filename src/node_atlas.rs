@@ -27,6 +27,7 @@ impl NodeData {
         asset_server: &AssetServer,
         handle_mapping: &mut HashMap<HandleId, (NodeId, String)>,
     ) -> Self {
+        // Todo: fix this mess
         let height_map: Handle<Image> = asset_server.load(&format!("output/height/{}.png", id));
         let albedo_map: Handle<Image> = asset_server.load(&format!("output/albedo/{}.png", id));
 
@@ -63,6 +64,7 @@ impl NodeData {
         }
     }
 
+    /// Returns `true` if all of the nodes attachments have finished loading.
     pub(crate) fn is_finished(&self) -> bool {
         self.finished_loading.values().all(|&finished| finished)
     }
@@ -141,10 +143,7 @@ impl NodeAtlas {
 
         for (node_id, mut node) in activation_queue {
             // Todo: figure out a cleaner way of dealing with index exhaustion
-            node.atlas_index = self
-                .available_indices
-                .pop_front()
-                .expect("Out of atlas ids.");
+            node.atlas_index = available_indices.pop_front().expect("Out of atlas ids.");
 
             node_updates[TerrainConfig::node_position(node_id).lod as usize].push(NodeUpdate {
                 node_id,

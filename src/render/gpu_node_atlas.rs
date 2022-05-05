@@ -1,14 +1,21 @@
-use crate::node_atlas::NodeData;
 use crate::{
     config::TerrainConfig,
-    node_atlas::NodeAtlas,
-    render::{InitTerrain, PersistentComponent},
+    node_atlas::{NodeAtlas, NodeData},
+    persistent_component::PersistentComponent,
+    PersistentComponents,
 };
 use bevy::{
+    ecs::{
+        query::QueryItem,
+        system::{
+            lifetimeless::{Read, SRes, Write},
+            SystemParamItem,
+        },
+    },
     prelude::*,
     render::{
         render_asset::RenderAssets, render_resource::*, renderer::RenderDevice,
-        renderer::RenderQueue, RenderWorld,
+        renderer::RenderQueue,
     },
     utils::HashMap,
 };
@@ -51,9 +58,10 @@ pub enum NodeAttachmentConfig {
     },
 }
 
+#[derive(Component)]
 pub struct GpuNodeAtlas {
     pub(crate) atlas_attachments: HashMap<String, NodeAttachment>,
-    pub(crate) activated_nodes: Vec<NodeData>, // make generic on NodeData
+    pub(crate) activated_nodes: Vec<NodeData>,
 }
 
 impl GpuNodeAtlas {
@@ -104,33 +112,27 @@ impl GpuNodeAtlas {
     }
 }
 
-/// Initializes the [`GpuNodeAtlas`] of newly created terrains. Runs during the [`Prepare`](bevy::render::RenderStage::Prepare) stage.
-pub(crate) fn init_gpu_node_atlas(
-    device: Res<RenderDevice>,
-    mut gpu_node_atlases: ResMut<PersistentComponent<GpuNodeAtlas>>,
-    terrain_query: Query<(Entity, &TerrainConfig), With<InitTerrain>>,
-) {
-    for (entity, config) in terrain_query.iter() {
-        gpu_node_atlases.insert(entity, GpuNodeAtlas::new(config, &device));
+impl PersistentComponent for GpuNodeAtlas {
+    type InsertFilter = Added<NodeAtlas>;
+    type InitializeQuery = Read<TerrainConfig>;
+    type InitializeParam = SRes<RenderDevice>;
+    type UpdateQuery = Write<NodeAtlas>;
+    type UpdateFilter = ();
+
+    /// Initializes the [`GpuNodeAtlas`] in the render world
+    /// once a [`NodeAtlas`] is added to an entity in the app world.
+    fn initialize_component(
+        config: QueryItem<Self::InitializeQuery>,
+        device: &mut SystemParamItem<Self::InitializeParam>,
+    ) -> Self {
+        Self::new(config, &device)
     }
-}
 
-pub(crate) fn extract_node_atlas(
-    mut render_world: ResMut<RenderWorld>,
-    mut terrain_query: Query<(Entity, &mut NodeAtlas), With<TerrainConfig>>,
-) {
-    let mut gpu_node_atlases = render_world.resource_mut::<PersistentComponent<GpuNodeAtlas>>();
-
-    for (entity, mut node_atlas) in terrain_query.iter_mut() {
-        let gpu_node_atlas = match gpu_node_atlases.get_mut(&entity) {
-            Some(gpu_node_atlas) => gpu_node_atlas,
-            None => continue,
-        };
-
+    fn update_component(&mut self, mut node_atlas: QueryItem<Self::UpdateQuery>) {
         // node_atlas
         //     .active_nodes
         //     .extend(mem::take(&mut gpu_node_atlas.activated_nodes).into_iter());
-        gpu_node_atlas.activated_nodes = mem::take(&mut node_atlas.activated_nodes);
+        self.activated_nodes = mem::take(&mut node_atlas.activated_nodes);
     }
 }
 
@@ -138,7 +140,7 @@ pub(crate) fn queue_node_attachment_updates(
     device: Res<RenderDevice>,
     queue: Res<RenderQueue>,
     images: Res<RenderAssets<Image>>,
-    mut gpu_node_atlases: ResMut<PersistentComponent<GpuNodeAtlas>>,
+    mut gpu_node_atlases: ResMut<PersistentComponents<GpuNodeAtlas>>,
     terrain_query: Query<Entity, With<TerrainConfig>>,
 ) {
     let mut command_encoder = device.create_command_encoder(&CommandEncoderDescriptor::default());

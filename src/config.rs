@@ -70,7 +70,7 @@ impl TerrainConfig {
         let terrain_size = area_count * area_size;
         let chunk_count = area_count * (1 << (lod_count - 1));
         let vertices_per_row = (patch_size + 2) << 1;
-        let node_count = (area_count.x * area_count.y * ((1 << 2 * lod_count) - 1) / 3); // https://oeis.org/A002450
+        let node_count = area_count.x * area_count.y * ((1 << 2 * lod_count) - 1) / 3; // https://oeis.org/A002450
 
         Self {
             lod_count,
@@ -165,11 +165,6 @@ impl ExtractComponent for TerrainConfig {
 }
 
 mod tests {
-    use crate::config::NodePosition;
-    use crate::TerrainConfig;
-    use bevy::math::UVec2;
-    use itertools::iproduct;
-
     #[test]
     fn node_conversion() {
         let config = TerrainConfig::new(128, 3, UVec2::new(2, 2), 1.0, 0.0, 0);

@@ -162,7 +162,7 @@ impl TerrainResources {
 }
 
 /// Runs in prepare.
-pub(crate) fn init_terrain_resources(
+pub(crate) fn initialize_terrain_resources(
     mut commands: Commands,
     device: Res<RenderDevice>,
     terrain_query: Query<(Entity, &TerrainConfig), With<InitTerrain>>,
