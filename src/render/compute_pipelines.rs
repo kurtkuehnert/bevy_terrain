@@ -1,8 +1,6 @@
 use crate::{
-    render::{
-        bind_groups::TerrainBindGroups, culling::CullingBindGroup, layouts::*, PersistentComponent,
-    },
-    GpuQuadtree, TerrainConfig,
+    render::{bind_groups::TerrainBindGroups, culling::CullingBindGroup, layouts::*},
+    GpuQuadtree, PersistentComponents, TerrainConfig,
 };
 use bevy::{
     ecs::system::{
@@ -272,8 +270,8 @@ impl render_graph::Node for TerrainComputeNode {
         world: &World,
     ) -> Result<(), render_graph::NodeRunError> {
         let pipeline_cache = world.resource::<PipelineCache>();
-        let terrain_bind_groups = world.resource::<PersistentComponent<TerrainBindGroups>>();
-        let gpu_quadtrees = world.resource::<PersistentComponent<GpuQuadtree>>();
+        let terrain_bind_groups = world.resource::<PersistentComponents<TerrainBindGroups>>();
+        let gpu_quadtrees = world.resource::<PersistentComponents<GpuQuadtree>>();
 
         let pipelines = &match TerrainComputePipelineKey::iter()
             .map(|key| pipeline_cache.get_compute_pipeline(self.pipelines[key as usize]))

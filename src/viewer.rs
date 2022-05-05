@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+// Todo: rework viewer
+
 /// Marks a camera as the viewer of the terrain.
 /// The view distance is a multiplier, which increases the amount of loaded nodes.
 #[derive(Component)]

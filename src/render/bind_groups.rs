@@ -2,9 +2,9 @@ use crate::{
     render::{
         gpu_node_atlas::{GpuNodeAtlas, NodeAttachment},
         resources::TerrainResources,
-        InitTerrain, PersistentComponent,
+        InitTerrain,
     },
-    GpuQuadtree, TerrainComputePipelines, TerrainRenderPipeline,
+    GpuQuadtree, PersistentComponents, TerrainComputePipelines, TerrainRenderPipeline,
 };
 use bevy::{
     prelude::*,
@@ -256,9 +256,9 @@ pub(crate) fn init_terrain_bind_groups(
     device: Res<RenderDevice>,
     terrain_pipeline: Res<TerrainRenderPipeline>,
     compute_pipelines: Res<TerrainComputePipelines>,
-    gpu_quadtrees: Res<PersistentComponent<GpuQuadtree>>,
-    gpu_node_atlases: Res<PersistentComponent<GpuNodeAtlas>>,
-    mut terrain_bind_groups: ResMut<PersistentComponent<TerrainBindGroups>>,
+    gpu_quadtrees: Res<PersistentComponents<GpuQuadtree>>,
+    gpu_node_atlases: Res<PersistentComponents<GpuNodeAtlas>>,
+    mut terrain_bind_groups: ResMut<PersistentComponents<TerrainBindGroups>>,
     mut terrain_query: Query<(Entity, &mut TerrainResources), With<InitTerrain>>,
 ) {
     for (entity, mut resources) in terrain_query.iter_mut() {

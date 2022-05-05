@@ -2,7 +2,7 @@ use crate::config::TerrainConfig;
 
 use bevy::utils::HashMap;
 use image::io::Reader;
-use image::{ImageBuffer, Luma, Rgb, RgbImage, Rgba, RgbaImage};
+use image::{ImageBuffer, Luma, Rgba, RgbaImage};
 use itertools::iproduct;
 use ron::to_string;
 use std::{fs, path::Path};
