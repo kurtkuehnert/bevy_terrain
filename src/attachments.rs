@@ -1,3 +1,4 @@
+use crate::node_atlas::LoadNodeEvent;
 use crate::{config::NodeId, node_atlas::NodeAtlas, TerrainConfig};
 use bevy::{
     asset::{AssetServer, HandleId, LoadState},
@@ -164,23 +165,18 @@ pub struct AttachmentFromDiskConfig {
 }
 
 pub fn start_loading_attachment_from_disk(
+    mut load_events: EventReader<LoadNodeEvent>,
     asset_server: Res<AssetServer>,
     mut terrain_query: Query<(&mut NodeAtlas, &mut AttachmentFromDiskConfig)>,
 ) {
     for (mut node_atlas, mut config) in terrain_query.iter_mut() {
-        let NodeAtlas {
-            ref mut loading_nodes,
-            ref mut started_loading,
-            ..
-        } = node_atlas.as_mut();
-
         let AttachmentFromDiskConfig {
             ref mut attachments,
             ref mut handle_mapping,
         } = config.as_mut();
 
-        for &node_id in started_loading.iter() {
-            let node = loading_nodes.get_mut(&node_id).unwrap();
+        for &LoadNodeEvent(node_id) in load_events.iter() {
+            let node = node_atlas.loading_nodes.get_mut(&node_id).unwrap();
 
             for (label, AttachmentFromDisk { ref path, .. }) in attachments.iter() {
                 let handle: Handle<Image> = asset_server.load(&format!("{path}/{node_id}.png"));
@@ -206,17 +202,13 @@ pub fn finish_loading_attachment_from_disk(
     for event in asset_events.iter() {
         if let AssetEvent::Created { handle } = event {
             for (mut node_atlas, mut config) in terrain_query.iter_mut() {
-                if let Some((id, label)) = config.handle_mapping.remove(&handle.id) {
+                if let Some((node_id, label)) = config.handle_mapping.remove(&handle.id) {
                     let image = images.get_mut(handle).unwrap();
+                    let attachment = config.attachments.get(&label).unwrap();
 
-                    let AttachmentFromDisk {
-                        ref texture_descriptor,
-                        ..
-                    } = config.attachments.get(&label).unwrap();
+                    image.texture_descriptor = attachment.texture_descriptor.clone();
 
-                    image.texture_descriptor = texture_descriptor.clone();
-
-                    let node = node_atlas.loading_nodes.get_mut(&id).unwrap();
+                    let node = node_atlas.loading_nodes.get_mut(&node_id).unwrap();
                     node.loading_attachments.remove(&label);
                     break;
                 }
