@@ -10,6 +10,8 @@ use bevy::{
 use lru::LruCache;
 use std::{collections::VecDeque, mem};
 
+pub struct LoadNodeEvent(pub NodeId);
+
 type AtlasIndex = u16;
 
 #[derive(Clone)]
@@ -41,8 +43,6 @@ pub struct NodeAtlas {
     pub(crate) available_indices: VecDeque<AtlasIndex>,
     /// Specifies which [`NodeAttachmentData`] to load for each node.
     pub(crate) attachments: HashSet<String>,
-    /// Stores the ids of all nodes, which started loading this frame.
-    pub(crate) started_loading: Vec<NodeId>,
     /// Stores the currently loading nodes.
     pub(crate) loading_nodes: HashMap<NodeId, NodeData>,
     /// Stores the currently active nodes.
@@ -65,7 +65,6 @@ impl NodeAtlas {
         Self {
             available_indices: (0..config.node_atlas_size).collect(),
             attachments,
-            started_loading: default(),
             loading_nodes: default(),
             active_nodes: default(),
             inactive_nodes: LruCache::new(cache_size),
@@ -79,19 +78,17 @@ impl NodeAtlas {
         nodes_to_activate: Vec<NodeId>,
         node_updates: &mut Vec<Vec<NodeUpdate>>,
         nodes_activated: &mut HashSet<NodeId>,
+        mut load_events: &mut EventWriter<LoadNodeEvent>,
     ) {
         let NodeAtlas {
             ref mut available_indices,
             ref mut attachments,
-            ref mut started_loading,
             ref mut loading_nodes,
             ref mut active_nodes,
             ref mut inactive_nodes,
             ref mut activated_nodes,
             ..
         } = self;
-
-        started_loading.clear();
 
         // load required nodes from cache or disk
         let mut activation_queue = nodes_to_activate
@@ -102,7 +99,7 @@ impl NodeAtlas {
                     Some((node_id, node))
                 } else {
                     // load node before activation
-                    started_loading.push(node_id);
+                    load_events.send(LoadNodeEvent(node_id)); // Todo: differentiate between different node atlases
                     loading_nodes.insert(node_id, NodeData::new(attachments.clone()));
                     None
                 }
@@ -159,7 +156,10 @@ impl NodeAtlas {
 }
 
 /// Updates the node atlas according to the corresponding quadtree update.
-pub fn update_nodes(mut terrain_query: Query<(&mut Quadtree, &mut NodeAtlas)>) {
+pub fn update_nodes(
+    mut load_events: EventWriter<LoadNodeEvent>,
+    mut terrain_query: Query<(&mut Quadtree, &mut NodeAtlas)>,
+) {
     for (mut quadtree, mut node_atlas) in terrain_query.iter_mut() {
         let Quadtree {
             ref mut nodes_activated,
@@ -170,6 +170,11 @@ pub fn update_nodes(mut terrain_query: Query<(&mut Quadtree, &mut NodeAtlas)>) {
         } = quadtree.as_mut();
 
         node_atlas.deactivate_nodes(mem::take(nodes_to_deactivate), node_updates);
-        node_atlas.activate_nodes(mem::take(nodes_to_activate), node_updates, nodes_activated);
+        node_atlas.activate_nodes(
+            mem::take(nodes_to_activate),
+            node_updates,
+            nodes_activated,
+            &mut load_events,
+        );
     }
 }
