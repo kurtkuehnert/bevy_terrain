@@ -1,7 +1,4 @@
-use crate::{
-    config::TerrainConfig,
-    render::{layouts::*, InitTerrain},
-};
+use crate::{config::TerrainConfig, render::layouts::*};
 use bevy::{
     prelude::*,
     render::{
@@ -12,6 +9,8 @@ use bevy::{
 
 #[derive(Component)]
 pub struct TerrainResources {
+    pub(crate) prepare_node_list_count: usize,
+    pub(crate) chunk_count: u32,
     pub(crate) indirect_buffer: Option<Buffer>,
     pub(crate) parameter_buffer: Buffer,
     pub(crate) config_buffer: Buffer,
@@ -32,6 +31,8 @@ impl TerrainResources {
         let (lod_map_view, atlas_map_view) = Self::create_chunk_maps(device, config);
 
         Self {
+            prepare_node_list_count: (config.lod_count - 1) as usize,
+            chunk_count: config.chunk_count.x * config.chunk_count.y,
             indirect_buffer,
             parameter_buffer,
             config_buffer,
@@ -165,7 +166,7 @@ impl TerrainResources {
 pub(crate) fn initialize_terrain_resources(
     mut commands: Commands,
     device: Res<RenderDevice>,
-    terrain_query: Query<(Entity, &TerrainConfig), With<InitTerrain>>,
+    terrain_query: Query<(Entity, &TerrainConfig), With<TerrainConfig>>,
 ) {
     for (entity, config) in terrain_query.iter() {
         info!("initializing terrain resources");

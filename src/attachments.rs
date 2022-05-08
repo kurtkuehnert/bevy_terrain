@@ -1,5 +1,8 @@
-use crate::node_atlas::LoadNodeEvent;
-use crate::{config::NodeId, node_atlas::NodeAtlas, TerrainConfig};
+use crate::{
+    config::NodeId,
+    node_atlas::{LoadNodeEvent, NodeAtlas},
+    TerrainConfig,
+};
 use bevy::{
     asset::{AssetServer, HandleId, LoadState},
     prelude::*,

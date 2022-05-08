@@ -4,7 +4,7 @@ use crate::{
     persistent_component::PersistentComponent,
     quadtree::{NodeUpdate, Quadtree},
     render::layouts::NODE_UPDATE_SIZE,
-    PersistentComponents, TerrainComputePipelines,
+    PersistentComponents, Terrain, TerrainComputePipelines,
 };
 use bevy::{
     core::cast_slice,
@@ -143,13 +143,12 @@ impl GpuQuadtree {
 }
 
 impl PersistentComponent for GpuQuadtree {
-    type InsertFilter = Added<Quadtree>;
-    type InitializeQuery = Read<TerrainConfig>;
     type InitializeParam = (
         SRes<RenderDevice>,
         SRes<RenderQueue>,
         SRes<TerrainComputePipelines>,
     );
+    type InitializeQuery = Read<TerrainConfig>;
     type UpdateQuery = Write<Quadtree>;
     type UpdateFilter = ();
 
@@ -175,7 +174,7 @@ impl PersistentComponent for GpuQuadtree {
 pub(crate) fn queue_quadtree_updates(
     queue: Res<RenderQueue>,
     mut gpu_quadtrees: ResMut<PersistentComponents<GpuQuadtree>>,
-    terrain_query: Query<Entity, With<TerrainConfig>>,
+    terrain_query: Query<Entity, With<Terrain>>,
 ) {
     for entity in terrain_query.iter() {
         let gpu_quadtree = gpu_quadtrees.get_mut(&entity).unwrap();

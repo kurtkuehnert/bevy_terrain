@@ -57,17 +57,19 @@ impl NodeAtlas {
     // pub(crate) const NONEXISTENT_ID: u16 = u16::MAX;
     pub(crate) const INACTIVE_ID: u16 = u16::MAX - 1;
 
-    pub fn new(config: &TerrainConfig, cache_size: usize) -> Self {
-        let mut attachments = HashSet::new();
-        attachments.insert("albedo_map".into());
-        attachments.insert("height_map".into());
+    pub fn new(config: &TerrainConfig) -> Self {
+        let mut attachments = config
+            .attachments
+            .keys()
+            .map(|label| label.clone())
+            .collect::<HashSet<_>>();
 
         Self {
             available_indices: (0..config.node_atlas_size).collect(),
             attachments,
             loading_nodes: default(),
             active_nodes: default(),
-            inactive_nodes: LruCache::new(cache_size),
+            inactive_nodes: LruCache::new(config.cache_size),
             activated_nodes: default(),
         }
     }

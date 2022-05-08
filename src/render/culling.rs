@@ -1,4 +1,4 @@
-use crate::{TerrainComputePipelines, TerrainConfig};
+use crate::{Terrain, TerrainComputePipelines, TerrainConfig};
 use bevy::{
     core::cast_slice,
     pbr::MeshUniform,
@@ -15,7 +15,7 @@ pub(crate) fn queue_terrain_culling_bind_group(
     mut commands: Commands,
     device: Res<RenderDevice>,
     compute_pipelines: Res<TerrainComputePipelines>,
-    terrain_query: Query<(Entity, &MeshUniform), With<TerrainConfig>>,
+    terrain_query: Query<(Entity, &MeshUniform), With<Terrain>>,
     view_query: Query<&ExtractedView>,
 ) {
     let view = view_query.single();

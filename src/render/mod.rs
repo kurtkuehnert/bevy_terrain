@@ -1,6 +1,6 @@
 use crate::{
     render::{bind_groups::TerrainBindGroups, render_pipeline::TerrainPipelineKey},
-    PersistentComponents, TerrainConfig, TerrainRenderPipeline,
+    PersistentComponents, Terrain, TerrainConfig, TerrainRenderPipeline,
 };
 use bevy::{
     core_pipeline::Opaque3d,
@@ -24,9 +24,6 @@ pub mod gpu_quadtree;
 pub mod layouts;
 pub mod render_pipeline;
 pub mod resources;
-
-#[derive(Component)]
-pub struct InitTerrain;
 
 pub struct SetTerrainDataBindGroup<const I: usize>;
 
@@ -93,19 +90,9 @@ pub(crate) type DrawTerrain = (
     DrawTerrainCommand,
 );
 
-/// Runs in extract.
-pub(crate) fn notify_init_terrain(
-    mut commands: Commands,
-    terrain_query: Query<Entity, Changed<TerrainConfig>>,
-) {
-    for entity in terrain_query.iter() {
-        commands.get_or_spawn(entity).insert(InitTerrain);
-    }
-}
-
 pub(crate) fn extract_terrain(
     mut commands: Commands,
-    terrain_query: Query<(Entity, &GlobalTransform), With<TerrainConfig>>,
+    terrain_query: Query<(Entity, &GlobalTransform), With<Terrain>>,
 ) {
     for (entity, transform) in terrain_query.iter() {
         let transform = transform.compute_matrix();
@@ -126,7 +113,7 @@ pub(crate) fn queue_terrain(
     mut pipelines: ResMut<SpecializedRenderPipelines<TerrainRenderPipeline>>,
     mut pipeline_cache: ResMut<PipelineCache>,
     mut view_query: Query<&mut RenderPhase<Opaque3d>>,
-    terrain_query: Query<(Entity, Option<&Wireframe>), With<TerrainConfig>>,
+    terrain_query: Query<(Entity, Option<&Wireframe>), With<Terrain>>,
 ) {
     let draw_function = draw_functions.read().get_id::<DrawTerrain>().unwrap();
 
