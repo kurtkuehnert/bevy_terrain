@@ -1,8 +1,6 @@
 use crate::{
-    attachments::NodeAttachment,
-    render::{resources::TerrainResources, InitTerrain},
-    GpuNodeAtlas, GpuQuadtree, PersistentComponents, TerrainComputePipelines,
-    TerrainRenderPipeline,
+    attachments::NodeAttachment, render::resources::TerrainResources, GpuNodeAtlas, GpuQuadtree,
+    PersistentComponents, TerrainComputePipelines, TerrainConfig, TerrainRenderPipeline,
 };
 use bevy::{
     prelude::*,
@@ -11,6 +9,8 @@ use bevy::{
 use std::mem;
 
 pub struct TerrainBindGroups {
+    pub(crate) prepare_node_list_count: usize,
+    pub(crate) chunk_count: u32,
     pub(crate) indirect_buffer: Buffer,
     pub(crate) prepare_indirect_bind_group: BindGroup,
     pub(crate) build_node_list_bind_groups: [BindGroup; 2],
@@ -30,6 +30,8 @@ impl TerrainBindGroups {
         compute_pipelines: &TerrainComputePipelines,
     ) -> Self {
         let TerrainResources {
+            prepare_node_list_count,
+            chunk_count,
             ref mut indirect_buffer,
             ref parameter_buffer,
             ref config_buffer,
@@ -238,6 +240,8 @@ impl TerrainBindGroups {
         });
 
         Self {
+            prepare_node_list_count: *prepare_node_list_count,
+            chunk_count: *chunk_count,
             indirect_buffer,
             prepare_indirect_bind_group,
             build_node_list_bind_groups,
@@ -257,7 +261,7 @@ pub(crate) fn init_terrain_bind_groups(
     gpu_quadtrees: Res<PersistentComponents<GpuQuadtree>>,
     gpu_node_atlases: Res<PersistentComponents<GpuNodeAtlas>>,
     mut terrain_bind_groups: ResMut<PersistentComponents<TerrainBindGroups>>,
-    mut terrain_query: Query<(Entity, &mut TerrainResources), With<InitTerrain>>,
+    mut terrain_query: Query<(Entity, &mut TerrainResources), With<TerrainConfig>>,
 ) {
     for (entity, mut resources) in terrain_query.iter_mut() {
         info!("initializing terrain bind groups");

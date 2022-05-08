@@ -1,5 +1,6 @@
 use crate::attachments::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk};
 use crate::node_atlas::LoadNodeEvent;
+use crate::render::gpu_node_atlas::{initialize_gpu_node_atlas, update_gpu_node_atlas};
 use crate::{
     config::TerrainConfig,
     node_atlas::update_nodes,
@@ -12,12 +13,15 @@ use crate::{
         extract_terrain,
         gpu_node_atlas::{queue_node_attachment_updates, GpuNodeAtlas},
         gpu_quadtree::{queue_quadtree_updates, GpuQuadtree},
-        notify_init_terrain, queue_terrain,
+        queue_terrain,
         render_pipeline::TerrainRenderPipeline,
         resources::initialize_terrain_resources,
         DrawTerrain,
     },
 };
+use bevy::ecs::query::QueryItem;
+use bevy::ecs::system::lifetimeless::Read;
+use bevy::render::render_component::ExtractComponent;
 use bevy::{
     core_pipeline::{node::MAIN_PASS_DEPENDENCIES, Opaque3d},
     prelude::*,
@@ -40,6 +44,18 @@ pub mod preprocess;
 pub mod quadtree;
 pub mod render;
 pub mod viewer;
+
+#[derive(Clone, Copy, Component)]
+pub struct Terrain;
+
+impl ExtractComponent for Terrain {
+    type Query = Read<Terrain>;
+    type Filter = ();
+
+    fn extract_component(item: QueryItem<Self::Query>) -> Self {
+        *item
+    }
+}
 
 const CONFIG_HANDLE: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 907665645684322571);
@@ -74,9 +90,10 @@ impl Plugin for TerrainPlugin {
             Shader::from_wgsl(include_str!("render/shaders/parameters.wgsl")),
         );
 
-        app.add_plugin(ExtractComponentPlugin::<TerrainConfig>::default())
+        app.add_plugin(ExtractComponentPlugin::<Terrain>::default())
+            .add_plugin(ExtractComponentPlugin::<TerrainConfig>::default())
             .add_plugin(PersistentComponentPlugin::<GpuQuadtree>::default())
-            .add_plugin(PersistentComponentPlugin::<GpuNodeAtlas>::default())
+            // .add_plugin(PersistentComponentPlugin::<GpuNodeAtlas>::default())
             .add_event::<LoadNodeEvent>()
             .add_system(traverse_quadtree.before(update_nodes))
             .add_system(update_nodes)
@@ -91,9 +108,11 @@ impl Plugin for TerrainPlugin {
             .init_resource::<TerrainRenderPipeline>()
             .init_resource::<SpecializedRenderPipelines<TerrainRenderPipeline>>()
             .init_resource::<PersistentComponents<TerrainBindGroups>>()
-            .add_system_to_stage(RenderStage::Extract, notify_init_terrain)
+            .init_resource::<PersistentComponents<GpuNodeAtlas>>()
             .add_system_to_stage(RenderStage::Extract, extract_terrain)
+            .add_system_to_stage(RenderStage::Extract, update_gpu_node_atlas)
             .add_system_to_stage(RenderStage::Prepare, initialize_terrain_resources)
+            .add_system_to_stage(RenderStage::Prepare, initialize_gpu_node_atlas)
             .add_system_to_stage(RenderStage::Queue, init_terrain_bind_groups)
             .add_system_to_stage(RenderStage::Queue, queue_terrain)
             .add_system_to_stage(RenderStage::Queue, queue_quadtree_updates)

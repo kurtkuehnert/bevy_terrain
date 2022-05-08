@@ -49,12 +49,21 @@ pub struct TerrainConfig {
     pub scale: f32,
     pub height: f32,
     pub node_atlas_size: u16,
-    pub(crate) node_attachment_configs: Option<HashMap<String, NodeAttachmentConfig>>,
+    pub cache_size: usize,
+    pub attachments: HashMap<String, NodeAttachmentConfig>,
 }
 
 impl TerrainConfig {
     pub const PATCH_COUNT: u32 = 8;
     pub const PATCHES_PER_NODE: u32 = 64;
+
+    pub fn add_node_attachment_config(
+        &mut self,
+        label: String,
+        attachment_config: NodeAttachmentConfig,
+    ) {
+        self.attachments.insert(label, attachment_config);
+    }
 
     pub fn new(
         chunk_size: u32,
@@ -86,19 +95,9 @@ impl TerrainConfig {
             scale,
             height,
             node_atlas_size,
-            node_attachment_configs: Some(HashMap::new()),
+            cache_size: 16,
+            attachments: default(),
         }
-    }
-
-    pub fn add_node_attachment_config(
-        &mut self,
-        label: String,
-        attachment_config: NodeAttachmentConfig,
-    ) {
-        self.node_attachment_configs
-            .as_mut()
-            .unwrap()
-            .insert(label, attachment_config);
     }
 
     pub(crate) fn as_std140(&self) -> Std140TerrainConfigUniform {
@@ -157,7 +156,7 @@ impl TerrainConfig {
 
 impl ExtractComponent for TerrainConfig {
     type Query = Read<TerrainConfig>;
-    type Filter = ();
+    type Filter = Changed<TerrainConfig>;
 
     fn extract_component(item: QueryItem<Self::Query>) -> Self {
         item.clone() // Todo consider persisting the config in the render world

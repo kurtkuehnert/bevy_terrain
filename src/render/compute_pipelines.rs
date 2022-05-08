@@ -159,7 +159,7 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
 }
 
 pub struct TerrainComputeNode {
-    query: QueryState<(Entity, Read<TerrainConfig>, Read<CullingBindGroup>)>,
+    query: QueryState<(Entity, Read<CullingBindGroup>)>,
     system_state: SystemState<(
         SResMut<PipelineCache>,
         SResMut<SpecializedComputePipelines<TerrainComputePipelines>>,
@@ -195,7 +195,6 @@ impl TerrainComputeNode {
     fn build_node_list<'a>(
         pass: &mut ComputePass<'a>,
         pipelines: &'a Vec<&'a ComputePipeline>,
-        config: &'a TerrainConfig,
         bind_groups: &'a TerrainBindGroups,
     ) {
         pass.set_bind_group(0, &bind_groups.prepare_indirect_bind_group, &[]);
@@ -210,7 +209,7 @@ impl TerrainComputeNode {
         pass.set_pipeline(pipelines[TerrainComputePipelineKey::PrepareNodeList as usize]);
         pass.dispatch(1, 1, 1);
 
-        let count = config.lod_count as usize - 1;
+        let count = bind_groups.prepare_node_list_count;
 
         for i in 0..count {
             pass.set_bind_group(0, &bind_groups.build_node_list_bind_groups[i % 2], &[]);
@@ -230,7 +229,6 @@ impl TerrainComputeNode {
     fn build_patch_list<'a>(
         pass: &mut ComputePass<'a>,
         pipelines: &'a Vec<&'a ComputePipeline>,
-        config: &'a TerrainConfig,
         bind_groups: &'a TerrainBindGroups,
     ) {
         pass.set_bind_group(0, &bind_groups.prepare_indirect_bind_group, &[]);
@@ -239,7 +237,7 @@ impl TerrainComputeNode {
 
         pass.set_bind_group(0, &bind_groups.build_chunk_maps_bind_group, &[]);
         pass.set_pipeline(pipelines[TerrainComputePipelineKey::BuildChunkMaps as usize]);
-        pass.dispatch(config.chunk_count.x * config.chunk_count.y, 1, 1);
+        pass.dispatch(bind_groups.chunk_count, 1, 1);
 
         pass.set_bind_group(0, &bind_groups.build_patch_list_bind_group, &[]);
         pass.set_pipeline(pipelines[TerrainComputePipelineKey::BuildPatchList as usize]);
@@ -285,15 +283,15 @@ impl render_graph::Node for TerrainComputeNode {
             .command_encoder
             .begin_compute_pass(&ComputePassDescriptor::default());
 
-        for (entity, config, culling_bind_group) in self.query.iter_manual(world) {
+        for (entity, culling_bind_group) in self.query.iter_manual(world) {
             let gpu_quadtree = gpu_quadtrees.get(&entity).unwrap();
             let bind_groups = terrain_bind_groups.get(&entity).unwrap();
 
             pass.set_bind_group(1, &culling_bind_group.value, &[]);
 
             TerrainComputeNode::update_quadtree(pass, pipelines, gpu_quadtree);
-            TerrainComputeNode::build_node_list(pass, pipelines, config, bind_groups);
-            TerrainComputeNode::build_patch_list(pass, pipelines, config, bind_groups);
+            TerrainComputeNode::build_node_list(pass, pipelines, bind_groups);
+            TerrainComputeNode::build_patch_list(pass, pipelines, bind_groups);
         }
 
         Ok(())
