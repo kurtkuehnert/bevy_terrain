@@ -1,6 +1,5 @@
 use crate::{
-    render::{bind_groups::TerrainBindGroups, render_pipeline::TerrainPipelineKey},
-    Terrain, TerrainRenderPipeline,
+    render::render_pipeline::TerrainPipelineKey, Terrain, TerrainRenderData, TerrainRenderPipeline,
 };
 use bevy::{
     core_pipeline::Opaque3d,
@@ -17,12 +16,13 @@ use bevy::{
     utils::HashMap,
 };
 
-pub mod bind_groups;
+pub mod compute_data;
 pub mod compute_pipelines;
 pub mod culling;
 pub mod gpu_node_atlas;
 pub mod gpu_quadtree;
 pub mod layouts;
+pub mod render_data;
 pub mod render_pipeline;
 pub mod resources;
 
@@ -31,17 +31,17 @@ pub type PersistentComponents<C> = HashMap<Entity, C>;
 pub struct SetTerrainDataBindGroup<const I: usize>;
 
 impl<const I: usize> EntityRenderCommand for SetTerrainDataBindGroup<I> {
-    type Param = SRes<PersistentComponents<TerrainBindGroups>>;
+    type Param = SRes<PersistentComponents<TerrainRenderData>>;
 
     #[inline]
     fn render<'w>(
         _view: Entity,
         item: Entity,
-        terrain_bind_groups: SystemParamItem<'w, '_, Self::Param>,
+        terrain_render_data: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let bind_groups = terrain_bind_groups.into_inner().get(&item).unwrap();
-        pass.set_bind_group(I, &bind_groups.terrain_data_bind_group, &[]);
+        let render_data = terrain_render_data.into_inner().get(&item).unwrap();
+        pass.set_bind_group(I, &render_data.terrain_data_bind_group, &[]);
         RenderCommandResult::Success
     }
 }
@@ -49,17 +49,17 @@ impl<const I: usize> EntityRenderCommand for SetTerrainDataBindGroup<I> {
 pub struct SetPatchListBindGroup<const I: usize>;
 
 impl<const I: usize> EntityRenderCommand for SetPatchListBindGroup<I> {
-    type Param = SRes<PersistentComponents<TerrainBindGroups>>;
+    type Param = SRes<PersistentComponents<TerrainRenderData>>;
 
     #[inline]
     fn render<'w>(
         _view: Entity,
         item: Entity,
-        terrain_bind_groups: SystemParamItem<'w, '_, Self::Param>,
+        terrain_render_data: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let bind_groups = terrain_bind_groups.into_inner().get(&item).unwrap();
-        pass.set_bind_group(I, &bind_groups.patch_list_bind_group, &[]);
+        let render_data = terrain_render_data.into_inner().get(&item).unwrap();
+        pass.set_bind_group(I, &render_data.patch_list_bind_group, &[]);
         RenderCommandResult::Success
     }
 }
@@ -67,17 +67,17 @@ impl<const I: usize> EntityRenderCommand for SetPatchListBindGroup<I> {
 pub(crate) struct DrawTerrainCommand;
 
 impl EntityRenderCommand for DrawTerrainCommand {
-    type Param = SRes<PersistentComponents<TerrainBindGroups>>;
+    type Param = SRes<PersistentComponents<TerrainRenderData>>;
 
     #[inline]
     fn render<'w>(
         _view: Entity,
         item: Entity,
-        terrain_bind_groups: SystemParamItem<'w, '_, Self::Param>,
+        terrain_render_data: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let bind_groups = terrain_bind_groups.into_inner().get(&item).unwrap();
-        pass.draw_indirect(&bind_groups.indirect_buffer, 0);
+        let render_data = terrain_render_data.into_inner().get(&item).unwrap();
+        pass.draw_indirect(&render_data.indirect_buffer, 0);
         RenderCommandResult::Success
     }
 }

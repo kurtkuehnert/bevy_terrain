@@ -1,4 +1,4 @@
-use crate::render::layouts::{PATCH_LIST_LAYOUT, TERRAIN_DATA_LAYOUT};
+use crate::render::layouts::PATCH_LIST_LAYOUT;
 use bevy::{
     pbr::MeshPipeline,
     prelude::*,
@@ -40,7 +40,7 @@ impl TerrainPipelineKey {
 pub struct TerrainRenderPipeline {
     pub(crate) view_layout: BindGroupLayout,
     pub(crate) mesh_layout: BindGroupLayout,
-    pub(crate) terrain_data_layout: BindGroupLayout,
+    pub(crate) terrain_data_layouts: Vec<BindGroupLayout>,
     pub(crate) patch_list_layout: BindGroupLayout,
     pub(crate) shader: Handle<Shader>, // Todo: make fragment shader customizable
 }
@@ -53,14 +53,13 @@ impl FromWorld for TerrainRenderPipeline {
 
         let view_layout = mesh_pipeline.view_layout.clone();
         let mesh_layout = mesh_pipeline.mesh_layout.clone();
-        let terrain_data_layout = device.create_bind_group_layout(&TERRAIN_DATA_LAYOUT);
         let patch_list_layout = device.create_bind_group_layout(&PATCH_LIST_LAYOUT);
         let shader = asset_server.load("shaders/terrain.wgsl");
 
         Self {
             view_layout,
             mesh_layout,
-            terrain_data_layout,
+            terrain_data_layouts: Vec::new(),
             patch_list_layout,
             shader,
         }
@@ -76,7 +75,7 @@ impl SpecializedRenderPipeline for TerrainRenderPipeline {
             layout: Some(vec![
                 self.view_layout.clone(),
                 self.mesh_layout.clone(),
-                self.terrain_data_layout.clone(),
+                self.terrain_data_layouts[0].clone(), // Todo: do this properly for multiple maps
                 self.patch_list_layout.clone(),
             ]),
             vertex: VertexState {

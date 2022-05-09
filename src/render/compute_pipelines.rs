@@ -1,5 +1,5 @@
 use crate::{
-    render::{bind_groups::TerrainBindGroups, culling::CullingBindGroup, layouts::*},
+    render::{compute_data::TerrainComputeData, culling::CullingBindGroup, layouts::*},
     GpuQuadtree, PersistentComponents,
 };
 use bevy::{
@@ -195,7 +195,7 @@ impl TerrainComputeNode {
     fn build_node_list<'a>(
         pass: &mut ComputePass<'a>,
         pipelines: &'a Vec<&'a ComputePipeline>,
-        bind_groups: &'a TerrainBindGroups,
+        bind_groups: &'a TerrainComputeData,
     ) {
         pass.set_bind_group(0, &bind_groups.prepare_indirect_bind_group, &[]);
         pass.set_pipeline(pipelines[TerrainComputePipelineKey::PrepareAreaList as usize]);
@@ -225,28 +225,6 @@ impl TerrainComputeNode {
         pass.set_pipeline(pipelines[TerrainComputePipelineKey::BuildChunkList as usize]);
         pass.dispatch_indirect(&bind_groups.indirect_buffer, 0);
     }
-
-    fn build_patch_list<'a>(
-        pass: &mut ComputePass<'a>,
-        pipelines: &'a Vec<&'a ComputePipeline>,
-        bind_groups: &'a TerrainBindGroups,
-    ) {
-        pass.set_bind_group(0, &bind_groups.prepare_indirect_bind_group, &[]);
-        pass.set_pipeline(pipelines[TerrainComputePipelineKey::PreparePatchList as usize]);
-        pass.dispatch(1, 1, 1);
-
-        pass.set_bind_group(0, &bind_groups.build_chunk_maps_bind_group, &[]);
-        pass.set_pipeline(pipelines[TerrainComputePipelineKey::BuildChunkMaps as usize]);
-        pass.dispatch(bind_groups.chunk_count, 1, 1);
-
-        pass.set_bind_group(0, &bind_groups.build_patch_list_bind_group, &[]);
-        pass.set_pipeline(pipelines[TerrainComputePipelineKey::BuildPatchList as usize]);
-        pass.dispatch_indirect(&bind_groups.indirect_buffer, 0);
-
-        pass.set_bind_group(0, &bind_groups.prepare_indirect_bind_group, &[]);
-        pass.set_pipeline(pipelines[TerrainComputePipelineKey::PrepareRender as usize]);
-        pass.dispatch(1, 1, 1);
-    }
 }
 
 impl render_graph::Node for TerrainComputeNode {
@@ -268,7 +246,7 @@ impl render_graph::Node for TerrainComputeNode {
         world: &World,
     ) -> Result<(), render_graph::NodeRunError> {
         let pipeline_cache = world.resource::<PipelineCache>();
-        let terrain_bind_groups = world.resource::<PersistentComponents<TerrainBindGroups>>();
+        let terrain_bind_groups = world.resource::<PersistentComponents<TerrainComputeData>>();
         let gpu_quadtrees = world.resource::<PersistentComponents<GpuQuadtree>>();
 
         let pipelines = &match TerrainComputePipelineKey::iter()
@@ -291,7 +269,22 @@ impl render_graph::Node for TerrainComputeNode {
 
             TerrainComputeNode::update_quadtree(pass, pipelines, gpu_quadtree);
             TerrainComputeNode::build_node_list(pass, pipelines, bind_groups);
-            TerrainComputeNode::build_patch_list(pass, pipelines, bind_groups);
+
+            pass.set_bind_group(0, &bind_groups.prepare_indirect_bind_group, &[]);
+            pass.set_pipeline(pipelines[TerrainComputePipelineKey::PreparePatchList as usize]);
+            pass.dispatch(1, 1, 1);
+
+            pass.set_bind_group(0, &bind_groups.build_chunk_maps_bind_group, &[]);
+            pass.set_pipeline(pipelines[TerrainComputePipelineKey::BuildChunkMaps as usize]);
+            pass.dispatch(bind_groups.chunk_count, 1, 1);
+
+            pass.set_bind_group(0, &bind_groups.build_patch_list_bind_group, &[]);
+            pass.set_pipeline(pipelines[TerrainComputePipelineKey::BuildPatchList as usize]);
+            pass.dispatch_indirect(&bind_groups.indirect_buffer, 0);
+
+            pass.set_bind_group(0, &bind_groups.prepare_indirect_bind_group, &[]);
+            pass.set_pipeline(pipelines[TerrainComputePipelineKey::PrepareRender as usize]);
+            pass.dispatch(1, 1, 1);
         }
 
         Ok(())
