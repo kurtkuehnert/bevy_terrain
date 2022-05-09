@@ -9,9 +9,7 @@ use bevy::{
 
 #[derive(Component)]
 pub struct TerrainResources {
-    pub(crate) prepare_node_list_count: usize,
-    pub(crate) chunk_count: u32,
-    pub(crate) indirect_buffer: Option<Buffer>,
+    pub(crate) indirect_buffer: Buffer,
     pub(crate) parameter_buffer: Buffer,
     pub(crate) config_buffer: Buffer,
     pub(crate) temp_node_buffers: [Buffer; 2],
@@ -23,7 +21,7 @@ pub struct TerrainResources {
 
 impl TerrainResources {
     pub(crate) fn new(device: &RenderDevice, config: &TerrainConfig) -> Self {
-        let indirect_buffer = Some(Self::create_indirect_buffer(device));
+        let indirect_buffer = Self::create_indirect_buffer(device);
         let parameter_buffer = Self::create_parameter_buffer(device);
         let config_buffer = Self::create_config_buffer(device, config);
         let (temp_node_buffers, final_node_buffer) = Self::create_node_buffers(device, config);
@@ -31,8 +29,6 @@ impl TerrainResources {
         let (lod_map_view, atlas_map_view) = Self::create_chunk_maps(device, config);
 
         Self {
-            prepare_node_list_count: (config.lod_count - 1) as usize,
-            chunk_count: config.chunk_count.x * config.chunk_count.y,
             indirect_buffer,
             parameter_buffer,
             config_buffer,

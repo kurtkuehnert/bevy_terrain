@@ -37,7 +37,7 @@ pub enum AtlasAttachment {
 
 impl AtlasAttachment {
     /// Returns the binding of the attachment.
-    pub(crate) fn as_binding(&self) -> BindGroupEntry {
+    pub(crate) fn binding(&self) -> BindGroupEntry {
         match self {
             &AtlasAttachment::Buffer {
                 binding,
@@ -58,6 +58,38 @@ impl AtlasAttachment {
             } => BindGroupEntry {
                 binding,
                 resource: BindingResource::Sampler(sampler),
+            },
+        }
+    }
+
+    /// Returns the bind group layout of the attachment.
+    pub(crate) fn layout(&self) -> BindGroupLayoutEntry {
+        match self {
+            &AtlasAttachment::Buffer { binding, .. } => BindGroupLayoutEntry {
+                binding,
+                visibility: ShaderStages::VERTEX_FRAGMENT,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            &AtlasAttachment::Texture { binding, .. } => BindGroupLayoutEntry {
+                binding,
+                visibility: ShaderStages::VERTEX_FRAGMENT,
+                ty: BindingType::Texture {
+                    sample_type: TextureSampleType::Float { filterable: true },
+                    view_dimension: TextureViewDimension::D2Array,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            &AtlasAttachment::Sampler { binding, .. } => BindGroupLayoutEntry {
+                binding,
+                visibility: ShaderStages::VERTEX_FRAGMENT,
+                ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                count: None,
             },
         }
     }

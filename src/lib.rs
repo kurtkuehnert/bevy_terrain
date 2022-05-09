@@ -1,10 +1,11 @@
+use crate::render::render_data::{initialize_terrain_render_data, TerrainRenderData};
 use crate::{
     attachments::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk},
     config::TerrainConfig,
     node_atlas::{update_nodes, LoadNodeEvent},
     quadtree::traverse_quadtree,
     render::{
-        bind_groups::{init_terrain_bind_groups, TerrainBindGroups},
+        compute_data::{initialize_terrain_compute_data, TerrainComputeData},
         compute_pipelines::{TerrainComputeNode, TerrainComputePipelines},
         culling::queue_terrain_culling_bind_group,
         extract_terrain,
@@ -104,16 +105,18 @@ impl Plugin for TerrainPlugin {
             .init_resource::<SpecializedComputePipelines<TerrainComputePipelines>>()
             .init_resource::<TerrainRenderPipeline>()
             .init_resource::<SpecializedRenderPipelines<TerrainRenderPipeline>>()
-            .init_resource::<PersistentComponents<TerrainBindGroups>>()
+            .init_resource::<PersistentComponents<TerrainComputeData>>()
             .init_resource::<PersistentComponents<GpuQuadtree>>()
             .init_resource::<PersistentComponents<GpuNodeAtlas>>()
+            .init_resource::<PersistentComponents<TerrainRenderData>>()
             .add_system_to_stage(RenderStage::Extract, extract_terrain)
             .add_system_to_stage(RenderStage::Extract, update_gpu_quadtree)
             .add_system_to_stage(RenderStage::Extract, update_gpu_node_atlas)
             .add_system_to_stage(RenderStage::Prepare, initialize_terrain_resources)
             .add_system_to_stage(RenderStage::Prepare, initialize_gpu_quadtree)
             .add_system_to_stage(RenderStage::Prepare, initialize_gpu_node_atlas)
-            .add_system_to_stage(RenderStage::Queue, init_terrain_bind_groups)
+            .add_system_to_stage(RenderStage::Queue, initialize_terrain_compute_data)
+            .add_system_to_stage(RenderStage::Queue, initialize_terrain_render_data)
             .add_system_to_stage(RenderStage::Queue, queue_terrain)
             .add_system_to_stage(RenderStage::Queue, queue_quadtree_updates)
             .add_system_to_stage(RenderStage::Queue, queue_node_atlas_updates)
