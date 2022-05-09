@@ -1,6 +1,7 @@
 use crate::{
     config::NodeId,
-    node_atlas::{LoadNodeEvent, NodeAtlas},
+    node_atlas::{LoadNodeEvent, NodeAtlas, NodeAttachment},
+    render::gpu_node_atlas::AtlasAttachmentConfig,
     TerrainConfig,
 };
 use bevy::{
@@ -10,46 +11,26 @@ use bevy::{
     utils::HashMap,
 };
 
-#[derive(Clone)]
-pub enum NodeAttachmentData {
-    Buffer { data: Vec<u8> },
-    Texture { handle: Handle<Image> },
-}
+pub fn add_sampler_attachment_config(config: &mut TerrainConfig) {
+    let sampler_descriptor = SamplerDescriptor {
+        label: "sampler_attachment".into(),
+        mag_filter: FilterMode::Linear,
+        min_filter: FilterMode::Linear,
+        ..default()
+    };
 
-pub enum NodeAttachment {
-    Buffer {
-        binding: u32,
-        buffer: Buffer,
-    },
-    Texture {
-        view_binding: u32,
-        sampler_binding: u32,
-        texture_size: u32,
-        texture: Texture,
-        view: TextureView,
-        sampler: Sampler,
-    },
-}
-
-#[derive(Clone)]
-pub enum NodeAttachmentConfig {
-    Buffer {
-        binding: u32,
-        descriptor: BufferDescriptor<'static>,
-    },
-    Texture {
-        view_binding: u32,
-        sampler_binding: u32,
-        texture_size: u32,
-        texture_descriptor: TextureDescriptor<'static>,
-        view_descriptor: TextureViewDescriptor<'static>,
-        sampler_descriptor: SamplerDescriptor<'static>,
-    },
+    config.add_node_attachment_config(
+        "sampler".into(),
+        AtlasAttachmentConfig::Sampler {
+            binding: 2,
+            sampler_descriptor,
+        },
+    );
 }
 
 pub fn add_height_attachment_config(config: &mut TerrainConfig, texture_size: u32) {
     let texture_descriptor = TextureDescriptor {
-        label: None,
+        label: "height_attachment_texture".into(),
         size: Extent3d {
             width: texture_size,
             height: texture_size,
@@ -63,47 +44,26 @@ pub fn add_height_attachment_config(config: &mut TerrainConfig, texture_size: u3
     };
 
     let view_descriptor = TextureViewDescriptor {
-        label: None,
-        format: None,
+        label: "height_attachment_view".into(),
         dimension: Some(TextureViewDimension::D2Array),
         aspect: TextureAspect::All,
-        base_mip_level: 0,
-        mip_level_count: None,
-        base_array_layer: 0,
-        array_layer_count: None,
-    };
-
-    let sampler_descriptor = SamplerDescriptor {
-        label: None,
-        address_mode_u: AddressMode::ClampToEdge,
-        address_mode_v: AddressMode::ClampToEdge,
-        address_mode_w: AddressMode::ClampToEdge,
-        mag_filter: FilterMode::Linear,
-        min_filter: FilterMode::Linear,
-        mipmap_filter: FilterMode::Linear,
-        lod_min_clamp: 0.0,
-        lod_max_clamp: f32::MAX,
-        compare: None,
-        anisotropy_clamp: None,
-        border_color: None,
+        ..default()
     };
 
     config.add_node_attachment_config(
         "height_map".into(),
-        NodeAttachmentConfig::Texture {
-            view_binding: 2,
-            sampler_binding: 3,
+        AtlasAttachmentConfig::Texture {
+            binding: 3,
             texture_size,
             texture_descriptor,
             view_descriptor,
-            sampler_descriptor,
         },
     );
 }
 
 pub fn add_albedo_attachment_config(config: &mut TerrainConfig, texture_size: u32) {
     let texture_descriptor = TextureDescriptor {
-        label: None,
+        label: "albedo_attachment_texture".into(),
         size: Extent3d {
             width: texture_size,
             height: texture_size,
@@ -117,40 +77,19 @@ pub fn add_albedo_attachment_config(config: &mut TerrainConfig, texture_size: u3
     };
 
     let view_descriptor = TextureViewDescriptor {
-        label: None,
-        format: None,
+        label: "albedo_attachment_view".into(),
         dimension: Some(TextureViewDimension::D2Array),
         aspect: TextureAspect::All,
-        base_mip_level: 0,
-        mip_level_count: None,
-        base_array_layer: 0,
-        array_layer_count: None,
-    };
-
-    let sampler_descriptor = SamplerDescriptor {
-        label: None,
-        address_mode_u: AddressMode::ClampToEdge,
-        address_mode_v: AddressMode::ClampToEdge,
-        address_mode_w: AddressMode::ClampToEdge,
-        mag_filter: FilterMode::Linear,
-        min_filter: FilterMode::Linear,
-        mipmap_filter: FilterMode::Linear,
-        lod_min_clamp: 0.0,
-        lod_max_clamp: f32::MAX,
-        compare: None,
-        anisotropy_clamp: None,
-        border_color: None,
+        ..default()
     };
 
     config.add_node_attachment_config(
         "albedo_map".into(),
-        NodeAttachmentConfig::Texture {
-            view_binding: 4,
-            sampler_binding: 5,
+        AtlasAttachmentConfig::Texture {
+            binding: 4,
             texture_size,
             texture_descriptor,
             view_descriptor,
-            sampler_descriptor,
         },
     );
 }
@@ -185,13 +124,12 @@ pub fn start_loading_attachment_from_disk(
                 let handle: Handle<Image> = asset_server.load(&format!("{path}/{node_id}.png"));
 
                 if asset_server.get_load_state(handle.clone()) == LoadState::Loaded {
-                    node.loading_attachments.remove(label);
+                    node.loaded(label);
                 } else {
                     handle_mapping.insert(handle.id, (node_id, label.clone()));
                 };
 
-                node.attachment_data
-                    .insert(label.clone(), NodeAttachmentData::Texture { handle });
+                node.set_attachment(label.clone(), NodeAttachment::Texture { handle });
             }
         }
     }
@@ -212,7 +150,7 @@ pub fn finish_loading_attachment_from_disk(
                     image.texture_descriptor = attachment.texture_descriptor.clone();
 
                     let node = node_atlas.loading_nodes.get_mut(&node_id).unwrap();
-                    node.loading_attachments.remove(&label);
+                    node.loaded(&label);
                     break;
                 }
             }

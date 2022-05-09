@@ -1,6 +1,6 @@
 use crate::{
     render::{bind_groups::TerrainBindGroups, render_pipeline::TerrainPipelineKey},
-    PersistentComponents, Terrain, TerrainConfig, TerrainRenderPipeline,
+    Terrain, TerrainRenderPipeline,
 };
 use bevy::{
     core_pipeline::Opaque3d,
@@ -14,6 +14,7 @@ use bevy::{
         },
         render_resource::*,
     },
+    utils::HashMap,
 };
 
 pub mod bind_groups;
@@ -24,6 +25,8 @@ pub mod gpu_quadtree;
 pub mod layouts;
 pub mod render_pipeline;
 pub mod resources;
+
+pub type PersistentComponents<C> = HashMap<Entity, C>;
 
 pub struct SetTerrainDataBindGroup<const I: usize>;
 
@@ -90,6 +93,7 @@ pub(crate) type DrawTerrain = (
     DrawTerrainCommand,
 );
 
+/// Extracts the [`MeshUniform`] data of all terrains.
 pub(crate) fn extract_terrain(
     mut commands: Commands,
     terrain_query: Query<(Entity, &GlobalTransform), With<Terrain>>,

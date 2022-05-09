@@ -1,16 +1,13 @@
 use crate::{
-    attachments::{NodeAttachment, NodeAttachmentConfig, NodeAttachmentData},
     config::TerrainConfig,
-    node_atlas::{NodeAtlas, NodeData},
-    persistent_component::PersistentComponent,
-    PersistentComponents, Terrain,
+    node_atlas::{NodeAtlas, NodeAttachment, NodeData},
+    render::PersistentComponents,
+    Terrain,
 };
 use bevy::{
-    ecs::{query::QueryItem, system::lifetimeless::Read},
     prelude::*,
     render::{
         render_asset::RenderAssets,
-        render_component::ExtractComponent,
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
         RenderWorld,
@@ -19,10 +16,118 @@ use bevy::{
 };
 use std::mem;
 
+/// A modular resource of the node atlas, that can be accessed in the terrain shader.
+/// It may store data (buffer/texture) for each active node or a sampler.
+pub enum AtlasAttachment {
+    /// An (array) buffer with data per active node.
+    Buffer {
+        binding: u32, // Todo: rework the ordering
+        buffer: Buffer,
+    },
+    /// An array texture with data per active node.
+    Texture {
+        binding: u32,
+        texture_size: u32,
+        texture: Texture,
+        view: TextureView,
+    },
+    /// A sampler used in conjunction with one or more texture attachments.
+    Sampler { binding: u32, sampler: Sampler },
+}
+
+impl AtlasAttachment {
+    /// Returns the binding of the attachment.
+    pub(crate) fn as_binding(&self) -> BindGroupEntry {
+        match self {
+            &AtlasAttachment::Buffer {
+                binding,
+                ref buffer,
+            } => BindGroupEntry {
+                binding,
+                resource: buffer.as_entire_binding(),
+            },
+            &AtlasAttachment::Texture {
+                binding, ref view, ..
+            } => BindGroupEntry {
+                binding,
+                resource: BindingResource::TextureView(view),
+            },
+            &AtlasAttachment::Sampler {
+                binding,
+                ref sampler,
+            } => BindGroupEntry {
+                binding,
+                resource: BindingResource::Sampler(sampler),
+            },
+        }
+    }
+}
+
+/// Configures an [`AtlasAttachment`].
+#[derive(Clone)]
+pub enum AtlasAttachmentConfig {
+    /// An (array) buffer with data per active node.
+    Buffer {
+        binding: u32,
+        descriptor: BufferDescriptor<'static>,
+    },
+    /// An array texture with data per active node.
+    Texture {
+        binding: u32,
+        texture_size: u32,
+        texture_descriptor: TextureDescriptor<'static>,
+        view_descriptor: TextureViewDescriptor<'static>,
+    },
+    /// A sampler used in conjunction with one or more texture attachments.
+    Sampler {
+        binding: u32,
+        sampler_descriptor: SamplerDescriptor<'static>,
+    },
+}
+
+impl AtlasAttachmentConfig {
+    /// Creates the attachment from its config.
+    pub(crate) fn create(&self, device: &RenderDevice) -> AtlasAttachment {
+        match self {
+            &AtlasAttachmentConfig::Buffer {
+                binding,
+                ref descriptor,
+            } => AtlasAttachment::Buffer {
+                binding,
+                buffer: device.create_buffer(descriptor),
+            },
+            &AtlasAttachmentConfig::Texture {
+                binding,
+                texture_size,
+                ref texture_descriptor,
+                ref view_descriptor,
+            } => {
+                let texture = device.create_texture(texture_descriptor);
+
+                AtlasAttachment::Texture {
+                    binding,
+                    texture_size,
+                    view: texture.create_view(view_descriptor),
+                    texture,
+                }
+            }
+            &AtlasAttachmentConfig::Sampler {
+                binding,
+                ref sampler_descriptor,
+            } => AtlasAttachment::Sampler {
+                binding,
+                sampler: device.create_sampler(sampler_descriptor),
+            },
+        }
+    }
+}
+
+/// Manages the [`AtlasAttachment`]s of the terrain, by updating them with the data of
+/// the [`NodeAttachment`]s of newly activated nodes.
 #[derive(Component)]
 pub struct GpuNodeAtlas {
-    pub(crate) atlas_attachments: HashMap<String, NodeAttachment>,
-    pub(crate) activated_nodes: Vec<NodeData>,
+    pub(crate) atlas_attachments: HashMap<String, AtlasAttachment>,
+    pub(crate) activated_nodes: Vec<NodeData>, // Todo: consider own component
 }
 
 impl GpuNodeAtlas {
@@ -30,38 +135,7 @@ impl GpuNodeAtlas {
         let atlas_attachments = config
             .attachments
             .iter()
-            .map(|(label, attachment_config)| {
-                let attachment = match attachment_config {
-                    &NodeAttachmentConfig::Buffer {
-                        binding,
-                        ref descriptor,
-                    } => NodeAttachment::Buffer {
-                        binding,
-                        buffer: device.create_buffer(descriptor),
-                    },
-                    &NodeAttachmentConfig::Texture {
-                        view_binding,
-                        sampler_binding,
-                        texture_size,
-                        ref texture_descriptor,
-                        ref view_descriptor,
-                        ref sampler_descriptor,
-                    } => {
-                        let texture = device.create_texture(texture_descriptor);
-
-                        NodeAttachment::Texture {
-                            view_binding,
-                            sampler_binding,
-                            texture_size,
-                            view: texture.create_view(view_descriptor),
-                            sampler: device.create_sampler(sampler_descriptor),
-                            texture,
-                        }
-                    }
-                };
-
-                (label.clone(), attachment)
-            })
+            .map(|(label, attachment_config)| (label.clone(), attachment_config.create(device)))
             .collect();
 
         Self {
@@ -71,6 +145,7 @@ impl GpuNodeAtlas {
     }
 }
 
+/// Initializes the [`GpuNodeAtlas`] of newly created terrains.
 pub(crate) fn initialize_gpu_node_atlas(
     mut components: ResMut<PersistentComponents<GpuNodeAtlas>>,
     device: Res<RenderDevice>,
@@ -81,6 +156,7 @@ pub(crate) fn initialize_gpu_node_atlas(
     }
 }
 
+/// Updates the [`GpuNodeAtlas`] with the activated nodes of the current frame.
 pub(crate) fn update_gpu_node_atlas(
     mut render_world: ResMut<RenderWorld>,
     mut terrain_query: Query<(Entity, &mut NodeAtlas)>,
@@ -97,7 +173,9 @@ pub(crate) fn update_gpu_node_atlas(
     }
 }
 
-pub(crate) fn queue_node_attachment_updates(
+/// Updates the [`AtlasAttachment`]s of the terrain, by updating them with the data of
+/// the [`NodeAttachment`]s of activated nodes.
+pub(crate) fn queue_node_atlas_updates(
     device: Res<RenderDevice>,
     queue: Res<RenderQueue>,
     images: Res<RenderAssets<Image>>,
@@ -115,15 +193,13 @@ pub(crate) fn queue_node_attachment_updates(
                     .atlas_attachments
                     .iter()
                     .filter_map(|(label, attachment)| {
-                        let node_attachment = node_data.attachment_data.get(label).unwrap();
+                        let node_attachment = node_data.attachment_data.get(label)?;
 
                         match (node_attachment, attachment) {
-                            (NodeAttachmentData::Buffer { .. }, NodeAttachment::Buffer { .. }) => {
-                                None
-                            }
+                            (NodeAttachment::Buffer { .. }, AtlasAttachment::Buffer { .. }) => None,
                             (
-                                NodeAttachmentData::Texture { handle: data },
-                                &NodeAttachment::Texture {
+                                NodeAttachment::Texture { handle: data },
+                                &AtlasAttachment::Texture {
                                     ref texture,
                                     texture_size,
                                     ..

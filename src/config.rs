@@ -1,9 +1,9 @@
-use crate::attachments::NodeAttachmentConfig;
+use crate::render::gpu_node_atlas::AtlasAttachmentConfig;
 use bevy::{
     ecs::{query::QueryItem, system::lifetimeless::Read},
     prelude::*,
     render::{render_component::ExtractComponent, render_resource::std140::AsStd140},
-    utils::HashMap,
+    utils::{HashMap, HashSet},
 };
 use itertools::{iproduct, Product};
 use std::ops::Range;
@@ -50,7 +50,7 @@ pub struct TerrainConfig {
     pub height: f32,
     pub node_atlas_size: u16,
     pub cache_size: usize,
-    pub attachments: HashMap<String, NodeAttachmentConfig>,
+    pub attachments: HashMap<String, AtlasAttachmentConfig>,
 }
 
 impl TerrainConfig {
@@ -60,7 +60,7 @@ impl TerrainConfig {
     pub fn add_node_attachment_config(
         &mut self,
         label: String,
-        attachment_config: NodeAttachmentConfig,
+        attachment_config: AtlasAttachmentConfig,
     ) {
         self.attachments.insert(label, attachment_config);
     }
@@ -151,6 +151,16 @@ impl TerrainConfig {
             x: (id >> 14) & 0x3FFF,
             y: id & 0x3FFF,
         }
+    }
+
+    pub(crate) fn attachments_to_load(&self) -> HashSet<String> {
+        self.attachments
+            .iter()
+            .filter_map(|(label, config)| match config {
+                AtlasAttachmentConfig::Sampler { .. } => None,
+                _ => Some(label.clone()),
+            })
+            .collect()
     }
 }
 
