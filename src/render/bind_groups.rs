@@ -1,6 +1,6 @@
 use crate::{
-    attachments::NodeAttachment, render::resources::TerrainResources, GpuNodeAtlas, GpuQuadtree,
-    PersistentComponents, TerrainComputePipelines, TerrainConfig, TerrainRenderPipeline,
+    render::{resources::TerrainResources, PersistentComponents},
+    GpuNodeAtlas, GpuQuadtree, TerrainComputePipelines, TerrainRenderPipeline,
 };
 use bevy::{
     prelude::*,
@@ -196,33 +196,12 @@ impl TerrainBindGroups {
             },
         ];
 
-        for attachment in gpu_node_atlas.atlas_attachments.values() {
-            match attachment {
-                &NodeAttachment::Buffer {
-                    binding,
-                    ref buffer,
-                } => entries.push(BindGroupEntry {
-                    binding,
-                    resource: buffer.as_entire_binding(),
-                }),
-                &NodeAttachment::Texture {
-                    view_binding,
-                    sampler_binding,
-                    ref view,
-                    ref sampler,
-                    ..
-                } => {
-                    entries.push(BindGroupEntry {
-                        binding: view_binding,
-                        resource: BindingResource::TextureView(view),
-                    });
-                    entries.push(BindGroupEntry {
-                        binding: sampler_binding,
-                        resource: BindingResource::Sampler(sampler),
-                    });
-                }
-            }
-        }
+        entries.extend(
+            gpu_node_atlas
+                .atlas_attachments
+                .values()
+                .map(|attachment| attachment.as_binding()),
+        );
 
         let terrain_data_bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: None,
@@ -261,7 +240,7 @@ pub(crate) fn init_terrain_bind_groups(
     gpu_quadtrees: Res<PersistentComponents<GpuQuadtree>>,
     gpu_node_atlases: Res<PersistentComponents<GpuNodeAtlas>>,
     mut terrain_bind_groups: ResMut<PersistentComponents<TerrainBindGroups>>,
-    mut terrain_query: Query<(Entity, &mut TerrainResources), With<TerrainConfig>>,
+    mut terrain_query: Query<(Entity, &mut TerrainResources)>,
 ) {
     for (entity, mut resources) in terrain_query.iter_mut() {
         info!("initializing terrain bind groups");

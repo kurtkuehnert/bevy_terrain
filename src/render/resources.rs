@@ -166,11 +166,9 @@ impl TerrainResources {
 pub(crate) fn initialize_terrain_resources(
     mut commands: Commands,
     device: Res<RenderDevice>,
-    terrain_query: Query<(Entity, &TerrainConfig), With<TerrainConfig>>,
+    terrain_query: Query<(Entity, &TerrainConfig)>,
 ) {
     for (entity, config) in terrain_query.iter() {
-        info!("initializing terrain resources");
-
         commands
             .get_or_spawn(entity)
             .insert(TerrainResources::new(&device, config));

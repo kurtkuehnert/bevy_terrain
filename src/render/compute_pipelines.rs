@@ -1,6 +1,6 @@
 use crate::{
     render::{bind_groups::TerrainBindGroups, culling::CullingBindGroup, layouts::*},
-    GpuQuadtree, PersistentComponents, TerrainConfig,
+    GpuQuadtree, PersistentComponents,
 };
 use bevy::{
     ecs::system::{

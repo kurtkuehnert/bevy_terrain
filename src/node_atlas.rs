@@ -1,5 +1,4 @@
 use crate::{
-    attachments::NodeAttachmentData,
     config::{NodeId, TerrainConfig},
     quadtree::{NodeUpdate, Quadtree},
 };
@@ -10,39 +9,60 @@ use bevy::{
 use lru::LruCache;
 use std::{collections::VecDeque, mem};
 
+/// It is emitted whenever the [`NodeAtlas`] requests loading a node, for it to become active.
 pub struct LoadNodeEvent(pub NodeId);
 
-type AtlasIndex = u16;
+/// Identifier of an active node inside the
+/// [`GpuNodeAtlas`](crate::render::gpu_node_atlas::GpuNodeAtlas).
+pub type AtlasIndex = u16;
 
+/// Stores the data, which will be loaded into the corresponding
+/// [`AtlasAttachment`](crate::render::gpu_node_atlas::AtlasAttachment) once the node
+/// becomes activated.
+#[derive(Clone)]
+pub enum NodeAttachment {
+    Buffer { data: Vec<u8> },
+    Texture { handle: Handle<Image> },
+}
+
+/// Stores all of the [`NodeAttachment`]s of the node, alongside their loading state.
 #[derive(Clone)]
 pub struct NodeData {
+    /// The [`AtlasIndex`] of the node.
     pub(crate) atlas_index: AtlasIndex,
-    pub(crate) loading_attachments: HashSet<String>,
-    pub(crate) attachment_data: HashMap<String, NodeAttachmentData>,
+    /// Stores all of the [`NodeAttachment`]s of the node.
+    pub(crate) attachment_data: HashMap<String, NodeAttachment>,
+    /// The set of still loading [`NodeAttachment`]s. Is empty if the node is fully loaded.
+    loading_attachments: HashSet<String>, // Todo: maybe factor this out?
 }
 
 impl NodeData {
-    pub(crate) fn new(attachments: HashSet<String>) -> Self {
-        Self {
-            atlas_index: NodeAtlas::INACTIVE_ID,
-            loading_attachments: attachments,
-            attachment_data: default(),
-        }
+    /// Sets the attachment data of the node.
+    pub fn set_attachment(&mut self, label: String, attachment: NodeAttachment) {
+        self.attachment_data.insert(label.clone(), attachment);
     }
 
-    /// Returns `true` if all of the nodes attachments have finished loading.
-    pub(crate) fn is_finished(&self) -> bool {
-        self.loading_attachments.is_empty()
+    /// Marks the corresponding [`NodeAttachment`] as loaded.
+    pub fn loaded(&mut self, label: &String) {
+        self.loading_attachments.remove(label);
     }
 }
 
-/// Maps the assets to the corresponding active nodes and tracks the node updates.
+/// Orchestrates the loading and activation/deactivation process of all nodes.
+///
+/// It activates and deactivates nodes according to the decisions of the [`Quadtree`].
+/// Recently deactivated nodes are cached for prompt reactivation, otherwise nodes have to be loaded
+/// first. This happens by sending a [`LoadNodeEvent`] for which [`NodeAttachment`]-loading-systems
+/// can listen.
+///
+/// Each activated node gets assigned a unique [`AtlasIndex`] for accessing the attached data in
+/// the terrain shader.
 #[derive(Component)]
 pub struct NodeAtlas {
     /// Stores the atlas indices, which are not currently taken by the active nodes.
     pub(crate) available_indices: VecDeque<AtlasIndex>,
-    /// Specifies which [`NodeAttachmentData`] to load for each node.
-    pub(crate) attachments: HashSet<String>,
+    /// Specifies which [`NodeAttachment`]s to load for each node.
+    pub(crate) attachments_to_load: HashSet<String>,
     /// Stores the currently loading nodes.
     pub(crate) loading_nodes: HashMap<NodeId, NodeData>,
     /// Stores the currently active nodes.
@@ -54,19 +74,13 @@ pub struct NodeAtlas {
 }
 
 impl NodeAtlas {
-    // pub(crate) const NONEXISTENT_ID: u16 = u16::MAX;
-    pub(crate) const INACTIVE_ID: u16 = u16::MAX - 1;
+    pub(crate) const INACTIVE_INDEX: AtlasIndex = AtlasIndex::MAX - 1;
 
+    /// Creates a new node atlas based on the supplied [`TerrainConfig`].
     pub fn new(config: &TerrainConfig) -> Self {
-        let mut attachments = config
-            .attachments
-            .keys()
-            .map(|label| label.clone())
-            .collect::<HashSet<_>>();
-
         Self {
             available_indices: (0..config.node_atlas_size).collect(),
-            attachments,
+            attachments_to_load: config.attachments_to_load(),
             loading_nodes: default(),
             active_nodes: default(),
             inactive_nodes: LruCache::new(config.cache_size),
@@ -80,11 +94,11 @@ impl NodeAtlas {
         nodes_to_activate: Vec<NodeId>,
         node_updates: &mut Vec<Vec<NodeUpdate>>,
         nodes_activated: &mut HashSet<NodeId>,
-        mut load_events: &mut EventWriter<LoadNodeEvent>,
+        load_events: &mut EventWriter<LoadNodeEvent>,
     ) {
         let NodeAtlas {
             ref mut available_indices,
-            ref mut attachments,
+            ref attachments_to_load,
             ref mut loading_nodes,
             ref mut active_nodes,
             ref mut inactive_nodes,
@@ -101,15 +115,23 @@ impl NodeAtlas {
                     Some((node_id, node))
                 } else {
                     // load node before activation
-                    load_events.send(LoadNodeEvent(node_id)); // Todo: differentiate between different node atlases
-                    loading_nodes.insert(node_id, NodeData::new(attachments.clone()));
+                    load_events.send(LoadNodeEvent(node_id));
+                    loading_nodes.insert(
+                        node_id,
+                        NodeData {
+                            atlas_index: NodeAtlas::INACTIVE_INDEX,
+                            attachment_data: HashMap::new(),
+                            loading_attachments: attachments_to_load.clone(),
+                        },
+                    );
                     None
                 }
             })
             .collect::<Vec<_>>();
 
         // queue all nodes, that have finished loading, for activation
-        activation_queue.extend(loading_nodes.drain_filter(|_id, node| node.is_finished()));
+        activation_queue
+            .extend(loading_nodes.drain_filter(|_id, node| node.loading_attachments.is_empty()));
 
         for (node_id, mut node) in activation_queue {
             // Todo: figure out a cleaner way of dealing with index exhaustion
@@ -145,7 +167,7 @@ impl NodeAtlas {
 
         for (node_id, mut node) in deactivation_queue {
             available_indices.push_front(node.atlas_index);
-            node.atlas_index = Self::INACTIVE_ID;
+            node.atlas_index = Self::INACTIVE_INDEX;
 
             node_updates[TerrainConfig::node_position(node_id).lod as usize].push(NodeUpdate {
                 node_id,
@@ -158,7 +180,7 @@ impl NodeAtlas {
 }
 
 /// Updates the node atlas according to the corresponding quadtree update.
-pub fn update_nodes(
+pub(crate) fn update_nodes(
     mut load_events: EventWriter<LoadNodeEvent>,
     mut terrain_query: Query<(&mut Quadtree, &mut NodeAtlas)>,
 ) {

@@ -1,33 +1,33 @@
-use crate::attachments::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk};
-use crate::node_atlas::LoadNodeEvent;
-use crate::render::gpu_node_atlas::{initialize_gpu_node_atlas, update_gpu_node_atlas};
 use crate::{
+    attachments::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk},
     config::TerrainConfig,
-    node_atlas::update_nodes,
-    persistent_component::{PersistentComponentPlugin, PersistentComponents},
+    node_atlas::{update_nodes, LoadNodeEvent},
     quadtree::traverse_quadtree,
     render::{
         bind_groups::{init_terrain_bind_groups, TerrainBindGroups},
         compute_pipelines::{TerrainComputeNode, TerrainComputePipelines},
         culling::queue_terrain_culling_bind_group,
         extract_terrain,
-        gpu_node_atlas::{queue_node_attachment_updates, GpuNodeAtlas},
-        gpu_quadtree::{queue_quadtree_updates, GpuQuadtree},
+        gpu_node_atlas::{
+            initialize_gpu_node_atlas, queue_node_atlas_updates, update_gpu_node_atlas,
+            GpuNodeAtlas,
+        },
+        gpu_quadtree::{
+            initialize_gpu_quadtree, queue_quadtree_updates, update_gpu_quadtree, GpuQuadtree,
+        },
         queue_terrain,
         render_pipeline::TerrainRenderPipeline,
         resources::initialize_terrain_resources,
-        DrawTerrain,
+        DrawTerrain, PersistentComponents,
     },
 };
-use bevy::ecs::query::QueryItem;
-use bevy::ecs::system::lifetimeless::Read;
-use bevy::render::render_component::ExtractComponent;
 use bevy::{
     core_pipeline::{node::MAIN_PASS_DEPENDENCIES, Opaque3d},
+    ecs::{query::QueryItem, system::lifetimeless::Read},
     prelude::*,
     reflect::TypeUuid,
     render::{
-        render_component::ExtractComponentPlugin,
+        render_component::{ExtractComponent, ExtractComponentPlugin},
         render_graph::RenderGraph,
         render_phase::AddRenderCommand,
         render_resource::{SpecializedComputePipelines, SpecializedRenderPipelines},
@@ -39,11 +39,19 @@ pub mod attachments;
 pub mod bundles;
 pub mod config;
 pub mod node_atlas;
-pub mod persistent_component;
 pub mod preprocess;
 pub mod quadtree;
 pub mod render;
 pub mod viewer;
+
+const CONFIG_HANDLE: HandleUntyped =
+    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 907665645684322571);
+const NODE_HANDLE: HandleUntyped =
+    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 456563743231345678);
+const PATCH_HANDLE: HandleUntyped =
+    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 556563744564564658);
+const PARAMETERS_HANDLE: HandleUntyped =
+    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 656456784512075658);
 
 #[derive(Clone, Copy, Component)]
 pub struct Terrain;
@@ -56,15 +64,6 @@ impl ExtractComponent for Terrain {
         *item
     }
 }
-
-const CONFIG_HANDLE: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 907665645684322571);
-const NODE_HANDLE: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 456563743231345678);
-const PATCH_HANDLE: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 556563744564564658);
-const PARAMETERS_HANDLE: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 656456784512075658);
 
 pub struct TerrainPlugin;
 
@@ -92,8 +91,6 @@ impl Plugin for TerrainPlugin {
 
         app.add_plugin(ExtractComponentPlugin::<Terrain>::default())
             .add_plugin(ExtractComponentPlugin::<TerrainConfig>::default())
-            .add_plugin(PersistentComponentPlugin::<GpuQuadtree>::default())
-            // .add_plugin(PersistentComponentPlugin::<GpuNodeAtlas>::default())
             .add_event::<LoadNodeEvent>()
             .add_system(traverse_quadtree.before(update_nodes))
             .add_system(update_nodes)
@@ -108,16 +105,19 @@ impl Plugin for TerrainPlugin {
             .init_resource::<TerrainRenderPipeline>()
             .init_resource::<SpecializedRenderPipelines<TerrainRenderPipeline>>()
             .init_resource::<PersistentComponents<TerrainBindGroups>>()
+            .init_resource::<PersistentComponents<GpuQuadtree>>()
             .init_resource::<PersistentComponents<GpuNodeAtlas>>()
             .add_system_to_stage(RenderStage::Extract, extract_terrain)
+            .add_system_to_stage(RenderStage::Extract, update_gpu_quadtree)
             .add_system_to_stage(RenderStage::Extract, update_gpu_node_atlas)
             .add_system_to_stage(RenderStage::Prepare, initialize_terrain_resources)
+            .add_system_to_stage(RenderStage::Prepare, initialize_gpu_quadtree)
             .add_system_to_stage(RenderStage::Prepare, initialize_gpu_node_atlas)
             .add_system_to_stage(RenderStage::Queue, init_terrain_bind_groups)
             .add_system_to_stage(RenderStage::Queue, queue_terrain)
             .add_system_to_stage(RenderStage::Queue, queue_quadtree_updates)
-            .add_system_to_stage(RenderStage::Queue, queue_terrain_culling_bind_group)
-            .add_system_to_stage(RenderStage::Queue, queue_node_attachment_updates);
+            .add_system_to_stage(RenderStage::Queue, queue_node_atlas_updates)
+            .add_system_to_stage(RenderStage::Queue, queue_terrain_culling_bind_group);
 
         let compute_node = TerrainComputeNode::from_world(&mut render_app.world);
 

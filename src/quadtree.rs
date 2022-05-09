@@ -12,10 +12,11 @@ use itertools::iproduct;
 use std::mem;
 
 /// An update to the [`GpuQuadtree`](crate::render::gpu_quadtree::GpuQuadtree).
-/// This update is created whenever a node gets activate/deactivated by the [`NodeAtlas`](crate::node_atlas::NodeAtlas).
+/// This update is created whenever a node becomes activated/deactivated by
+/// the [`NodeAtlas`](crate::node_atlas::NodeAtlas).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, Zeroable, Pod)]
-pub(crate) struct NodeUpdate {
+pub struct NodeUpdate {
     /// The id of the updated node.
     pub(crate) node_id: NodeId,
     /// The new atlas index of the node.
@@ -27,8 +28,8 @@ pub(crate) struct NodeUpdate {
 enum NodeState {
     /// This node does not exist. Useful for sparse terrains, which are not rectangular in shape.
     Nonexistent,
-    /// The node is not part of the [`NodeAtlas`](crate::node_atlas::NodeAtlas) and therefore not available for rendering.
-    /// It may or may not be loaded.
+    /// The node is not part of the [`NodeAtlas`](crate::node_atlas::NodeAtlas) and therefore
+    /// not available for rendering. It may or may not be loaded.
     Inactive,
     /// The node is scheduled for activation, but was not confirmed to be fully loaded and thus
     /// part of the [`NodeAtlas`](crate::node_atlas::NodeAtlas) yet.
@@ -110,7 +111,7 @@ impl TreeNode {
     }
 }
 
-/// Stores all of the [`TreeNode`]s of a terrain and decides which nodes to activate/deactivate.
+/// Stores all of the tree nodes of a terrain and decides which nodes to activate/deactivate.
 /// Additionally it tracks all [`NodeUpdate`]s, which are send to the GPU by the
 /// [`GpuQuadtree`](crate::render::gpu_quadtree::GpuQuadtree).
 #[derive(Component)]
@@ -175,7 +176,7 @@ impl Quadtree {
 }
 
 /// Traverses all quadtrees and marks all nodes to activate/deactivate.
-pub fn traverse_quadtree(
+pub(crate) fn traverse_quadtree(
     viewer_query: Query<(&GlobalTransform, &ViewDistance), With<Camera>>,
     mut terrain_query: Query<(&GlobalTransform, &mut Quadtree)>,
 ) {

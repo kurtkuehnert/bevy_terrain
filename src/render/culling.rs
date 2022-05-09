@@ -1,4 +1,4 @@
-use crate::{Terrain, TerrainComputePipelines, TerrainConfig};
+use crate::{Terrain, TerrainComputePipelines};
 use bevy::{
     core::cast_slice,
     pbr::MeshUniform,

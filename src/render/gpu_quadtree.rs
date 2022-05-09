@@ -1,21 +1,17 @@
 use crate::{
-    config::{NodeId, TerrainConfig},
+    config::TerrainConfig,
     node_atlas::NodeAtlas,
-    persistent_component::PersistentComponent,
     quadtree::{NodeUpdate, Quadtree},
-    render::layouts::NODE_UPDATE_SIZE,
-    PersistentComponents, Terrain, TerrainComputePipelines,
+    render::{layouts::NODE_UPDATE_SIZE, PersistentComponents},
+    Terrain, TerrainComputePipelines,
 };
 use bevy::{
     core::cast_slice,
-    ecs::{
-        query::QueryItem,
-        system::{lifetimeless::*, SystemParamItem},
-    },
     prelude::*,
     render::{
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
+        RenderWorld,
     },
 };
 use image::EncodableLayout;
@@ -26,12 +22,12 @@ use std::{mem, num::NonZeroU32};
 pub struct GpuQuadtree {
     /// Readonly view of the entire quadtree, with all of its layers.
     pub(crate) view: TextureView,
-    /// The node id, the node update buffer and its bind group for each layer of the quadtree
+    /// The node update count, buffer and its bind group for each layer of the quadtree
     /// used during the quadtree update pipeline.
-    pub(crate) update: Vec<(NodeId, Buffer, BindGroup)>,
+    pub(crate) update: Vec<(u32, Buffer, BindGroup)>,
     /// All newly generate updates of nodes, which were activated or deactivated.
     /// (Taken from the [`Quadtree`] each frame.)
-    node_updates: Vec<Vec<NodeUpdate>>,
+    node_updates: Vec<Vec<NodeUpdate>>, // Todo: consider own component
 }
 
 impl GpuQuadtree {
@@ -57,7 +53,7 @@ impl GpuQuadtree {
         device: &RenderDevice,
         queue: &RenderQueue,
     ) -> (Texture, TextureView) {
-        let data = vec![NodeAtlas::INACTIVE_ID; config.node_count as usize];
+        let data = vec![NodeAtlas::INACTIVE_INDEX; config.node_count as usize];
 
         let quadtree = device.create_texture_with_data(
             queue,
@@ -142,29 +138,39 @@ impl GpuQuadtree {
     }
 }
 
-impl PersistentComponent for GpuQuadtree {
-    type InitializeParam = (
-        SRes<RenderDevice>,
-        SRes<RenderQueue>,
-        SRes<TerrainComputePipelines>,
-    );
-    type InitializeQuery = Read<TerrainConfig>;
-    type UpdateQuery = Write<Quadtree>;
-    type UpdateFilter = ();
-
-    /// Initializes the [`GpuQuadtree`] of the newly created terrains.
-    fn initialize_component(
-        config: QueryItem<Self::InitializeQuery>,
-        (device, queue, compute_pipelines): &mut SystemParamItem<Self::InitializeParam>,
-    ) -> Self {
-        Self::new(config, &device, &queue, &compute_pipelines)
+/// Initializes the [`GpuQuadtree`] of newly created terrains.
+pub(crate) fn initialize_gpu_quadtree(
+    mut quadtrees: ResMut<PersistentComponents<GpuQuadtree>>,
+    device: Res<RenderDevice>,
+    queue: Res<RenderQueue>,
+    compute_pipelines: Res<TerrainComputePipelines>,
+    mut terrain_query: Query<(Entity, &TerrainConfig)>,
+) {
+    for (entity, config) in terrain_query.iter_mut() {
+        quadtrees.insert(
+            entity,
+            GpuQuadtree::new(config, &device, &queue, &compute_pipelines),
+        );
     }
+}
 
-    /// Extracts the [`NodeUpdate`]s generated this frame from the [`Quadtree`] to the [`GpuQuadtree`].
-    fn update_component(&mut self, mut quadtree: QueryItem<Self::UpdateQuery>) {
-        self.node_updates = mem::replace(
+/// Extracts the new nodes updates for all [`GpuQuadtree`]s by copying them over from their
+/// corresponding [`Quadtree`]s.
+pub(crate) fn update_gpu_quadtree(
+    mut render_world: ResMut<RenderWorld>,
+    mut terrain_query: Query<(Entity, &mut Quadtree)>,
+) {
+    let mut gpu_quadtrees = render_world.resource_mut::<PersistentComponents<GpuQuadtree>>();
+
+    for (entity, mut quadtree) in terrain_query.iter_mut() {
+        let gpu_quadtree = match gpu_quadtrees.get_mut(&entity) {
+            Some(gpu_quadtree) => gpu_quadtree,
+            None => continue,
+        };
+
+        gpu_quadtree.node_updates = mem::replace(
             &mut quadtree.node_updates,
-            vec![default(); self.update.len()],
+            vec![default(); gpu_quadtree.update.len()],
         );
     }
 }
