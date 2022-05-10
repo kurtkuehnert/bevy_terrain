@@ -1,6 +1,6 @@
 use crate::render::render_data::{initialize_terrain_render_data, TerrainRenderData};
 use crate::{
-    attachments::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk},
+    attachment_loader::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk},
     config::TerrainConfig,
     node_atlas::{update_nodes, LoadNodeEvent},
     quadtree::traverse_quadtree,
@@ -36,7 +36,7 @@ use bevy::{
     },
 };
 
-pub mod attachments;
+pub mod attachment_loader;
 pub mod bundles;
 pub mod config;
 pub mod node_atlas;
@@ -44,6 +44,11 @@ pub mod preprocess;
 pub mod quadtree;
 pub mod render;
 pub mod viewer;
+
+use bevy::utils::define_label;
+define_label!(AttachmentLabel);
+
+pub(crate) type BoxedAttachmentLabel = Box<dyn AttachmentLabel>;
 
 const CONFIG_HANDLE: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 907665645684322571);
@@ -117,7 +122,10 @@ impl Plugin for TerrainPlugin {
             .add_system_to_stage(RenderStage::Prepare, initialize_gpu_node_atlas)
             .add_system_to_stage(RenderStage::Queue, initialize_terrain_compute_data)
             .add_system_to_stage(RenderStage::Queue, initialize_terrain_render_data)
-            .add_system_to_stage(RenderStage::Queue, queue_terrain)
+            .add_system_to_stage(
+                RenderStage::Queue,
+                queue_terrain.after(initialize_terrain_render_data),
+            )
             .add_system_to_stage(RenderStage::Queue, queue_quadtree_updates)
             .add_system_to_stage(RenderStage::Queue, queue_node_atlas_updates)
             .add_system_to_stage(RenderStage::Queue, queue_terrain_culling_bind_group);
