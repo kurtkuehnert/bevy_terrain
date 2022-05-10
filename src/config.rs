@@ -57,11 +57,7 @@ impl TerrainConfig {
     pub const PATCH_COUNT: u32 = 8;
     pub const PATCHES_PER_NODE: u32 = 64;
 
-    pub fn add_node_attachment_config(
-        &mut self,
-        label: String,
-        attachment_config: AtlasAttachmentConfig,
-    ) {
+    pub fn add_attachment(&mut self, label: String, attachment_config: AtlasAttachmentConfig) {
         self.attachments.insert(label, attachment_config);
     }
 
