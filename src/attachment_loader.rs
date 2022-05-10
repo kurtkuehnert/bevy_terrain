@@ -1,6 +1,7 @@
 use crate::{
+    attachment::{AttachmentIndex, NodeAttachment},
     config::NodeId,
-    node_atlas::{LoadNodeEvent, NodeAtlas, NodeAttachment},
+    node_atlas::{LoadNodeEvent, NodeAtlas},
 };
 use bevy::{
     asset::{AssetServer, HandleId, LoadState},
@@ -16,14 +17,18 @@ pub struct TextureAttachmentFromDisk {
 
 #[derive(Default, Component)]
 pub struct TextureAttachmentFromDiskLoader {
-    pub attachments: HashMap<String, TextureAttachmentFromDisk>,
+    pub attachments: HashMap<AttachmentIndex, TextureAttachmentFromDisk>,
     /// Maps the id of an asset to the corresponding node id.
-    pub handle_mapping: HashMap<HandleId, (NodeId, String)>,
+    pub handle_mapping: HashMap<HandleId, (NodeId, AttachmentIndex)>,
 }
 
 impl TextureAttachmentFromDiskLoader {
-    pub fn add_attachment(&mut self, label: String, attachment: TextureAttachmentFromDisk) {
-        self.attachments.insert(label, attachment);
+    pub fn add_attachment(
+        &mut self,
+        attachment_index: AttachmentIndex,
+        attachment: TextureAttachmentFromDisk,
+    ) {
+        self.attachments.insert(attachment_index, attachment);
     }
 }
 
@@ -41,16 +46,17 @@ pub fn start_loading_attachment_from_disk(
         for &LoadNodeEvent(node_id) in load_events.iter() {
             let node = node_atlas.loading_nodes.get_mut(&node_id).unwrap();
 
-            for (label, TextureAttachmentFromDisk { ref path, .. }) in attachments.iter() {
+            for (attachment_index, TextureAttachmentFromDisk { ref path, .. }) in attachments.iter()
+            {
                 let handle: Handle<Image> = asset_server.load(&format!("{path}/{node_id}.png"));
 
                 if asset_server.get_load_state(handle.clone()) == LoadState::Loaded {
-                    node.loaded(label);
+                    node.loaded(attachment_index);
                 } else {
-                    handle_mapping.insert(handle.id, (node_id, label.clone()));
+                    handle_mapping.insert(handle.id, (node_id, attachment_index.clone()));
                 };
 
-                node.set_attachment(label.clone(), NodeAttachment::Texture { handle });
+                node.set_attachment(attachment_index.clone(), NodeAttachment::Texture { handle });
             }
         }
     }

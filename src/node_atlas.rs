@@ -1,4 +1,5 @@
 use crate::{
+    attachment::{AtlasAttachmentConfig, AttachmentIndex, NodeAttachment},
     config::{NodeId, TerrainConfig},
     quadtree::{NodeUpdate, Quadtree},
 };
@@ -12,18 +13,8 @@ use std::{collections::VecDeque, mem};
 /// It is emitted whenever the [`NodeAtlas`] requests loading a node, for it to become active.
 pub struct LoadNodeEvent(pub NodeId);
 
-/// Identifier of an active node inside the
-/// [`GpuNodeAtlas`](crate::render::gpu_node_atlas::GpuNodeAtlas).
+/// Identifier of an active node (and its attachments) inside the node atlas.
 pub type AtlasIndex = u16;
-
-/// Stores the data, which will be loaded into the corresponding
-/// [`AtlasAttachment`](crate::render::gpu_node_atlas::AtlasAttachment) once the node
-/// becomes activated.
-#[derive(Clone)]
-pub enum NodeAttachment {
-    Buffer { data: Vec<u8> },
-    Texture { handle: Handle<Image> },
-}
 
 /// Stores all of the [`NodeAttachment`]s of the node, alongside their loading state.
 #[derive(Clone)]
@@ -31,20 +22,25 @@ pub struct NodeData {
     /// The [`AtlasIndex`] of the node.
     pub(crate) atlas_index: AtlasIndex,
     /// Stores all of the [`NodeAttachment`]s of the node.
-    pub(crate) attachment_data: HashMap<String, NodeAttachment>,
+    pub(crate) attachment_data: HashMap<AttachmentIndex, NodeAttachment>,
     /// The set of still loading [`NodeAttachment`]s. Is empty if the node is fully loaded.
-    loading_attachments: HashSet<String>, // Todo: maybe factor this out?
+    loading_attachments: HashSet<AttachmentIndex>, // Todo: maybe factor this out?
 }
 
 impl NodeData {
     /// Sets the attachment data of the node.
-    pub fn set_attachment(&mut self, label: String, attachment: NodeAttachment) {
-        self.attachment_data.insert(label.clone(), attachment);
+    pub fn set_attachment(
+        &mut self,
+        attachment_index: AttachmentIndex,
+        attachment: NodeAttachment,
+    ) {
+        self.attachment_data
+            .insert(attachment_index.clone(), attachment);
     }
 
     /// Marks the corresponding [`NodeAttachment`] as loaded.
-    pub fn loaded(&mut self, label: &String) {
-        self.loading_attachments.remove(label);
+    pub fn loaded(&mut self, attachment_index: &AttachmentIndex) {
+        self.loading_attachments.remove(attachment_index);
     }
 }
 
@@ -62,7 +58,7 @@ pub struct NodeAtlas {
     /// Stores the atlas indices, which are not currently taken by the active nodes.
     pub(crate) available_indices: VecDeque<AtlasIndex>,
     /// Specifies which [`NodeAttachment`]s to load for each node.
-    pub(crate) attachments_to_load: HashSet<String>,
+    pub(crate) attachments_to_load: HashSet<AttachmentIndex>,
     /// Stores the currently loading nodes.
     pub(crate) loading_nodes: HashMap<NodeId, NodeData>,
     /// Stores the currently active nodes.
@@ -78,9 +74,18 @@ impl NodeAtlas {
 
     /// Creates a new node atlas based on the supplied [`TerrainConfig`].
     pub fn new(config: &TerrainConfig) -> Self {
+        let attachments_to_load = config
+            .attachments
+            .iter()
+            .filter_map(|(&attachment_index, config)| match config {
+                AtlasAttachmentConfig::Sampler { .. } => None,
+                _ => Some(attachment_index),
+            })
+            .collect();
+
         Self {
             available_indices: (0..config.node_atlas_size).collect(),
-            attachments_to_load: config.attachments_to_load(),
+            attachments_to_load,
             loading_nodes: default(),
             active_nodes: default(),
             inactive_nodes: LruCache::new(config.cache_size),

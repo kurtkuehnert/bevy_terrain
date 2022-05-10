@@ -1,9 +1,9 @@
-use crate::render::gpu_node_atlas::AtlasAttachmentConfig;
+use crate::attachment::{AtlasAttachmentConfig, AttachmentIndex};
 use bevy::{
     ecs::{query::QueryItem, system::lifetimeless::Read},
     prelude::*,
     render::{render_component::ExtractComponent, render_resource::std140::AsStd140},
-    utils::{HashMap, HashSet},
+    utils::HashMap,
 };
 use itertools::{iproduct, Product};
 use std::ops::Range;
@@ -24,7 +24,6 @@ pub(crate) struct TerrainConfigUniform {
     patch_size: u32,
     chunk_size: u32,
     chunk_count: UVec2,
-    texture_size: u32,
     area_size: u32,
     area_count: UVec2,
     terrain_size: UVec2,
@@ -50,15 +49,19 @@ pub struct TerrainConfig {
     pub height: f32,
     pub node_atlas_size: u16,
     pub cache_size: usize,
-    pub attachments: HashMap<String, AtlasAttachmentConfig>,
+    pub attachments: HashMap<AttachmentIndex, AtlasAttachmentConfig>,
 }
 
 impl TerrainConfig {
     pub const PATCH_COUNT: u32 = 8;
     pub const PATCHES_PER_NODE: u32 = 64;
 
-    pub fn add_attachment(&mut self, label: String, attachment_config: AtlasAttachmentConfig) {
-        self.attachments.insert(label, attachment_config);
+    pub fn add_attachment(
+        &mut self,
+        attachment_index: AttachmentIndex,
+        attachment_config: AtlasAttachmentConfig,
+    ) {
+        self.attachments.insert(attachment_index, attachment_config);
     }
 
     pub fn new(
@@ -101,7 +104,6 @@ impl TerrainConfig {
             lod_count: self.lod_count,
             chunk_size: self.chunk_size,
             chunk_count: self.chunk_count,
-            texture_size: self.texture_size,
             patch_size: self.patch_size,
             vertices_per_row: self.vertices_per_row,
             area_count: self.area_count,
@@ -147,16 +149,6 @@ impl TerrainConfig {
             x: (id >> 14) & 0x3FFF,
             y: id & 0x3FFF,
         }
-    }
-
-    pub(crate) fn attachments_to_load(&self) -> HashSet<String> {
-        self.attachments
-            .iter()
-            .filter_map(|(label, config)| match config {
-                AtlasAttachmentConfig::Sampler { .. } => None,
-                _ => Some(label.clone()),
-            })
-            .collect()
     }
 }
 

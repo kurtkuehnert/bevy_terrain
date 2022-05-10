@@ -74,8 +74,8 @@ impl TerrainRenderData {
         entries.extend(
             gpu_node_atlas
                 .atlas_attachments
-                .values()
-                .map(|attachment| attachment.layout()),
+                .iter()
+                .map(|(&binding, attachment)| attachment.layout_entry(binding)),
         );
 
         device.create_bind_group_layout(&BindGroupLayoutDescriptor {
@@ -104,8 +104,8 @@ impl TerrainRenderData {
         entries.extend(
             gpu_node_atlas
                 .atlas_attachments
-                .values()
-                .map(|attachment| attachment.binding()),
+                .iter()
+                .map(|(&binding, attachment)| attachment.bind_group_entry(binding)),
         );
 
         device.create_bind_group(&BindGroupDescriptor {
