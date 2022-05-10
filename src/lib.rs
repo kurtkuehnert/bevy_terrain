@@ -1,4 +1,3 @@
-use crate::render::render_data::{initialize_terrain_render_data, TerrainRenderData};
 use crate::{
     attachment_loader::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk},
     config::TerrainConfig,
@@ -17,6 +16,7 @@ use crate::{
             initialize_gpu_quadtree, queue_quadtree_updates, update_gpu_quadtree, GpuQuadtree,
         },
         queue_terrain,
+        render_data::{initialize_terrain_render_data, TerrainRenderData},
         render_pipeline::TerrainRenderPipeline,
         resources::initialize_terrain_resources,
         DrawTerrain, PersistentComponents,
@@ -36,6 +36,7 @@ use bevy::{
     },
 };
 
+pub mod attachment;
 pub mod attachment_loader;
 pub mod bundles;
 pub mod config;
@@ -44,11 +45,6 @@ pub mod preprocess;
 pub mod quadtree;
 pub mod render;
 pub mod viewer;
-
-use bevy::utils::define_label;
-define_label!(AttachmentLabel);
-
-pub(crate) type BoxedAttachmentLabel = Box<dyn AttachmentLabel>;
 
 const CONFIG_HANDLE: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 907665645684322571);

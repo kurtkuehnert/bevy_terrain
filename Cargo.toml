@@ -9,7 +9,6 @@ default = []
 [dependencies]
 bevy = { git = "https://github.com/ku95/bevy", branch = "texture-formats" }
 # bevy-inspector-egui = { git="https://github.com/jakobhellermann/bevy-inspector-egui" }
-bevy_utils = "0.7.0"
 
 itertools = "*"
 image = "*"

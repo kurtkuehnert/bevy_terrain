@@ -5,7 +5,6 @@ struct TerrainConfig {
     patch_size: u32;
     chunk_size: u32;
     chunk_count: vec2<u32>;
-    texture_size: u32;
     area_size: u32;
     area_count: vec2<u32>;
     terrain_size: vec2<u32>;
