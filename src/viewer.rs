@@ -12,7 +12,7 @@ pub struct ViewDistance {
 
 impl Default for ViewDistance {
     fn default() -> Self {
-        Self { view_distance: 8.0 }
+        Self { view_distance: 2.0 }
     }
 }
 

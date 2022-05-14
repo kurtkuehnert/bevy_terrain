@@ -19,7 +19,7 @@ var<storage> node_list: NodeList;
 [[group(0), binding(4)]]
 var<storage, read_write> patch_list: PatchList;
 [[group(0), binding(5)]]
-var lod_map: texture_2d<u32>;
+var atlas_map: texture_2d<u32>;
 [[group(1), binding(0)]]
 var<uniform> cull_data: CullData;
 
@@ -33,19 +33,19 @@ fn calculate_lod_transition(patch_id: vec2<u32>, node_position: NodePosition, sc
     var lod_delta = 0u;
 
     if (patch_id.x == 0u) {
-        let left_lod = i32(textureLoad(lod_map, position + vec2<i32>(-1, 0), 0).x);
+        let left_lod = i32(textureLoad(atlas_map, position + vec2<i32>(-1, 0), 0).x);
         lod_delta = lod_delta | (u32(max(left_lod - lod, 0)) << 12u);
     }
     if (patch_id.y == 0u) {
-        let top_lod = i32(textureLoad(lod_map, position + vec2<i32>(0, -1), 0).x);
+        let top_lod = i32(textureLoad(atlas_map, position + vec2<i32>(0, -1), 0).x);
         lod_delta = lod_delta | (u32(max(top_lod - lod, 0)) << 8u);
     }
     if (patch_id.x == 7u) {
-        let right_lod = i32(textureLoad(lod_map, position + vec2<i32>(i32(scale), 0), 0).x);
+        let right_lod = i32(textureLoad(atlas_map, position + vec2<i32>(i32(scale), 0), 0).x);
         lod_delta = lod_delta | (u32(max(right_lod - lod, 0)) << 4u);
     }
     if (patch_id.y == 7u) {
-        let bottom_lod = i32(textureLoad(lod_map, position + vec2<i32>(0, i32(scale)), 0).x);
+        let bottom_lod = i32(textureLoad(atlas_map, position + vec2<i32>(0, i32(scale)), 0).x);
         lod_delta = lod_delta | u32(max(bottom_lod - lod, 0));
     }
 

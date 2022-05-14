@@ -11,12 +11,10 @@ var<storage, read_write> parameters: Parameters;
 [[group(0), binding(3)]]
 var<storage> node_list: NodeList;
 [[group(0), binding(4)]]
-var lod_map: texture_storage_2d<r8uint, write>;
-[[group(0), binding(5)]]
-var atlas_map: texture_storage_2d<r16uint, write>;
+var atlas_map: texture_storage_2d<rgba8uint, write>;
 
 [[stage(compute), workgroup_size(1, 1, 1)]]
-fn build_chunk_maps(
+fn build_atlas_map(
     [[builtin(global_invocation_id)]] invocation_id: vec3<u32>
 ) {
     let chunk_index = invocation_id.x;
@@ -54,6 +52,5 @@ fn build_chunk_maps(
 
     let atlas_index = textureLoad(quadtree, vec2<i32>(i32(node_position.x), i32(node_position.y)), i32(node_position.lod)).x;
 
-    textureStore(lod_map, chunk_position, vec4<u32>(node_position.lod));
-    textureStore(atlas_map, chunk_position, vec4<u32>(atlas_index));
+    textureStore(atlas_map, chunk_position, vec4<u32>(node_position.lod, atlas_index / 256u, atlas_index % 256u, 0u));
 }

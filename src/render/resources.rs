@@ -15,7 +15,6 @@ pub struct TerrainResources {
     pub(crate) temp_node_buffers: [Buffer; 2],
     pub(crate) final_node_buffer: Buffer,
     pub(crate) patch_buffer: Buffer,
-    pub(crate) lod_map_view: TextureView,
     pub(crate) atlas_map_view: TextureView,
 }
 
@@ -26,7 +25,7 @@ impl TerrainResources {
         let config_buffer = Self::create_config_buffer(device, config);
         let (temp_node_buffers, final_node_buffer) = Self::create_node_buffers(device, config);
         let patch_buffer = Self::create_patch_buffer(device, config);
-        let (lod_map_view, atlas_map_view) = Self::create_chunk_maps(device, config);
+        let atlas_map_view = Self::create_atlas_map(device, config);
 
         Self {
             indirect_buffer,
@@ -35,7 +34,6 @@ impl TerrainResources {
             temp_node_buffers,
             final_node_buffer,
             patch_buffer,
-            lod_map_view,
             atlas_map_view,
         }
     }
@@ -96,26 +94,7 @@ impl TerrainResources {
         device.create_buffer(&buffer_descriptor)
     }
 
-    fn create_chunk_maps(
-        device: &RenderDevice,
-        config: &TerrainConfig,
-    ) -> (TextureView, TextureView) {
-        let lod_map = device.create_texture(&TextureDescriptor {
-            label: "lod_map".into(),
-            size: Extent3d {
-                width: config.chunk_count.x,
-                height: config.chunk_count.y,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            format: TextureFormat::R8Uint,
-            usage: TextureUsages::COPY_DST
-                | TextureUsages::STORAGE_BINDING
-                | TextureUsages::TEXTURE_BINDING,
-        });
-
+    fn create_atlas_map(device: &RenderDevice, config: &TerrainConfig) -> TextureView {
         let atlas_map = device.create_texture(&TextureDescriptor {
             label: "atlas_map".into(),
             size: Extent3d {
@@ -126,35 +105,19 @@ impl TerrainResources {
             mip_level_count: 1,
             sample_count: 1,
             dimension: TextureDimension::D2,
-            format: TextureFormat::R16Uint,
+            format: TextureFormat::Rgba8Uint,
             usage: TextureUsages::COPY_DST
                 | TextureUsages::STORAGE_BINDING
                 | TextureUsages::TEXTURE_BINDING,
         });
 
-        let lod_map_view = lod_map.create_view(&TextureViewDescriptor {
-            label: "lod_map_view".into(),
-            format: Some(TextureFormat::R8Uint),
-            dimension: Some(TextureViewDimension::D2),
-            aspect: TextureAspect::All,
-            base_mip_level: 0,
-            mip_level_count: None,
-            base_array_layer: 0,
-            array_layer_count: None,
-        });
-
         let atlas_map_view = atlas_map.create_view(&TextureViewDescriptor {
             label: "atlas_map_view".into(),
-            format: Some(TextureFormat::R16Uint),
-            dimension: Some(TextureViewDimension::D2),
-            aspect: TextureAspect::All,
-            base_mip_level: 0,
-            mip_level_count: None,
-            base_array_layer: 0,
-            array_layer_count: None,
+            // dimension: Some(TextureViewDimension::D2),
+            ..default()
         });
 
-        (lod_map_view, atlas_map_view)
+        atlas_map_view
     }
 }
 
