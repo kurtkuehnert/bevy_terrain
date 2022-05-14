@@ -74,7 +74,7 @@ impl TerrainConfig {
     ) -> Self {
         let patch_size = chunk_size / Self::PATCH_COUNT;
         let area_size = chunk_size * (1 << (lod_count - 1));
-        let texture_size = chunk_size + 1;
+        let texture_size = chunk_size;
         let terrain_size = area_count * area_size;
         let chunk_count = area_count * (1 << (lod_count - 1));
         let vertices_per_row = (patch_size + 2) << 1;

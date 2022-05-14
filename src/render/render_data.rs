@@ -61,7 +61,7 @@ impl TerrainRenderData {
             },
             BindGroupLayoutEntry {
                 binding: 1,
-                visibility: ShaderStages::VERTEX,
+                visibility: ShaderStages::VERTEX_FRAGMENT,
                 ty: BindingType::Texture {
                     sample_type: TextureSampleType::Uint,
                     view_dimension: TextureViewDimension::D2,

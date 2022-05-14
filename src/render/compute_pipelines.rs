@@ -20,7 +20,7 @@ use strum_macros::{EnumCount, EnumIter};
 #[derive(Copy, Clone, Hash, PartialEq, Eq, EnumIter, EnumCount)]
 pub enum TerrainComputePipelineKey {
     UpdateQuadtree,
-    BuildChunkMaps,
+    BuildAtlasMap,
     BuildAreaList,
     BuildNodeList,
     BuildChunkList,
@@ -36,13 +36,13 @@ pub struct TerrainComputePipelines {
     pub(crate) update_quadtree_layout: BindGroupLayout,
     pub(crate) build_node_list_layout: BindGroupLayout,
     pub(crate) build_patch_list_layout: BindGroupLayout,
-    pub(crate) build_chunk_maps_layout: BindGroupLayout,
+    pub(crate) build_atlas_map_layout: BindGroupLayout,
     pub(crate) cull_data_layout: BindGroupLayout,
     prepare_indirect_shader: Handle<Shader>,
     update_quadtree_shader: Handle<Shader>,
     build_node_list_shader: Handle<Shader>,
     build_patch_list_shader: Handle<Shader>,
-    build_chunk_maps_shader: Handle<Shader>,
+    build_atlas_map_shader: Handle<Shader>,
 }
 
 impl FromWorld for TerrainComputePipelines {
@@ -54,7 +54,7 @@ impl FromWorld for TerrainComputePipelines {
         let update_quadtree_layout = device.create_bind_group_layout(&UPDATE_QUADTREE_LAYOUT);
         let build_node_list_layout = device.create_bind_group_layout(&BUILD_NODE_LIST_LAYOUT);
         let build_patch_list_layout = device.create_bind_group_layout(&BUILD_PATCH_LIST_LAYOUT);
-        let build_chunk_maps_layout = device.create_bind_group_layout(&BUILD_CHUNK_MAPS_LAYOUT);
+        let build_atlas_map_layout = device.create_bind_group_layout(&BUILD_ATLAS_MAP_LAYOUT);
         let cull_data_layout = device.create_bind_group_layout(&CULL_DATA_LAYOUT);
 
         let prepare_indirect_shader =
@@ -65,21 +65,21 @@ impl FromWorld for TerrainComputePipelines {
             asset_server.load("../plugins/bevy_terrain/src/render/shaders/build_node_list.wgsl");
         let build_patch_list_shader =
             asset_server.load("../plugins/bevy_terrain/src/render/shaders/build_patch_list.wgsl");
-        let build_chunk_maps_shader =
-            asset_server.load("../plugins/bevy_terrain/src/render/shaders/build_chunk_maps.wgsl");
+        let build_atlas_map_shader =
+            asset_server.load("../plugins/bevy_terrain/src/render/shaders/build_atlas_map.wgsl");
 
         TerrainComputePipelines {
             prepare_indirect_layout,
             update_quadtree_layout,
             build_node_list_layout,
             build_patch_list_layout,
-            build_chunk_maps_layout,
+            build_atlas_map_layout,
             cull_data_layout,
             prepare_indirect_shader,
             update_quadtree_shader,
             build_node_list_shader,
             build_patch_list_shader,
-            build_chunk_maps_shader,
+            build_atlas_map_shader,
         }
     }
 }
@@ -98,10 +98,10 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
                 shader = self.update_quadtree_shader.clone();
                 entry_point = "update_quadtree".into();
             }
-            TerrainComputePipelineKey::BuildChunkMaps => {
-                layout = Some(vec![self.build_chunk_maps_layout.clone()]);
-                shader = self.build_chunk_maps_shader.clone_weak();
-                entry_point = "build_chunk_maps".into();
+            TerrainComputePipelineKey::BuildAtlasMap => {
+                layout = Some(vec![self.build_atlas_map_layout.clone()]);
+                shader = self.build_atlas_map_shader.clone_weak();
+                entry_point = "build_atlas_map".into();
             }
             TerrainComputePipelineKey::BuildAreaList => {
                 layout = Some(vec![self.build_node_list_layout.clone()]);
@@ -274,8 +274,8 @@ impl render_graph::Node for TerrainComputeNode {
             pass.set_pipeline(pipelines[TerrainComputePipelineKey::PreparePatchList as usize]);
             pass.dispatch(1, 1, 1);
 
-            pass.set_bind_group(0, &bind_groups.build_chunk_maps_bind_group, &[]);
-            pass.set_pipeline(pipelines[TerrainComputePipelineKey::BuildChunkMaps as usize]);
+            pass.set_bind_group(0, &bind_groups.build_atlas_map_bind_group, &[]);
+            pass.set_pipeline(pipelines[TerrainComputePipelineKey::BuildAtlasMap as usize]);
             pass.dispatch(bind_groups.chunk_count, 1, 1);
 
             pass.set_bind_group(0, &bind_groups.build_patch_list_bind_group, &[]);

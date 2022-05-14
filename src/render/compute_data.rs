@@ -14,7 +14,7 @@ pub struct TerrainComputeData {
     pub(crate) prepare_indirect_bind_group: BindGroup,
     pub(crate) build_node_list_bind_groups: [BindGroup; 2],
     pub(crate) build_patch_list_bind_group: BindGroup,
-    pub(crate) build_chunk_maps_bind_group: BindGroup,
+    pub(crate) build_atlas_map_bind_group: BindGroup,
 }
 
 impl TerrainComputeData {
@@ -42,11 +42,11 @@ impl TerrainComputeData {
             gpu_quadtree,
             &compute_pipelines.build_patch_list_layout,
         );
-        let build_chunk_maps_bind_group = Self::create_build_chunk_maps_bind_group(
+        let build_atlas_map_bind_group = Self::create_build_atlas_map_bind_group(
             device,
             resources,
             gpu_quadtree,
-            &compute_pipelines.build_chunk_maps_layout,
+            &compute_pipelines.build_atlas_map_layout,
         );
 
         Self {
@@ -56,7 +56,7 @@ impl TerrainComputeData {
             prepare_indirect_bind_group,
             build_node_list_bind_groups,
             build_patch_list_bind_group,
-            build_chunk_maps_bind_group,
+            build_atlas_map_bind_group,
         }
     }
 
@@ -91,7 +91,7 @@ impl TerrainComputeData {
                 },
                 BindGroupEntry {
                     binding: 5,
-                    resource: BindingResource::TextureView(&resources.lod_map_view),
+                    resource: BindingResource::TextureView(&resources.atlas_map_view),
                 },
             ],
             layout,
@@ -185,7 +185,7 @@ impl TerrainComputeData {
         })
     }
 
-    fn create_build_chunk_maps_bind_group(
+    fn create_build_atlas_map_bind_group(
         device: &RenderDevice,
         resources: &TerrainResources,
         gpu_quadtree: &GpuQuadtree,
@@ -212,10 +212,6 @@ impl TerrainComputeData {
                 },
                 BindGroupEntry {
                     binding: 4,
-                    resource: BindingResource::TextureView(&resources.lod_map_view),
-                },
-                BindGroupEntry {
-                    binding: 5,
                     resource: BindingResource::TextureView(&resources.atlas_map_view),
                 },
             ],

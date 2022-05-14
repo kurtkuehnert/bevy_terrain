@@ -74,14 +74,14 @@ fn sample_node(
         let source_y = origin_y + node_y * stride;
 
         if source_x < width && source_y < height {
-            let _value = (iproduct!(0..stride, 0..stride)
+            let value = (iproduct!(0..stride, 0..stride)
                 .map(|(offset_x, offset_y)| {
                     source.get_pixel(source_x + offset_x, source_y + offset_y).0[0] as f64
                 })
                 .sum::<f64>()
                 / sample_count) as u16;
 
-            let value = source.get_pixel(source_x, source_y).0[0];
+            // let value = source.get_pixel(source_x, source_y).0[0];
 
             node.min_height = node.min_height.min(value);
             node.max_height = node.max_height.max(value);

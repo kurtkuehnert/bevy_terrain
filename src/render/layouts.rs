@@ -197,7 +197,7 @@ pub(crate) const BUILD_PATCH_LIST_LAYOUT: BindGroupLayoutDescriptor = BindGroupL
             },
             count: None,
         },
-        // lod map
+        // atlas map
         BindGroupLayoutEntry {
             binding: 5,
             visibility: ShaderStages::COMPUTE,
@@ -210,7 +210,7 @@ pub(crate) const BUILD_PATCH_LIST_LAYOUT: BindGroupLayoutDescriptor = BindGroupL
         },
     ],
 };
-pub(crate) const BUILD_CHUNK_MAPS_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
+pub(crate) const BUILD_ATLAS_MAP_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
     label: None,
     entries: &[
         // config buffer
@@ -257,24 +257,13 @@ pub(crate) const BUILD_CHUNK_MAPS_LAYOUT: BindGroupLayoutDescriptor = BindGroupL
             },
             count: None,
         },
-        // lod map
+        // atlas map
         BindGroupLayoutEntry {
             binding: 4,
             visibility: ShaderStages::COMPUTE,
             ty: BindingType::StorageTexture {
                 access: StorageTextureAccess::WriteOnly,
-                format: TextureFormat::R8Uint,
-                view_dimension: TextureViewDimension::D2,
-            },
-            count: None,
-        },
-        // atlas map
-        BindGroupLayoutEntry {
-            binding: 5,
-            visibility: ShaderStages::COMPUTE,
-            ty: BindingType::StorageTexture {
-                access: StorageTextureAccess::WriteOnly,
-                format: TextureFormat::R16Uint,
+                format: TextureFormat::Rgba8Uint,
                 view_dimension: TextureViewDimension::D2,
             },
             count: None,
