@@ -1,8 +1,8 @@
+use crate::render::layouts::{NODE_ACTIVATION_SIZE, NODE_DEACTIVATION_SIZE};
 use crate::{
     config::TerrainConfig,
-    node_atlas::NodeAtlas,
-    quadtree::{NodeUpdate, Quadtree},
-    render::{layouts::NODE_UPDATE_SIZE, PersistentComponents},
+    quadtree::{NodeActivation, NodeDeactivation, Quadtree},
+    render::PersistentComponents,
     Terrain, TerrainComputePipelines,
 };
 use bevy::{
@@ -14,20 +14,20 @@ use bevy::{
         RenderWorld,
     },
 };
-use image::EncodableLayout;
-use std::{mem, num::NonZeroU32};
+use itertools::iproduct;
+use std::mem;
 
 /// Stores the GPU representation of the [`Quadtree`] alongside the data to update it.
 #[derive(Component)]
 pub struct GpuQuadtree {
-    /// Readonly view of the entire quadtree, with all of its layers.
     pub(crate) view: TextureView,
-    /// The node update count, buffer and its bind group for each layer of the quadtree
-    /// used during the quadtree update pipeline.
-    pub(crate) update: Vec<(u32, Buffer, BindGroup)>,
-    /// All newly generate updates of nodes, which were activated or deactivated.
-    /// (Taken from the [`Quadtree`] each frame.)
-    node_updates: Vec<Vec<NodeUpdate>>, // Todo: consider own component
+    pub(crate) update_bind_group: BindGroup,
+    pub(crate) activation_buffer: Buffer,
+    pub(crate) deactivation_buffer: Buffer,
+    pub(crate) activation_count: u32,
+    pub(crate) deactivation_count: u32,
+    pub(crate) node_activations: Vec<NodeActivation>,
+    pub(crate) node_deactivations: Vec<NodeDeactivation>, // Todo: consider own component
 }
 
 impl GpuQuadtree {
@@ -37,23 +37,29 @@ impl GpuQuadtree {
         queue: &RenderQueue,
         compute_pipelines: &TerrainComputePipelines,
     ) -> Self {
-        let (quadtree, view) = Self::create_quadtree(config, device, queue);
-        let update = Self::create_quadtree_update(quadtree, config, device, compute_pipelines);
+        let (view, update_bind_group, activation_buffer, deactivation_buffer) =
+            Self::create_quadtree(config, device, queue, compute_pipelines);
 
         Self {
             view,
-            update,
-            node_updates: default(),
+            update_bind_group,
+            activation_buffer,
+            deactivation_buffer,
+            activation_count: 0,
+            deactivation_count: 0,
+            node_activations: default(),
+            node_deactivations: default(),
         }
     }
 
-    /// Creates the quadtree texture and its readonly view.
     fn create_quadtree(
         config: &TerrainConfig,
         device: &RenderDevice,
         queue: &RenderQueue,
-    ) -> (Texture, TextureView) {
-        let data = vec![NodeAtlas::INACTIVE_INDEX; config.node_count as usize];
+        compute_pipelines: &TerrainComputePipelines,
+    ) -> (TextureView, BindGroup, Buffer, Buffer) {
+        let size = config.chunk_count.x * config.chunk_count.y * config.lod_count;
+        let data = vec![u64::MAX; (size) as usize];
 
         let quadtree = device.create_texture_with_data(
             queue,
@@ -62,79 +68,61 @@ impl GpuQuadtree {
                 size: Extent3d {
                     width: config.chunk_count.x,
                     height: config.chunk_count.y,
-                    depth_or_array_layers: 1,
+                    depth_or_array_layers: config.lod_count,
                 },
-                mip_level_count: config.lod_count,
+                mip_level_count: 1,
                 sample_count: 1,
                 dimension: TextureDimension::D2,
-                format: TextureFormat::R16Uint,
+                format: TextureFormat::Rgba8Uint,
                 usage: TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING,
             },
-            data.as_bytes(),
+            cast_slice(&data),
         );
 
         let view = quadtree.create_view(&TextureViewDescriptor {
             label: "quadtree_view".into(),
-            format: Some(TextureFormat::R16Uint),
-            dimension: Some(TextureViewDimension::D2),
-            aspect: TextureAspect::All,
-            base_mip_level: 0,
-            mip_level_count: None,
-            base_array_layer: 0,
-            array_layer_count: None,
+            ..default()
         });
 
-        (quadtree, view)
-    }
+        let activation_buffer = device.create_buffer(&BufferDescriptor {
+            label: "quadtree_activation_buffer".into(),
+            size: NODE_ACTIVATION_SIZE * size as BufferAddress,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
 
-    /// Creates the [`NodeUpdate`] buffers, views and bind groups for each layer of the quadtree.
-    fn create_quadtree_update(
-        quadtree: Texture,
-        config: &TerrainConfig,
-        device: &RenderDevice,
-        compute_pipelines: &TerrainComputePipelines,
-    ) -> Vec<(u32, Buffer, BindGroup)> {
-        (0..config.lod_count)
-            .map(|lod| {
-                let node_count = config.node_count(lod);
-                let max_node_count = (node_count.x * node_count.y) as BufferAddress;
+        let deactivation_buffer = device.create_buffer(&BufferDescriptor {
+            label: "quadtree_deactivation_buffer".into(),
+            size: NODE_DEACTIVATION_SIZE * size as BufferAddress,
+            usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
 
-                let buffer = device.create_buffer(&BufferDescriptor {
-                    label: "quadtree_update_buffer".into(),
-                    size: NODE_UPDATE_SIZE * max_node_count,
-                    usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
-                    mapped_at_creation: false,
-                });
+        let update_bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: "quadtree_update_bind_group".into(),
+            layout: &compute_pipelines.update_quadtree_layout,
+            entries: &[
+                BindGroupEntry {
+                    binding: 0,
+                    resource: BindingResource::TextureView(&view),
+                },
+                BindGroupEntry {
+                    binding: 1,
+                    resource: activation_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 2,
+                    resource: deactivation_buffer.as_entire_binding(),
+                },
+            ],
+        });
 
-                let view = quadtree.create_view(&TextureViewDescriptor {
-                    label: "quadtree_update_view".into(),
-                    format: Some(TextureFormat::R16Uint),
-                    dimension: Some(TextureViewDimension::D2),
-                    aspect: TextureAspect::All,
-                    base_mip_level: lod,
-                    mip_level_count: NonZeroU32::new(1),
-                    base_array_layer: 0,
-                    array_layer_count: None,
-                });
-
-                let bind_group = device.create_bind_group(&BindGroupDescriptor {
-                    label: "quadtree_update_bind_group".into(),
-                    layout: &compute_pipelines.update_quadtree_layout,
-                    entries: &[
-                        BindGroupEntry {
-                            binding: 0,
-                            resource: BindingResource::TextureView(&view),
-                        },
-                        BindGroupEntry {
-                            binding: 1,
-                            resource: buffer.as_entire_binding(),
-                        },
-                    ],
-                });
-
-                (0, buffer, bind_group)
-            })
-            .collect()
+        (
+            view,
+            update_bind_group,
+            activation_buffer,
+            deactivation_buffer,
+        )
     }
 }
 
@@ -168,10 +156,8 @@ pub(crate) fn update_gpu_quadtree(
             None => continue,
         };
 
-        gpu_quadtree.node_updates = mem::replace(
-            &mut quadtree.node_updates,
-            vec![default(); gpu_quadtree.update.len()],
-        );
+        gpu_quadtree.node_activations = mem::take(&mut quadtree.node_activations);
+        gpu_quadtree.node_deactivations = mem::take(&mut quadtree.node_deactivations);
     }
 }
 
@@ -185,13 +171,62 @@ pub(crate) fn queue_quadtree_updates(
     for entity in terrain_query.iter() {
         let gpu_quadtree = gpu_quadtrees.get_mut(&entity).unwrap();
 
-        for ((count, buffer, _), node_updates) in gpu_quadtree
-            .update
-            .iter_mut()
-            .zip(&gpu_quadtree.node_updates)
-        {
-            queue.write_buffer(buffer, 0, cast_slice(node_updates));
-            *count = node_updates.len() as u32;
+        let mut activations = Vec::new();
+
+        for node_activation in &gpu_quadtree.node_activations {
+            let position = TerrainConfig::node_position(node_activation.node_id);
+
+            for lod in 0..=position.lod {
+                let scale = 1 << (position.lod - lod);
+
+                let origin_x = position.x * scale;
+                let origin_y = position.y * scale;
+
+                for (x, y) in iproduct!(origin_x..origin_x + scale, origin_y..origin_y + scale) {
+                    let node_id = TerrainConfig::node_id(lod, x, y);
+
+                    activations.push(NodeActivation {
+                        node_id,
+                        atlas_index: node_activation.atlas_index,
+                        lod: position.lod,
+                    })
+                }
+            }
         }
+
+        gpu_quadtree.activation_count = activations.len() as u32;
+        queue.write_buffer(&gpu_quadtree.activation_buffer, 0, cast_slice(&activations));
+
+        let mut deactivations = Vec::new();
+
+        for node_deactivation in &gpu_quadtree.node_deactivations {
+            let position = TerrainConfig::node_position(node_deactivation.node_id);
+
+            let ancestor_id =
+                TerrainConfig::node_id(position.lod + 1, position.x >> 1, position.y >> 1);
+
+            for lod in 0..=position.lod {
+                let scale = 1 << (position.lod - lod);
+
+                let origin_x = position.x * scale;
+                let origin_y = position.y * scale;
+
+                for (x, y) in iproduct!(origin_x..origin_x + scale, origin_y..origin_y + scale) {
+                    let node_id = TerrainConfig::node_id(lod, x, y);
+
+                    deactivations.push(NodeDeactivation {
+                        node_id,
+                        ancestor_id,
+                    })
+                }
+            }
+        }
+
+        gpu_quadtree.deactivation_count = deactivations.len() as u32;
+        queue.write_buffer(
+            &gpu_quadtree.deactivation_buffer,
+            0,
+            cast_slice(&deactivations),
+        );
     }
 }

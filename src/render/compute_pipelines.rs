@@ -19,8 +19,8 @@ use strum_macros::{EnumCount, EnumIter};
 
 #[derive(Copy, Clone, Hash, PartialEq, Eq, EnumIter, EnumCount)]
 pub enum TerrainComputePipelineKey {
-    UpdateQuadtree,
-    BuildAtlasMap,
+    ActivateNodes,
+    DeactivateNodes,
     BuildAreaList,
     BuildNodeList,
     BuildChunkList,
@@ -36,13 +36,11 @@ pub struct TerrainComputePipelines {
     pub(crate) update_quadtree_layout: BindGroupLayout,
     pub(crate) build_node_list_layout: BindGroupLayout,
     pub(crate) build_patch_list_layout: BindGroupLayout,
-    pub(crate) build_atlas_map_layout: BindGroupLayout,
     pub(crate) cull_data_layout: BindGroupLayout,
     prepare_indirect_shader: Handle<Shader>,
     update_quadtree_shader: Handle<Shader>,
     build_node_list_shader: Handle<Shader>,
     build_patch_list_shader: Handle<Shader>,
-    build_atlas_map_shader: Handle<Shader>,
 }
 
 impl FromWorld for TerrainComputePipelines {
@@ -54,7 +52,6 @@ impl FromWorld for TerrainComputePipelines {
         let update_quadtree_layout = device.create_bind_group_layout(&UPDATE_QUADTREE_LAYOUT);
         let build_node_list_layout = device.create_bind_group_layout(&BUILD_NODE_LIST_LAYOUT);
         let build_patch_list_layout = device.create_bind_group_layout(&BUILD_PATCH_LIST_LAYOUT);
-        let build_atlas_map_layout = device.create_bind_group_layout(&BUILD_ATLAS_MAP_LAYOUT);
         let cull_data_layout = device.create_bind_group_layout(&CULL_DATA_LAYOUT);
 
         let prepare_indirect_shader =
@@ -65,21 +62,17 @@ impl FromWorld for TerrainComputePipelines {
             asset_server.load("../plugins/bevy_terrain/src/render/shaders/build_node_list.wgsl");
         let build_patch_list_shader =
             asset_server.load("../plugins/bevy_terrain/src/render/shaders/build_patch_list.wgsl");
-        let build_atlas_map_shader =
-            asset_server.load("../plugins/bevy_terrain/src/render/shaders/build_atlas_map.wgsl");
 
         TerrainComputePipelines {
             prepare_indirect_layout,
             update_quadtree_layout,
             build_node_list_layout,
             build_patch_list_layout,
-            build_atlas_map_layout,
             cull_data_layout,
             prepare_indirect_shader,
             update_quadtree_shader,
             build_node_list_shader,
             build_patch_list_shader,
-            build_atlas_map_shader,
         }
     }
 }
@@ -93,15 +86,15 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
         let entry_point;
 
         match key {
-            TerrainComputePipelineKey::UpdateQuadtree => {
+            TerrainComputePipelineKey::ActivateNodes => {
                 layout = Some(vec![self.update_quadtree_layout.clone()]);
                 shader = self.update_quadtree_shader.clone();
-                entry_point = "update_quadtree".into();
+                entry_point = "activate_nodes".into();
             }
-            TerrainComputePipelineKey::BuildAtlasMap => {
-                layout = Some(vec![self.build_atlas_map_layout.clone()]);
-                shader = self.build_atlas_map_shader.clone_weak();
-                entry_point = "build_atlas_map".into();
+            TerrainComputePipelineKey::DeactivateNodes => {
+                layout = Some(vec![self.update_quadtree_layout.clone()]);
+                shader = self.update_quadtree_shader.clone();
+                entry_point = "deactivate_nodes".into();
             }
             TerrainComputePipelineKey::BuildAreaList => {
                 layout = Some(vec![self.build_node_list_layout.clone()]);
@@ -184,12 +177,11 @@ impl TerrainComputeNode {
         pipelines: &'a Vec<&'a ComputePipeline>,
         gpu_quadtree: &'a GpuQuadtree,
     ) {
-        pass.set_pipeline(pipelines[TerrainComputePipelineKey::UpdateQuadtree as usize]);
-
-        for (count, _, bind_group) in &gpu_quadtree.update {
-            pass.set_bind_group(0, bind_group, &[]);
-            pass.dispatch(*count, 1, 1);
-        }
+        pass.set_bind_group(0, &gpu_quadtree.update_bind_group, &[]);
+        pass.set_pipeline(pipelines[TerrainComputePipelineKey::ActivateNodes as usize]);
+        pass.dispatch(gpu_quadtree.activation_count, 1, 1);
+        pass.set_pipeline(pipelines[TerrainComputePipelineKey::DeactivateNodes as usize]);
+        pass.dispatch(gpu_quadtree.deactivation_count, 1, 1);
     }
 
     fn build_node_list<'a>(
@@ -273,10 +265,6 @@ impl render_graph::Node for TerrainComputeNode {
             pass.set_bind_group(0, &bind_groups.prepare_indirect_bind_group, &[]);
             pass.set_pipeline(pipelines[TerrainComputePipelineKey::PreparePatchList as usize]);
             pass.dispatch(1, 1, 1);
-
-            pass.set_bind_group(0, &bind_groups.build_atlas_map_bind_group, &[]);
-            pass.set_pipeline(pipelines[TerrainComputePipelineKey::BuildAtlasMap as usize]);
-            pass.dispatch(bind_groups.chunk_count, 1, 1);
 
             pass.set_bind_group(0, &bind_groups.build_patch_list_bind_group, &[]);
             pass.set_pipeline(pipelines[TerrainComputePipelineKey::BuildPatchList as usize]);

@@ -14,7 +14,6 @@ pub struct TerrainComputeData {
     pub(crate) prepare_indirect_bind_group: BindGroup,
     pub(crate) build_node_list_bind_groups: [BindGroup; 2],
     pub(crate) build_patch_list_bind_group: BindGroup,
-    pub(crate) build_atlas_map_bind_group: BindGroup,
 }
 
 impl TerrainComputeData {
@@ -42,12 +41,6 @@ impl TerrainComputeData {
             gpu_quadtree,
             &compute_pipelines.build_patch_list_layout,
         );
-        let build_atlas_map_bind_group = Self::create_build_atlas_map_bind_group(
-            device,
-            resources,
-            gpu_quadtree,
-            &compute_pipelines.build_atlas_map_layout,
-        );
 
         Self {
             prepare_node_list_count: (config.lod_count - 1) as usize,
@@ -56,7 +49,6 @@ impl TerrainComputeData {
             prepare_indirect_bind_group,
             build_node_list_bind_groups,
             build_patch_list_bind_group,
-            build_atlas_map_bind_group,
         }
     }
 
@@ -88,10 +80,6 @@ impl TerrainComputeData {
                 BindGroupEntry {
                     binding: 4,
                     resource: resources.patch_buffer.as_entire_binding(),
-                },
-                BindGroupEntry {
-                    binding: 5,
-                    resource: BindingResource::TextureView(&resources.atlas_map_view),
                 },
             ],
             layout,
@@ -179,40 +167,6 @@ impl TerrainComputeData {
                 BindGroupEntry {
                     binding: 2,
                     resource: resources.parameter_buffer.as_entire_binding(),
-                },
-            ],
-            layout,
-        })
-    }
-
-    fn create_build_atlas_map_bind_group(
-        device: &RenderDevice,
-        resources: &TerrainResources,
-        gpu_quadtree: &GpuQuadtree,
-        layout: &BindGroupLayout,
-    ) -> BindGroup {
-        device.create_bind_group(&BindGroupDescriptor {
-            label: None,
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: resources.config_buffer.as_entire_binding(),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: BindingResource::TextureView(&gpu_quadtree.view),
-                },
-                BindGroupEntry {
-                    binding: 2,
-                    resource: resources.parameter_buffer.as_entire_binding(),
-                },
-                BindGroupEntry {
-                    binding: 3,
-                    resource: resources.final_node_buffer.as_entire_binding(),
-                },
-                BindGroupEntry {
-                    binding: 4,
-                    resource: BindingResource::TextureView(&resources.atlas_map_view),
                 },
             ],
             layout,

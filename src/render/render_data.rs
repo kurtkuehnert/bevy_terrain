@@ -1,6 +1,6 @@
 use crate::{
     render::{layouts::CONFIG_BUFFER_SIZE, resources::TerrainResources, PersistentComponents},
-    GpuNodeAtlas, TerrainRenderPipeline,
+    GpuNodeAtlas, GpuQuadtree, TerrainRenderPipeline,
 };
 use bevy::{
     prelude::*,
@@ -17,6 +17,7 @@ impl TerrainRenderData {
     fn new(
         device: &RenderDevice,
         resources: &TerrainResources,
+        gpu_quadtree: &GpuQuadtree,
         gpu_node_atlas: &GpuNodeAtlas,
         terrain_pipeline: &mut TerrainRenderPipeline,
     ) -> Self {
@@ -24,6 +25,7 @@ impl TerrainRenderData {
         let terrain_data_bind_group = Self::create_terrain_data_bind_group(
             device,
             resources,
+            gpu_quadtree,
             gpu_node_atlas,
             &terrain_data_layout,
         );
@@ -49,6 +51,7 @@ impl TerrainRenderData {
         gpu_node_atlas: &GpuNodeAtlas,
     ) -> BindGroupLayout {
         let mut entries = vec![
+            // config buffer
             BindGroupLayoutEntry {
                 binding: 0,
                 visibility: ShaderStages::VERTEX_FRAGMENT,
@@ -59,12 +62,13 @@ impl TerrainRenderData {
                 },
                 count: None,
             },
+            // quadtree
             BindGroupLayoutEntry {
                 binding: 1,
                 visibility: ShaderStages::VERTEX_FRAGMENT,
                 ty: BindingType::Texture {
                     sample_type: TextureSampleType::Uint,
-                    view_dimension: TextureViewDimension::D2,
+                    view_dimension: TextureViewDimension::D2Array,
                     multisampled: false,
                 },
                 count: None,
@@ -87,6 +91,7 @@ impl TerrainRenderData {
     fn create_terrain_data_bind_group(
         device: &RenderDevice,
         resources: &TerrainResources,
+        gpu_quadtree: &GpuQuadtree,
         gpu_node_atlas: &GpuNodeAtlas,
         layout: &BindGroupLayout,
     ) -> BindGroup {
@@ -97,7 +102,7 @@ impl TerrainRenderData {
             },
             BindGroupEntry {
                 binding: 1,
-                resource: BindingResource::TextureView(&resources.atlas_map_view),
+                resource: BindingResource::TextureView(&gpu_quadtree.view),
             },
         ];
 
@@ -135,16 +140,24 @@ impl TerrainRenderData {
 pub(crate) fn initialize_terrain_render_data(
     device: Res<RenderDevice>,
     mut terrain_pipeline: ResMut<TerrainRenderPipeline>,
+    gpu_quadtrees: Res<PersistentComponents<GpuQuadtree>>,
     gpu_node_atlases: Res<PersistentComponents<GpuNodeAtlas>>,
     mut terrain_render_data: ResMut<PersistentComponents<TerrainRenderData>>,
     terrain_query: Query<(Entity, &TerrainResources)>,
 ) {
     for (entity, resources) in terrain_query.iter() {
+        let gpu_quadtree = gpu_quadtrees.get(&entity).unwrap();
         let gpu_node_atlas = gpu_node_atlases.get(&entity).unwrap();
 
         terrain_render_data.insert(
             entity,
-            TerrainRenderData::new(&device, &resources, gpu_node_atlas, &mut terrain_pipeline),
+            TerrainRenderData::new(
+                &device,
+                &resources,
+                &gpu_quadtree,
+                gpu_node_atlas,
+                &mut terrain_pipeline,
+            ),
         );
     }
 }
