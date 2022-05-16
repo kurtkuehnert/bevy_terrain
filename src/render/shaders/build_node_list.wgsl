@@ -2,7 +2,7 @@
 #import bevy_terrain::parameters
 
 [[group(0), binding(0)]]
-var quadtree: texture_2d<u32>;
+var quadtree: texture_2d_array<u32>;
 [[group(0), binding(1)]]
 var<storage, read_write> parameters: Parameters;
 [[group(0), binding(2)]]
@@ -20,7 +20,6 @@ fn build_area_list(
     let y = invocation_id.y;
     let lod = parameters.lod - 1u;
     let id = node_id(lod, x, y);
-    let atlas_id = textureLoad(quadtree, vec2<i32>(i32(x), i32(y)), i32(lod)).x;
 
     // assume that area nodes are allways loaded
     //
@@ -49,9 +48,10 @@ fn build_node_list(
         let x = (parent_position.x << 1u) + (i & 1u);
         let y = (parent_position.y << 1u) + ((i >> 1u) & 1u);
         child_ids[i] = node_id(lod, x, y);
-        let atlas_id = textureLoad(quadtree, vec2<i32>(i32(x), i32(y)), i32(lod)).x;
 
-        if (atlas_id < INACTIVE_ID) {
+        let quadtree_entry = textureLoad(quadtree, vec2<i32>(i32(x), i32(y)), i32(lod), 0);
+
+        if (quadtree_entry.z == lod ) {
             loaded = loaded + (1u << i);
         }
     }

@@ -1,7 +1,8 @@
+use crate::quadtree::{NodeActivation, NodeDeactivation};
 use crate::{
     attachment::{AtlasAttachmentConfig, AttachmentIndex, NodeAttachment},
     config::{NodeId, TerrainConfig},
-    quadtree::{NodeUpdate, Quadtree},
+    quadtree::Quadtree,
 };
 use bevy::{
     prelude::*,
@@ -97,7 +98,7 @@ impl NodeAtlas {
     pub(crate) fn activate_nodes(
         &mut self,
         nodes_to_activate: Vec<NodeId>,
-        node_updates: &mut Vec<Vec<NodeUpdate>>,
+        node_activations: &mut Vec<NodeActivation>,
         nodes_activated: &mut HashSet<NodeId>,
         load_events: &mut EventWriter<LoadNodeEvent>,
     ) {
@@ -142,9 +143,10 @@ impl NodeAtlas {
             // Todo: figure out a cleaner way of dealing with index exhaustion
             node.atlas_index = available_indices.pop_front().expect("Out of atlas ids.");
 
-            node_updates[TerrainConfig::node_position(node_id).lod as usize].push(NodeUpdate {
+            node_activations.push(NodeActivation {
                 node_id,
                 atlas_index: node.atlas_index as u32,
+                lod: 0,
             });
 
             nodes_activated.insert(node_id);
@@ -157,7 +159,7 @@ impl NodeAtlas {
     pub(crate) fn deactivate_nodes(
         &mut self,
         nodes_to_deactivate: Vec<NodeId>,
-        node_updates: &mut Vec<Vec<NodeUpdate>>,
+        node_deactivations: &mut Vec<NodeDeactivation>,
     ) {
         let NodeAtlas {
             ref mut available_indices,
@@ -174,9 +176,9 @@ impl NodeAtlas {
             available_indices.push_front(node.atlas_index);
             node.atlas_index = Self::INACTIVE_INDEX;
 
-            node_updates[TerrainConfig::node_position(node_id).lod as usize].push(NodeUpdate {
+            node_deactivations.push(NodeDeactivation {
                 node_id,
-                atlas_index: node.atlas_index as u32,
+                ancestor_id: node_id,
             });
 
             inactive_nodes.put(node_id, node);
@@ -194,14 +196,18 @@ pub(crate) fn update_nodes(
             ref mut nodes_activated,
             ref mut nodes_to_activate,
             ref mut nodes_to_deactivate,
-            ref mut node_updates,
+            ref mut node_activations,
+            ref mut node_deactivations,
             ..
         } = quadtree.as_mut();
 
-        node_atlas.deactivate_nodes(mem::take(nodes_to_deactivate), node_updates);
+        node_activations.clear();
+        node_deactivations.clear();
+
+        node_atlas.deactivate_nodes(mem::take(nodes_to_deactivate), node_deactivations);
         node_atlas.activate_nodes(
             mem::take(nodes_to_activate),
-            node_updates,
+            node_activations,
             nodes_activated,
             &mut load_events,
         );

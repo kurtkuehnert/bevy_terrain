@@ -15,7 +15,6 @@ pub struct TerrainResources {
     pub(crate) temp_node_buffers: [Buffer; 2],
     pub(crate) final_node_buffer: Buffer,
     pub(crate) patch_buffer: Buffer,
-    pub(crate) atlas_map_view: TextureView,
 }
 
 impl TerrainResources {
@@ -25,7 +24,6 @@ impl TerrainResources {
         let config_buffer = Self::create_config_buffer(device, config);
         let (temp_node_buffers, final_node_buffer) = Self::create_node_buffers(device, config);
         let patch_buffer = Self::create_patch_buffer(device, config);
-        let atlas_map_view = Self::create_atlas_map(device, config);
 
         Self {
             indirect_buffer,
@@ -34,7 +32,6 @@ impl TerrainResources {
             temp_node_buffers,
             final_node_buffer,
             patch_buffer,
-            atlas_map_view,
         }
     }
 
@@ -92,32 +89,6 @@ impl TerrainResources {
         };
 
         device.create_buffer(&buffer_descriptor)
-    }
-
-    fn create_atlas_map(device: &RenderDevice, config: &TerrainConfig) -> TextureView {
-        let atlas_map = device.create_texture(&TextureDescriptor {
-            label: "atlas_map".into(),
-            size: Extent3d {
-                width: config.chunk_count.x,
-                height: config.chunk_count.y,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            format: TextureFormat::Rgba8Uint,
-            usage: TextureUsages::COPY_DST
-                | TextureUsages::STORAGE_BINDING
-                | TextureUsages::TEXTURE_BINDING,
-        });
-
-        let atlas_map_view = atlas_map.create_view(&TextureViewDescriptor {
-            label: "atlas_map_view".into(),
-            // dimension: Some(TextureViewDimension::D2),
-            ..default()
-        });
-
-        atlas_map_view
     }
 }
 

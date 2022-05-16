@@ -1,11 +1,15 @@
-use crate::{config::TerrainConfigUniform, quadtree::NodeUpdate};
+use crate::config::TerrainConfigUniform;
+use crate::quadtree::{NodeActivation, NodeDeactivation};
 use bevy::{
     prelude::*,
     render::{render_resource::std140::AsStd140, render_resource::*},
 };
 use std::mem;
 
-pub(crate) const NODE_UPDATE_SIZE: BufferAddress = mem::size_of::<NodeUpdate>() as BufferAddress;
+pub(crate) const NODE_ACTIVATION_SIZE: BufferAddress =
+    mem::size_of::<NodeActivation>() as BufferAddress;
+pub(crate) const NODE_DEACTIVATION_SIZE: BufferAddress =
+    mem::size_of::<NodeDeactivation>() as BufferAddress;
 pub(crate) const NODE_SIZE: BufferAddress = mem::size_of::<u32>() as BufferAddress;
 pub(crate) const PATCH_SIZE: BufferAddress = 8 * mem::size_of::<u32>() as BufferAddress;
 pub(crate) const INDIRECT_BUFFER_SIZE: BufferAddress = 5 * mem::size_of::<u32>() as BufferAddress;
@@ -55,25 +59,34 @@ pub(crate) const PREPARE_INDIRECT_LAYOUT: BindGroupLayoutDescriptor = BindGroupL
 pub(crate) const UPDATE_QUADTREE_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
     label: None,
     entries: &[
-        // quadtree layer
+        // quadtree
         BindGroupLayoutEntry {
             binding: 0,
             visibility: ShaderStages::COMPUTE,
             ty: BindingType::StorageTexture {
-                access: StorageTextureAccess::WriteOnly,
-                format: TextureFormat::R16Uint,
-                view_dimension: TextureViewDimension::D2,
+                access: StorageTextureAccess::ReadWrite,
+                format: TextureFormat::Rgba8Uint,
+                view_dimension: TextureViewDimension::D2Array,
             },
             count: None,
         },
-        // node update buffer
         BindGroupLayoutEntry {
             binding: 1,
             visibility: ShaderStages::COMPUTE,
             ty: BindingType::Buffer {
                 ty: BufferBindingType::Storage { read_only: true },
                 has_dynamic_offset: false,
-                min_binding_size: BufferSize::new(NODE_UPDATE_SIZE),
+                min_binding_size: BufferSize::new(NODE_ACTIVATION_SIZE),
+            },
+            count: None,
+        },
+        BindGroupLayoutEntry {
+            binding: 2,
+            visibility: ShaderStages::COMPUTE,
+            ty: BindingType::Buffer {
+                ty: BufferBindingType::Storage { read_only: true },
+                has_dynamic_offset: false,
+                min_binding_size: BufferSize::new(NODE_DEACTIVATION_SIZE),
             },
             count: None,
         },
@@ -82,13 +95,13 @@ pub(crate) const UPDATE_QUADTREE_LAYOUT: BindGroupLayoutDescriptor = BindGroupLa
 pub(crate) const BUILD_NODE_LIST_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
     label: None,
     entries: &[
-        // config buffer
+        // quadtree
         BindGroupLayoutEntry {
             binding: 0,
             visibility: ShaderStages::COMPUTE,
             ty: BindingType::Texture {
                 sample_type: TextureSampleType::Uint,
-                view_dimension: TextureViewDimension::D2,
+                view_dimension: TextureViewDimension::D2Array,
                 multisampled: false,
             },
             count: None,
@@ -159,7 +172,7 @@ pub(crate) const BUILD_PATCH_LIST_LAYOUT: BindGroupLayoutDescriptor = BindGroupL
             visibility: ShaderStages::COMPUTE,
             ty: BindingType::Texture {
                 sample_type: TextureSampleType::Uint,
-                view_dimension: TextureViewDimension::D2,
+                view_dimension: TextureViewDimension::D2Array,
                 multisampled: false,
             },
             count: None,
@@ -194,77 +207,6 @@ pub(crate) const BUILD_PATCH_LIST_LAYOUT: BindGroupLayoutDescriptor = BindGroupL
                 ty: BufferBindingType::Storage { read_only: false },
                 has_dynamic_offset: false,
                 min_binding_size: BufferSize::new(PATCH_SIZE),
-            },
-            count: None,
-        },
-        // atlas map
-        BindGroupLayoutEntry {
-            binding: 5,
-            visibility: ShaderStages::COMPUTE,
-            ty: BindingType::Texture {
-                sample_type: TextureSampleType::Uint,
-                view_dimension: TextureViewDimension::D2,
-                multisampled: false,
-            },
-            count: None,
-        },
-    ],
-};
-pub(crate) const BUILD_ATLAS_MAP_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
-    label: None,
-    entries: &[
-        // config buffer
-        BindGroupLayoutEntry {
-            binding: 0,
-            visibility: ShaderStages::COMPUTE,
-            ty: BindingType::Buffer {
-                ty: BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: BufferSize::new(CONFIG_BUFFER_SIZE),
-            },
-            count: None,
-        },
-        // quadtree
-        BindGroupLayoutEntry {
-            binding: 1,
-            visibility: ShaderStages::COMPUTE,
-            ty: BindingType::Texture {
-                sample_type: TextureSampleType::Uint,
-                view_dimension: TextureViewDimension::D2,
-                multisampled: false,
-            },
-            count: None,
-        },
-        // parameter buffer
-        BindGroupLayoutEntry {
-            binding: 2,
-            visibility: ShaderStages::COMPUTE,
-            ty: BindingType::Buffer {
-                ty: BufferBindingType::Storage { read_only: false },
-                has_dynamic_offset: false,
-                min_binding_size: BufferSize::new(PARAMETER_BUFFER_SIZE),
-            },
-            count: None,
-        },
-        // node list
-        BindGroupLayoutEntry {
-            binding: 3,
-            visibility: ShaderStages::COMPUTE,
-            ty: BindingType::Buffer {
-                ty: BufferBindingType::Storage { read_only: true },
-                has_dynamic_offset: false,
-                min_binding_size: BufferSize::new(NODE_SIZE),
-            },
-            count: None,
-        },
-        // atlas map
-        BindGroupLayoutEntry {
-            binding: 4,
-            visibility: ShaderStages::COMPUTE,
-            ty: BindingType::StorageTexture {
-                access: StorageTextureAccess::WriteOnly,
-                format: TextureFormat::Rgba8Uint,
-                view_dimension: TextureViewDimension::D2,
             },
             count: None,
         },

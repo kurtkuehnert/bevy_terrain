@@ -16,11 +16,19 @@ use std::mem;
 /// the [`NodeAtlas`](crate::node_atlas::NodeAtlas).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, Zeroable, Pod)]
-pub struct NodeUpdate {
+pub struct NodeActivation {
     /// The id of the updated node.
     pub(crate) node_id: NodeId,
     /// The new atlas index of the node.
     pub(crate) atlas_index: u32, // u16 not supported by std 140
+    pub(crate) lod: u32, // Todo: pre pack index and lod into one u32
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Default, Zeroable, Pod)]
+pub struct NodeDeactivation {
+    pub(crate) node_id: NodeId,
+    pub(crate) ancestor_id: NodeId,
 }
 
 /// The state of a [`TreeNode`] inside the quadtree.
@@ -41,6 +49,7 @@ enum NodeState {
 /// All information required by the [`Quadtree`] traversal algorithm to determine
 /// the [`NodeState`] the node should be in.
 struct TreeNode {
+    root: bool,
     id: NodeId,
     state: NodeState,
     position: Vec2,
@@ -64,6 +73,7 @@ impl TreeNode {
         };
 
         Self {
+            root: lod == config.lod_count - 1,
             id,
             state,
             position,
@@ -82,13 +92,14 @@ impl TreeNode {
 
         // load a rectangle of nodes around the viewer
         let distance = viewer.position - self.position - Vec2::splat(self.size / 2.0);
-        let should_be_active = distance.abs().max_element() < viewer.view_distance * self.size;
+        let should_be_active =
+            self.root || distance.abs().max_element() < viewer.view_distance * self.size;
 
         // update the state and determine whether to travers the children
         let traverse_children = match (should_be_active, &self.state) {
             (_, NodeState::Nonexistent) => false,  // does not have children
             (false, NodeState::Inactive) => false, // can't have active children
-            (false, NodeState::Loading) => true, // Todo: should this be ignored? cancel into cache
+            (false, NodeState::Loading) => false, // Todo: should this be ignored? cancel into cache
             (false, NodeState::Active) => {
                 quadtree.nodes_to_deactivate.push(self.id);
                 self.state = NodeState::Inactive;
@@ -97,9 +108,9 @@ impl TreeNode {
             (true, NodeState::Inactive) => {
                 quadtree.nodes_to_activate.push(self.id);
                 self.state = NodeState::Loading;
-                true
+                false
             }
-            (true, NodeState::Loading) => true,
+            (true, NodeState::Loading) => false,
             (true, NodeState::Active) => true,
         };
 
@@ -125,8 +136,8 @@ pub struct Quadtree {
     pub(crate) nodes_to_deactivate: Vec<NodeId>,
     /// Nodes that are required and should be loaded and scheduled for activation.
     pub(crate) nodes_to_activate: Vec<NodeId>,
-    /// All newly generate updates of nodes, which were activated or deactivated.
-    pub(crate) node_updates: Vec<Vec<NodeUpdate>>,
+    pub(crate) node_activations: Vec<NodeActivation>,
+    pub(crate) node_deactivations: Vec<NodeDeactivation>,
 }
 
 impl Quadtree {
@@ -134,30 +145,19 @@ impl Quadtree {
     pub(crate) fn new(config: &TerrainConfig) -> Self {
         let lod = config.lod_count - 1;
 
-        // activate root nodes
-        let nodes_to_activate = config
-            .area_iter()
-            .map(|(x, y)| TerrainConfig::node_id(lod, x, y))
-            .collect();
-
         // create all nodes of the tree
-        let nodes = match lod {
-            0 => Vec::new(),
-            _ => config
-                .area_iter()
-                .flat_map(|(x, y)| {
-                    iproduct!(0..2, 0..2)
-                        .map(move |(ox, oy)| TreeNode::new(config, lod - 1, 2 * x + ox, 2 * y + oy))
-                })
-                .collect(),
-        };
+        let nodes = config
+            .area_iter()
+            .map(|(x, y)| TreeNode::new(config, lod, x, y))
+            .collect();
 
         Self {
             nodes,
             nodes_activated: default(),
             nodes_to_deactivate: default(),
-            nodes_to_activate,
-            node_updates: vec![default(); config.lod_count as usize],
+            nodes_to_activate: default(),
+            node_activations: default(),
+            node_deactivations: default(),
         }
     }
 
