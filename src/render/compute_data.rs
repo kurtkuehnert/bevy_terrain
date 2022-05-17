@@ -53,18 +53,22 @@ impl TerrainComputeData {
                 entries: &[
                     BindGroupEntry {
                         binding: 0,
-                        resource: resources.parameter_buffer.as_entire_binding(),
+                        resource: resources.config_buffer.as_entire_binding(),
                     },
                     BindGroupEntry {
                         binding: 1,
-                        resource: resources.temp_node_buffers[0].as_entire_binding(),
+                        resource: resources.parameter_buffer.as_entire_binding(),
                     },
                     BindGroupEntry {
                         binding: 2,
-                        resource: resources.temp_node_buffers[1].as_entire_binding(),
+                        resource: resources.temp_node_buffers[0].as_entire_binding(),
                     },
                     BindGroupEntry {
                         binding: 3,
+                        resource: resources.temp_node_buffers[1].as_entire_binding(),
+                    },
+                    BindGroupEntry {
+                        binding: 4,
                         resource: resources.final_node_buffer.as_entire_binding(),
                     },
                 ],
@@ -75,18 +79,22 @@ impl TerrainComputeData {
                 entries: &[
                     BindGroupEntry {
                         binding: 0,
-                        resource: resources.parameter_buffer.as_entire_binding(),
+                        resource: resources.config_buffer.as_entire_binding(),
                     },
                     BindGroupEntry {
                         binding: 1,
-                        resource: resources.temp_node_buffers[1].as_entire_binding(),
+                        resource: resources.parameter_buffer.as_entire_binding(),
                     },
                     BindGroupEntry {
                         binding: 2,
-                        resource: resources.temp_node_buffers[0].as_entire_binding(),
+                        resource: resources.temp_node_buffers[1].as_entire_binding(),
                     },
                     BindGroupEntry {
                         binding: 3,
+                        resource: resources.temp_node_buffers[0].as_entire_binding(),
+                    },
+                    BindGroupEntry {
+                        binding: 4,
                         resource: resources.final_node_buffer.as_entire_binding(),
                     },
                 ],

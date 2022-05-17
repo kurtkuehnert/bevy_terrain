@@ -22,16 +22,12 @@ fn prepare_area_list() {
 
     atomicStore(&parameters.child_index, 0u);
     atomicStore(&parameters.final_index, 0u);
-
-    parameters.lod = 8u;
 }
 
 [[stage(compute), workgroup_size(1, 1, 1)]]
 fn prepare_node_list() {
     indirect_buffer.workgroup_count_x = atomicExchange(&parameters.child_index, 0u);
     indirect_buffer.workgroup_count_y = 1u;
-
-    parameters.lod = parameters.lod - 1u;
 }
 
 [[stage(compute), workgroup_size(1, 1, 1)]]

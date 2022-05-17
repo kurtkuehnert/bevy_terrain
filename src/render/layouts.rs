@@ -12,11 +12,11 @@ pub(crate) const NODE_DEACTIVATION_SIZE: BufferAddress =
     mem::size_of::<NodeDeactivation>() as BufferAddress;
 pub(crate) const NODE_SIZE: BufferAddress = 4 * mem::size_of::<u32>() as BufferAddress;
 pub(crate) const INDIRECT_BUFFER_SIZE: BufferAddress = 5 * mem::size_of::<u32>() as BufferAddress;
-pub(crate) const PARAMETER_BUFFER_SIZE: BufferAddress = 3 * mem::size_of::<u32>() as BufferAddress; // minimum buffer size = 16
+pub(crate) const PARAMETER_BUFFER_SIZE: BufferAddress = 2 * mem::size_of::<u32>() as BufferAddress; // minimum buffer size = 16
 pub(crate) const CONFIG_BUFFER_SIZE: BufferAddress =
     mem::size_of::<<TerrainConfigUniform as AsStd140>::Output>() as BufferAddress;
 pub(crate) const CULL_DATA_BUFFER_SIZE: BufferAddress =
-    (mem::size_of::<Vec2>() * 2 + 2 * mem::size_of::<Mat4>()) as BufferAddress;
+    (mem::size_of::<Vec4>() + 2 * mem::size_of::<Mat4>()) as BufferAddress;
 
 pub(crate) const PREPARE_INDIRECT_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
     label: None,
@@ -95,9 +95,20 @@ pub(crate) const UPDATE_QUADTREE_LAYOUT: BindGroupLayoutDescriptor = BindGroupLa
 pub(crate) const BUILD_NODE_LIST_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
     label: None,
     entries: &[
-        // parameter buffer
+        // config buffer
         BindGroupLayoutEntry {
             binding: 0,
+            visibility: ShaderStages::COMPUTE,
+            ty: BindingType::Buffer {
+                ty: BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: BufferSize::new(CONFIG_BUFFER_SIZE),
+            },
+            count: None,
+        },
+        // parameter buffer
+        BindGroupLayoutEntry {
+            binding: 1,
             visibility: ShaderStages::COMPUTE,
             ty: BindingType::Buffer {
                 ty: BufferBindingType::Storage { read_only: false },
@@ -108,7 +119,7 @@ pub(crate) const BUILD_NODE_LIST_LAYOUT: BindGroupLayoutDescriptor = BindGroupLa
         },
         // parent node list
         BindGroupLayoutEntry {
-            binding: 1,
+            binding: 2,
             visibility: ShaderStages::COMPUTE,
             ty: BindingType::Buffer {
                 ty: BufferBindingType::Storage { read_only: false },
@@ -119,7 +130,7 @@ pub(crate) const BUILD_NODE_LIST_LAYOUT: BindGroupLayoutDescriptor = BindGroupLa
         },
         // child node list
         BindGroupLayoutEntry {
-            binding: 2,
+            binding: 3,
             visibility: ShaderStages::COMPUTE,
             ty: BindingType::Buffer {
                 ty: BufferBindingType::Storage { read_only: false },
@@ -130,7 +141,7 @@ pub(crate) const BUILD_NODE_LIST_LAYOUT: BindGroupLayoutDescriptor = BindGroupLa
         },
         // final node list
         BindGroupLayoutEntry {
-            binding: 3,
+            binding: 4,
             visibility: ShaderStages::COMPUTE,
             ty: BindingType::Buffer {
                 ty: BufferBindingType::Storage { read_only: false },
