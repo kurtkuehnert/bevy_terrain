@@ -1,3 +1,4 @@
+use crate::debug::{extract_debug, toggle_debug_system, DebugTerrain};
 use crate::{
     attachment_loader::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk},
     config::TerrainConfig,
@@ -40,6 +41,7 @@ pub mod attachment;
 pub mod attachment_loader;
 pub mod bundles;
 pub mod config;
+pub mod debug;
 pub mod node_atlas;
 pub mod preprocess;
 pub mod quadtree;
@@ -62,8 +64,9 @@ impl ExtractComponent for Terrain {
     type Query = Read<Terrain>;
     type Filter = ();
 
-    fn extract_component(item: QueryItem<Self::Query>) -> Self {
-        *item
+    #[inline]
+    fn extract_component(_item: QueryItem<Self::Query>) -> Self {
+        Self
     }
 }
 
@@ -93,11 +96,13 @@ impl Plugin for TerrainPlugin {
 
         app.add_plugin(ExtractComponentPlugin::<Terrain>::default())
             .add_plugin(ExtractComponentPlugin::<TerrainConfig>::default())
+            .init_resource::<DebugTerrain>()
             .add_event::<LoadNodeEvent>()
             .add_system(traverse_quadtree.before(update_nodes))
             .add_system(update_nodes)
             .add_system(start_loading_attachment_from_disk.after(update_nodes))
-            .add_system(finish_loading_attachment_from_disk);
+            .add_system(finish_loading_attachment_from_disk)
+            .add_system(toggle_debug_system);
 
         let render_app = app
             .sub_app_mut(RenderApp)
@@ -111,6 +116,7 @@ impl Plugin for TerrainPlugin {
             .init_resource::<PersistentComponents<GpuNodeAtlas>>()
             .init_resource::<PersistentComponents<TerrainRenderData>>()
             .add_system_to_stage(RenderStage::Extract, extract_terrain)
+            .add_system_to_stage(RenderStage::Extract, extract_debug)
             .add_system_to_stage(RenderStage::Extract, update_gpu_quadtree)
             .add_system_to_stage(RenderStage::Extract, update_gpu_node_atlas)
             .add_system_to_stage(RenderStage::Prepare, initialize_terrain_resources)

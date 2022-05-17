@@ -1,4 +1,4 @@
-use crate::render::layouts::PATCH_LIST_LAYOUT;
+use crate::{render::layouts::PATCH_LIST_LAYOUT, DebugTerrain};
 use bevy::{
     pbr::MeshPipeline,
     prelude::*,
@@ -10,6 +10,9 @@ bitflags::bitflags! {
     pub struct TerrainPipelineKey: u32 {
         const NONE               = 0;
         const WIREFRAME          = (1 << 0);
+        const ALBEDO             = (1 << 1);
+        const PATCHES            = (1 << 2);
+        const LOD                = (1 << 3);
         const MSAA_RESERVED_BITS = TerrainPipelineKey::MSAA_MASK_BITS << TerrainPipelineKey::MSAA_SHIFT_BITS;
     }
 }
@@ -22,17 +25,51 @@ impl TerrainPipelineKey {
         let msaa_bits = ((msaa_samples - 1) & Self::MSAA_MASK_BITS) << Self::MSAA_SHIFT_BITS;
         TerrainPipelineKey::from_bits(msaa_bits).unwrap()
     }
+    pub fn from_wireframe(wireframe: bool) -> Self {
+        TerrainPipelineKey::from_bits(wireframe as u32).unwrap()
+    }
+
+    pub fn from_debug(debug: &DebugTerrain) -> Self {
+        let mut key = TerrainPipelineKey::NONE;
+
+        if debug.albedo {
+            key |= TerrainPipelineKey::ALBEDO;
+        }
+        if debug.show_patches {
+            key |= TerrainPipelineKey::PATCHES;
+        }
+        if debug.show_lod {
+            key |= TerrainPipelineKey::LOD;
+        }
+
+        key
+    }
 
     pub fn msaa_samples(&self) -> u32 {
         ((self.bits >> Self::MSAA_SHIFT_BITS) & Self::MSAA_MASK_BITS) + 1
     }
 
-    pub fn from_wireframe(wireframe: bool) -> Self {
-        TerrainPipelineKey::from_bits(wireframe as u32).unwrap()
+    pub fn polygon_mode(&self) -> PolygonMode {
+        match (self.bits & TerrainPipelineKey::WIREFRAME.bits) != 0 {
+            true => PolygonMode::Line,
+            false => PolygonMode::Fill,
+        }
     }
 
-    pub fn wireframe(&self) -> bool {
-        (self.bits & 1) != 0
+    pub fn shader_defs(&self) -> Vec<String> {
+        let mut shader_defs = Vec::new();
+
+        if (self.bits & TerrainPipelineKey::ALBEDO.bits) != 0 {
+            shader_defs.push("ALBEDO".to_string());
+        }
+        if (self.bits & TerrainPipelineKey::PATCHES.bits) != 0 {
+            shader_defs.push("SHOW_PATCHES".to_string());
+        }
+        if (self.bits & TerrainPipelineKey::LOD.bits) != 0 {
+            shader_defs.push("SHOW_LOD".to_string());
+        }
+
+        shader_defs
     }
 }
 
@@ -70,6 +107,8 @@ impl SpecializedRenderPipeline for TerrainRenderPipeline {
     type Key = TerrainPipelineKey;
 
     fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
+        let shader_defs = key.shader_defs();
+
         RenderPipelineDescriptor {
             label: None,
             layout: Some(vec![
@@ -81,24 +120,21 @@ impl SpecializedRenderPipeline for TerrainRenderPipeline {
             vertex: VertexState {
                 shader: self.shader.clone(),
                 entry_point: "vertex".into(),
-                shader_defs: Vec::new(),
+                shader_defs: shader_defs.clone(),
                 buffers: Vec::new(),
             },
             primitive: PrimitiveState {
                 front_face: FrontFace::Ccw,
                 cull_mode: Some(Face::Back),
                 unclipped_depth: false,
-                polygon_mode: match key.wireframe() {
-                    false => PolygonMode::Fill,
-                    true => PolygonMode::Line,
-                },
+                polygon_mode: key.polygon_mode(),
                 conservative: false,
                 topology: PrimitiveTopology::TriangleStrip,
                 strip_index_format: None,
             },
             fragment: Some(FragmentState {
                 shader: self.shader.clone(),
-                shader_defs: Vec::new(),
+                shader_defs,
                 entry_point: "fragment".into(),
                 targets: vec![ColorTargetState {
                     format: TextureFormat::bevy_default(),

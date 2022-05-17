@@ -11,7 +11,7 @@ pub struct TerrainComputeData {
     pub(crate) refinement_count: usize,
     pub(crate) indirect_buffer: Buffer,
     pub(crate) prepare_indirect_bind_group: BindGroup,
-    pub(crate) tesselation_bind_groups: [BindGroup; 2],
+    pub(crate) tessellation_bind_groups: [BindGroup; 2],
 }
 
 impl TerrainComputeData {
@@ -29,14 +29,14 @@ impl TerrainComputeData {
         let build_node_list_bind_groups = Self::create_build_node_list_bind_groups(
             device,
             resources,
-            &compute_pipelines.tesselation_layout,
+            &compute_pipelines.tessellation_layout,
         );
 
         Self {
             refinement_count: (config.lod_count - 1) as usize,
             indirect_buffer: resources.indirect_buffer.clone(),
             prepare_indirect_bind_group,
-            tesselation_bind_groups: build_node_list_bind_groups,
+            tessellation_bind_groups: build_node_list_bind_groups,
         }
     }
 
