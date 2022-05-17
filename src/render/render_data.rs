@@ -129,7 +129,7 @@ impl TerrainRenderData {
             label: None,
             entries: &[BindGroupEntry {
                 binding: 0,
-                resource: resources.patch_buffer.as_entire_binding(),
+                resource: resources.final_node_buffer.as_entire_binding(),
             }],
             layout,
         })

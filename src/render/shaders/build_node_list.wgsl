@@ -1,35 +1,53 @@
 #import bevy_terrain::node
 #import bevy_terrain::parameters
 
+struct Patch {
+    x: u32;
+    y: u32;
+    size: u32;
+    stitch: u32; // 4 bit
+};
+
+struct PatchList {
+    data: array<Patch>;
+};
+
+struct CullData {
+    world_position: vec4<f32>;
+    view_proj: mat4x4<f32>;
+    model: mat4x4<f32>;
+};
+
 [[group(0), binding(0)]]
-var quadtree: texture_2d_array<u32>;
-[[group(0), binding(1)]]
 var<storage, read_write> parameters: Parameters;
+[[group(0), binding(1)]]
+var<storage, read_write> parent_list: PatchList;
 [[group(0), binding(2)]]
-var<storage, read_write> parent_list: NodeList;
+var<storage, read_write> child_list: PatchList;
 [[group(0), binding(3)]]
-var<storage, read_write> child_list: NodeList;
-[[group(0), binding(4)]]
-var<storage, read_write> final_list: NodeList;
+var<storage, read_write> final_list: PatchList;
+
+[[group(1), binding(0)]]
+var<uniform> cull_data: CullData;
+
+fn divide(x: u32, y: u32, size: u32) -> bool {
+    let world_position = vec2<f32>(f32(x + 4u), f32(y + 4u)) * f32(size);
+    let distance = length(cull_data.world_position.xz - world_position);
+
+    return distance < f32(size * 8u * 2u) * 8.0;
+}
 
 [[stage(compute), workgroup_size(1, 1, 1)]]
 fn build_area_list(
     [[builtin(global_invocation_id)]] invocation_id: vec3<u32>,
 ) {
-    let x = invocation_id.x;
-    let y = invocation_id.y;
-    let lod = parameters.lod - 1u;
-    let id = node_id(lod, x, y);
-
-    // assume that area nodes are allways loaded
-    //
-    // if (atlas_id < INACTIVE_ID) {
-    //     let child_index = atomicAdd(&parameters.child_index, 1u);
-    //     child_list.data[child_index] = id;
-    // }
+    let x = invocation_id.x * 8u;
+    let y = invocation_id.y * 8u;
+    let size = 1u << parameters.lod;
+    let stitch = 0u; // no stitch required
 
     let child_index = atomicAdd(&parameters.child_index, 1u);
-    child_list.data[child_index] = id;
+    child_list.data[child_index] = Patch(x, y, size, stitch);
 }
 
 [[stage(compute), workgroup_size(1, 1, 1)]]
@@ -37,34 +55,36 @@ fn build_node_list(
     [[builtin(global_invocation_id)]] invocation_id: vec3<u32>,
 ) {
     let parent_index = invocation_id.x;
-    let parent_id = parent_list.data[parent_index];
-    let parent_position = node_position(parent_id);
+    let parent_patch = parent_list.data[parent_index];
 
-    var loaded: u32 = 0u;
-    var child_ids: array<u32, 4>;
-    let lod = parent_position.lod - 1u;
+    if (divide(parent_patch.x, parent_patch.y, parent_patch.size)) {
+        let size = parent_patch.size >> 1u;
 
-    for (var i: u32 = 0u; i < 4u; i = i + 1u) {
-        let x = (parent_position.x << 1u) + (i & 1u);
-        let y = (parent_position.y << 1u) + ((i >> 1u) & 1u);
-        child_ids[i] = node_id(lod, x, y);
+        //       bit |      3 |      2 |      1 |      0
+        // direction | bottom |  right |    top |   left
+        var stitch = u32(!divide(parent_patch.x - 8u, parent_patch.y,      parent_patch.size))
+                   | u32(!divide(parent_patch.x,      parent_patch.y - 8u, parent_patch.size)) << 1u
+                   | u32(!divide(parent_patch.x + 8u, parent_patch.y,      parent_patch.size)) << 2u
+                   | u32(!divide(parent_patch.x,      parent_patch.y + 8u, parent_patch.size)) << 3u;
 
-        let quadtree_entry = textureLoad(quadtree, vec2<i32>(i32(x), i32(y)), i32(lod), 0);
-
-        if (quadtree_entry.z == lod ) {
-            loaded = loaded + (1u << i);
-        }
-    }
-
-    if (loaded == 0xFu) {
+        //    i |    3 |    2 |    1 |    0
+        //  x y |  1 1 |  0 1 |  1 0 |  0 0
+        // mask | 1100 | 1001 | 0110 | 0011
+        // mask |    C |    9 |    6 |    3
         for (var i: u32 = 0u; i < 4u; i = i + 1u) {
+            let x = (parent_patch.x << 1u) + (i       & 1u) * 8u;
+            let y = (parent_patch.y << 1u) + (i >> 1u & 1u) * 8u;
+
+            // select two adjacent edges on parent level
+            let stitch = stitch & (0xC963u >> (i << 2u));
+
             let child_index = atomicAdd(&parameters.child_index, 1u);
-            child_list.data[child_index] = child_ids[i];
+            child_list.data[child_index] = Patch(x, y, size, stitch);
         }
     }
     else {
         let final_index = atomicAdd(&parameters.final_index, 1u);
-        final_list.data[final_index] = parent_id;
+        final_list.data[final_index] = parent_patch;
     }
 }
 

@@ -1,9 +1,10 @@
 #define_import_path bevy_terrain::patch
 
 struct Patch {
-    position: vec2<u32>;
-    scale: u32;
-    lod_delta: u32; // should be u16
+    x: u32;
+    y: u32;
+    size: u32;
+    stitch: u32; // 4 bit
 };
 
 struct PatchList {
