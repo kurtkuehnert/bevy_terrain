@@ -12,8 +12,8 @@ pub struct TerrainResources {
     pub(crate) indirect_buffer: Buffer,
     pub(crate) parameter_buffer: Buffer,
     pub(crate) config_buffer: Buffer,
-    pub(crate) temp_node_buffers: [Buffer; 2],
-    pub(crate) final_node_buffer: Buffer,
+    pub(crate) temp_patch_buffers: [Buffer; 2],
+    pub(crate) final_patch_buffer: Buffer,
 }
 
 impl TerrainResources {
@@ -21,14 +21,14 @@ impl TerrainResources {
         let indirect_buffer = Self::create_indirect_buffer(device);
         let parameter_buffer = Self::create_parameter_buffer(device);
         let config_buffer = Self::create_config_buffer(device, config);
-        let (temp_node_buffers, final_node_buffer) = Self::create_node_buffers(device, config);
+        let (temp_patch_buffers, final_patch_buffer) = Self::create_patch_buffers(device, config);
 
         Self {
             indirect_buffer,
             parameter_buffer,
             config_buffer,
-            temp_node_buffers,
-            final_node_buffer,
+            temp_patch_buffers,
+            final_patch_buffer,
         }
     }
 
@@ -57,12 +57,14 @@ impl TerrainResources {
         })
     }
 
-    fn create_node_buffers(device: &RenderDevice, config: &TerrainConfig) -> ([Buffer; 2], Buffer) {
+    fn create_patch_buffers(
+        device: &RenderDevice,
+        config: &TerrainConfig,
+    ) -> ([Buffer; 2], Buffer) {
         let buffer_descriptor = BufferDescriptor {
-            label: "node_buffer".into(),
-            size: 10000
-                * NODE_SIZE
-                * (config.chunk_count.x * config.chunk_count.y) as BufferAddress,
+            label: "patch_buffer".into(),
+            // Todo: figure out a better lower bound
+            size: 10 * PATCH_SIZE * (config.chunk_count.x * config.chunk_count.y) as BufferAddress,
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
         };

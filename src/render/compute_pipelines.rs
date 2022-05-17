@@ -21,22 +21,22 @@ use strum_macros::{EnumCount, EnumIter};
 pub enum TerrainComputePipelineKey {
     ActivateNodes,
     DeactivateNodes,
-    BuildAreaList,
-    BuildNodeList,
-    BuildChunkList,
-    PrepareAreaList,
-    PrepareNodeList,
+    SelectCoarsestPatches,
+    RefinePatches,
+    SelectFinestPatches,
+    PrepareTesselation,
+    PrepareRefinement,
     PrepareRender,
 }
 
 pub struct TerrainComputePipelines {
     pub(crate) prepare_indirect_layout: BindGroupLayout,
     pub(crate) update_quadtree_layout: BindGroupLayout,
-    pub(crate) build_node_list_layout: BindGroupLayout,
+    pub(crate) tesselation_layout: BindGroupLayout,
     pub(crate) cull_data_layout: BindGroupLayout,
     prepare_indirect_shader: Handle<Shader>,
     update_quadtree_shader: Handle<Shader>,
-    build_node_list_shader: Handle<Shader>,
+    tesselation_shader: Handle<Shader>,
 }
 
 impl FromWorld for TerrainComputePipelines {
@@ -46,24 +46,24 @@ impl FromWorld for TerrainComputePipelines {
 
         let prepare_indirect_layout = device.create_bind_group_layout(&PREPARE_INDIRECT_LAYOUT);
         let update_quadtree_layout = device.create_bind_group_layout(&UPDATE_QUADTREE_LAYOUT);
-        let build_node_list_layout = device.create_bind_group_layout(&BUILD_NODE_LIST_LAYOUT);
+        let tesselation_layout = device.create_bind_group_layout(&TESSELATION_LAYOUT);
         let cull_data_layout = device.create_bind_group_layout(&CULL_DATA_LAYOUT);
 
         let prepare_indirect_shader =
             asset_server.load("../plugins/bevy_terrain/src/render/shaders/prepare_indirect.wgsl");
         let update_quadtree_shader =
             asset_server.load("../plugins/bevy_terrain/src/render/shaders/update_quadtree.wgsl");
-        let build_node_list_shader =
-            asset_server.load("../plugins/bevy_terrain/src/render/shaders/build_node_list.wgsl");
+        let tesselation_shader =
+            asset_server.load("../plugins/bevy_terrain/src/render/shaders/tesselation.wgsl");
 
         TerrainComputePipelines {
             prepare_indirect_layout,
             update_quadtree_layout,
-            build_node_list_layout,
+            tesselation_layout,
             cull_data_layout,
             prepare_indirect_shader,
             update_quadtree_shader,
-            build_node_list_shader,
+            tesselation_shader,
         }
     }
 }
@@ -87,39 +87,39 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
                 shader = self.update_quadtree_shader.clone();
                 entry_point = "deactivate_nodes".into();
             }
-            TerrainComputePipelineKey::BuildAreaList => {
+            TerrainComputePipelineKey::SelectCoarsestPatches => {
                 layout = Some(vec![
-                    self.build_node_list_layout.clone(),
+                    self.tesselation_layout.clone(),
                     self.cull_data_layout.clone(),
                 ]);
-                shader = self.build_node_list_shader.clone();
-                entry_point = "build_area_list".into();
+                shader = self.tesselation_shader.clone();
+                entry_point = "select_coarsest_patches".into();
             }
-            TerrainComputePipelineKey::BuildNodeList => {
+            TerrainComputePipelineKey::RefinePatches => {
                 layout = Some(vec![
-                    self.build_node_list_layout.clone(),
+                    self.tesselation_layout.clone(),
                     self.cull_data_layout.clone(),
                 ]);
-                shader = self.build_node_list_shader.clone();
-                entry_point = "build_node_list".into();
+                shader = self.tesselation_shader.clone();
+                entry_point = "refine_patches".into();
             }
-            TerrainComputePipelineKey::BuildChunkList => {
+            TerrainComputePipelineKey::SelectFinestPatches => {
                 layout = Some(vec![
-                    self.build_node_list_layout.clone(),
+                    self.tesselation_layout.clone(),
                     self.cull_data_layout.clone(),
                 ]);
-                shader = self.build_node_list_shader.clone();
-                entry_point = "build_chunk_list".into();
+                shader = self.tesselation_shader.clone();
+                entry_point = "select_finest_patches".into();
             }
-            TerrainComputePipelineKey::PrepareAreaList => {
+            TerrainComputePipelineKey::PrepareTesselation => {
                 layout = Some(vec![self.prepare_indirect_layout.clone()]);
                 shader = self.prepare_indirect_shader.clone();
-                entry_point = "prepare_area_list".into();
+                entry_point = "prepare_tesselation".into();
             }
-            TerrainComputePipelineKey::PrepareNodeList => {
+            TerrainComputePipelineKey::PrepareRefinement => {
                 layout = Some(vec![self.prepare_indirect_layout.clone()]);
                 shader = self.prepare_indirect_shader.clone();
-                entry_point = "prepare_node_list".into();
+                entry_point = "prepare_refinement".into();
             }
             TerrainComputePipelineKey::PrepareRender => {
                 layout = Some(vec![self.prepare_indirect_layout.clone()]);
@@ -171,38 +171,38 @@ impl TerrainComputeNode {
         pass.dispatch(gpu_quadtree.deactivation_count, 1, 1);
     }
 
-    fn build_node_list<'a>(
+    fn tessellate_terrain<'a>(
         pass: &mut ComputePass<'a>,
         pipelines: &'a Vec<&'a ComputePipeline>,
-        bind_groups: &'a TerrainComputeData,
+        data: &'a TerrainComputeData,
     ) {
-        pass.set_bind_group(0, &bind_groups.prepare_indirect_bind_group, &[]);
-        pass.set_pipeline(pipelines[TerrainComputePipelineKey::PrepareAreaList as usize]);
+        pass.set_bind_group(0, &data.prepare_indirect_bind_group, &[]);
+        pass.set_pipeline(pipelines[TerrainComputePipelineKey::PrepareTesselation as usize]);
         pass.dispatch(1, 1, 1);
 
-        pass.set_bind_group(0, &bind_groups.build_node_list_bind_groups[1], &[]);
-        pass.set_pipeline(pipelines[TerrainComputePipelineKey::BuildAreaList as usize]);
-        pass.dispatch_indirect(&bind_groups.indirect_buffer, 0);
+        pass.set_bind_group(0, &data.tesselation_bind_groups[1], &[]);
+        pass.set_pipeline(pipelines[TerrainComputePipelineKey::SelectCoarsestPatches as usize]);
+        pass.dispatch_indirect(&data.indirect_buffer, 0);
 
-        pass.set_bind_group(0, &bind_groups.prepare_indirect_bind_group, &[]);
-        pass.set_pipeline(pipelines[TerrainComputePipelineKey::PrepareNodeList as usize]);
+        pass.set_bind_group(0, &data.prepare_indirect_bind_group, &[]);
+        pass.set_pipeline(pipelines[TerrainComputePipelineKey::PrepareRefinement as usize]);
         pass.dispatch(1, 1, 1);
 
-        let count = 7;
+        let count = data.refinement_count;
 
         for i in 0..count {
-            pass.set_bind_group(0, &bind_groups.build_node_list_bind_groups[i % 2], &[]);
-            pass.set_pipeline(pipelines[TerrainComputePipelineKey::BuildNodeList as usize]);
-            pass.dispatch_indirect(&bind_groups.indirect_buffer, 0);
+            pass.set_bind_group(0, &data.tesselation_bind_groups[i % 2], &[]);
+            pass.set_pipeline(pipelines[TerrainComputePipelineKey::RefinePatches as usize]);
+            pass.dispatch_indirect(&data.indirect_buffer, 0);
 
-            pass.set_bind_group(0, &bind_groups.prepare_indirect_bind_group, &[]);
-            pass.set_pipeline(pipelines[TerrainComputePipelineKey::PrepareNodeList as usize]);
+            pass.set_bind_group(0, &data.prepare_indirect_bind_group, &[]);
+            pass.set_pipeline(pipelines[TerrainComputePipelineKey::PrepareRefinement as usize]);
             pass.dispatch(1, 1, 1);
         }
 
-        pass.set_bind_group(0, &bind_groups.build_node_list_bind_groups[count % 2], &[]);
-        pass.set_pipeline(pipelines[TerrainComputePipelineKey::BuildChunkList as usize]);
-        pass.dispatch_indirect(&bind_groups.indirect_buffer, 0);
+        pass.set_bind_group(0, &data.tesselation_bind_groups[count % 2], &[]);
+        pass.set_pipeline(pipelines[TerrainComputePipelineKey::SelectFinestPatches as usize]);
+        pass.dispatch_indirect(&data.indirect_buffer, 0);
     }
 }
 
@@ -225,7 +225,7 @@ impl render_graph::Node for TerrainComputeNode {
         world: &World,
     ) -> Result<(), render_graph::NodeRunError> {
         let pipeline_cache = world.resource::<PipelineCache>();
-        let terrain_bind_groups = world.resource::<PersistentComponents<TerrainComputeData>>();
+        let compute_data = world.resource::<PersistentComponents<TerrainComputeData>>();
         let gpu_quadtrees = world.resource::<PersistentComponents<GpuQuadtree>>();
 
         let pipelines = &match TerrainComputePipelineKey::iter()
@@ -242,14 +242,14 @@ impl render_graph::Node for TerrainComputeNode {
 
         for (entity, culling_bind_group) in self.query.iter_manual(world) {
             let gpu_quadtree = gpu_quadtrees.get(&entity).unwrap();
-            let bind_groups = terrain_bind_groups.get(&entity).unwrap();
+            let data = compute_data.get(&entity).unwrap();
 
             pass.set_bind_group(1, &culling_bind_group.value, &[]);
 
             TerrainComputeNode::update_quadtree(pass, pipelines, gpu_quadtree);
-            TerrainComputeNode::build_node_list(pass, pipelines, bind_groups);
+            TerrainComputeNode::tessellate_terrain(pass, pipelines, data);
 
-            pass.set_bind_group(0, &bind_groups.prepare_indirect_bind_group, &[]);
+            pass.set_bind_group(0, &data.prepare_indirect_bind_group, &[]);
             pass.set_pipeline(pipelines[TerrainComputePipelineKey::PrepareRender as usize]);
             pass.dispatch(1, 1, 1);
         }

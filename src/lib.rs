@@ -48,8 +48,6 @@ pub mod viewer;
 
 const CONFIG_HANDLE: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 907665645684322571);
-const NODE_HANDLE: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 456563743231345678);
 const PATCH_HANDLE: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 556563744564564658);
 const PARAMETERS_HANDLE: HandleUntyped =
@@ -79,10 +77,6 @@ impl Plugin for TerrainPlugin {
         assets.set_untracked(
             CONFIG_HANDLE,
             Shader::from_wgsl(include_str!("render/shaders/config.wgsl")),
-        );
-        assets.set_untracked(
-            NODE_HANDLE,
-            Shader::from_wgsl(include_str!("render/shaders/node.wgsl")),
         );
         assets.set_untracked(
             PATCH_HANDLE,

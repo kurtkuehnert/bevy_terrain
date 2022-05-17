@@ -1,4 +1,16 @@
-#import bevy_terrain::node
+struct NodePosition {
+    lod: u32;
+    x: u32;
+    y: u32;
+};
+
+fn node_id(lod: u32, x: u32, y: u32) -> u32 {
+    return (lod & 0xFu) << 28u | (x & 0x3FFFu) << 14u | (y & 0x3FFFu);
+}
+
+fn node_position(id: u32) -> NodePosition {
+    return NodePosition((id >> 28u) & 0xFu, (id >> 14u) & 0x3FFFu, id & 0x3FFFu);
+}
 
 struct NodeActivation {
     node_id: u32; // node to update
@@ -18,7 +30,6 @@ struct NodeActivations {
 struct NodeDeactivations {
     data: array<NodeDeactivation>;
 };
-
 
 [[group(0), binding(0)]]
 var quadtree: texture_storage_2d_array<rgba8uint, read_write>;

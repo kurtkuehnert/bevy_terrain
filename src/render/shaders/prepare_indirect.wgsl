@@ -15,9 +15,9 @@ var<storage, read_write> indirect_buffer: IndirectBuffer;
 var<storage, read_write> parameters: Parameters;
 
 [[stage(compute), workgroup_size(1, 1, 1)]]
-fn prepare_area_list() {
-    indirect_buffer.workgroup_count_x = 2u;
-    indirect_buffer.workgroup_count_y = 2u;
+fn prepare_tesselation() {
+    indirect_buffer.workgroup_count_x = 20u;
+    indirect_buffer.workgroup_count_y = 20u;
     indirect_buffer.workgroup_count_z = 1u;
 
     atomicStore(&parameters.child_index, 0u);
@@ -25,7 +25,7 @@ fn prepare_area_list() {
 }
 
 [[stage(compute), workgroup_size(1, 1, 1)]]
-fn prepare_node_list() {
+fn prepare_refinement() {
     indirect_buffer.workgroup_count_x = atomicExchange(&parameters.child_index, 0u);
     indirect_buffer.workgroup_count_y = 1u;
 }
