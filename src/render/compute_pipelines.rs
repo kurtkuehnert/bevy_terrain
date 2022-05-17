@@ -24,7 +24,7 @@ pub enum TerrainComputePipelineKey {
     SelectCoarsestPatches,
     RefinePatches,
     SelectFinestPatches,
-    PrepareTesselation,
+    PrepareTessellation,
     PrepareRefinement,
     PrepareRender,
 }
@@ -32,11 +32,11 @@ pub enum TerrainComputePipelineKey {
 pub struct TerrainComputePipelines {
     pub(crate) prepare_indirect_layout: BindGroupLayout,
     pub(crate) update_quadtree_layout: BindGroupLayout,
-    pub(crate) tesselation_layout: BindGroupLayout,
+    pub(crate) tessellation_layout: BindGroupLayout,
     pub(crate) cull_data_layout: BindGroupLayout,
     prepare_indirect_shader: Handle<Shader>,
     update_quadtree_shader: Handle<Shader>,
-    tesselation_shader: Handle<Shader>,
+    tessellation_shader: Handle<Shader>,
 }
 
 impl FromWorld for TerrainComputePipelines {
@@ -46,24 +46,24 @@ impl FromWorld for TerrainComputePipelines {
 
         let prepare_indirect_layout = device.create_bind_group_layout(&PREPARE_INDIRECT_LAYOUT);
         let update_quadtree_layout = device.create_bind_group_layout(&UPDATE_QUADTREE_LAYOUT);
-        let tesselation_layout = device.create_bind_group_layout(&TESSELATION_LAYOUT);
+        let tessellation_layout = device.create_bind_group_layout(&TESSELLATION_LAYOUT);
         let cull_data_layout = device.create_bind_group_layout(&CULL_DATA_LAYOUT);
 
         let prepare_indirect_shader =
             asset_server.load("../plugins/bevy_terrain/src/render/shaders/prepare_indirect.wgsl");
         let update_quadtree_shader =
             asset_server.load("../plugins/bevy_terrain/src/render/shaders/update_quadtree.wgsl");
-        let tesselation_shader =
-            asset_server.load("../plugins/bevy_terrain/src/render/shaders/tesselation.wgsl");
+        let tessellation_shader =
+            asset_server.load("../plugins/bevy_terrain/src/render/shaders/tessellation.wgsl");
 
         TerrainComputePipelines {
             prepare_indirect_layout,
             update_quadtree_layout,
-            tesselation_layout,
+            tessellation_layout,
             cull_data_layout,
             prepare_indirect_shader,
             update_quadtree_shader,
-            tesselation_shader,
+            tessellation_shader,
         }
     }
 }
@@ -89,32 +89,32 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
             }
             TerrainComputePipelineKey::SelectCoarsestPatches => {
                 layout = Some(vec![
-                    self.tesselation_layout.clone(),
+                    self.tessellation_layout.clone(),
                     self.cull_data_layout.clone(),
                 ]);
-                shader = self.tesselation_shader.clone();
+                shader = self.tessellation_shader.clone();
                 entry_point = "select_coarsest_patches".into();
             }
             TerrainComputePipelineKey::RefinePatches => {
                 layout = Some(vec![
-                    self.tesselation_layout.clone(),
+                    self.tessellation_layout.clone(),
                     self.cull_data_layout.clone(),
                 ]);
-                shader = self.tesselation_shader.clone();
+                shader = self.tessellation_shader.clone();
                 entry_point = "refine_patches".into();
             }
             TerrainComputePipelineKey::SelectFinestPatches => {
                 layout = Some(vec![
-                    self.tesselation_layout.clone(),
+                    self.tessellation_layout.clone(),
                     self.cull_data_layout.clone(),
                 ]);
-                shader = self.tesselation_shader.clone();
+                shader = self.tessellation_shader.clone();
                 entry_point = "select_finest_patches".into();
             }
-            TerrainComputePipelineKey::PrepareTesselation => {
+            TerrainComputePipelineKey::PrepareTessellation => {
                 layout = Some(vec![self.prepare_indirect_layout.clone()]);
                 shader = self.prepare_indirect_shader.clone();
-                entry_point = "prepare_tesselation".into();
+                entry_point = "prepare_tessellation".into();
             }
             TerrainComputePipelineKey::PrepareRefinement => {
                 layout = Some(vec![self.prepare_indirect_layout.clone()]);
@@ -177,10 +177,10 @@ impl TerrainComputeNode {
         data: &'a TerrainComputeData,
     ) {
         pass.set_bind_group(0, &data.prepare_indirect_bind_group, &[]);
-        pass.set_pipeline(pipelines[TerrainComputePipelineKey::PrepareTesselation as usize]);
+        pass.set_pipeline(pipelines[TerrainComputePipelineKey::PrepareTessellation as usize]);
         pass.dispatch(1, 1, 1);
 
-        pass.set_bind_group(0, &data.tesselation_bind_groups[1], &[]);
+        pass.set_bind_group(0, &data.tessellation_bind_groups[1], &[]);
         pass.set_pipeline(pipelines[TerrainComputePipelineKey::SelectCoarsestPatches as usize]);
         pass.dispatch_indirect(&data.indirect_buffer, 0);
 
@@ -191,7 +191,7 @@ impl TerrainComputeNode {
         let count = data.refinement_count;
 
         for i in 0..count {
-            pass.set_bind_group(0, &data.tesselation_bind_groups[i % 2], &[]);
+            pass.set_bind_group(0, &data.tessellation_bind_groups[i % 2], &[]);
             pass.set_pipeline(pipelines[TerrainComputePipelineKey::RefinePatches as usize]);
             pass.dispatch_indirect(&data.indirect_buffer, 0);
 
@@ -200,7 +200,7 @@ impl TerrainComputeNode {
             pass.dispatch(1, 1, 1);
         }
 
-        pass.set_bind_group(0, &data.tesselation_bind_groups[count % 2], &[]);
+        pass.set_bind_group(0, &data.tessellation_bind_groups[count % 2], &[]);
         pass.set_pipeline(pipelines[TerrainComputePipelineKey::SelectFinestPatches as usize]);
         pass.dispatch_indirect(&data.indirect_buffer, 0);
     }

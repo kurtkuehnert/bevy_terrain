@@ -106,7 +106,7 @@ pub(crate) const UPDATE_QUADTREE_LAYOUT: BindGroupLayoutDescriptor = BindGroupLa
         },
     ],
 };
-pub(crate) const TESSELATION_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
+pub(crate) const TESSELLATION_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
     label: None,
     entries: &[
         // config buffer
