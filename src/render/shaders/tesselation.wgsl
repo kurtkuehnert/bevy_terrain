@@ -1,17 +1,6 @@
 #import bevy_terrain::config
-#import bevy_terrain::node
 #import bevy_terrain::parameters
-
-struct Patch {
-    x: u32;
-    y: u32;
-    size: u32;
-    stitch: u32; // 4 bit
-};
-
-struct PatchList {
-    data: array<Patch>;
-};
+#import bevy_terrain::patch
 
 struct CullData {
     world_position: vec4<f32>;
@@ -41,12 +30,12 @@ fn divide(x: u32, y: u32, size: u32) -> bool {
 }
 
 [[stage(compute), workgroup_size(1, 1, 1)]]
-fn build_area_list(
+fn select_coarsest_patches(
     [[builtin(global_invocation_id)]] invocation_id: vec3<u32>,
 ) {
     let x = invocation_id.x * config.patch_size;
     let y = invocation_id.y * config.patch_size;
-    let size = 1u << 7u;
+    let size = 1u << (config.lod_count - 1u);
     let stitch = 0u; // no stitch required
 
     let child_index = atomicAdd(&parameters.child_index, 1u);
@@ -54,7 +43,7 @@ fn build_area_list(
 }
 
 [[stage(compute), workgroup_size(1, 1, 1)]]
-fn build_node_list(
+fn refine_patches(
     [[builtin(global_invocation_id)]] invocation_id: vec3<u32>,
 ) {
     let parent_index = invocation_id.x;
@@ -92,7 +81,7 @@ fn build_node_list(
 }
 
 [[stage(compute), workgroup_size(1, 1, 1)]]
-fn build_chunk_list(
+fn select_finest_patches(
     [[builtin(global_invocation_id)]] invocation_id: vec3<u32>,
 ) {
     let parent_index = invocation_id.x;

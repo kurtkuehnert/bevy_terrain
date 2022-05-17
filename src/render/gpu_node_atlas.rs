@@ -1,6 +1,5 @@
-use crate::attachment::NodeAttachment;
-use crate::attachment::{AtlasAttachment, AttachmentIndex};
 use crate::{
+    attachment::{AtlasAttachment, AttachmentIndex, NodeAttachment},
     config::TerrainConfig,
     node_atlas::{NodeAtlas, NodeData},
     render::PersistentComponents,

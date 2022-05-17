@@ -1,22 +1,34 @@
-use crate::config::TerrainConfigUniform;
-use crate::quadtree::{NodeActivation, NodeDeactivation};
+use crate::{
+    config::TerrainConfigUniform,
+    quadtree::{NodeActivation, NodeDeactivation},
+    render::culling::CullingData,
+};
 use bevy::{
-    prelude::*,
+    core::{Pod, Zeroable},
     render::{render_resource::std140::AsStd140, render_resource::*},
 };
 use std::mem;
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Default, Zeroable, Pod)]
+struct Patch {
+    x: u32,
+    y: u32,
+    size: u32,
+    stitch: u32,
+}
 
 pub(crate) const NODE_ACTIVATION_SIZE: BufferAddress =
     mem::size_of::<NodeActivation>() as BufferAddress;
 pub(crate) const NODE_DEACTIVATION_SIZE: BufferAddress =
     mem::size_of::<NodeDeactivation>() as BufferAddress;
-pub(crate) const NODE_SIZE: BufferAddress = 4 * mem::size_of::<u32>() as BufferAddress;
+pub(crate) const PATCH_SIZE: BufferAddress = mem::size_of::<Patch>() as BufferAddress;
 pub(crate) const INDIRECT_BUFFER_SIZE: BufferAddress = 5 * mem::size_of::<u32>() as BufferAddress;
 pub(crate) const PARAMETER_BUFFER_SIZE: BufferAddress = 2 * mem::size_of::<u32>() as BufferAddress; // minimum buffer size = 16
 pub(crate) const CONFIG_BUFFER_SIZE: BufferAddress =
     mem::size_of::<<TerrainConfigUniform as AsStd140>::Output>() as BufferAddress;
 pub(crate) const CULL_DATA_BUFFER_SIZE: BufferAddress =
-    (mem::size_of::<Vec4>() + 2 * mem::size_of::<Mat4>()) as BufferAddress;
+    mem::size_of::<CullingData>() as BufferAddress;
 
 pub(crate) const PREPARE_INDIRECT_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
     label: None,
@@ -70,6 +82,7 @@ pub(crate) const UPDATE_QUADTREE_LAYOUT: BindGroupLayoutDescriptor = BindGroupLa
             },
             count: None,
         },
+        // node activations
         BindGroupLayoutEntry {
             binding: 1,
             visibility: ShaderStages::COMPUTE,
@@ -80,6 +93,7 @@ pub(crate) const UPDATE_QUADTREE_LAYOUT: BindGroupLayoutDescriptor = BindGroupLa
             },
             count: None,
         },
+        // node deactivations
         BindGroupLayoutEntry {
             binding: 2,
             visibility: ShaderStages::COMPUTE,
@@ -92,7 +106,7 @@ pub(crate) const UPDATE_QUADTREE_LAYOUT: BindGroupLayoutDescriptor = BindGroupLa
         },
     ],
 };
-pub(crate) const BUILD_NODE_LIST_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
+pub(crate) const TESSELATION_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
     label: None,
     entries: &[
         // config buffer
@@ -117,36 +131,36 @@ pub(crate) const BUILD_NODE_LIST_LAYOUT: BindGroupLayoutDescriptor = BindGroupLa
             },
             count: None,
         },
-        // parent node list
+        // parent patch list
         BindGroupLayoutEntry {
             binding: 2,
             visibility: ShaderStages::COMPUTE,
             ty: BindingType::Buffer {
                 ty: BufferBindingType::Storage { read_only: false },
                 has_dynamic_offset: false,
-                min_binding_size: BufferSize::new(NODE_SIZE),
+                min_binding_size: BufferSize::new(PATCH_SIZE),
             },
             count: None,
         },
-        // child node list
+        // child patch list
         BindGroupLayoutEntry {
             binding: 3,
             visibility: ShaderStages::COMPUTE,
             ty: BindingType::Buffer {
                 ty: BufferBindingType::Storage { read_only: false },
                 has_dynamic_offset: false,
-                min_binding_size: BufferSize::new(NODE_SIZE),
+                min_binding_size: BufferSize::new(PATCH_SIZE),
             },
             count: None,
         },
-        // final node list
+        // final patch list
         BindGroupLayoutEntry {
             binding: 4,
             visibility: ShaderStages::COMPUTE,
             ty: BindingType::Buffer {
                 ty: BufferBindingType::Storage { read_only: false },
                 has_dynamic_offset: false,
-                min_binding_size: BufferSize::new(NODE_SIZE),
+                min_binding_size: BufferSize::new(PATCH_SIZE),
             },
             count: None,
         },
@@ -167,6 +181,7 @@ pub(crate) const CULL_DATA_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDe
     }],
 };
 pub(crate) const PATCH_LIST_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
+    // patch list
     label: None,
     entries: &[BindGroupLayoutEntry {
         binding: 0,
@@ -174,7 +189,7 @@ pub(crate) const PATCH_LIST_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutD
         ty: BindingType::Buffer {
             ty: BufferBindingType::Storage { read_only: true },
             has_dynamic_offset: false,
-            min_binding_size: BufferSize::new(NODE_SIZE),
+            min_binding_size: BufferSize::new(PATCH_SIZE),
         },
         count: None,
     }],

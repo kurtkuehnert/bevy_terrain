@@ -6,7 +6,7 @@ use bevy::{
     prelude::*,
     render::{render_resource::*, renderer::RenderDevice, view::ExtractedView},
 };
-use bytemuck::{bytes_of, cast};
+use bytemuck::bytes_of;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, Zeroable, Pod)]
@@ -15,6 +15,7 @@ pub struct CullingData {
     pub(crate) view_proj: Mat4,
     pub(crate) model: Mat4,
 }
+
 #[derive(Component)]
 pub struct CullingBindGroup {
     pub(crate) value: BindGroup,

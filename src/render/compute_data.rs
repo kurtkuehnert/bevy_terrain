@@ -1,6 +1,6 @@
 use crate::{
     render::{resources::TerrainResources, PersistentComponents},
-    GpuQuadtree, TerrainComputePipelines, TerrainConfig,
+    TerrainComputePipelines, TerrainConfig,
 };
 use bevy::{
     prelude::*,
@@ -8,11 +8,10 @@ use bevy::{
 };
 
 pub struct TerrainComputeData {
-    pub(crate) prepare_node_list_count: usize,
-    pub(crate) chunk_count: u32,
+    pub(crate) refinement_count: usize,
     pub(crate) indirect_buffer: Buffer,
     pub(crate) prepare_indirect_bind_group: BindGroup,
-    pub(crate) build_node_list_bind_groups: [BindGroup; 2],
+    pub(crate) tesselation_bind_groups: [BindGroup; 2],
 }
 
 impl TerrainComputeData {
@@ -30,15 +29,14 @@ impl TerrainComputeData {
         let build_node_list_bind_groups = Self::create_build_node_list_bind_groups(
             device,
             resources,
-            &compute_pipelines.build_node_list_layout,
+            &compute_pipelines.tesselation_layout,
         );
 
         Self {
-            prepare_node_list_count: (config.lod_count - 1) as usize,
-            chunk_count: config.chunk_count.x * config.chunk_count.y,
+            refinement_count: (config.lod_count - 1) as usize,
             indirect_buffer: resources.indirect_buffer.clone(),
             prepare_indirect_bind_group,
-            build_node_list_bind_groups,
+            tesselation_bind_groups: build_node_list_bind_groups,
         }
     }
 
@@ -61,15 +59,15 @@ impl TerrainComputeData {
                     },
                     BindGroupEntry {
                         binding: 2,
-                        resource: resources.temp_node_buffers[0].as_entire_binding(),
+                        resource: resources.temp_patch_buffers[0].as_entire_binding(),
                     },
                     BindGroupEntry {
                         binding: 3,
-                        resource: resources.temp_node_buffers[1].as_entire_binding(),
+                        resource: resources.temp_patch_buffers[1].as_entire_binding(),
                     },
                     BindGroupEntry {
                         binding: 4,
-                        resource: resources.final_node_buffer.as_entire_binding(),
+                        resource: resources.final_patch_buffer.as_entire_binding(),
                     },
                 ],
                 layout,
@@ -87,15 +85,15 @@ impl TerrainComputeData {
                     },
                     BindGroupEntry {
                         binding: 2,
-                        resource: resources.temp_node_buffers[1].as_entire_binding(),
+                        resource: resources.temp_patch_buffers[1].as_entire_binding(),
                     },
                     BindGroupEntry {
                         binding: 3,
-                        resource: resources.temp_node_buffers[0].as_entire_binding(),
+                        resource: resources.temp_patch_buffers[0].as_entire_binding(),
                     },
                     BindGroupEntry {
                         binding: 4,
-                        resource: resources.final_node_buffer.as_entire_binding(),
+                        resource: resources.final_patch_buffer.as_entire_binding(),
                     },
                 ],
                 layout,

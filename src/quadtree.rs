@@ -34,8 +34,6 @@ pub struct NodeDeactivation {
 /// The state of a [`TreeNode`] inside the quadtree.
 #[derive(PartialOrd, PartialEq)]
 enum NodeState {
-    /// This node does not exist. Useful for sparse terrains, which are not rectangular in shape.
-    Nonexistent,
     /// The node is not part of the [`NodeAtlas`](crate::node_atlas::NodeAtlas) and therefore
     /// not available for rendering. It may or may not be loaded.
     Inactive,
@@ -97,7 +95,6 @@ impl TreeNode {
 
         // update the state and determine whether to travers the children
         let traverse_children = match (should_be_active, &self.state) {
-            (_, NodeState::Nonexistent) => false,  // does not have children
             (false, NodeState::Inactive) => false, // can't have active children
             (false, NodeState::Loading) => false, // Todo: should this be ignored? cancel into cache
             (false, NodeState::Active) => {

@@ -1,8 +1,10 @@
-use crate::render::layouts::{NODE_ACTIVATION_SIZE, NODE_DEACTIVATION_SIZE};
 use crate::{
     config::TerrainConfig,
     quadtree::{NodeActivation, NodeDeactivation, Quadtree},
-    render::PersistentComponents,
+    render::{
+        layouts::{NODE_ACTIVATION_SIZE, NODE_DEACTIVATION_SIZE},
+        PersistentComponents,
+    },
     Terrain, TerrainComputePipelines,
 };
 use bevy::{
