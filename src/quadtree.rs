@@ -90,10 +90,10 @@ impl TreeNode {
             self.state = NodeState::Active;
         }
 
-        // load a rectangle of nodes around the viewer
-        let distance = viewer.position - self.position - Vec2::splat(self.size / 2.0);
-        let should_be_active =
-            self.root || distance.abs().max_element() < viewer.view_distance * self.size;
+        let distance = viewer
+            .position
+            .distance(self.position + Vec2::splat(self.size / 2.0));
+        let should_be_active = self.root || distance < viewer.view_distance * self.size;
 
         // update the state and determine whether to travers the children
         let traverse_children = match (should_be_active, &self.state) {
