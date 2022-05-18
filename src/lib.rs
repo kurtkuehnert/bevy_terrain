@@ -1,7 +1,7 @@
-use crate::debug::{extract_debug, toggle_debug_system, DebugTerrain};
 use crate::{
     attachment_loader::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk},
     config::TerrainConfig,
+    debug::{extract_debug, toggle_debug_system, DebugTerrain},
     node_atlas::{update_nodes, LoadNodeEvent},
     quadtree::traverse_quadtree,
     render::{
@@ -56,6 +56,8 @@ const PARAMETERS_HANDLE: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 656456784512075658);
 const ATLAS_HANDLE: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 124345314345873273);
+const DEBUG_HANDLE: HandleUntyped =
+    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 513467378691355413);
 
 #[derive(Clone, Copy, Component)]
 pub struct Terrain;
@@ -93,6 +95,10 @@ impl Plugin for TerrainPlugin {
             ATLAS_HANDLE,
             Shader::from_wgsl(include_str!("render/shaders/atlas.wgsl")),
         );
+        assets.set_untracked(
+            DEBUG_HANDLE,
+            Shader::from_wgsl(include_str!("render/shaders/debug.wgsl")),
+        );
 
         app.add_plugin(ExtractComponentPlugin::<Terrain>::default())
             .add_plugin(ExtractComponentPlugin::<TerrainConfig>::default())
@@ -122,6 +128,7 @@ impl Plugin for TerrainPlugin {
             .add_system_to_stage(RenderStage::Prepare, initialize_terrain_resources)
             .add_system_to_stage(RenderStage::Prepare, initialize_gpu_quadtree)
             .add_system_to_stage(RenderStage::Prepare, initialize_gpu_node_atlas)
+            // Todo: initialize should run in prepare
             .add_system_to_stage(RenderStage::Queue, initialize_terrain_compute_data)
             .add_system_to_stage(RenderStage::Queue, initialize_terrain_render_data)
             .add_system_to_stage(
