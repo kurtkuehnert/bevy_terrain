@@ -13,6 +13,9 @@ bitflags::bitflags! {
         const ALBEDO             = (1 << 1);
         const PATCHES            = (1 << 2);
         const LOD                = (1 << 3);
+        const NODES              = (1 << 4);
+        const COLOR              = (1 << 5);
+        const LIGHTING           = (1 << 6);
         const MSAA_RESERVED_BITS = TerrainPipelineKey::MSAA_MASK_BITS << TerrainPipelineKey::MSAA_SHIFT_BITS;
     }
 }
@@ -41,6 +44,15 @@ impl TerrainPipelineKey {
         if debug.show_lod {
             key |= TerrainPipelineKey::LOD;
         }
+        if debug.show_nodes {
+            key |= TerrainPipelineKey::NODES;
+        }
+        if debug.color {
+            key |= TerrainPipelineKey::COLOR;
+        }
+        if debug.lighting {
+            key |= TerrainPipelineKey::LIGHTING;
+        }
 
         key
     }
@@ -67,6 +79,15 @@ impl TerrainPipelineKey {
         }
         if (self.bits & TerrainPipelineKey::LOD.bits) != 0 {
             shader_defs.push("SHOW_LOD".to_string());
+        }
+        if (self.bits & TerrainPipelineKey::NODES.bits) != 0 {
+            shader_defs.push("SHOW_NODES".to_string());
+        }
+        if (self.bits & TerrainPipelineKey::COLOR.bits) != 0 {
+            shader_defs.push("COLOR".to_string());
+        }
+        if (self.bits & TerrainPipelineKey::LIGHTING.bits) != 0 {
+            shader_defs.push("LIGHTING".to_string());
         }
 
         shader_defs

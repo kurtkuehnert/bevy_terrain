@@ -26,7 +26,7 @@ fn divide(x: u32, y: u32, size: u32) -> bool {
     let world_position = vec2<f32>(f32(x + 4u), f32(y + 4u)) * f32(size);
     let distance = length(cull_data.world_position.xz - world_position);
 
-    return distance < f32(size * config.patch_size * 2u) * 8.0;
+    return distance < f32(size) * config.view_distance;
 }
 
 [[stage(compute), workgroup_size(1, 1, 1)]]
