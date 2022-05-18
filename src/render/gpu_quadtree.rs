@@ -60,7 +60,7 @@ impl GpuQuadtree {
         queue: &RenderQueue,
         compute_pipelines: &TerrainComputePipelines,
     ) -> (TextureView, BindGroup, Buffer, Buffer) {
-        let size = config.chunk_count.x * config.chunk_count.y * config.lod_count;
+        let size = config.load_count * config.load_count * config.lod_count;
         let data = vec![u64::MAX; (size) as usize];
 
         let quadtree = device.create_texture_with_data(
@@ -68,8 +68,8 @@ impl GpuQuadtree {
             &TextureDescriptor {
                 label: "quadtree_texture".into(),
                 size: Extent3d {
-                    width: config.chunk_count.x,
-                    height: config.chunk_count.y,
+                    width: config.load_count,
+                    height: config.load_count,
                     depth_or_array_layers: config.lod_count,
                 },
                 mip_level_count: 1,
@@ -88,14 +88,14 @@ impl GpuQuadtree {
 
         let activation_buffer = device.create_buffer(&BufferDescriptor {
             label: "quadtree_activation_buffer".into(),
-            size: NODE_ACTIVATION_SIZE * size as BufferAddress,
+            size: 10 * NODE_ACTIVATION_SIZE * size as BufferAddress,
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
         let deactivation_buffer = device.create_buffer(&BufferDescriptor {
             label: "quadtree_deactivation_buffer".into(),
-            size: NODE_DEACTIVATION_SIZE * size as BufferAddress,
+            size: 10 * NODE_DEACTIVATION_SIZE * size as BufferAddress,
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });

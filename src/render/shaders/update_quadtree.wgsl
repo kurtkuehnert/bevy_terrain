@@ -46,8 +46,16 @@ fn activate_nodes([[builtin(global_invocation_id)]] invocation_id: vec3<u32>) {
     let update = node_activations.data[index];
     let position = node_position(update.node_id);
 
-    let output = vec4<u32>(update.atlas_index >> 8u, update.atlas_index & 0xFFu, update.lod,  0u);
-    textureStore(quadtree, vec2<i32>(i32(position.x), i32(position.y)), i32(position.lod), output);
+    let load_count = 8u;
+    let x = i32(position.x % load_count);
+    let y = i32(position.y % load_count);
+
+    if (update.lod > position.lod) {
+        return; // worse lod
+    }
+
+    let quadtree_entry = vec4<u32>(update.atlas_index >> 8u, update.atlas_index & 0xFFu, update.lod,  0u);
+    textureStore(quadtree, vec2<i32>(x, y), i32(position.lod), quadtree_entry);
 }
 
 [[stage(compute), workgroup_size(1, 1, 1)]]
@@ -57,7 +65,11 @@ fn deactivate_nodes([[builtin(global_invocation_id)]] invocation_id: vec3<u32>) 
     let position = node_position(update.node_id);
     let ancestor_position = node_position(update.ancestor_id);
 
+    let load_count = 8u;
+    let x = i32(position.x % load_count);
+    let y = i32(position.y % load_count);
+
     let quadtree_entry = textureLoad(quadtree, vec2<i32>(i32(ancestor_position.x), i32(ancestor_position.y)), i32(ancestor_position.lod));
-    textureStore(quadtree, vec2<i32>(i32(position.x), i32(position.y)), i32(position.lod), quadtree_entry);
+    // textureStore(quadtree, vec2<i32>(x, y), i32(position.lod), quadtree_entry);
 }
 

@@ -165,10 +165,10 @@ impl TerrainComputeNode {
         gpu_quadtree: &'a GpuQuadtree,
     ) {
         pass.set_bind_group(0, &gpu_quadtree.update_bind_group, &[]);
-        pass.set_pipeline(pipelines[TerrainComputePipelineKey::ActivateNodes as usize]);
-        pass.dispatch(gpu_quadtree.activation_count, 1, 1);
         pass.set_pipeline(pipelines[TerrainComputePipelineKey::DeactivateNodes as usize]);
         pass.dispatch(gpu_quadtree.deactivation_count, 1, 1);
+        pass.set_pipeline(pipelines[TerrainComputePipelineKey::ActivateNodes as usize]);
+        pass.dispatch(gpu_quadtree.activation_count, 1, 1);
     }
 
     fn tessellate_terrain<'a>(
