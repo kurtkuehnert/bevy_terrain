@@ -23,6 +23,7 @@ pub(crate) struct TerrainConfigUniform {
     lod_count: u32,
     chunk_size: u32,
     patch_size: u32,
+    load_count: u32,
     vertices_per_row: u32,
     view_distance: f32,
     scale: f32,
@@ -40,6 +41,7 @@ pub struct TerrainConfig {
     pub area_count: UVec2,
     pub node_count: u32,
     pub terrain_size: UVec2,
+    pub load_count: u32,
     pub view_distance: f32,
     pub vertices_per_row: u32,
     pub scale: f32,
@@ -78,6 +80,7 @@ impl TerrainConfig {
         let node_count = area_count.x * area_count.y * ((1 << 2 * lod_count) - 1) / 3; // https://oeis.org/A002450
 
         let view_distance = 6.0 * (patch_size * 2) as f32;
+        let load_count = 8;
 
         Self {
             lod_count,
@@ -90,6 +93,7 @@ impl TerrainConfig {
             node_count,
             terrain_size,
             view_distance,
+            load_count,
             vertices_per_row,
             scale,
             height,
@@ -104,6 +108,7 @@ impl TerrainConfig {
             lod_count: self.lod_count,
             chunk_size: self.chunk_size,
             patch_size: self.patch_size,
+            load_count: self.load_count,
             vertices_per_row: self.vertices_per_row,
             view_distance: self.view_distance,
             scale: self.scale,

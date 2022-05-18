@@ -118,8 +118,8 @@ where
                 source,
                 x * node_size * 5,
                 y * node_size * 5,
-                128,
-                stride * 5,
+                128 * 5,
+                stride,
             );
 
             let mut path = output_path.as_ref().join(&node_id.to_string());
