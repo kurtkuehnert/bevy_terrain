@@ -26,7 +26,6 @@ pub struct TerrainConfig {
     pub patch_size: u32,
     pub chunk_size: u32,
     pub chunk_count: UVec2,
-    pub texture_size: u32,
     pub area_count: UVec2,
     pub node_count: u32,
     pub view_distance: f32,
@@ -34,6 +33,7 @@ pub struct TerrainConfig {
     pub scale: f32,
     pub height: f32,
     pub node_atlas_size: u16,
+    pub path: String,
     pub attachments: HashMap<AttachmentIndex, AtlasAttachmentConfig>,
 }
 
@@ -55,21 +55,21 @@ impl TerrainConfig {
         area_count: UVec2,
         scale: f32,
         height: f32,
-        node_atlas_size: u16,
+        path: String,
     ) -> Self {
         let patch_size = chunk_size / Self::PATCH_COUNT;
-        let texture_size = chunk_size;
         let chunk_count = area_count * (1 << (lod_count - 1));
         let vertices_per_row = (patch_size + 2) << 1;
 
         let view_distance = 6.0 * (patch_size * 2) as f32;
         let node_count = 8;
 
+        let node_atlas_size = (lod_count * node_count * node_count) as u16 * 4;
+
         Self {
             lod_count,
             patch_size,
             chunk_size,
-            texture_size,
             chunk_count,
             area_count,
             node_count,
@@ -78,6 +78,7 @@ impl TerrainConfig {
             scale,
             height,
             node_atlas_size,
+            path,
             attachments: default(),
         }
     }

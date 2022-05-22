@@ -3,7 +3,7 @@ use crate::config::TerrainConfig;
 use crate::quadtree::Node;
 use bevy::utils::HashMap;
 use image::io::Reader;
-use image::{ImageBuffer, Luma, Rgba, RgbaImage};
+use image::{DynamicImage, GenericImageView, ImageBuffer, Luma, Rgba, RgbaImage};
 use itertools::iproduct;
 use ron::to_string;
 use std::{fs, path::Path};
@@ -19,7 +19,7 @@ where
     P: AsRef<Path>,
 {
     let source = image::open(source_path).unwrap();
-    let source = source.as_luma16().unwrap();
+    // let source = source.as_luma16().unwrap();
 
     let mut min_max_map = HashMap::<u32, (u16, u16)>::new();
 
@@ -34,13 +34,7 @@ where
             0..node_count * config.area_count.x
         ) {
             let node_id = Node::id(lod, x, y);
-            let node = sample_node(
-                source,
-                x * node_size,
-                y * node_size,
-                config.texture_size,
-                stride,
-            );
+            let node = sample_node(&source, x * node_size, y * node_size, node_size, stride);
 
             min_max_map.insert(node_id, (node.min_height, node.max_height));
 
@@ -55,7 +49,7 @@ where
 }
 
 fn sample_node(
-    source: &ImageBuffer<Luma<u16>, Vec<u16>>,
+    source: &DynamicImage,
     origin_x: u32,
     origin_y: u32,
     texture_size: u32,
@@ -82,7 +76,9 @@ fn sample_node(
                 .sum::<f64>()
                 / sample_count) as u16;
 
-            // let value = source.get_pixel(source_x, source_y).0[0];
+            // let value = source.get_pixel(source_x, source_y).0[0] as u16;
+
+            // let value = value * 100;
 
             node.min_height = node.min_height.min(value);
             node.max_height = node.max_height.max(value);
@@ -102,7 +98,7 @@ where
     reader.no_limits();
 
     let source = reader.decode().unwrap();
-    let source = source.as_rgba8().unwrap();
+    // let source = source.as_rgba8().unwrap();
 
     for lod in 0..config.lod_count {
         let node_count = config.nodes_per_area(lod); // number of nodes per area
@@ -115,13 +111,7 @@ where
             0..node_count * config.area_count.x
         ) {
             let node_id = Node::id(lod, x, y);
-            let albedo = sample_albedo(
-                source,
-                x * node_size * 5,
-                y * node_size * 5,
-                128 * 5,
-                stride,
-            );
+            let albedo = sample_albedo(&source, x * node_size, y * node_size, 128, stride);
 
             let mut path = output_path.as_ref().join(&node_id.to_string());
             path.set_extension("png");
@@ -131,7 +121,7 @@ where
 }
 
 fn sample_albedo(
-    source: &RgbaImage,
+    source: &DynamicImage,
     origin_x: u32,
     origin_y: u32,
     texture_size: u32,
@@ -147,12 +137,12 @@ fn sample_albedo(
         let source_y = origin_y + node_y * stride;
 
         if source_x < width && source_y < height {
-            let _value = (iproduct!(0..stride, 0..stride)
-                .map(|(offset_x, offset_y)| {
-                    source.get_pixel(source_x + offset_x, source_y + offset_y).0[0] as f64
-                })
-                .sum::<f64>()
-                / sample_count) as u16;
+            // let _value = (iproduct!(0..stride, 0..stride)
+            //     .map(|(offset_x, offset_y)| {
+            //         source.get_pixel(source_x + offset_x, source_y + offset_y).0[0] as f64
+            //     })
+            //     .sum::<f64>()
+            //     / sample_count) as u16;
 
             let value = source.get_pixel(source_x, source_y).0;
 
