@@ -1,7 +1,7 @@
 use crate::{
     attachment::{AtlasAttachment, AttachmentIndex, NodeAttachment},
     config::TerrainConfig,
-    node_atlas::{NodeAtlas, NodeData},
+    node_atlas::{AtlasIndex, LoadingNode, NodeAtlas},
     render::PersistentComponents,
     Terrain,
 };
@@ -22,7 +22,7 @@ use std::mem;
 #[derive(Component)]
 pub struct GpuNodeAtlas {
     pub(crate) atlas_attachments: HashMap<AttachmentIndex, AtlasAttachment>,
-    pub(crate) activated_nodes: Vec<NodeData>, // Todo: consider own component
+    pub(crate) loaded_nodes: Vec<(AtlasIndex, LoadingNode)>, // Todo: consider own component
 }
 
 impl GpuNodeAtlas {
@@ -37,7 +37,7 @@ impl GpuNodeAtlas {
 
         Self {
             atlas_attachments,
-            activated_nodes: Vec::new(),
+            loaded_nodes: Vec::new(),
         }
     }
 }
@@ -66,7 +66,10 @@ pub(crate) fn update_gpu_node_atlas(
             None => continue,
         };
 
-        gpu_node_atlas.activated_nodes = mem::take(&mut node_atlas.activated_nodes);
+        mem::swap(
+            &mut node_atlas.loaded_nodes,
+            &mut gpu_node_atlas.loaded_nodes,
+        );
     }
 }
 
@@ -84,12 +87,12 @@ pub(crate) fn queue_node_atlas_updates(
     for entity in terrain_query.iter() {
         let gpu_node_atlas = gpu_node_atlases.get_mut(&entity).unwrap();
 
-        for node_data in &gpu_node_atlas.activated_nodes {
+        for (atlas_index, node) in gpu_node_atlas.loaded_nodes.drain(..) {
             for (handle, texture, texture_size) in gpu_node_atlas
                 .atlas_attachments
                 .iter()
                 .filter_map(|(attachment_index, attachment)| {
-                    let node_attachment = node_data.attachment_data.get(attachment_index)?;
+                    let node_attachment = node.attachments.get(attachment_index)?;
 
                     match (node_attachment, attachment) {
                         (NodeAttachment::Buffer { .. }, AtlasAttachment::Buffer { .. }) => None,
@@ -120,7 +123,7 @@ pub(crate) fn queue_node_atlas_updates(
                         origin: Origin3d {
                             x: 0,
                             y: 0,
-                            z: node_data.atlas_index as u32,
+                            z: atlas_index as u32,
                         },
                         aspect: TextureAspect::All,
                     },

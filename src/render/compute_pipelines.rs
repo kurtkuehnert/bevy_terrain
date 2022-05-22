@@ -19,8 +19,7 @@ use strum_macros::{EnumCount, EnumIter};
 
 #[derive(Copy, Clone, Hash, PartialEq, Eq, EnumIter, EnumCount)]
 pub enum TerrainComputePipelineKey {
-    ActivateNodes,
-    DeactivateNodes,
+    UpdateQuadtree,
     SelectCoarsestPatches,
     RefinePatches,
     SelectFinestPatches,
@@ -77,15 +76,10 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
         let entry_point;
 
         match key {
-            TerrainComputePipelineKey::ActivateNodes => {
+            TerrainComputePipelineKey::UpdateQuadtree => {
                 layout = Some(vec![self.update_quadtree_layout.clone()]);
                 shader = self.update_quadtree_shader.clone();
-                entry_point = "activate_nodes".into();
-            }
-            TerrainComputePipelineKey::DeactivateNodes => {
-                layout = Some(vec![self.update_quadtree_layout.clone()]);
-                shader = self.update_quadtree_shader.clone();
-                entry_point = "deactivate_nodes".into();
+                entry_point = "update_quadtree".into();
             }
             TerrainComputePipelineKey::SelectCoarsestPatches => {
                 layout = Some(vec![
@@ -165,10 +159,8 @@ impl TerrainComputeNode {
         gpu_quadtree: &'a GpuQuadtree,
     ) {
         pass.set_bind_group(0, &gpu_quadtree.update_bind_group, &[]);
-        pass.set_pipeline(pipelines[TerrainComputePipelineKey::DeactivateNodes as usize]);
-        pass.dispatch(gpu_quadtree.deactivation_count, 1, 1);
-        pass.set_pipeline(pipelines[TerrainComputePipelineKey::ActivateNodes as usize]);
-        pass.dispatch(gpu_quadtree.activation_count, 1, 1);
+        pass.set_pipeline(pipelines[TerrainComputePipelineKey::UpdateQuadtree as usize]);
+        pass.dispatch(gpu_quadtree.node_updates.len() as u32, 1, 1);
     }
 
     fn tessellate_terrain<'a>(
