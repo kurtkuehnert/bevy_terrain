@@ -1,5 +1,6 @@
 use crate::config::TerrainConfig;
 
+use crate::quadtree::Node;
 use bevy::utils::HashMap;
 use image::io::Reader;
 use image::{ImageBuffer, Luma, Rgba, RgbaImage};
@@ -7,7 +8,7 @@ use itertools::iproduct;
 use ron::to_string;
 use std::{fs, path::Path};
 
-struct Node {
+struct NodeInfo {
     height_data: ImageBuffer<Luma<u16>, Vec<u16>>,
     min_height: u16,
     max_height: u16,
@@ -32,7 +33,7 @@ where
             0..node_count * config.area_count.y,
             0..node_count * config.area_count.x
         ) {
-            let node_id = TerrainConfig::node_id(lod, x, y);
+            let node_id = Node::id(lod, x, y);
             let node = sample_node(
                 source,
                 x * node_size,
@@ -59,8 +60,8 @@ fn sample_node(
     origin_y: u32,
     texture_size: u32,
     stride: u32,
-) -> Node {
-    let mut node = Node {
+) -> NodeInfo {
+    let mut node = NodeInfo {
         height_data: ImageBuffer::new(texture_size, texture_size),
         min_height: u16::MAX,
         max_height: 0,
@@ -113,7 +114,7 @@ where
             0..node_count * config.area_count.y,
             0..node_count * config.area_count.x
         ) {
-            let node_id = TerrainConfig::node_id(lod, x, y);
+            let node_id = Node::id(lod, x, y);
             let albedo = sample_albedo(
                 source,
                 x * node_size * 5,

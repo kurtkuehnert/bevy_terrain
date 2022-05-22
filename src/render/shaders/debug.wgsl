@@ -52,16 +52,15 @@ fn show_lod(lod: u32, world_position: vec2<f32>) -> vec4<f32> {
 
     for (var i = 0u; i < config.lod_count; i = i + 1u) {
         let node_size = node_size(i);
-        let center = vec2<f32>(round(view.world_position.xz / node_size)) * node_size;
-
-        let size = node_size * 4.0;
+        let grid_position = floor(view.world_position.xz / node_size + 0.5 - f32(config.node_count) / 2.0) * node_size;
+        let grid_size = node_size * f32(config.node_count);
         let thickness = f32(4u << i);
 
-        let hv1 = step(center - vec2<f32>(size), world_position) * step(world_position, center + vec2<f32>(size));
-        let hv2 = step(center - vec2<f32>(size - thickness), world_position) * step(world_position, center + vec2<f32>(size - thickness));
-        let onOff = hv1.x * hv1.y - hv2.x * hv2.y;
+        let grid_outer = step(grid_position, world_position) * step(world_position, grid_position + grid_size);
+        let grid_inner = step(grid_position + thickness, world_position) * step(world_position, grid_position + grid_size - thickness);
+        let outline = grid_outer.x * grid_outer.y - grid_inner.x * grid_inner.y;
 
-        color = mix(color, lod_color(i) * 4.0, onOff);
+        color = mix(color, lod_color(i) * 4.0, outline);
     }
 
     let distance = distance(view.world_position.xz, world_position);

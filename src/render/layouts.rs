@@ -1,8 +1,4 @@
-use crate::{
-    config::TerrainConfigUniform,
-    quadtree::{NodeActivation, NodeDeactivation},
-    render::culling::CullingData,
-};
+use crate::{config::TerrainConfigUniform, quadtree::NodeUpdate, render::culling::CullingData};
 use bevy::{
     core::{Pod, Zeroable},
     render::{render_resource::std140::AsStd140, render_resource::*},
@@ -18,10 +14,7 @@ struct Patch {
     stitch: u32,
 }
 
-pub(crate) const NODE_ACTIVATION_SIZE: BufferAddress =
-    mem::size_of::<NodeActivation>() as BufferAddress;
-pub(crate) const NODE_DEACTIVATION_SIZE: BufferAddress =
-    mem::size_of::<NodeDeactivation>() as BufferAddress;
+pub(crate) const NODE_UPDATE_SIZE: BufferAddress = mem::size_of::<NodeUpdate>() as BufferAddress;
 pub(crate) const PATCH_SIZE: BufferAddress = mem::size_of::<Patch>() as BufferAddress;
 pub(crate) const INDIRECT_BUFFER_SIZE: BufferAddress = 5 * mem::size_of::<u32>() as BufferAddress;
 pub(crate) const PARAMETER_BUFFER_SIZE: BufferAddress = 2 * mem::size_of::<u32>() as BufferAddress; // minimum buffer size = 16
@@ -82,25 +75,14 @@ pub(crate) const UPDATE_QUADTREE_LAYOUT: BindGroupLayoutDescriptor = BindGroupLa
             },
             count: None,
         },
-        // node activations
+        // node updates
         BindGroupLayoutEntry {
             binding: 1,
             visibility: ShaderStages::COMPUTE,
             ty: BindingType::Buffer {
                 ty: BufferBindingType::Storage { read_only: true },
                 has_dynamic_offset: false,
-                min_binding_size: BufferSize::new(NODE_ACTIVATION_SIZE),
-            },
-            count: None,
-        },
-        // node deactivations
-        BindGroupLayoutEntry {
-            binding: 2,
-            visibility: ShaderStages::COMPUTE,
-            ty: BindingType::Buffer {
-                ty: BufferBindingType::Storage { read_only: true },
-                has_dynamic_offset: false,
-                min_binding_size: BufferSize::new(NODE_DEACTIVATION_SIZE),
+                min_binding_size: BufferSize::new(NODE_UPDATE_SIZE),
             },
             count: None,
         },

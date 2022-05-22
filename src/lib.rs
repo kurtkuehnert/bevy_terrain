@@ -1,8 +1,11 @@
+extern crate core;
+
+use crate::quadtree::compute_node_updates;
 use crate::{
     attachment_loader::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk},
     config::TerrainConfig,
     debug::{extract_debug, toggle_debug_system, DebugTerrain},
-    node_atlas::{update_nodes, LoadNodeEvent},
+    node_atlas::{update_node_atlas, LoadNodeEvent},
     quadtree::traverse_quadtree,
     render::{
         compute_data::{initialize_terrain_compute_data, TerrainComputeData},
@@ -46,7 +49,6 @@ pub mod node_atlas;
 pub mod preprocess;
 pub mod quadtree;
 pub mod render;
-pub mod viewer;
 
 const CONFIG_HANDLE: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 907665645684322571);
@@ -104,10 +106,11 @@ impl Plugin for TerrainPlugin {
             .add_plugin(ExtractComponentPlugin::<TerrainConfig>::default())
             .init_resource::<DebugTerrain>()
             .add_event::<LoadNodeEvent>()
-            .add_system(traverse_quadtree.before(update_nodes))
-            .add_system(update_nodes)
-            .add_system(start_loading_attachment_from_disk.after(update_nodes))
-            .add_system(finish_loading_attachment_from_disk)
+            .add_system(finish_loading_attachment_from_disk.before(update_node_atlas))
+            .add_system(traverse_quadtree.before(update_node_atlas))
+            .add_system(update_node_atlas)
+            .add_system(compute_node_updates.after(update_node_atlas))
+            .add_system(start_loading_attachment_from_disk.after(update_node_atlas))
             .add_system(toggle_debug_system);
 
         let render_app = app

@@ -1,6 +1,6 @@
+use crate::quadtree::NodeId;
 use crate::{
     attachment::{AttachmentIndex, NodeAttachment},
-    config::NodeId,
     node_atlas::{LoadNodeEvent, NodeAtlas},
 };
 use bevy::{
@@ -51,12 +51,12 @@ pub fn start_loading_attachment_from_disk(
                 let handle: Handle<Image> = asset_server.load(&format!("{path}/{node_id}.png"));
 
                 if asset_server.get_load_state(handle.clone()) == LoadState::Loaded {
-                    node.loaded(attachment_index);
+                    node.loaded(*attachment_index);
                 } else {
-                    handle_mapping.insert(handle.id, (node_id, attachment_index.clone()));
+                    handle_mapping.insert(handle.id, (node_id, *attachment_index));
                 };
 
-                node.set_attachment(attachment_index.clone(), NodeAttachment::Texture { handle });
+                node.set_attachment(*attachment_index, NodeAttachment::Texture { handle });
             }
         }
     }
@@ -70,14 +70,15 @@ pub fn finish_loading_attachment_from_disk(
     for event in asset_events.iter() {
         if let AssetEvent::Created { handle } = event {
             for (mut node_atlas, mut config) in terrain_query.iter_mut() {
-                if let Some((node_id, label)) = config.handle_mapping.remove(&handle.id) {
+                if let Some((node_id, attachment_index)) = config.handle_mapping.remove(&handle.id)
+                {
                     let image = images.get_mut(handle).unwrap();
-                    let attachment = config.attachments.get(&label).unwrap();
+                    let attachment = config.attachments.get(&attachment_index).unwrap();
 
                     image.texture_descriptor = attachment.texture_descriptor.clone();
 
                     let node = node_atlas.loading_nodes.get_mut(&node_id).unwrap();
-                    node.loaded(&label);
+                    node.loaded(attachment_index);
                     break;
                 }
             }
