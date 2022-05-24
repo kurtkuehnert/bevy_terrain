@@ -1,7 +1,7 @@
 use crate::{
     attachment::{AtlasAttachment, AttachmentIndex, NodeAttachment},
     config::TerrainConfig,
-    node_atlas::{AtlasIndex, LoadingNode, NodeAtlas},
+    node_atlas::{LoadingNode, NodeAtlas},
     render::PersistentComponents,
     Terrain,
 };
@@ -22,7 +22,7 @@ use std::mem;
 #[derive(Component)]
 pub struct GpuNodeAtlas {
     pub(crate) atlas_attachments: HashMap<AttachmentIndex, AtlasAttachment>,
-    pub(crate) loaded_nodes: Vec<(AtlasIndex, LoadingNode)>, // Todo: consider own component
+    pub(crate) loaded_nodes: Vec<LoadingNode>, // Todo: consider own component
 }
 
 impl GpuNodeAtlas {
@@ -87,7 +87,7 @@ pub(crate) fn queue_node_atlas_updates(
     for entity in terrain_query.iter() {
         let gpu_node_atlas = gpu_node_atlases.get_mut(&entity).unwrap();
 
-        for (atlas_index, node) in gpu_node_atlas.loaded_nodes.drain(..) {
+        for node in gpu_node_atlas.loaded_nodes.drain(..) {
             for (handle, texture, texture_size) in gpu_node_atlas
                 .atlas_attachments
                 .iter()
@@ -123,7 +123,7 @@ pub(crate) fn queue_node_atlas_updates(
                         origin: Origin3d {
                             x: 0,
                             y: 0,
-                            z: atlas_index as u32,
+                            z: node.atlas_index as u32,
                         },
                         aspect: TextureAspect::All,
                     },

@@ -1,5 +1,3 @@
-extern crate core;
-
 use crate::quadtree::compute_node_updates;
 use crate::{
     attachment_loader::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk},

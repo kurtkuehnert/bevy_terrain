@@ -64,7 +64,7 @@ impl TerrainConfig {
         let view_distance = 6.0 * (patch_size * 2) as f32;
         let node_count = 8;
 
-        let node_atlas_size = (lod_count * node_count * node_count) as u16 * 4;
+        let node_atlas_size = (lod_count * node_count * node_count) as u16;
 
         Self {
             lod_count,
