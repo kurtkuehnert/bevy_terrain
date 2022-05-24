@@ -56,7 +56,7 @@ pub fn start_loading_attachment_from_disk(
                     handle_mapping.insert(handle.id, (node_id, *attachment_index));
                 };
 
-                node.set_attachment(*attachment_index, NodeAttachment::Texture { handle });
+                node.attachment(*attachment_index, NodeAttachment::Texture { handle });
             }
         }
     }

@@ -9,30 +9,28 @@ use bevy::{
 };
 use std::collections::VecDeque;
 
-/// It is emitted whenever the [`NodeAtlas`] requests loading a node, for it to become active.
+/// It is emitted whenever the [`NodeAtlas`] requests loading a node.
 pub struct LoadNodeEvent(pub NodeId);
 
 /// Identifier of an active node (and its attachments) inside the node atlas.
 pub type AtlasIndex = u16;
 
+/// An invalid [`AtlasIndex`], which is used for initialization.
 pub(crate) const INVALID_ATLAS_INDEX: AtlasIndex = AtlasIndex::MAX;
 
 /// Stores all of the [`NodeAttachment`]s of the node, alongside their loading state.
 #[derive(Clone)]
 pub struct LoadingNode {
-    /// The set of still loading [`NodeAttachment`]s. Is empty if the node is fully loaded.
-    loading_attachments: HashSet<AttachmentIndex>,
+    pub(crate) atlas_index: AtlasIndex,
     /// Stores all of the [`NodeAttachment`]s of the node.
     pub(crate) attachments: HashMap<AttachmentIndex, NodeAttachment>,
+    /// The set of still loading [`NodeAttachment`]s. Is empty if the node is fully loaded.
+    loading_attachments: HashSet<AttachmentIndex>,
 }
 
 impl LoadingNode {
     /// Sets the attachment data of the node.
-    pub fn set_attachment(
-        &mut self,
-        attachment_index: AttachmentIndex,
-        attachment: NodeAttachment,
-    ) {
+    pub fn attachment(&mut self, attachment_index: AttachmentIndex, attachment: NodeAttachment) {
         self.attachments.insert(attachment_index, attachment);
     }
 
@@ -41,47 +39,59 @@ impl LoadingNode {
         self.loading_attachments.remove(&attachment_index);
     }
 
-    fn is_loaded(&self) -> bool {
+    /// Returns whether all node attachments of the node have finished loading.
+    fn finished_loading(&self) -> bool {
         self.loading_attachments.is_empty()
     }
 }
 
 /// Stores all of the cpu accessible [`NodeAttachment`]s of the node, after it has been loaded.
-#[derive(Clone, Default)]
+#[derive(Default)]
 pub struct NodeData {
     /// Stores all of the cpu accessible [`NodeAttachment`]s of the node.
-    pub(crate) attachments: HashMap<AttachmentIndex, NodeAttachment>,
+    pub(crate) _attachments: HashMap<AttachmentIndex, NodeAttachment>,
 }
 
-pub struct NodeState {
+/// Stores the state of a present node in the [`NodeAtlas`].
+struct NodeState {
+    /// The count of [`Quadtrees`] that have requested this node.
     requests: u32,
+    /// Indicates whether or not the node is loading or loaded.
     loading: bool,
+    /// The index of the node inside the atlas.
     atlas_index: AtlasIndex,
 }
 
-/// Orchestrates the loading and activation/deactivation process of all nodes.
+/// A Node which is not currently requested by any [`Quadtree`].
+struct UnusedNode {
+    node_id: NodeId,
+    atlas_index: AtlasIndex,
+}
+
+/// Orchestrates the loading process of all nodes according to the decisions of the [`Quadtree`]s.
 ///
-/// It activates and deactivates nodes according to the decisions of the [`Quadtree`].
-/// Recently deactivated nodes are cached for prompt reactivation, otherwise nodes have to be loaded
-/// first. This happens by sending a [`LoadNodeEvent`] for which [`NodeAttachment`]-loading-systems
-/// can listen.
+/// A node is considered present and assigned an [`AtlasIndex`] as soon as it is
+/// requested by any quadtree. Then the node atlas will start loading all of its [`NodeAttachment`]s
+/// by sending a [`LoadNodeEvent`] for which attachment-loading-systems can listen.
+/// Nodes that are not being used by any quadtree anymore are cached (LRU),
+/// until new atlas indices are required.
 ///
-/// Each activated node gets assigned a unique [`AtlasIndex`] for accessing the attached data
-/// in systems by the CPU and in shaders by the GPU.
+/// The [`AtlasIndex`] can be used for accessing the attached data in systems by the CPU
+/// and in shaders by the GPU.
 #[derive(Component)]
 pub struct NodeAtlas {
-    /// Stores the cpu accessible data of all present nodes.
-    pub(crate) data: Vec<(NodeId, NodeData)>, // Todo: build api for accessing data on the cpu
     /// Stores the nodes, that have finished loading this frame.
-    pub(crate) loaded_nodes: Vec<(AtlasIndex, LoadingNode)>,
-    /// Specifies which [`NodeAttachment`]s to load for each node.
-    attachments_to_load: HashSet<AttachmentIndex>,
-    /// Lists the least recently used atlas indices, which are not used by any node.
-    available_indices: VecDeque<AtlasIndex>,
-    /// Stores the states of all present nodes.
-    node_states: HashMap<NodeId, NodeState>,
+    pub(crate) loaded_nodes: Vec<LoadingNode>,
     /// Stores the currently loading nodes.
     pub(crate) loading_nodes: HashMap<NodeId, LoadingNode>,
+    /// Specifies which [`NodeAttachment`]s to load for each node.
+    attachments_to_load: HashSet<AttachmentIndex>,
+    /// Lists the unused nodes in least recently used order.
+    unused_nodes: VecDeque<UnusedNode>,
+    /// Stores the cpu accessible data of all present nodes.
+    data: Vec<NodeData>, // Todo: build api for accessing data on the cpu
+    /// Stores the states of all present nodes.
+    node_states: HashMap<NodeId, NodeState>,
 }
 
 impl NodeAtlas {
@@ -96,28 +106,37 @@ impl NodeAtlas {
             })
             .collect();
 
-        let data = vec![(INVALID_NODE_ID, NodeData::default()); config.node_atlas_size as usize];
-        let available_indices = (0..config.node_atlas_size).collect();
+        let mut data = Vec::with_capacity(config.node_atlas_size as usize);
+        let mut unused_nodes = VecDeque::with_capacity(config.node_atlas_size as usize);
+
+        for atlas_index in 0..config.node_atlas_size {
+            data.push(default());
+            unused_nodes.push_back(UnusedNode {
+                node_id: INVALID_NODE_ID,
+                atlas_index,
+            });
+        }
 
         Self {
-            data,
             loaded_nodes: default(),
-            attachments_to_load,
-            available_indices,
-            node_states: default(),
             loading_nodes: default(),
+            attachments_to_load,
+            unused_nodes,
+            data,
+            node_states: default(),
         }
     }
 
+    /// Adjusts the nodes atlas according to the requested and released nodes of the [`Quadtree`]
+    /// and provides it with the available atlas indices.
     fn adjust_to_quadtree(
         &mut self,
         quadtree: &mut Quadtree,
         load_events: &mut EventWriter<LoadNodeEvent>,
     ) {
         let NodeAtlas {
-            ref data,
             ref attachments_to_load,
-            ref mut available_indices,
+            ref mut unused_nodes,
             ref mut node_states,
             ref mut loading_nodes,
             ..
@@ -133,15 +152,17 @@ impl NodeAtlas {
 
         // release nodes that are on longer required
         for node_id in released_nodes.drain(..) {
-            if let Some(state) = node_states.get_mut(&node_id) {
-                state.requests -= 1;
+            let state = node_states
+                .get_mut(&node_id)
+                .expect("Tried releasing a node, which is not present.");
+            state.requests -= 1;
 
-                if state.requests == 0 {
-                    // the node is not used anymore
-                    available_indices.push_back(state.atlas_index);
-                }
-            } else {
-                dbg!(node_id);
+            if state.requests == 0 {
+                // the node is not used anymore
+                unused_nodes.push_back(UnusedNode {
+                    node_id,
+                    atlas_index: state.atlas_index,
+                });
             }
         }
 
@@ -151,30 +172,32 @@ impl NodeAtlas {
             if let Some(state) = node_states.get_mut(&node_id) {
                 if state.requests == 0 {
                     // the node is now used again
-                    available_indices.retain(|&atlas_index| atlas_index != state.atlas_index);
+                    unused_nodes.retain(|node| node.atlas_index != state.atlas_index);
                 }
 
                 state.requests += 1;
             } else {
-                // start loading the node
-                load_events.send(LoadNodeEvent(node_id));
-                loading_nodes.insert(
-                    node_id,
-                    LoadingNode {
-                        loading_attachments: attachments_to_load.clone(),
-                        attachments: default(),
-                    },
-                );
-
                 // remove least recently used node and reuse its atlas index
-                let atlas_index = available_indices.pop_front().expect("Atlas out of indices");
-                node_states.remove(&data[atlas_index as usize].0);
+                let unused_node = unused_nodes.pop_front().expect("Atlas out of indices");
+
+                node_states.remove(&unused_node.node_id);
                 node_states.insert(
                     node_id,
                     NodeState {
                         requests: 1,
                         loading: true,
-                        atlas_index,
+                        atlas_index: unused_node.atlas_index,
+                    },
+                );
+
+                // start loading the node
+                load_events.send(LoadNodeEvent(node_id));
+                loading_nodes.insert(
+                    node_id,
+                    LoadingNode {
+                        atlas_index: unused_node.atlas_index,
+                        loading_attachments: attachments_to_load.clone(),
+                        attachments: default(),
                     },
                 );
             }
@@ -184,7 +207,8 @@ impl NodeAtlas {
         waiting_nodes.retain(|&node_id| {
             if let Some(state) = node_states.get_mut(&node_id) {
                 if !state.loading {
-                    provided_nodes.push((node_id, state.atlas_index));
+                    provided_nodes.insert(node_id, state.atlas_index);
+                    // provided_nodes.push((node_id, state.atlas_index));
                     false
                 } else {
                     true
@@ -195,7 +219,9 @@ impl NodeAtlas {
         });
     }
 
-    fn update_loaded(&mut self) {
+    /// Checks all nodes that have finished loading, marks them accordingly and prepares the data
+    /// to be send to the gpu by the [`GpuNodeAtlas`](crate::render::gpu_node_atlas::GpuNodeAtlas).
+    fn update_loaded_nodes(&mut self) {
         let NodeAtlas {
             ref mut data,
             ref mut node_states,
@@ -205,22 +231,19 @@ impl NodeAtlas {
         } = self;
 
         // update all nodes that have finished loading
-        for (node_id, node) in loading_nodes.drain_filter(|_, node| node.is_loaded()) {
+        for (node_id, node) in loading_nodes.drain_filter(|_, node| node.finished_loading()) {
             if let Some(state) = node_states.get_mut(&node_id) {
                 state.loading = false;
 
-                data.insert(
-                    state.atlas_index as usize,
-                    (
-                        node_id,
-                        NodeData {
-                            attachments: node.attachments.clone(),
-                        },
-                    ),
-                );
-                loaded_nodes.push((state.atlas_index, node))
+                // Todo: only keep attachments required by the CPU around
+                data[state.atlas_index as usize] = NodeData {
+                    _attachments: node.attachments.clone(),
+                };
+
+                loaded_nodes.push(node);
             } else {
-                // node no longer required
+                dbg!("Dropped node after loading.");
+                // node no longer required, can safely be ignored
             }
         }
     }
@@ -232,7 +255,7 @@ pub(crate) fn update_node_atlas(
     mut terrain_query: Query<(&mut Quadtree, &mut NodeAtlas)>,
 ) {
     for (mut quadtree, mut node_atlas) in terrain_query.iter_mut() {
-        node_atlas.update_loaded();
+        node_atlas.update_loaded_nodes();
         node_atlas.adjust_to_quadtree(&mut quadtree, &mut load_events);
     }
 }

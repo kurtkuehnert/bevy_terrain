@@ -5,6 +5,7 @@ use crate::{
 use bevy::{math::Vec3Swizzles, prelude::*, utils::HashSet};
 use itertools::iproduct;
 use ndarray::Array3;
+use std::collections::BTreeMap;
 use std::{collections::VecDeque, mem};
 
 // Todo: may be swap to u64 for giant terrains
@@ -15,7 +16,7 @@ use std::{collections::VecDeque, mem};
 pub(crate) type NodeId = u32;
 pub(crate) const INVALID_NODE_ID: NodeId = NodeId::MAX;
 
-/// An update to the gpu quadtree.
+/// An update to the [`GpuQuadtree`](crate::render::gpu_quadtree::GpuQuadtree).
 /// The update packs the atlas index and atlas lod,
 /// as well as the quadtree coordinate of the node.
 /// Its representation is temporary unique for the corresponding view.
@@ -51,12 +52,12 @@ impl Default for Node {
 
 impl Node {
     /// Calculates a unique identifier for the node at the specified coordinate.
-    /// These ids encode the position into 32 bits.
     #[inline]
     pub(crate) fn id(lod: u32, x: u32, y: u32) -> NodeId {
         (lod & 0xF) << 28 | (x & 0x3FFF) << 14 | y & 0x3FFF
     }
 
+    /// Calculates the coordinate of the node.
     #[inline]
     pub(crate) fn coordinate(id: NodeId) -> NodeCoordinate {
         NodeCoordinate {
@@ -66,6 +67,7 @@ impl Node {
         }
     }
 
+    /// Calculates a node update that can be sent to the GPU.
     #[inline]
     fn update(atlas_index: AtlasIndex, atlas_lod: u32, lod: u32, x: u32, y: u32) -> NodeUpdate {
         (atlas_index as u32) << 20
@@ -76,11 +78,13 @@ impl Node {
     }
 }
 
-/// Stores all of the tree nodes of a terrain and decides which nodes to activate/deactivate.
+// Todo: find a suitable name
+/// A quadtree-like view of a terrain, that requests and releases nodes.
 /// Additionally it tracks all [`NodeUpdate`]s, which are send to the GPU by the
 /// [`GpuQuadtree`](crate::render::gpu_quadtree::GpuQuadtree).
 #[derive(Component)]
 pub struct Quadtree {
+    //
     lod_count: u32,
     node_count: u32,
     chunk_size: u32,
@@ -90,7 +94,7 @@ pub struct Quadtree {
     pub(crate) fallback_nodes: Vec<NodeId>,
     pub(crate) requested_nodes: Vec<NodeId>,
     pub(crate) waiting_nodes: HashSet<NodeId>,
-    pub(crate) provided_nodes: Vec<(NodeId, AtlasIndex)>,
+    pub(crate) provided_nodes: BTreeMap<NodeId, AtlasIndex>,
     /// Nodes that should be loading or active.
     pub(crate) node_updates: Vec<NodeUpdate>,
 }
@@ -133,21 +137,16 @@ impl Quadtree {
 
     /// Traverses the quadtree and selects all nodes to activate/deactivate.
     pub(crate) fn traverse(&mut self, viewer_position: Vec2) {
-        let &mut Quadtree {
-            lod_count,
-            node_count,
-            ..
-        } = self;
-
         // traverse the quadtree top down
-        for lod in (0..lod_count).rev() {
+        for lod in (0..self.lod_count).rev() {
             let node_size = self.node_size(lod);
 
             // bottom left position of grid in node coordinates
-            let grid_coordinate: IVec2 =
-                (viewer_position / node_size as f32 + 0.5 - node_count as f32 / 2.0).as_ivec2();
+            let grid_coordinate: IVec2 = (viewer_position / node_size as f32 + 0.5
+                - self.node_count as f32 / 2.0)
+                .as_ivec2();
 
-            for coordinate in iproduct!(0..node_count as i32, 0..node_count as i32)
+            for coordinate in iproduct!(0..self.node_count as i32, 0..self.node_count as i32)
                 .map(|(x, y)| grid_coordinate + IVec2::new(x, y))
             {
                 if coordinate.x < 0 || coordinate.y < 0 {
@@ -159,8 +158,8 @@ impl Quadtree {
                 let node_id = Node::id(lod, coordinate.x, coordinate.y);
                 let node = &mut self.nodes[[
                     lod as usize,
-                    (coordinate.x % node_count) as usize,
-                    (coordinate.y % node_count) as usize,
+                    (coordinate.x % self.node_count) as usize,
+                    (coordinate.y % self.node_count) as usize,
                 ]];
 
                 // quadtree slot refers to a new node
@@ -203,7 +202,7 @@ impl Quadtree {
         let mut fallback_nodes = mem::take(&mut self.fallback_nodes);
         let mut provided_nodes = mem::take(&mut self.provided_nodes);
 
-        // for each provided node fall back to the closest present ancestor
+        // fall back to the closest present ancestor
         for node_id in fallback_nodes.drain(..) {
             let mut coordinate = Node::coordinate(node_id);
 
@@ -217,6 +216,7 @@ impl Quadtree {
                 coordinate.y >>= 1;
 
                 if coordinate.lod == self.lod_count {
+                    dbg!("Could not fall back to any ancestor.");
                     break;
                 }
 
@@ -239,7 +239,7 @@ impl Quadtree {
         }
 
         // for each provided node update itself and its children
-        for (node_id, atlas_index) in provided_nodes.drain(..) {
+        for (&node_id, &atlas_index) in provided_nodes.iter().rev() {
             let atlas_lod = Node::coordinate(node_id).lod;
 
             let mut queue = VecDeque::new();
@@ -273,6 +273,7 @@ impl Quadtree {
                 }
             }
         }
+        provided_nodes.clear();
 
         self.fallback_nodes = fallback_nodes;
         self.provided_nodes = provided_nodes;
