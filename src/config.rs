@@ -2,13 +2,13 @@ use crate::attachment::{AtlasAttachmentConfig, AttachmentIndex};
 use bevy::{
     ecs::{query::QueryItem, system::lifetimeless::Read},
     prelude::*,
-    render::{render_component::ExtractComponent, render_resource::std140::AsStd140},
+    render::{render_component::ExtractComponent, render_resource::*},
     utils::HashMap,
 };
 
 // Todo: fully reconsider the configuration
 
-#[derive(Clone, Default, AsStd140)]
+#[derive(Clone, Default, ShaderType)]
 pub(crate) struct TerrainConfigUniform {
     lod_count: u32,
     chunk_size: u32,
@@ -83,7 +83,7 @@ impl TerrainConfig {
         }
     }
 
-    pub(crate) fn as_std140(&self) -> Std140TerrainConfigUniform {
+    pub(crate) fn shader_data(&self) -> TerrainConfigUniform {
         TerrainConfigUniform {
             lod_count: self.lod_count,
             chunk_size: self.chunk_size,
@@ -94,7 +94,6 @@ impl TerrainConfig {
             scale: self.scale,
             height: self.height,
         }
-        .as_std140()
     }
 
     #[inline]

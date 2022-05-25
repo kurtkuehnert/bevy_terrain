@@ -1,15 +1,13 @@
 use crate::{Terrain, TerrainComputePipelines};
 use bevy::{
-    core::{Pod, Zeroable},
     math::Vec3Swizzles,
     pbr::MeshUniform,
     prelude::*,
     render::{render_resource::*, renderer::RenderDevice, view::ExtractedView},
 };
-use bytemuck::bytes_of;
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default, Zeroable, Pod)]
+#[derive(Copy, Clone, Debug, Default, ShaderType)]
 pub struct CullingData {
     pub(crate) world_position: Vec4,
     pub(crate) view_proj: Mat4,
@@ -38,9 +36,12 @@ pub(crate) fn queue_terrain_culling_bind_group(
             model: mesh_uniform.transform,
         };
 
+        let mut buffer = encase::UniformBuffer::new(Vec::new());
+        buffer.write(&culling_data).unwrap();
+
         let buffer = device.create_buffer_with_data(&BufferInitDescriptor {
             label: None,
-            contents: bytes_of(&culling_data),
+            contents: &buffer.into_inner(),
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
         });
 
