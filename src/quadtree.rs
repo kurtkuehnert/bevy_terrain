@@ -239,7 +239,7 @@ impl Quadtree {
         }
 
         // for each provided node update itself and its children
-        for (&node_id, &atlas_index) in provided_nodes.iter().rev() {
+        for (&node_id, &atlas_index) in provided_nodes.iter() {
             let atlas_lod = Node::coordinate(node_id).lod;
 
             let mut queue = VecDeque::new();

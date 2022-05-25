@@ -19,7 +19,7 @@ where
     P: AsRef<Path>,
 {
     let source = image::open(source_path).unwrap();
-    // let source = source.as_luma16().unwrap();
+    let source = source.as_luma16().unwrap();
 
     let mut min_max_map = HashMap::<u32, (u16, u16)>::new();
 
@@ -34,7 +34,13 @@ where
             0..node_count * config.area_count.x
         ) {
             let node_id = Node::id(lod, x, y);
-            let node = sample_node(&source, x * node_size, y * node_size, node_size, stride);
+            let node = sample_node(
+                source,
+                x * node_size,
+                y * node_size,
+                config.chunk_size,
+                stride,
+            );
 
             min_max_map.insert(node_id, (node.min_height, node.max_height));
 
@@ -49,7 +55,7 @@ where
 }
 
 fn sample_node(
-    source: &DynamicImage,
+    source: &ImageBuffer<Luma<u16>, Vec<u16>>,
     origin_x: u32,
     origin_y: u32,
     texture_size: u32,
@@ -75,10 +81,6 @@ fn sample_node(
                 })
                 .sum::<f64>()
                 / sample_count) as u16;
-
-            // let value = source.get_pixel(source_x, source_y).0[0] as u16;
-
-            // let value = value * 100;
 
             node.min_height = node.min_height.min(value);
             node.max_height = node.max_height.max(value);
