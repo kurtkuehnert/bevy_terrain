@@ -9,17 +9,19 @@ pub struct DebugTerrain {
     pub show_nodes: bool,
     pub color: bool,
     pub lighting: bool,
+    pub uv: bool,
 }
 
 impl Default for DebugTerrain {
     fn default() -> Self {
         Self {
-            albedo: true,
+            albedo: false,
             show_patches: false,
             show_lod: false,
             show_nodes: false,
-            color: true,
+            color: false,
             lighting: true,
+            uv: false,
         }
     }
 }
@@ -42,6 +44,9 @@ pub fn toggle_debug_system(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTe
     }
     if input.just_pressed(KeyCode::S) {
         debug.lighting = !debug.lighting;
+    }
+    if input.just_pressed(KeyCode::U) {
+        debug.uv = !debug.uv;
     }
 }
 

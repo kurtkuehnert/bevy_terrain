@@ -39,7 +39,7 @@ fn select_coarsest_patches(
     let stitch = 0u; // no stitch required
 
     let child_index = atomicAdd(&parameters.child_index, 1u);
-    child_list.data[child_index] = Patch(x, y, size, stitch);
+    child_list.data[child_index] = Patch(vec2<u32>(x, y), size, stitch);
 }
 
 [[stage(compute), workgroup_size(1, 1, 1)]]
@@ -48,30 +48,31 @@ fn refine_patches(
 ) {
     let parent_index = invocation_id.x;
     let parent_patch = parent_list.data[parent_index];
+    let parent_coords = parent_patch.coords;
 
-    if (divide(parent_patch.x, parent_patch.y, parent_patch.size)) {
+    if (divide(parent_coords.x, parent_coords.y, parent_patch.size)) {
         let size = parent_patch.size >> 1u;
 
         //       bit |      3 |      2 |      1 |      0
         // direction | bottom |  right |    top |   left
-        var stitch = u32(!divide(parent_patch.x - config.patch_size, parent_patch.y, parent_patch.size))
-                   | u32(!divide(parent_patch.x, parent_patch.y - config.patch_size, parent_patch.size)) << 1u
-                   | u32(!divide(parent_patch.x + config.patch_size, parent_patch.y, parent_patch.size)) << 2u
-                   | u32(!divide(parent_patch.x, parent_patch.y + config.patch_size, parent_patch.size)) << 3u;
+        var stitch = u32(!divide(parent_coords.x - config.patch_size, parent_coords.y, parent_patch.size))
+                   | u32(!divide(parent_coords.x, parent_coords.y - config.patch_size, parent_patch.size)) << 1u
+                   | u32(!divide(parent_coords.x + config.patch_size, parent_coords.y, parent_patch.size)) << 2u
+                   | u32(!divide(parent_coords.x, parent_coords.y + config.patch_size, parent_patch.size)) << 3u;
 
         //    i |    3 |    2 |    1 |    0
         //  x y |  1 1 |  0 1 |  1 0 |  0 0
         // mask | 1100 | 1001 | 0110 | 0011
         // mask |    C |    9 |    6 |    3
         for (var i: u32 = 0u; i < 4u; i = i + 1u) {
-            let x = (parent_patch.x << 1u) + (i       & 1u) * config.patch_size;
-            let y = (parent_patch.y << 1u) + (i >> 1u & 1u) * config.patch_size;
+            let x = (parent_coords.x << 1u) + (i       & 1u) * config.patch_size;
+            let y = (parent_coords.y << 1u) + (i >> 1u & 1u) * config.patch_size;
 
             // select two adjacent edges on parent level
             let stitch = stitch & (0xC963u >> (i << 2u));
 
             let child_index = atomicAdd(&parameters.child_index, 1u);
-            child_list.data[child_index] = Patch(x, y, size, stitch);
+            child_list.data[child_index] = Patch(vec2<u32>(x, y), size, stitch);
         }
     }
     else {

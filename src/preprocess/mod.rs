@@ -16,8 +16,12 @@ struct NodeInfo {
     max_height: u16,
 }
 
-pub fn generate_node_textures<P>(config: &TerrainConfig, source_path: P, output_path: P)
-where
+pub fn generate_node_textures<P>(
+    config: &TerrainConfig,
+    source_path: P,
+    output_path: P,
+    texture_size: u32,
+) where
     P: AsRef<Path>,
 {
     let source = image::open(source_path).unwrap();
@@ -27,7 +31,6 @@ where
 
     for lod in 0..config.lod_count {
         let node_count = config.nodes_per_area(lod); // number of nodes per area
-        let node_size = config.node_size(lod); // offset in the source image
         let stride = 1 << lod; // pixel to pixel ratio
 
         // for every node of the current lod sample a new selection and save it
@@ -38,9 +41,9 @@ where
             let node_id = Node::id(lod, x, y);
             let node = sample_node(
                 source,
-                x * node_size,
-                y * node_size,
-                config.chunk_size,
+                (x * texture_size - 2) * stride,
+                (y * texture_size - 2) * stride,
+                texture_size + 4,
                 stride,
             );
 
@@ -94,8 +97,12 @@ fn sample_node(
     node
 }
 
-pub fn generate_albedo_textures<P>(config: &TerrainConfig, source_path: P, output_path: P)
-where
+pub fn generate_albedo_textures<P>(
+    config: &TerrainConfig,
+    source_path: P,
+    output_path: P,
+    texture_size: u32,
+) where
     P: AsRef<Path>,
 {
     let mut reader = Reader::open(source_path).unwrap();
@@ -106,7 +113,6 @@ where
 
     for lod in 0..config.lod_count {
         let node_count = config.nodes_per_area(lod); // number of nodes per area
-        let node_size = config.node_size(lod); // offset in the source image
         let stride = 1 << lod; // pixel to pixel ratio
 
         // for every node of the current lod sample a new selection and save it
@@ -115,7 +121,14 @@ where
             0..node_count * config.area_count.x
         ) {
             let node_id = Node::id(lod, x, y);
-            let albedo = sample_albedo(&source, x * node_size, y * node_size, 128, stride);
+            // let albedo = sample_albedo(&source, x * node_size, y * node_size, 128 * 5, stride);
+            let albedo = sample_albedo(
+                &source,
+                (x * texture_size - 1) * stride,
+                (y * texture_size - 1) * stride,
+                texture_size + 2,
+                stride,
+            );
 
             let mut path = output_path.as_ref().join(&node_id.to_string());
             path.set_extension("png");
@@ -134,20 +147,12 @@ fn sample_albedo(
     let mut albedo = RgbaImage::new(texture_size, texture_size);
 
     let (width, height) = source.dimensions();
-    let sample_count = (stride as f64).powf(2.0);
 
     for (node_x, node_y, pixel) in albedo.enumerate_pixels_mut() {
         let source_x = origin_x + node_x * stride;
         let source_y = origin_y + node_y * stride;
 
         if source_x < width && source_y < height {
-            // let _value = (iproduct!(0..stride, 0..stride)
-            //     .map(|(offset_x, offset_y)| {
-            //         source.get_pixel(source_x + offset_x, source_y + offset_y).0[0] as f64
-            //     })
-            //     .sum::<f64>()
-            //     / sample_count) as u16;
-
             let value = source.get_pixel(source_x, source_y).0;
 
             *pixel = Rgba(value)

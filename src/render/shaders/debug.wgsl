@@ -26,7 +26,7 @@ fn lod_color(lod: u32) -> vec4<f32> {
 fn show_patches(patch: Patch, vertex_position: vec2<u32>) -> vec4<f32> {
     var color: vec4<f32>;
 
-    if ((patch.x + patch.y) / config.patch_size % 2u == 0u) {
+    if ((patch.coords.x + patch.coords.y) / config.patch_size % 2u == 0u) {
         color = vec4<f32>(0.5);
     }
     else {
@@ -67,7 +67,7 @@ fn show_lod(lod: u32, world_position: vec2<f32>) -> vec4<f32> {
     let circle = f32(2u << lod) * config.view_distance;
 
     if (distance < circle && circle - f32(4 << lod) < distance) {
-        color = color * 4.0;
+        color = color * 100.0;
     }
 
     return color;

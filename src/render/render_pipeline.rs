@@ -16,6 +16,7 @@ bitflags::bitflags! {
         const NODES              = (1 << 4);
         const COLOR              = (1 << 5);
         const LIGHTING           = (1 << 6);
+        const UV                 = (1 << 7);
         const MSAA_RESERVED_BITS = TerrainPipelineKey::MSAA_MASK_BITS << TerrainPipelineKey::MSAA_SHIFT_BITS;
     }
 }
@@ -53,6 +54,9 @@ impl TerrainPipelineKey {
         if debug.lighting {
             key |= TerrainPipelineKey::LIGHTING;
         }
+        if debug.uv {
+            key |= TerrainPipelineKey::UV;
+        }
 
         key
     }
@@ -88,6 +92,9 @@ impl TerrainPipelineKey {
         }
         if (self.bits & TerrainPipelineKey::LIGHTING.bits) != 0 {
             shader_defs.push("LIGHTING".to_string());
+        }
+        if (self.bits & TerrainPipelineKey::UV.bits) != 0 {
+            shader_defs.push("UV".to_string());
         }
 
         shader_defs
