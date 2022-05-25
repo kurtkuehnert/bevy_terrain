@@ -1,3 +1,5 @@
+pub mod node;
+
 use crate::config::TerrainConfig;
 
 use crate::quadtree::Node;

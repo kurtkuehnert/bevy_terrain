@@ -1,10 +1,7 @@
 use crate::{config::TerrainConfig, render::layouts::*};
 use bevy::{
     prelude::*,
-    render::{
-        render_resource::{std140::Std140, *},
-        renderer::RenderDevice,
-    },
+    render::{render_resource::*, renderer::RenderDevice},
 };
 
 #[derive(Component)]
@@ -41,10 +38,13 @@ impl TerrainResources {
     }
 
     fn create_config_buffer(device: &RenderDevice, config: &TerrainConfig) -> Buffer {
+        let mut buffer = encase::UniformBuffer::new(Vec::new());
+        buffer.write(&config.shader_data()).unwrap();
+
         device.create_buffer_with_data(&BufferInitDescriptor {
             label: "config_buffer".into(),
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            contents: config.as_std140().as_bytes(),
+            contents: &buffer.into_inner(),
         })
     }
 

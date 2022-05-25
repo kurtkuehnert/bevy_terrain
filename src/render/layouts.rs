@@ -1,12 +1,9 @@
 use crate::{config::TerrainConfigUniform, quadtree::NodeUpdate, render::culling::CullingData};
-use bevy::{
-    core::{Pod, Zeroable},
-    render::{render_resource::std140::AsStd140, render_resource::*},
-};
+use bevy::render::render_resource::*;
 use std::mem;
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Default, Zeroable, Pod)]
+#[derive(Copy, Clone, Debug, Default)]
 struct Patch {
     x: u32,
     y: u32,
@@ -19,7 +16,7 @@ pub(crate) const PATCH_SIZE: BufferAddress = mem::size_of::<Patch>() as BufferAd
 pub(crate) const INDIRECT_BUFFER_SIZE: BufferAddress = 5 * mem::size_of::<u32>() as BufferAddress;
 pub(crate) const PARAMETER_BUFFER_SIZE: BufferAddress = 2 * mem::size_of::<u32>() as BufferAddress; // minimum buffer size = 16
 pub(crate) const CONFIG_BUFFER_SIZE: BufferAddress =
-    mem::size_of::<<TerrainConfigUniform as AsStd140>::Output>() as BufferAddress;
+    mem::size_of::<TerrainConfigUniform>() as BufferAddress;
 pub(crate) const CULL_DATA_BUFFER_SIZE: BufferAddress =
     mem::size_of::<CullingData>() as BufferAddress;
 
