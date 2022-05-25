@@ -216,7 +216,7 @@ impl Quadtree {
                 coordinate.y >>= 1;
 
                 if coordinate.lod == self.lod_count {
-                    dbg!("Could not fall back to any ancestor.");
+                    // dbg!("Could not fall back to any ancestor.");
                     break;
                 }
 
