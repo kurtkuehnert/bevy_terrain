@@ -32,7 +32,7 @@ fn prepare_refinement() {
 
 [[stage(compute), workgroup_size(1, 1, 1)]]
 fn prepare_render() {
-    indirect_buffer.workgroup_count_x = config.vertices_per_row * config.patch_size;
-    indirect_buffer.workgroup_count_y = atomicExchange(&parameters.final_index, 0u);
+    indirect_buffer.workgroup_count_x = config.vertices_per_patch * atomicExchange(&parameters.final_index, 0u);
+    indirect_buffer.workgroup_count_y = 1u;
     indirect_buffer.workgroup_count_z = 0u;
 }

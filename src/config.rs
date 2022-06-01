@@ -15,6 +15,7 @@ pub(crate) struct TerrainConfigUniform {
     patch_size: u32,
     node_count: u32,
     vertices_per_row: u32,
+    vertices_per_patch: u32,
     view_distance: f32,
     scale: f32,
     height: f32,
@@ -29,7 +30,9 @@ pub struct TerrainConfig {
     pub area_count: UVec2,
     pub node_count: u32,
     pub view_distance: f32,
+    pub load_distance: f32,
     pub vertices_per_row: u32,
+    pub vertices_per_patch: u32,
     pub scale: f32,
     pub height: f32,
     pub node_atlas_size: u16,
@@ -57,13 +60,15 @@ impl TerrainConfig {
         height: f32,
         path: String,
     ) -> Self {
-        let patch_size = chunk_size / Self::PATCH_COUNT;
         let chunk_count = area_count * (1 << (lod_count - 1));
+
+        let patch_size = 16;
         let vertices_per_row = (patch_size + 2) << 1;
+        let vertices_per_patch = vertices_per_row * patch_size;
+        let view_distance = 1.0 * chunk_size as f32; // half of the view radius
 
-        let view_distance = 6.0 * (patch_size * 2) as f32;
         let node_count = 8;
-
+        let load_distance = 0.5 * node_count as f32;
         let node_atlas_size = (lod_count * node_count * node_count) as u16;
 
         Self {
@@ -74,7 +79,9 @@ impl TerrainConfig {
             area_count,
             node_count,
             view_distance,
+            load_distance,
             vertices_per_row,
+            vertices_per_patch,
             scale,
             height,
             node_atlas_size,
@@ -90,6 +97,7 @@ impl TerrainConfig {
             patch_size: self.patch_size,
             node_count: self.node_count,
             vertices_per_row: self.vertices_per_row,
+            vertices_per_patch: self.vertices_per_patch,
             view_distance: self.view_distance,
             scale: self.scale,
             height: self.height,

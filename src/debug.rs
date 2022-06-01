@@ -3,50 +3,59 @@ use bevy::render::RenderWorld;
 
 #[derive(Clone)]
 pub struct DebugTerrain {
-    pub albedo: bool,
     pub show_patches: bool,
     pub show_lod: bool,
-    pub show_nodes: bool,
-    pub color: bool,
+    pub show_uv: bool,
+
+    pub circular_lod: bool,
+    pub mesh_morph: bool,
+
+    pub albedo: bool,
+    pub bright: bool,
     pub lighting: bool,
-    pub uv: bool,
 }
 
 impl Default for DebugTerrain {
     fn default() -> Self {
         Self {
-            albedo: false,
             show_patches: false,
             show_lod: false,
-            show_nodes: false,
-            color: false,
+            show_uv: false,
+            circular_lod: true,
+            mesh_morph: true,
+            albedo: false,
+            bright: false,
             lighting: true,
-            uv: false,
         }
     }
 }
 
 pub fn toggle_debug_system(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTerrain>) {
-    if input.just_pressed(KeyCode::A) {
-        debug.albedo = !debug.albedo;
-    }
     if input.just_pressed(KeyCode::P) {
         debug.show_patches = !debug.show_patches;
     }
     if input.just_pressed(KeyCode::L) {
         debug.show_lod = !debug.show_lod;
     }
-    if input.just_pressed(KeyCode::N) {
-        debug.show_nodes = !debug.show_nodes;
+    if input.just_pressed(KeyCode::U) {
+        debug.show_uv = !debug.show_uv;
     }
-    if input.just_pressed(KeyCode::C) {
-        debug.color = !debug.color;
+
+    if input.just_pressed(KeyCode::N) {
+        debug.circular_lod = !debug.circular_lod;
+    }
+    if input.just_pressed(KeyCode::M) {
+        debug.mesh_morph = !debug.mesh_morph;
+    }
+
+    if input.just_pressed(KeyCode::A) {
+        debug.albedo = !debug.albedo;
+    }
+    if input.just_pressed(KeyCode::B) {
+        debug.bright = !debug.bright;
     }
     if input.just_pressed(KeyCode::S) {
         debug.lighting = !debug.lighting;
-    }
-    if input.just_pressed(KeyCode::U) {
-        debug.uv = !debug.uv;
     }
 }
 

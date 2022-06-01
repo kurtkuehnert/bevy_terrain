@@ -23,10 +23,10 @@ var<storage, read_write> final_list: PatchList;
 var<uniform> cull_data: CullData;
 
 fn divide(x: u32, y: u32, size: u32) -> bool {
-    let world_position = vec2<f32>(f32(x + 4u), f32(y + 4u)) * f32(size);
+    let world_position = vec2<f32>(f32(x + (config.patch_size >> 1u)), f32(y + (config.patch_size >> 1u))) * f32(size);
     let distance = length(cull_data.world_position.xz - world_position);
 
-    return distance < f32(size) * config.view_distance;
+    return distance < f32(size) * (config.view_distance + sqrt(2.0) * f32(config.patch_size));
 }
 
 [[stage(compute), workgroup_size(1, 1, 1)]]

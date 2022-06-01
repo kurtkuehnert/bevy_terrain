@@ -10,13 +10,14 @@ bitflags::bitflags! {
     pub struct TerrainPipelineKey: u32 {
         const NONE               = 0;
         const WIREFRAME          = (1 << 0);
-        const ALBEDO             = (1 << 1);
-        const PATCHES            = (1 << 2);
-        const LOD                = (1 << 3);
-        const NODES              = (1 << 4);
-        const COLOR              = (1 << 5);
-        const LIGHTING           = (1 << 6);
-        const UV                 = (1 << 7);
+        const SHOW_PATCHES       = (1 << 1);
+        const SHOW_LOD           = (1 << 2);
+        const SHOW_UV            = (1 << 3);
+        const CIRCULAR_LOD       = (1 << 4);
+        const MESH_MORPH         = (1 << 5);
+        const ALBEDO             = (1 << 6);
+        const BRIGHT             = (1 << 7);
+        const LIGHTING           = (1 << 8);
         const MSAA_RESERVED_BITS = TerrainPipelineKey::MSAA_MASK_BITS << TerrainPipelineKey::MSAA_SHIFT_BITS;
     }
 }
@@ -36,26 +37,31 @@ impl TerrainPipelineKey {
     pub fn from_debug(debug: &DebugTerrain) -> Self {
         let mut key = TerrainPipelineKey::NONE;
 
+        if debug.show_patches {
+            key |= TerrainPipelineKey::SHOW_PATCHES;
+        }
+        if debug.show_lod {
+            key |= TerrainPipelineKey::SHOW_LOD;
+        }
+        if debug.show_uv {
+            key |= TerrainPipelineKey::SHOW_UV;
+        }
+
+        if debug.circular_lod {
+            key |= TerrainPipelineKey::CIRCULAR_LOD;
+        }
+        if debug.mesh_morph {
+            key |= TerrainPipelineKey::MESH_MORPH;
+        }
+
         if debug.albedo {
             key |= TerrainPipelineKey::ALBEDO;
         }
-        if debug.show_patches {
-            key |= TerrainPipelineKey::PATCHES;
-        }
-        if debug.show_lod {
-            key |= TerrainPipelineKey::LOD;
-        }
-        if debug.show_nodes {
-            key |= TerrainPipelineKey::NODES;
-        }
-        if debug.color {
-            key |= TerrainPipelineKey::COLOR;
+        if debug.bright {
+            key |= TerrainPipelineKey::BRIGHT;
         }
         if debug.lighting {
             key |= TerrainPipelineKey::LIGHTING;
-        }
-        if debug.uv {
-            key |= TerrainPipelineKey::UV;
         }
 
         key
@@ -75,26 +81,31 @@ impl TerrainPipelineKey {
     pub fn shader_defs(&self) -> Vec<String> {
         let mut shader_defs = Vec::new();
 
+        if (self.bits & TerrainPipelineKey::SHOW_PATCHES.bits) != 0 {
+            shader_defs.push("SHOW_PATCHES".to_string());
+        }
+        if (self.bits & TerrainPipelineKey::SHOW_LOD.bits) != 0 {
+            shader_defs.push("SHOW_LOD".to_string());
+        }
+        if (self.bits & TerrainPipelineKey::SHOW_UV.bits) != 0 {
+            shader_defs.push("SHOW_UV".to_string());
+        }
+
+        if (self.bits & TerrainPipelineKey::CIRCULAR_LOD.bits) != 0 {
+            shader_defs.push("CIRCULAR_LOD".to_string());
+        }
+        if (self.bits & TerrainPipelineKey::MESH_MORPH.bits) != 0 {
+            shader_defs.push("MESH_MORPH".to_string());
+        }
+
         if (self.bits & TerrainPipelineKey::ALBEDO.bits) != 0 {
             shader_defs.push("ALBEDO".to_string());
         }
-        if (self.bits & TerrainPipelineKey::PATCHES.bits) != 0 {
-            shader_defs.push("SHOW_PATCHES".to_string());
-        }
-        if (self.bits & TerrainPipelineKey::LOD.bits) != 0 {
-            shader_defs.push("SHOW_LOD".to_string());
-        }
-        if (self.bits & TerrainPipelineKey::NODES.bits) != 0 {
-            shader_defs.push("SHOW_NODES".to_string());
-        }
-        if (self.bits & TerrainPipelineKey::COLOR.bits) != 0 {
-            shader_defs.push("COLOR".to_string());
+        if (self.bits & TerrainPipelineKey::BRIGHT.bits) != 0 {
+            shader_defs.push("BRIGHT".to_string());
         }
         if (self.bits & TerrainPipelineKey::LIGHTING.bits) != 0 {
             shader_defs.push("LIGHTING".to_string());
-        }
-        if (self.bits & TerrainPipelineKey::UV.bits) != 0 {
-            shader_defs.push("UV".to_string());
         }
 
         shader_defs
