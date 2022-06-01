@@ -1,11 +1,8 @@
-pub mod node;
+pub mod new;
 
-use crate::config::TerrainConfig;
-
-use crate::quadtree::Node;
+use crate::{config::TerrainConfig, quadtree::Node};
 use bevy::utils::HashMap;
-use image::io::Reader;
-use image::{DynamicImage, GenericImageView, ImageBuffer, Luma, Rgba, RgbaImage};
+use image::{io::Reader, DynamicImage, GenericImageView, ImageBuffer, Luma, Rgba, RgbaImage};
 use itertools::iproduct;
 use ron::to_string;
 use std::{fs, path::Path};
