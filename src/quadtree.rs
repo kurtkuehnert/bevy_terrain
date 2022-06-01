@@ -106,7 +106,7 @@ impl Quadtree {
             lod_count: config.lod_count,
             node_count: config.node_count,
             chunk_size: config.chunk_size,
-            load_distance: config.node_count as f32 / 2.0,
+            load_distance: config.load_distance,
             nodes: Array3::default((
                 config.lod_count as usize,
                 config.node_count as usize,
