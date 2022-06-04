@@ -108,31 +108,34 @@ pub(crate) fn queue_node_atlas_updates(
                     }
                 })
             {
-                let image = images.get(handle).unwrap(); // Todo: investigate this occasional panic
-
-                command_encoder.copy_texture_to_texture(
-                    ImageCopyTexture {
-                        texture: &image.texture,
-                        mip_level: 0,
-                        origin: Origin3d { x: 0, y: 0, z: 0 },
-                        aspect: TextureAspect::All,
-                    },
-                    ImageCopyTexture {
-                        texture,
-                        mip_level: 0,
-                        origin: Origin3d {
-                            x: 0,
-                            y: 0,
-                            z: node.atlas_index as u32,
+                if let Some(image) = images.get(handle) {
+                    command_encoder.copy_texture_to_texture(
+                        ImageCopyTexture {
+                            texture: &image.texture,
+                            mip_level: 0,
+                            origin: Origin3d { x: 0, y: 0, z: 0 },
+                            aspect: TextureAspect::All,
                         },
-                        aspect: TextureAspect::All,
-                    },
-                    Extent3d {
-                        width: texture_size,
-                        height: texture_size,
-                        depth_or_array_layers: 1,
-                    },
-                );
+                        ImageCopyTexture {
+                            texture,
+                            mip_level: 0,
+                            origin: Origin3d {
+                                x: 0,
+                                y: 0,
+                                z: node.atlas_index as u32,
+                            },
+                            aspect: TextureAspect::All,
+                        },
+                        Extent3d {
+                            width: texture_size,
+                            height: texture_size,
+                            depth_or_array_layers: 1,
+                        },
+                    );
+                } else {
+                    // Todo: investigate this occasional missing texture
+                    warn!("Missing texture!")
+                }
             }
         }
     }

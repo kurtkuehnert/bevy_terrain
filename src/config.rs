@@ -63,9 +63,13 @@ impl TerrainConfig {
         let chunk_count = area_count * (1 << (lod_count - 1));
 
         let patch_size = 16;
+        let view_distance = 1.5 * chunk_size as f32; // half of the view radius
+
+        // let patch_size = 2;
+        // let view_distance = 0.1 * chunk_size as f32; // half of the view radius
+
         let vertices_per_row = (patch_size + 2) << 1;
         let vertices_per_patch = vertices_per_row * patch_size;
-        let view_distance = 1.0 * chunk_size as f32; // half of the view radius
 
         let node_count = 8;
         let load_distance = 0.5 * node_count as f32;
