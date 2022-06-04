@@ -1,7 +1,7 @@
 use crate::quadtree::Node;
 use image::{
     imageops::{self, FilterType},
-    DynamicImage, GenericImageView, ImageBuffer, Luma, RgbImage, RgbaImage,
+    DynamicImage, GenericImage, GenericImageView, ImageBuffer, Luma, RgbImage, RgbaImage,
 };
 use itertools::iproduct;
 use std::{fs, ops::Deref};
@@ -72,8 +72,8 @@ fn down_sample_overlay(
 ) {
     let child_size = texture_size >> 1;
 
-    let x = (child_x * child_size + border_size) as i64;
-    let y = (child_y * child_size + border_size) as i64;
+    let x = child_x * child_size + border_size;
+    let y = child_y * child_size + border_size;
 
     match format {
         ImageFormat::RGB => {
@@ -87,7 +87,10 @@ fn down_sample_overlay(
                 child_size,
                 FilterType::Triangle,
             );
-            imageops::overlay(node.as_mut_rgb8().unwrap(), &child_node, x, y);
+            node.as_mut_rgb8()
+                .unwrap()
+                .copy_from(&child_node, x, y)
+                .unwrap();
         }
         ImageFormat::RGBA => {
             let child_node = child_node.as_rgba8().unwrap();
@@ -100,7 +103,10 @@ fn down_sample_overlay(
                 child_size,
                 FilterType::Triangle,
             );
-            imageops::overlay(node.as_mut_rgba8().unwrap(), &child_node, x, y);
+            node.as_mut_rgba8()
+                .unwrap()
+                .copy_from(&child_node, x, y)
+                .unwrap();
         }
         ImageFormat::LUMA16 => {
             let child_node = child_node.as_luma16().unwrap();
@@ -113,7 +119,66 @@ fn down_sample_overlay(
                 child_size,
                 FilterType::Triangle,
             );
-            imageops::overlay(node.as_mut_luma16().unwrap(), &child_node, x, y);
+            node.as_mut_luma16()
+                .unwrap()
+                .copy_from(&child_node, x, y)
+                .unwrap();
+        }
+    }
+}
+
+pub fn stitch(
+    destination: &mut DynamicImage,
+    source: &DynamicImage,
+    texture_size: u32,
+    border_size: u32,
+    format: ImageFormat,
+    direction: (i32, i32),
+) {
+    let size = texture_size + 2 * border_size;
+    let offset = texture_size + border_size;
+
+    // positions to to stitch
+    let iter = match direction {
+        (-1, 0) => iproduct!(0..border_size, 0..size)
+            .map(|(b, i)| (b, i, texture_size + b, i))
+            .collect::<Vec<_>>(),
+        (1, 0) => iproduct!(0..border_size, 0..size)
+            .map(|(b, i)| (offset + b, i, border_size + b, i))
+            .collect::<Vec<_>>(),
+        (0, -1) => iproduct!(0..border_size, 0..size)
+            .map(|(b, i)| (i, b, i, texture_size + b))
+            .collect::<Vec<_>>(),
+        (0, 1) => iproduct!(0..border_size, 0..size)
+            .map(|(b, i)| (i, offset + b, i, border_size + b))
+            .collect::<Vec<_>>(),
+        _ => Vec::new(),
+    };
+
+    match format {
+        ImageFormat::RGB => {
+            let destination = destination.as_mut_rgb8().unwrap();
+            let source = source.as_rgb8().unwrap();
+
+            for (x1, y1, x2, y2) in iter {
+                destination.put_pixel(x1, y1, *source.get_pixel(x2, y2));
+            }
+        }
+        ImageFormat::RGBA => {
+            let destination = destination.as_mut_rgba8().unwrap();
+            let source = source.as_rgba8().unwrap();
+
+            for (x1, y1, x2, y2) in iter {
+                destination.put_pixel(x1, y1, *source.get_pixel(x2, y2));
+            }
+        }
+        ImageFormat::LUMA16 => {
+            let destination = destination.as_mut_luma16().unwrap();
+            let source = source.as_luma16().unwrap();
+
+            for (x1, y1, x2, y2) in iter {
+                destination.put_pixel(x1, y1, *source.get_pixel(x2, y2));
+            }
         }
     }
 }
@@ -152,7 +217,7 @@ pub fn split_tile(
     }
 }
 
-pub fn downscale_nodes(
+pub fn down_sample_nodes(
     directory: &str,
     first: (u32, u32),
     last: (u32, u32),
@@ -191,34 +256,46 @@ pub fn downscale_nodes(
     }
 }
 
-pub fn downscale_all(
+pub fn stitch_nodes(
     directory: &str,
-    offset: (u32, u32),
-    size: (u32, u32),
-    lod_count: u32,
+    first: (u32, u32),
+    last: (u32, u32),
+    lod: u32,
     texture_size: u32,
     border_size: u32,
     format: ImageFormat,
 ) {
-    let mut first = (offset.0 / texture_size, offset.1 / texture_size);
-    let mut last = (
-        div_ceil(offset.0 + size.0 + 2 * border_size, texture_size),
-        div_ceil(offset.1 + size.1 + 2 * border_size, texture_size),
-    );
+    for (x, y) in iproduct!(first.0..last.0, first.1..last.1) {
+        let node_id = Node::id(lod, x, y);
+        let file_path = format!("{directory}/{node_id}.png");
 
-    for lod in 1..lod_count {
-        first = (first.0 / 2, first.1 / 2);
-        last = (div_ceil(last.0, 2), div_ceil(last.1, 2));
+        let mut node = load_node(&file_path, texture_size, border_size, format);
 
-        downscale_nodes(
-            directory,
-            first,
-            last,
-            lod,
-            texture_size,
-            border_size,
-            format,
-        );
+        // should include corners as well
+        for direction in [(0, 1), (0, -1), (1, 0), (-1, 0)] {
+            let x = x as i32 + direction.0;
+            let y = y as i32 + direction.1;
+
+            if x < 0 || y < 0 {
+                continue;
+            };
+
+            let adjacent_id = Node::id(lod, x as u32, y as u32);
+            let adjacent_path = format!("{directory}/{adjacent_id}.png");
+
+            let adjacent_node = load_node(&adjacent_path, texture_size, border_size, format);
+
+            stitch(
+                &mut node,
+                &adjacent_node,
+                texture_size,
+                border_size,
+                format,
+                direction,
+            );
+        }
+
+        node.save(file_path).expect("Could not save file.");
     }
 }
 
@@ -282,13 +359,34 @@ pub fn preprocess_tiles(
         offset.1 + (max_pos.1 + 1) * tile_size - offset.1,
     );
 
-    downscale_all(
-        output_directory,
-        offset,
-        size,
-        lod_count,
-        texture_size,
-        border_size,
-        format,
+    let mut first = (offset.0 / texture_size, offset.1 / texture_size);
+    let mut last = (
+        div_ceil(offset.0 + size.0 + 2 * border_size, texture_size),
+        div_ceil(offset.1 + size.1 + 2 * border_size, texture_size),
     );
+
+    for lod in 1..lod_count {
+        first = (first.0 / 2, first.1 / 2);
+        last = (div_ceil(last.0, 2), div_ceil(last.1, 2));
+
+        down_sample_nodes(
+            output_directory,
+            first,
+            last,
+            lod,
+            texture_size,
+            border_size,
+            format,
+        );
+
+        stitch_nodes(
+            output_directory,
+            first,
+            last,
+            lod,
+            texture_size,
+            border_size,
+            format,
+        );
+    }
 }
