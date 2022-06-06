@@ -1,14 +1,19 @@
 [package]
 name = "bevy_terrain"
 version = "0.1.0"
+authors = ["Kurt Kühnert <kurt@kuehnert.dev"]
 edition = "2021"
+license = "MIT"
+description = "Terrain Rendering for the Bevy Engine."
+repository = "https://github.com/ku95/bevy_terrain"
+keywords = ["gamedev", "graphics", "bevy", "3d", "terrain"]
+categories = ["game-engines", "rendering"]
 
 [features]
 default = []
 
 [dependencies]
 bevy = { git = "https://github.com/ku95/bevy", branch = "texture-formats" }
-# bevy-inspector-egui = { git="https://github.com/jakobhellermann/bevy-inspector-egui" }
 
 ndarray = "*"
 itertools = "*"
