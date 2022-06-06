@@ -1,7 +1,8 @@
+use bevy::render::camera::Projection;
 use bevy::{
     pbr::wireframe::{Wireframe, WireframePlugin},
     prelude::*,
-    render::{camera::Camera3d, render_resource::*},
+    render::render_resource::*,
 };
 use bevy_terrain::{
     attachment::{AtlasAttachmentConfig, AttachmentIndex},
@@ -52,21 +53,18 @@ fn setup(mut commands: Commands) {
 
     commands
         .spawn_bundle(TerrainBundle::new(config))
-        .insert(from_disk_loader)
-        .insert(Wireframe);
+        .insert(from_disk_loader);
 
-    commands
-        .spawn_bundle(PerspectiveCameraBundle {
-            camera: Camera::default(),
-            perspective_projection: PerspectiveProjection {
-                far: 10000.0,
-                ..default()
-            },
-            transform: Transform::from_xyz(-200.0, 500.0, -200.0)
-                .looking_at(Vec3::new(500.0, 0.0, 500.0), Vec3::Y),
+    commands.spawn_bundle(Camera3dBundle {
+        camera: Camera::default(),
+        projection: Projection::Perspective(PerspectiveProjection {
+            far: 10000.0,
             ..default()
-        })
-        .insert(Camera3d);
+        }),
+        transform: Transform::from_xyz(-200.0, 500.0, -200.0)
+            .looking_at(Vec3::new(500.0, 0.0, 500.0), Vec3::Y),
+        ..default()
+    });
 }
 
 pub(crate) fn setup_default_sampler(config: &mut TerrainConfig, attachment_index: AttachmentIndex) {

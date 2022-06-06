@@ -1,4 +1,5 @@
-use crate::{Terrain, TerrainComputePipelines};
+use crate::{Opaque3d, Terrain, TerrainComputePipelines};
+use bevy::render::render_phase::RenderPhase;
 use bevy::{
     math::Vec3Swizzles,
     pbr::MeshUniform,
@@ -24,9 +25,9 @@ pub(crate) fn queue_terrain_culling_bind_group(
     device: Res<RenderDevice>,
     compute_pipelines: Res<TerrainComputePipelines>,
     terrain_query: Query<(Entity, &MeshUniform), With<Terrain>>,
-    view_query: Query<&ExtractedView>,
+    view_query: Query<&ExtractedView, With<RenderPhase<Opaque3d>>>,
 ) {
-    if let Ok(view) = view_query.get_single() {
+    for view in view_query.iter() {
         let view_proj = view.projection * view.transform.compute_matrix().inverse();
 
         for (entity, mesh_uniform) in terrain_query.iter() {
