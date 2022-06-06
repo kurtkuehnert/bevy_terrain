@@ -7,3 +7,15 @@ This plugin is still in early development.
 For a simple example see the examples folder.
 
 Documentation and usage instructions comming soon.
+
+## Controls
+
+- W - toggle wireframe
+- M - toggle mesh morph (circular transitions)
+- A - toggle alpha (if loaded)
+- N - toggle full nodes (or circular lod)
+- B - brighten
+- S - toggle light
+- P - show patches
+- L - show LOD
+- U - show UVs
