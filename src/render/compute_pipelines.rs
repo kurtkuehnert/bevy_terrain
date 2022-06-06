@@ -1,6 +1,7 @@
 use crate::{
     render::{compute_data::TerrainComputeData, culling::CullingBindGroup, layouts::*},
-    GpuQuadtree, PersistentComponents,
+    GpuQuadtree, PersistentComponents, PREPARE_INDIRECT_HANDLE, TESSELATION_HANDLE,
+    UPDATE_QUADTREE_HANDLE,
 };
 use bevy::{
     ecs::system::{
@@ -48,12 +49,16 @@ impl FromWorld for TerrainComputePipelines {
         let tessellation_layout = device.create_bind_group_layout(&TESSELLATION_LAYOUT);
         let cull_data_layout = device.create_bind_group_layout(&CULL_DATA_LAYOUT);
 
-        let prepare_indirect_shader =
-            asset_server.load("../plugins/bevy_terrain/src/render/shaders/prepare_indirect.wgsl");
-        let update_quadtree_shader =
-            asset_server.load("../plugins/bevy_terrain/src/render/shaders/update_quadtree.wgsl");
-        let tessellation_shader =
-            asset_server.load("../plugins/bevy_terrain/src/render/shaders/tessellation.wgsl");
+        // let prepare_indirect_shader =
+        //     asset_server.load("../plugins/bevy_terrain/src/render/shaders/prepare_indirect.wgsl");
+        // let update_quadtree_shader =
+        //     asset_server.load("../plugins/bevy_terrain/src/render/shaders/update_quadtree.wgsl");
+        // let tessellation_shader =
+        //     asset_server.load("../plugins/bevy_terrain/src/render/shaders/tessellation.wgsl");
+
+        let prepare_indirect_shader = PREPARE_INDIRECT_HANDLE.typed();
+        let update_quadtree_shader = UPDATE_QUADTREE_HANDLE.typed();
+        let tessellation_shader = TESSELATION_HANDLE.typed();
 
         TerrainComputePipelines {
             prepare_indirect_layout,
