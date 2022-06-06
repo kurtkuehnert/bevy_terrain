@@ -59,6 +59,13 @@ const ATLAS_HANDLE: HandleUntyped =
 const DEBUG_HANDLE: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 513467378691355413);
 
+pub const PREPARE_INDIRECT_HANDLE: HandleUntyped =
+    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 242384313596767307);
+pub const UPDATE_QUADTREE_HANDLE: HandleUntyped =
+    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 213403787773215143);
+pub const TESSELATION_HANDLE: HandleUntyped =
+    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 938732132468373352);
+
 #[derive(Clone, Copy, Component)]
 pub struct Terrain;
 
@@ -98,6 +105,19 @@ impl Plugin for TerrainPlugin {
         assets.set_untracked(
             DEBUG_HANDLE,
             Shader::from_wgsl(include_str!("render/shaders/debug.wgsl")),
+        );
+
+        assets.set_untracked(
+            PREPARE_INDIRECT_HANDLE,
+            Shader::from_wgsl(include_str!("render/shaders/prepare_indirect.wgsl")),
+        );
+        assets.set_untracked(
+            UPDATE_QUADTREE_HANDLE,
+            Shader::from_wgsl(include_str!("render/shaders/update_quadtree.wgsl")),
+        );
+        assets.set_untracked(
+            TESSELATION_HANDLE,
+            Shader::from_wgsl(include_str!("render/shaders/tessellation.wgsl")),
         );
 
         app.add_plugin(ExtractComponentPlugin::<Terrain>::default())
