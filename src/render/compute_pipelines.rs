@@ -42,23 +42,23 @@ pub struct TerrainComputePipelines {
 impl FromWorld for TerrainComputePipelines {
     fn from_world(world: &mut World) -> Self {
         let device = world.resource::<RenderDevice>();
-        let asset_server = world.resource::<AssetServer>();
 
         let prepare_indirect_layout = device.create_bind_group_layout(&PREPARE_INDIRECT_LAYOUT);
         let update_quadtree_layout = device.create_bind_group_layout(&UPDATE_QUADTREE_LAYOUT);
         let tessellation_layout = device.create_bind_group_layout(&TESSELLATION_LAYOUT);
         let cull_data_layout = device.create_bind_group_layout(&CULL_DATA_LAYOUT);
 
+        let prepare_indirect_shader = PREPARE_INDIRECT_HANDLE.typed();
+        let update_quadtree_shader = UPDATE_QUADTREE_HANDLE.typed();
+        let tessellation_shader = TESSELATION_HANDLE.typed();
+
+        // let asset_server = world.resource::<AssetServer>();
         // let prepare_indirect_shader =
         //     asset_server.load("../plugins/bevy_terrain/src/render/shaders/prepare_indirect.wgsl");
         // let update_quadtree_shader =
         //     asset_server.load("../plugins/bevy_terrain/src/render/shaders/update_quadtree.wgsl");
         // let tessellation_shader =
         //     asset_server.load("../plugins/bevy_terrain/src/render/shaders/tessellation.wgsl");
-
-        let prepare_indirect_shader = PREPARE_INDIRECT_HANDLE.typed();
-        let update_quadtree_shader = UPDATE_QUADTREE_HANDLE.typed();
-        let tessellation_shader = TESSELATION_HANDLE.typed();
 
         TerrainComputePipelines {
             prepare_indirect_layout,

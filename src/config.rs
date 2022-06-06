@@ -1,8 +1,9 @@
 use crate::attachment::{AtlasAttachmentConfig, AttachmentIndex};
+use bevy::render::extract_component::ExtractComponent;
 use bevy::{
     ecs::{query::QueryItem, system::lifetimeless::Read},
     prelude::*,
-    render::{render_component::ExtractComponent, render_resource::*},
+    render::render_resource::*,
     utils::HashMap,
 };
 
@@ -106,11 +107,6 @@ impl TerrainConfig {
             scale: self.scale,
             height: self.height,
         }
-    }
-
-    #[inline]
-    pub(crate) fn node_size(&self, lod: u32) -> u32 {
-        self.chunk_size * (1 << lod)
     }
 
     #[inline]

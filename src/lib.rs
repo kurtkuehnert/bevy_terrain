@@ -1,10 +1,9 @@
-use crate::quadtree::compute_node_updates;
 use crate::{
     attachment_loader::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk},
     config::TerrainConfig,
     debug::{extract_debug, toggle_debug_system, DebugTerrain},
     node_atlas::{update_node_atlas, LoadNodeEvent},
-    quadtree::traverse_quadtree,
+    quadtree::{compute_node_updates, traverse_quadtree},
     render::{
         compute_data::{initialize_terrain_compute_data, TerrainComputeData},
         compute_pipelines::{TerrainComputeNode, TerrainComputePipelines},
@@ -25,12 +24,13 @@ use crate::{
     },
 };
 use bevy::{
-    core_pipeline::{node::MAIN_PASS_DEPENDENCIES, Opaque3d},
-    ecs::{query::QueryItem, system::lifetimeless::Read},
+    core_pipeline::core_3d::Opaque3d,
+    ecs::system::lifetimeless::Read,
     prelude::*,
     reflect::TypeUuid,
     render::{
-        render_component::{ExtractComponent, ExtractComponentPlugin},
+        extract_component::{ExtractComponent, ExtractComponentPlugin},
+        main_graph::node::CAMERA_DRIVER,
         render_graph::RenderGraph,
         render_phase::AddRenderCommand,
         render_resource::{SpecializedComputePipelines, SpecializedRenderPipelines},
@@ -74,7 +74,7 @@ impl ExtractComponent for Terrain {
     type Filter = ();
 
     #[inline]
-    fn extract_component(_item: QueryItem<Self::Query>) -> Self {
+    fn extract_component(_item: bevy::ecs::query::QueryItem<Self::Query>) -> Self {
         Self
     }
 }
@@ -164,8 +164,9 @@ impl Plugin for TerrainPlugin {
 
         let mut render_graph = render_app.world.resource_mut::<RenderGraph>();
         render_graph.add_node("terrain_compute", compute_node);
+
         render_graph
-            .add_node_edge("terrain_compute", MAIN_PASS_DEPENDENCIES)
+            .add_node_edge("terrain_compute", CAMERA_DRIVER)
             .unwrap();
     }
 }

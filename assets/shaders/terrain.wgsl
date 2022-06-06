@@ -1,6 +1,6 @@
 // imports the View struct and the view binding, aswell as the lighting structs and bindings
-#import bevy_pbr::mesh_view_bind_group
-#import bevy_pbr::mesh_struct
+#import bevy_pbr::mesh_view_bindings
+#import bevy_pbr::mesh_types
 #import bevy_terrain::config
 #import bevy_terrain::patch
 

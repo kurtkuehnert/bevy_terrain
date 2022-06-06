@@ -2,8 +2,8 @@ use crate::{
     render::render_pipeline::TerrainPipelineKey, DebugTerrain, Terrain, TerrainRenderData,
     TerrainRenderPipeline,
 };
+use bevy::core_pipeline::core_3d::Opaque3d;
 use bevy::{
-    core_pipeline::Opaque3d,
     ecs::system::{lifetimeless::SRes, SystemParamItem},
     pbr::{wireframe::Wireframe, MeshUniform, SetMeshBindGroup, SetMeshViewBindGroup},
     prelude::*,
