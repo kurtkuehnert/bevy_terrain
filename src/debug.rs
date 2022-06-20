@@ -3,6 +3,8 @@ use bevy::render::RenderWorld;
 
 #[derive(Clone)]
 pub struct DebugTerrain {
+    pub wireframe: bool,
+
     pub show_patches: bool,
     pub show_lod: bool,
     pub show_uv: bool,
@@ -18,6 +20,7 @@ pub struct DebugTerrain {
 impl Default for DebugTerrain {
     fn default() -> Self {
         Self {
+            wireframe: false,
             show_patches: false,
             show_lod: false,
             show_uv: false,
@@ -31,6 +34,10 @@ impl Default for DebugTerrain {
 }
 
 pub fn toggle_debug_system(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTerrain>) {
+    if input.just_pressed(KeyCode::W) {
+        debug.wireframe = !debug.wireframe;
+    }
+
     if input.just_pressed(KeyCode::P) {
         debug.show_patches = !debug.show_patches;
     }

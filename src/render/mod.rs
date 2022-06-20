@@ -2,10 +2,10 @@ use crate::{
     render::render_pipeline::TerrainPipelineKey, DebugTerrain, Terrain, TerrainRenderData,
     TerrainRenderPipeline,
 };
-use bevy::core_pipeline::core_3d::Opaque3d;
 use bevy::{
+    core_pipeline::core_3d::Opaque3d,
     ecs::system::{lifetimeless::SRes, SystemParamItem},
-    pbr::{wireframe::Wireframe, MeshUniform, SetMeshBindGroup, SetMeshViewBindGroup},
+    pbr::{MeshUniform, SetMeshBindGroup, SetMeshViewBindGroup},
     prelude::*,
     render::{
         render_phase::{
@@ -119,14 +119,13 @@ pub(crate) fn queue_terrain(
     mut pipelines: ResMut<SpecializedRenderPipelines<TerrainRenderPipeline>>,
     mut pipeline_cache: ResMut<PipelineCache>,
     mut view_query: Query<&mut RenderPhase<Opaque3d>>,
-    terrain_query: Query<(Entity, Option<&Wireframe>), With<Terrain>>,
+    terrain_query: Query<Entity, With<Terrain>>,
 ) {
     let draw_function = draw_functions.read().get_id::<DrawTerrain>().unwrap();
 
     for mut opaque_phase in view_query.iter_mut() {
-        for (entity, wireframe) in terrain_query.iter() {
+        for entity in terrain_query.iter() {
             let key = TerrainPipelineKey::from_msaa_samples(msaa.samples)
-                | TerrainPipelineKey::from_wireframe(wireframe.is_some())
                 | TerrainPipelineKey::from_debug(&debug);
 
             let pipeline = pipelines.specialize(&mut pipeline_cache, &terrain_pipeline, key);

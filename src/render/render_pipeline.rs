@@ -5,21 +5,33 @@ use bevy::{
     render::{render_resource::*, renderer::RenderDevice, texture::BevyDefault},
 };
 
-bitflags::bitflags! {
-    #[repr(transparent)]
-    pub struct TerrainPipelineKey: u32 {
-        const NONE               = 0;
-        const WIREFRAME          = (1 << 0);
-        const SHOW_PATCHES       = (1 << 1);
-        const SHOW_LOD           = (1 << 2);
-        const SHOW_UV            = (1 << 3);
-        const CIRCULAR_LOD       = (1 << 4);
-        const MESH_MORPH         = (1 << 5);
-        const ALBEDO             = (1 << 6);
-        const BRIGHT             = (1 << 7);
-        const LIGHTING           = (1 << 8);
-        const MSAA_RESERVED_BITS = TerrainPipelineKey::MSAA_MASK_BITS << TerrainPipelineKey::MSAA_SHIFT_BITS;
+pub struct TerrainPipelineConfig {
+    shader: String,
+}
+
+impl Default for TerrainPipelineConfig {
+    fn default() -> Self {
+        Self {
+            shader: "shaders/terrain.wgsl".into(),
+        }
     }
+}
+
+bitflags::bitflags! {
+#[repr(transparent)]
+pub struct TerrainPipelineKey: u32 {
+    const NONE               = 0;
+    const WIREFRAME          = (1 << 0);
+    const SHOW_PATCHES       = (1 << 1);
+    const SHOW_LOD           = (1 << 2);
+    const SHOW_UV            = (1 << 3);
+    const CIRCULAR_LOD       = (1 << 4);
+    const MESH_MORPH         = (1 << 5);
+    const ALBEDO             = (1 << 6);
+    const BRIGHT             = (1 << 7);
+    const LIGHTING           = (1 << 8);
+    const MSAA_RESERVED_BITS = TerrainPipelineKey::MSAA_MASK_BITS << TerrainPipelineKey::MSAA_SHIFT_BITS;
+}
 }
 
 impl TerrainPipelineKey {
@@ -30,12 +42,13 @@ impl TerrainPipelineKey {
         let msaa_bits = ((msaa_samples - 1) & Self::MSAA_MASK_BITS) << Self::MSAA_SHIFT_BITS;
         TerrainPipelineKey::from_bits(msaa_bits).unwrap()
     }
-    pub fn from_wireframe(wireframe: bool) -> Self {
-        TerrainPipelineKey::from_bits(wireframe as u32).unwrap()
-    }
 
     pub fn from_debug(debug: &DebugTerrain) -> Self {
         let mut key = TerrainPipelineKey::NONE;
+
+        if debug.wireframe {
+            key |= TerrainPipelineKey::WIREFRAME;
+        }
 
         if debug.show_patches {
             key |= TerrainPipelineKey::SHOW_PATCHES;
@@ -118,7 +131,7 @@ pub struct TerrainRenderPipeline {
     pub(crate) mesh_layout: BindGroupLayout,
     pub(crate) terrain_data_layouts: Vec<BindGroupLayout>,
     pub(crate) patch_list_layout: BindGroupLayout,
-    pub(crate) shader: Handle<Shader>, // Todo: make fragment shader customizable
+    pub(crate) shader: Handle<Shader>,
 }
 
 impl FromWorld for TerrainRenderPipeline {
@@ -130,7 +143,7 @@ impl FromWorld for TerrainRenderPipeline {
         let view_layout = mesh_pipeline.view_layout.clone();
         let mesh_layout = mesh_pipeline.mesh_layout.clone();
         let patch_list_layout = device.create_bind_group_layout(&PATCH_LIST_LAYOUT);
-        let shader = asset_server.load("shaders/terrain.wgsl");
+        let shader = asset_server.load(&world.resource::<TerrainPipelineConfig>().shader);
 
         Self {
             view_layout,
