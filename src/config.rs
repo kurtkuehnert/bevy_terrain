@@ -27,8 +27,7 @@ pub struct TerrainConfig {
     pub lod_count: u32,
     pub patch_size: u32,
     pub chunk_size: u32,
-    pub chunk_count: UVec2,
-    pub area_count: UVec2,
+    pub patch_count: u32,
     pub node_count: u32,
     pub view_distance: f32,
     pub load_distance: f32,
@@ -53,16 +52,8 @@ impl TerrainConfig {
         self.attachments.insert(attachment_index, attachment_config);
     }
 
-    pub fn new(
-        chunk_size: u32,
-        lod_count: u32,
-        area_count: UVec2,
-        scale: f32,
-        height: f32,
-        path: String,
-    ) -> Self {
-        let chunk_count = area_count * (1 << (lod_count - 1));
-
+    pub fn new(chunk_size: u32, lod_count: u32, height: f32, path: String) -> Self {
+        let patch_count = 40000;
         let patch_size = 16;
         let view_distance = 1.5 * chunk_size as f32; // half of the view radius
 
@@ -76,12 +67,13 @@ impl TerrainConfig {
         let load_distance = 0.5 * node_count as f32;
         let node_atlas_size = (lod_count * node_count * node_count) as u16;
 
+        let scale = 1.0;
+
         Self {
             lod_count,
             patch_size,
+            patch_count,
             chunk_size,
-            chunk_count,
-            area_count,
             node_count,
             view_distance,
             load_distance,
