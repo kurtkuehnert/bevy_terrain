@@ -63,8 +63,7 @@ impl TerrainResources {
     ) -> ([Buffer; 2], Buffer) {
         let buffer_descriptor = BufferDescriptor {
             label: "patch_buffer".into(),
-            // Todo: figure out a better lower bound
-            size: 10 * PATCH_SIZE * (config.chunk_count.x * config.chunk_count.y) as BufferAddress,
+            size: PATCH_SIZE * config.patch_count as BufferAddress,
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
         };

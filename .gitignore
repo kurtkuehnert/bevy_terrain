@@ -1,3 +1,3 @@
 .idea
 /target
-/assets/terrain/data/height/*.png
+/assets/terrain/data/*/*.png
