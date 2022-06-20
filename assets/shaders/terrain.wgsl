@@ -167,8 +167,7 @@ fn color_fragment(
 
     #ifdef LIGHTING
         let ambient = 0.1;
-        let light_pos = vec3<f32>(5000.0, 2000.0, 5000.0);
-        let direction = normalize(light_pos - world_position);
+        let direction = normalize(vec3<f32>(3.0, 1.0, -2.0));
 
         let normal = calculate_normal(height_coords, atlas_index, lod);
 
