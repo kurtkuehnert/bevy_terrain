@@ -1,9 +1,4 @@
-use bevy::render::camera::Projection;
-use bevy::{
-    pbr::wireframe::{Wireframe, WireframePlugin},
-    prelude::*,
-    render::render_resource::*,
-};
+use bevy::{prelude::*, render::render_resource::*};
 use bevy_terrain::{
     attachment::{AtlasAttachmentConfig, AttachmentIndex},
     attachment_loader::{TextureAttachmentFromDisk, TextureAttachmentFromDiskLoader},
@@ -16,15 +11,9 @@ use bevy_terrain::{
 fn main() {
     let mut app = App::new();
 
-    app.insert_resource(WindowDescriptor {
-        title: "Terrain Rendering".into(),
-        ..default()
-    })
-    .add_plugins(DefaultPlugins)
-    .add_plugin(TerrainPlugin)
-    .add_plugin(WireframePlugin)
-    .add_startup_system(setup)
-    .add_system(toggle_wireframe_system);
+    app.add_plugins(DefaultPlugins)
+        .add_plugin(TerrainPlugin)
+        .add_startup_system(setup);
 
     app.run()
 }
@@ -56,11 +45,6 @@ fn setup(mut commands: Commands) {
         .insert(from_disk_loader);
 
     commands.spawn_bundle(Camera3dBundle {
-        camera: Camera::default(),
-        projection: Projection::Perspective(PerspectiveProjection {
-            far: 10000.0,
-            ..default()
-        }),
         transform: Transform::from_xyz(-200.0, 500.0, -200.0)
             .looking_at(Vec3::new(500.0, 0.0, 500.0), Vec3::Y),
         ..default()
@@ -69,12 +53,8 @@ fn setup(mut commands: Commands) {
 
 pub(crate) fn setup_default_sampler(config: &mut TerrainConfig, attachment_index: AttachmentIndex) {
     let sampler_descriptor = SamplerDescriptor {
-        label: "default_sampler_attachment".into(),
         mag_filter: FilterMode::Linear,
         min_filter: FilterMode::Linear,
-        address_mode_u: AddressMode::ClampToEdge,
-        address_mode_v: AddressMode::ClampToEdge,
-        address_mode_w: AddressMode::ClampToEdge,
         ..default()
     };
 
@@ -91,7 +71,7 @@ pub(crate) fn setup_height_texture(
     texture_size: u32,
 ) {
     let atlas_texture_descriptor = TextureDescriptor {
-        label: "atlas_height_texture_attachment".into(),
+        label: None,
         size: Extent3d {
             width: texture_size,
             height: texture_size,
@@ -104,14 +84,7 @@ pub(crate) fn setup_height_texture(
         usage: TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING,
     };
 
-    let view_descriptor = TextureViewDescriptor {
-        label: "height_texture_attachment_view".into(),
-        dimension: Some(TextureViewDimension::D2Array),
-        ..default()
-    };
-
     let mut node_texture_descriptor = atlas_texture_descriptor.clone();
-    node_texture_descriptor.label = "node_height_texture_attachment".into();
     node_texture_descriptor.size.depth_or_array_layers = 1;
     node_texture_descriptor.usage |= TextureUsages::COPY_SRC;
 
@@ -128,22 +101,7 @@ pub(crate) fn setup_height_texture(
         AtlasAttachmentConfig::Texture {
             texture_size,
             texture_descriptor: atlas_texture_descriptor,
-            view_descriptor,
+            view_descriptor: default(),
         },
     );
-}
-
-fn toggle_wireframe_system(
-    mut commands: Commands,
-    input: Res<Input<KeyCode>>,
-    terrain_query: Query<(Entity, Option<&Wireframe>), With<TerrainConfig>>,
-) {
-    if input.just_pressed(KeyCode::W) {
-        for (entity, wireframe) in terrain_query.iter() {
-            match wireframe {
-                None => commands.entity(entity).insert(Wireframe),
-                Some(_) => commands.entity(entity).remove::<Wireframe>(),
-            };
-        }
-    }
 }

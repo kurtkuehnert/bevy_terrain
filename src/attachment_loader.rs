@@ -1,7 +1,7 @@
-use crate::quadtree::NodeId;
 use crate::{
     attachment::{AttachmentIndex, NodeAttachment},
-    node_atlas::{LoadNodeEvent, NodeAtlas},
+    node_atlas::NodeAtlas,
+    quadtree::NodeId,
 };
 use bevy::{
     asset::{AssetServer, HandleId, LoadState},
@@ -33,18 +33,23 @@ impl TextureAttachmentFromDiskLoader {
 }
 
 pub fn start_loading_attachment_from_disk(
-    mut load_events: EventReader<LoadNodeEvent>,
     asset_server: Res<AssetServer>,
     mut terrain_query: Query<(&mut NodeAtlas, &mut TextureAttachmentFromDiskLoader)>,
 ) {
     for (mut node_atlas, mut config) in terrain_query.iter_mut() {
+        let NodeAtlas {
+            ref mut loading_nodes,
+            ref mut load_events,
+            ..
+        } = node_atlas.as_mut();
+
         let TextureAttachmentFromDiskLoader {
             ref mut attachments,
             ref mut handle_mapping,
         } = config.as_mut();
 
-        for &LoadNodeEvent(node_id) in load_events.iter() {
-            let node = node_atlas.loading_nodes.get_mut(&node_id).unwrap();
+        for &node_id in load_events.iter() {
+            let node = loading_nodes.get_mut(&node_id).unwrap();
 
             for (attachment_index, TextureAttachmentFromDisk { ref path, .. }) in attachments.iter()
             {
