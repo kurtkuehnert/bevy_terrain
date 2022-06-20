@@ -2,7 +2,7 @@ use crate::{
     attachment_loader::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk},
     config::TerrainConfig,
     debug::{extract_debug, toggle_debug_system, DebugTerrain},
-    node_atlas::{update_node_atlas, LoadNodeEvent},
+    node_atlas::update_node_atlas,
     quadtree::{compute_node_updates, traverse_quadtree},
     render::{
         compute_data::{initialize_terrain_compute_data, TerrainComputeData},
@@ -18,6 +18,7 @@ use crate::{
         },
         queue_terrain,
         render_data::{initialize_terrain_render_data, TerrainRenderData},
+        render_pipeline::TerrainPipelineConfig,
         render_pipeline::TerrainRenderPipeline,
         resources::initialize_terrain_resources,
         DrawTerrain, PersistentComponents,
@@ -123,7 +124,6 @@ impl Plugin for TerrainPlugin {
         app.add_plugin(ExtractComponentPlugin::<Terrain>::default())
             .add_plugin(ExtractComponentPlugin::<TerrainConfig>::default())
             .init_resource::<DebugTerrain>()
-            .add_event::<LoadNodeEvent>()
             .add_system(finish_loading_attachment_from_disk.before(update_node_atlas))
             .add_system(traverse_quadtree.before(update_node_atlas))
             .add_system(update_node_atlas)
@@ -134,6 +134,7 @@ impl Plugin for TerrainPlugin {
         let render_app = app
             .sub_app_mut(RenderApp)
             .add_render_command::<Opaque3d, DrawTerrain>()
+            .init_resource::<TerrainPipelineConfig>()
             .init_resource::<TerrainComputePipelines>()
             .init_resource::<SpecializedComputePipelines<TerrainComputePipelines>>()
             .init_resource::<TerrainRenderPipeline>()

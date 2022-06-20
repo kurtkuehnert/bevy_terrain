@@ -9,9 +9,6 @@ use bevy::{
 };
 use std::collections::VecDeque;
 
-/// It is emitted whenever the [`NodeAtlas`] requests loading a node.
-pub struct LoadNodeEvent(pub NodeId);
-
 /// Identifier of an active node (and its attachments) inside the node atlas.
 pub type AtlasIndex = u16;
 
@@ -80,6 +77,8 @@ struct UnusedNode {
 /// and in shaders by the GPU.
 #[derive(Component)]
 pub struct NodeAtlas {
+    /// Nodes that are requested to be loaded this frame.
+    pub load_events: Vec<NodeId>,
     /// Stores the nodes, that have finished loading this frame.
     pub(crate) loaded_nodes: Vec<LoadingNode>,
     /// Stores the currently loading nodes.
@@ -118,6 +117,7 @@ impl NodeAtlas {
         }
 
         Self {
+            load_events: default(),
             loaded_nodes: default(),
             loading_nodes: default(),
             attachments_to_load,
@@ -129,16 +129,13 @@ impl NodeAtlas {
 
     /// Adjusts the nodes atlas according to the requested and released nodes of the [`Quadtree`]
     /// and provides it with the available atlas indices.
-    fn adjust_to_quadtree(
-        &mut self,
-        quadtree: &mut Quadtree,
-        load_events: &mut EventWriter<LoadNodeEvent>,
-    ) {
+    fn adjust_to_quadtree(&mut self, quadtree: &mut Quadtree) {
         let NodeAtlas {
             ref attachments_to_load,
             ref mut unused_nodes,
             ref mut node_states,
             ref mut loading_nodes,
+            ref mut load_events,
             ..
         } = self;
 
@@ -149,6 +146,8 @@ impl NodeAtlas {
             ref mut provided_nodes,
             ..
         } = quadtree;
+
+        load_events.clear();
 
         // release nodes that are on longer required
         for node_id in released_nodes.drain(..) {
@@ -191,7 +190,7 @@ impl NodeAtlas {
                 );
 
                 // start loading the node
-                load_events.send(LoadNodeEvent(node_id));
+                load_events.push(node_id);
                 loading_nodes.insert(
                     node_id,
                     LoadingNode {
@@ -250,12 +249,9 @@ impl NodeAtlas {
 }
 
 /// Updates the node atlas according to all corresponding quadtrees.
-pub(crate) fn update_node_atlas(
-    mut load_events: EventWriter<LoadNodeEvent>,
-    mut terrain_query: Query<(&mut Quadtree, &mut NodeAtlas)>,
-) {
+pub(crate) fn update_node_atlas(mut terrain_query: Query<(&mut Quadtree, &mut NodeAtlas)>) {
     for (mut quadtree, mut node_atlas) in terrain_query.iter_mut() {
         node_atlas.update_loaded_nodes();
-        node_atlas.adjust_to_quadtree(&mut quadtree, &mut load_events);
+        node_atlas.adjust_to_quadtree(&mut quadtree);
     }
 }
