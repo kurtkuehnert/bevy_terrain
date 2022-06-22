@@ -18,8 +18,7 @@ use crate::{
         },
         queue_terrain,
         render_data::{initialize_terrain_render_data, TerrainRenderData},
-        render_pipeline::TerrainPipelineConfig,
-        render_pipeline::TerrainRenderPipeline,
+        render_pipeline::{TerrainPipelineConfig, TerrainRenderPipeline},
         resources::initialize_terrain_resources,
         DrawTerrain, PersistentComponents,
     },
@@ -171,8 +170,3 @@ impl Plugin for TerrainPlugin {
             .unwrap();
     }
 }
-
-// fn register_inspectable(app: &mut App) {
-//     app.register_inspectable::<ViewDistance>()
-//         .register_inspectable::<TerrainDebugInfo>();
-// }
