@@ -1,4 +1,6 @@
-use crate::{config::TerrainConfig, render::layouts::*};
+use crate::{
+    config::TerrainConfig, render::layouts::*, Terrain, TerrainView, TerrainViewComponents,
+};
 use bevy::{
     prelude::*,
     render::{render_resource::*, renderer::RenderDevice},
@@ -80,13 +82,14 @@ impl TerrainResources {
 
 /// Runs in prepare.
 pub(crate) fn initialize_terrain_resources(
-    mut commands: Commands,
     device: Res<RenderDevice>,
-    terrain_query: Query<(Entity, &TerrainConfig)>,
+    mut terrain_resources: ResMut<TerrainViewComponents<TerrainResources>>,
+    view_query: Query<Entity, With<TerrainView>>,
+    terrain_query: Query<(Entity, &TerrainConfig), With<Terrain>>,
 ) {
-    for (entity, config) in terrain_query.iter() {
-        commands
-            .get_or_spawn(entity)
-            .insert(TerrainResources::new(&device, config));
+    for (terrain, config) in terrain_query.iter() {
+        for view in view_query.iter() {
+            terrain_resources.insert((terrain, view), TerrainResources::new(&device, config));
+        }
     }
 }

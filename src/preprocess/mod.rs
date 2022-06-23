@@ -320,7 +320,7 @@ pub fn preprocess_tiles(
     format: ImageFormat,
 ) {
     let _ = fs::remove_dir_all(output_directory);
-    fs::create_dir(output_directory).unwrap();
+    fs::create_dir_all(output_directory).unwrap();
 
     let (offset, size) = if fs::metadata(input_path)
         .expect("Could not find the input path.")

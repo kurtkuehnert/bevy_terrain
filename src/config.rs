@@ -65,7 +65,7 @@ impl TerrainConfig {
 
         let node_count = 8;
         let load_distance = 0.5 * node_count as f32;
-        let node_atlas_size = (lod_count * node_count * node_count) as u16;
+        let node_atlas_size = 2 * (lod_count * node_count * node_count) as u16;
 
         let scale = 1.0;
 

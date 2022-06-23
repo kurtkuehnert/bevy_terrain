@@ -1,6 +1,6 @@
 use crate::{
-    render::render_pipeline::TerrainPipelineKey, DebugTerrain, Terrain, TerrainRenderData,
-    TerrainRenderPipeline,
+    render::render_pipeline::TerrainPipelineKey, DebugTerrain, Terrain, TerrainComputeData,
+    TerrainRenderData, TerrainRenderPipeline,
 };
 use bevy::{
     core_pipeline::core_3d::Opaque3d,
@@ -27,6 +27,8 @@ pub mod render_data;
 pub mod render_pipeline;
 pub mod resources;
 
+pub type TerrainViewComponents<C> = HashMap<(Entity, Entity), C>;
+
 pub type PersistentComponents<C> = HashMap<Entity, C>;
 
 pub struct SetTerrainDataBindGroup<const I: usize>;
@@ -50,17 +52,21 @@ impl<const I: usize> EntityRenderCommand for SetTerrainDataBindGroup<I> {
 pub struct SetPatchListBindGroup<const I: usize>;
 
 impl<const I: usize> EntityRenderCommand for SetPatchListBindGroup<I> {
-    type Param = SRes<PersistentComponents<TerrainRenderData>>;
+    type Param = SRes<TerrainViewComponents<TerrainComputeData>>;
 
     #[inline]
     fn render<'w>(
-        _view: Entity,
-        item: Entity,
-        terrain_render_data: SystemParamItem<'w, '_, Self::Param>,
+        view: Entity,
+        terrain: Entity,
+        terrain_compute_data: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let render_data = terrain_render_data.into_inner().get(&item).unwrap();
-        pass.set_bind_group(I, &render_data.patch_list_bind_group, &[]);
+        let compute_data = terrain_compute_data
+            .into_inner()
+            .get(&(terrain, view))
+            .unwrap();
+
+        pass.set_bind_group(I, &compute_data.patch_list_bind_group, &[]);
         RenderCommandResult::Success
     }
 }
@@ -68,17 +74,21 @@ impl<const I: usize> EntityRenderCommand for SetPatchListBindGroup<I> {
 pub(crate) struct DrawTerrainCommand;
 
 impl EntityRenderCommand for DrawTerrainCommand {
-    type Param = SRes<PersistentComponents<TerrainRenderData>>;
+    type Param = SRes<TerrainViewComponents<TerrainComputeData>>;
 
     #[inline]
     fn render<'w>(
-        _view: Entity,
-        item: Entity,
-        terrain_render_data: SystemParamItem<'w, '_, Self::Param>,
+        view: Entity,
+        terrain: Entity,
+        terrain_compute_data: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let render_data = terrain_render_data.into_inner().get(&item).unwrap();
-        pass.draw_indirect(&render_data.indirect_buffer, 0);
+        let compute_data = terrain_compute_data
+            .into_inner()
+            .get(&(terrain, view))
+            .unwrap();
+
+        pass.draw_indirect(&compute_data.indirect_buffer, 0);
         RenderCommandResult::Success
     }
 }

@@ -1,8 +1,8 @@
 use crate::{
     config::TerrainConfig,
     quadtree::{NodeUpdate, Quadtree},
-    render::{layouts::NODE_UPDATE_SIZE, PersistentComponents},
-    Terrain, TerrainComputePipelines,
+    render::layouts::NODE_UPDATE_SIZE,
+    Terrain, TerrainComputePipelines, TerrainView, TerrainViewComponents,
 };
 use bevy::{
     core::cast_slice,
@@ -102,17 +102,20 @@ impl GpuQuadtree {
 
 /// Initializes the [`GpuQuadtree`] of newly created terrains.
 pub(crate) fn initialize_gpu_quadtree(
-    mut quadtrees: ResMut<PersistentComponents<GpuQuadtree>>,
     device: Res<RenderDevice>,
     queue: Res<RenderQueue>,
     compute_pipelines: Res<TerrainComputePipelines>,
-    mut terrain_query: Query<(Entity, &TerrainConfig)>,
+    mut gpu_quadtrees: ResMut<TerrainViewComponents<GpuQuadtree>>,
+    view_query: Query<Entity, With<TerrainView>>,
+    terrain_query: Query<(Entity, &TerrainConfig), With<Terrain>>,
 ) {
-    for (entity, config) in terrain_query.iter_mut() {
-        quadtrees.insert(
-            entity,
-            GpuQuadtree::new(config, &device, &queue, &compute_pipelines),
-        );
+    for (terrain, config) in terrain_query.iter() {
+        for view in view_query.iter() {
+            gpu_quadtrees.insert(
+                (terrain, view),
+                GpuQuadtree::new(config, &device, &queue, &compute_pipelines),
+            );
+        }
     }
 }
 
@@ -120,18 +123,22 @@ pub(crate) fn initialize_gpu_quadtree(
 /// corresponding [`Quadtree`]s.
 pub(crate) fn update_gpu_quadtree(
     mut render_world: ResMut<RenderWorld>,
-    mut terrain_query: Query<(Entity, &mut Quadtree)>,
+    mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
+    view_query: Query<Entity, With<TerrainView>>,
+    terrain_query: Query<Entity, With<Terrain>>,
 ) {
-    let mut gpu_quadtrees = render_world.resource_mut::<PersistentComponents<GpuQuadtree>>();
+    let mut gpu_quadtrees = render_world.resource_mut::<TerrainViewComponents<GpuQuadtree>>();
 
-    for (entity, mut quadtree) in terrain_query.iter_mut() {
-        let gpu_quadtree = match gpu_quadtrees.get_mut(&entity) {
-            Some(gpu_quadtree) => gpu_quadtree,
-            None => continue,
-        };
-
-        gpu_quadtree.node_updates.clear();
-        mem::swap(&mut quadtree.node_updates, &mut gpu_quadtree.node_updates);
+    for terrain in terrain_query.iter() {
+        for view in view_query.iter() {
+            if let Some((quadtree, gpu_quadtree)) = quadtrees
+                .get_mut(&(terrain, view))
+                .zip(gpu_quadtrees.get_mut(&(terrain, view)))
+            {
+                gpu_quadtree.node_updates.clear();
+                mem::swap(&mut quadtree.node_updates, &mut gpu_quadtree.node_updates);
+            }
+        }
     }
 }
 
@@ -139,16 +146,19 @@ pub(crate) fn update_gpu_quadtree(
 /// by filling the node update buffers with them.
 pub(crate) fn queue_quadtree_updates(
     queue: Res<RenderQueue>,
-    mut gpu_quadtrees: ResMut<PersistentComponents<GpuQuadtree>>,
+    mut gpu_quadtrees: ResMut<TerrainViewComponents<GpuQuadtree>>,
+    view_query: Query<Entity, With<TerrainView>>,
     terrain_query: Query<Entity, With<Terrain>>,
 ) {
-    for entity in terrain_query.iter() {
-        let gpu_quadtree = gpu_quadtrees.get_mut(&entity).unwrap();
-
-        queue.write_buffer(
-            &gpu_quadtree.update_buffer,
-            0,
-            cast_slice(&gpu_quadtree.node_updates),
-        );
+    for terrain in terrain_query.iter() {
+        for view in view_query.iter() {
+            if let Some(gpu_quadtree) = gpu_quadtrees.get_mut(&(terrain, view)) {
+                queue.write_buffer(
+                    &gpu_quadtree.update_buffer,
+                    0,
+                    cast_slice(&gpu_quadtree.node_updates),
+                );
+            }
+        }
     }
 }

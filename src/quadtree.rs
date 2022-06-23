@@ -1,6 +1,8 @@
+use crate::node_atlas::NodeAtlas;
 use crate::{
     config::TerrainConfig,
     node_atlas::{AtlasIndex, INVALID_ATLAS_INDEX},
+    Terrain, TerrainView, TerrainViewComponents,
 };
 use bevy::{math::Vec3Swizzles, prelude::*, utils::HashSet};
 use itertools::iproduct;
@@ -101,7 +103,7 @@ pub struct Quadtree {
 
 impl Quadtree {
     /// Creates a new quadtree based on the supplied [`TerrainConfig`].
-    pub(crate) fn new(config: &TerrainConfig) -> Self {
+    pub fn new(config: &TerrainConfig) -> Self {
         Self {
             lod_count: config.lod_count,
             node_count: config.node_count,
@@ -136,25 +138,27 @@ impl Quadtree {
     }
 
     /// Traverses the quadtree and selects all nodes to activate/deactivate.
-    pub(crate) fn traverse(&mut self, viewer_position: Vec2) {
+    pub(crate) fn traverse(&mut self, viewer_position: Vec3) {
         // traverse the quadtree top down
         for lod in (0..self.lod_count).rev() {
             let node_size = self.node_size(lod);
 
             // bottom left position of grid in node coordinates
-            let grid_coordinate: IVec2 = (viewer_position / node_size as f32 + 0.5
+            let grid_coordinate: IVec2 = (viewer_position.xz() / node_size as f32 + 0.5
                 - self.node_count as f32 / 2.0)
                 .as_ivec2();
 
             for coordinate in iproduct!(0..self.node_count as i32, 0..self.node_count as i32)
-                .map(|(x, y)| grid_coordinate + IVec2::new(x, y))
+                .filter_map(|(x, y)| {
+                    let coordinate = grid_coordinate + IVec2::new(x, y);
+
+                    if coordinate.x < 0 || coordinate.y < 0 {
+                        None
+                    } else {
+                        Some(coordinate.as_uvec2())
+                    }
+                })
             {
-                if coordinate.x < 0 || coordinate.y < 0 {
-                    continue;
-                }
-
-                let coordinate = coordinate.as_uvec2();
-
                 let node_id = Node::id(lod, coordinate.x, coordinate.y);
                 let node = &mut self.nodes[[
                     lod as usize,
@@ -176,7 +180,7 @@ impl Quadtree {
                 }
 
                 let node_position = (coordinate.as_vec2() + 0.5) * node_size as f32;
-                let distance = viewer_position.distance(node_position);
+                let distance = viewer_position.xz().distance(node_position);
                 let should_be_requested = distance < self.load_distance * node_size as f32;
 
                 // request or release node based on their distance to the viewer
@@ -282,21 +286,33 @@ impl Quadtree {
 
 /// Traverses all quadtrees and marks all nodes to activate/deactivate.
 pub(crate) fn traverse_quadtree(
-    viewer_query: Query<&GlobalTransform, With<Camera>>,
-    mut terrain_query: Query<(&GlobalTransform, &mut Quadtree)>,
+    mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
+    view_query: Query<(Entity, &GlobalTransform), With<TerrainView>>,
+    terrain_query: Query<(Entity, &GlobalTransform), With<Terrain>>,
 ) {
     // Todo: properly take the terrain transform into account
-    for (_terrain_transform, mut quadtree) in terrain_query.iter_mut() {
-        for camera_transform in viewer_query.iter() {
-            let view_position = camera_transform.translation;
+    for (terrain, _terrain_transform) in terrain_query.iter() {
+        for (view, view_transform) in view_query.iter() {
+            if let Some(quadtree) = quadtrees.get_mut(&(terrain, view)) {
+                let view_position = view_transform.translation;
 
-            quadtree.traverse(view_position.xz());
+                quadtree.traverse(view_position);
+            }
         }
     }
 }
 
-pub(crate) fn compute_node_updates(mut terrain_query: Query<&mut Quadtree>) {
-    for mut quadtree in terrain_query.iter_mut() {
-        quadtree.compute_node_updates();
+pub(crate) fn compute_node_updates(
+    mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
+    view_query: Query<Entity, With<TerrainView>>,
+    mut terrain_query: Query<(Entity, &mut NodeAtlas), With<Terrain>>,
+) {
+    for (terrain, mut node_atlas) in terrain_query.iter_mut() {
+        for view in view_query.iter() {
+            if let Some(quadtree) = quadtrees.get_mut(&(terrain, view)) {
+                node_atlas.update_quadtree(quadtree);
+                quadtree.compute_node_updates();
+            }
+        }
     }
 }

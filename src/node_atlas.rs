@@ -2,6 +2,7 @@ use crate::{
     attachment::{AtlasAttachmentConfig, AttachmentIndex, NodeAttachment},
     config::TerrainConfig,
     quadtree::{NodeId, Quadtree, INVALID_NODE_ID},
+    Terrain, TerrainView, TerrainViewComponents,
 };
 use bevy::{
     prelude::*,
@@ -139,18 +140,8 @@ impl NodeAtlas {
             ..
         } = self;
 
-        let Quadtree {
-            ref mut released_nodes,
-            ref mut requested_nodes,
-            ref mut waiting_nodes,
-            ref mut provided_nodes,
-            ..
-        } = quadtree;
-
-        load_events.clear();
-
         // release nodes that are on longer required
-        for node_id in released_nodes.drain(..) {
+        for node_id in quadtree.released_nodes.drain(..) {
             let state = node_states
                 .get_mut(&node_id)
                 .expect("Tried releasing a node, which is not present.");
@@ -166,7 +157,7 @@ impl NodeAtlas {
         }
 
         // load nodes that are requested
-        for node_id in requested_nodes.drain(..) {
+        for node_id in quadtree.requested_nodes.drain(..) {
             // check if the node is already present else start loading it
             if let Some(state) = node_states.get_mut(&node_id) {
                 if state.requests == 0 {
@@ -201,13 +192,20 @@ impl NodeAtlas {
                 );
             }
         }
+    }
+
+    pub(crate) fn update_quadtree(&mut self, quadtree: &mut Quadtree) {
+        let Quadtree {
+            ref mut waiting_nodes,
+            ref mut provided_nodes,
+            ..
+        } = quadtree;
 
         // provide nodes that have finished loading
         waiting_nodes.retain(|&node_id| {
-            if let Some(state) = node_states.get_mut(&node_id) {
+            if let Some(state) = self.node_states.get_mut(&node_id) {
                 if !state.loading {
                     provided_nodes.insert(node_id, state.atlas_index);
-                    // provided_nodes.push((node_id, state.atlas_index));
                     false
                 } else {
                     true
@@ -223,11 +221,14 @@ impl NodeAtlas {
     fn update_loaded_nodes(&mut self) {
         let NodeAtlas {
             ref mut data,
+            ref mut load_events,
             ref mut node_states,
             ref mut loading_nodes,
             ref mut loaded_nodes,
             ..
         } = self;
+
+        load_events.clear();
 
         // update all nodes that have finished loading
         for (node_id, node) in loading_nodes.drain_filter(|_, node| node.finished_loading()) {
@@ -249,9 +250,18 @@ impl NodeAtlas {
 }
 
 /// Updates the node atlas according to all corresponding quadtrees.
-pub(crate) fn update_node_atlas(mut terrain_query: Query<(&mut Quadtree, &mut NodeAtlas)>) {
-    for (mut quadtree, mut node_atlas) in terrain_query.iter_mut() {
+pub(crate) fn update_node_atlas(
+    mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
+    view_query: Query<Entity, With<TerrainView>>,
+    mut terrain_query: Query<(Entity, &mut NodeAtlas), With<Terrain>>,
+) {
+    for (terrain, mut node_atlas) in terrain_query.iter_mut() {
         node_atlas.update_loaded_nodes();
-        node_atlas.adjust_to_quadtree(&mut quadtree);
+
+        for view in view_query.iter() {
+            if let Some(quadtree) = quadtrees.get_mut(&(terrain, view)) {
+                node_atlas.adjust_to_quadtree(quadtree);
+            }
+        }
     }
 }
