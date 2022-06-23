@@ -1,11 +1,13 @@
 use bevy::{prelude::*, render::render_resource::*};
+use bevy_terrain::quadtree::Quadtree;
+use bevy_terrain::render::TerrainViewComponents;
 use bevy_terrain::{
     attachment::{AtlasAttachmentConfig, AttachmentIndex},
     attachment_loader::{TextureAttachmentFromDisk, TextureAttachmentFromDiskLoader},
     bundles::TerrainBundle,
     config::TerrainConfig,
     preprocess::{preprocess_tiles, ImageFormat},
-    TerrainPlugin,
+    TerrainPlugin, TerrainView,
 };
 
 fn main() {
@@ -44,22 +46,34 @@ fn main() {
     app.run()
 }
 
-fn setup(mut commands: Commands) {
+fn setup(mut commands: Commands, mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>) {
     let mut from_disk_loader = TextureAttachmentFromDiskLoader::default();
 
     let mut config = TerrainConfig::new(128, 5, 200.0, "terrain/".to_string());
 
-    setup_default_sampler(&mut config, 2);
-    setup_height_texture(&mut config, &mut from_disk_loader, 3, 128 + 4);
-    setup_albedo_texture(&mut config, &mut from_disk_loader, 4, 256 + 2);
+    setup_default_sampler(&mut config, 1);
+    setup_height_texture(&mut config, &mut from_disk_loader, 2, 128 + 4);
+    setup_albedo_texture(&mut config, &mut from_disk_loader, 3, 256 + 2);
 
-    commands
-        .spawn_bundle(TerrainBundle::new(config))
-        .insert(from_disk_loader);
+    let terrain = commands
+        .spawn_bundle(TerrainBundle::new(config.clone()))
+        .insert(from_disk_loader)
+        .id();
 
-    commands.spawn_bundle(Camera3dBundle {
-        transform: Transform::from_xyz(-200.0, 500.0, -200.0)
-            .looking_at(Vec3::new(500.0, 0.0, 500.0), Vec3::Y),
+    let view = commands
+        .spawn_bundle(Camera3dBundle {
+            transform: Transform::from_xyz(-200.0, 500.0, -200.0)
+                .looking_at(Vec3::new(500.0, 0.0, 500.0), Vec3::Y),
+            ..default()
+        })
+        .insert(TerrainView)
+        .id();
+
+    let quadtree = Quadtree::new(&config);
+    quadtrees.insert((terrain, view), quadtree);
+
+    commands.spawn_bundle(PointLightBundle {
+        transform: Transform::from_xyz(0.0, 200.0, 0.0),
         ..default()
     });
 }

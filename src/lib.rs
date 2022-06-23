@@ -1,3 +1,7 @@
+use crate::quadtree::Quadtree;
+use crate::render::culling::CullingBindGroup;
+use crate::render::resources::TerrainResources;
+use crate::render::TerrainViewComponents;
 use crate::{
     attachment_loader::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk},
     config::TerrainConfig,
@@ -70,7 +74,20 @@ pub const TESSELATION_HANDLE: HandleUntyped =
 pub struct Terrain;
 
 impl ExtractComponent for Terrain {
-    type Query = Read<Terrain>;
+    type Query = Read<Self>;
+    type Filter = ();
+
+    #[inline]
+    fn extract_component(_item: bevy::ecs::query::QueryItem<Self::Query>) -> Self {
+        Self
+    }
+}
+
+#[derive(Clone, Copy, Component)]
+pub struct TerrainView;
+
+impl ExtractComponent for TerrainView {
+    type Query = Read<Self>;
     type Filter = ();
 
     #[inline]
@@ -121,25 +138,29 @@ impl Plugin for TerrainPlugin {
         );
 
         app.add_plugin(ExtractComponentPlugin::<Terrain>::default())
+            .add_plugin(ExtractComponentPlugin::<TerrainView>::default())
             .add_plugin(ExtractComponentPlugin::<TerrainConfig>::default())
             .init_resource::<DebugTerrain>()
+            .init_resource::<TerrainViewComponents<Quadtree>>()
+            .add_system(toggle_debug_system)
             .add_system(finish_loading_attachment_from_disk.before(update_node_atlas))
             .add_system(traverse_quadtree.before(update_node_atlas))
             .add_system(update_node_atlas)
             .add_system(compute_node_updates.after(update_node_atlas))
-            .add_system(start_loading_attachment_from_disk.after(update_node_atlas))
-            .add_system(toggle_debug_system);
+            .add_system(start_loading_attachment_from_disk.after(update_node_atlas));
 
         let render_app = app
             .sub_app_mut(RenderApp)
             .add_render_command::<Opaque3d, DrawTerrain>()
             .init_resource::<TerrainPipelineConfig>()
-            .init_resource::<TerrainComputePipelines>()
-            .init_resource::<SpecializedComputePipelines<TerrainComputePipelines>>()
             .init_resource::<TerrainRenderPipeline>()
             .init_resource::<SpecializedRenderPipelines<TerrainRenderPipeline>>()
-            .init_resource::<PersistentComponents<TerrainComputeData>>()
-            .init_resource::<PersistentComponents<GpuQuadtree>>()
+            .init_resource::<TerrainComputePipelines>()
+            .init_resource::<SpecializedComputePipelines<TerrainComputePipelines>>()
+            .init_resource::<TerrainViewComponents<TerrainResources>>()
+            .init_resource::<TerrainViewComponents<TerrainComputeData>>()
+            .init_resource::<TerrainViewComponents<CullingBindGroup>>()
+            .init_resource::<TerrainViewComponents<GpuQuadtree>>()
             .init_resource::<PersistentComponents<GpuNodeAtlas>>()
             .init_resource::<PersistentComponents<TerrainRenderData>>()
             .add_system_to_stage(RenderStage::Extract, extract_terrain)

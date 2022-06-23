@@ -1,11 +1,11 @@
 use crate::{
     render::{compute_data::TerrainComputeData, culling::CullingBindGroup, layouts::*},
-    GpuQuadtree, PersistentComponents, PREPARE_INDIRECT_HANDLE, TESSELATION_HANDLE,
-    UPDATE_QUADTREE_HANDLE,
+    GpuQuadtree, Terrain, TerrainView, TerrainViewComponents, PREPARE_INDIRECT_HANDLE,
+    TESSELATION_HANDLE, UPDATE_QUADTREE_HANDLE,
 };
 use bevy::{
     ecs::system::{
-        lifetimeless::{Read, SRes, SResMut},
+        lifetimeless::{SRes, SResMut},
         SystemState,
     },
     prelude::*,
@@ -138,7 +138,8 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
 }
 
 pub struct TerrainComputeNode {
-    query: QueryState<(Entity, Read<CullingBindGroup>)>,
+    terrain_query: QueryState<Entity, With<Terrain>>,
+    view_query: QueryState<Entity, With<TerrainView>>,
     system_state: SystemState<(
         SResMut<PipelineCache>,
         SResMut<SpecializedComputePipelines<TerrainComputePipelines>>,
@@ -150,7 +151,8 @@ pub struct TerrainComputeNode {
 impl FromWorld for TerrainComputeNode {
     fn from_world(world: &mut World) -> Self {
         Self {
-            query: world.query(),
+            terrain_query: world.query_filtered(),
+            view_query: world.query_filtered(),
             system_state: SystemState::new(world),
             pipelines: [CachedComputePipelineId::INVALID; TerrainComputePipelineKey::COUNT],
         }
@@ -163,9 +165,11 @@ impl TerrainComputeNode {
         pipelines: &'a Vec<&'a ComputePipeline>,
         gpu_quadtree: &'a GpuQuadtree,
     ) {
-        pass.set_bind_group(0, &gpu_quadtree.update_bind_group, &[]);
-        pass.set_pipeline(pipelines[TerrainComputePipelineKey::UpdateQuadtree as usize]);
-        pass.dispatch(gpu_quadtree.node_updates.len() as u32, 1, 1);
+        if gpu_quadtree.node_updates.len() != 0 {
+            pass.set_bind_group(0, &gpu_quadtree.update_bind_group, &[]);
+            pass.set_pipeline(pipelines[TerrainComputePipelineKey::UpdateQuadtree as usize]);
+            pass.dispatch(gpu_quadtree.node_updates.len() as u32, 1, 1);
+        }
     }
 
     fn tessellate_terrain<'a>(
@@ -205,7 +209,8 @@ impl TerrainComputeNode {
 
 impl render_graph::Node for TerrainComputeNode {
     fn update(&mut self, world: &mut World) {
-        self.query.update_archetypes(world);
+        self.terrain_query.update_archetypes(world);
+        self.view_query.update_archetypes(world);
 
         let (mut pipeline_cache, mut pipelines, pipeline) = self.system_state.get_mut(world);
 
@@ -222,8 +227,9 @@ impl render_graph::Node for TerrainComputeNode {
         world: &World,
     ) -> Result<(), render_graph::NodeRunError> {
         let pipeline_cache = world.resource::<PipelineCache>();
-        let compute_data = world.resource::<PersistentComponents<TerrainComputeData>>();
-        let gpu_quadtrees = world.resource::<PersistentComponents<GpuQuadtree>>();
+        let compute_data = world.resource::<TerrainViewComponents<TerrainComputeData>>();
+        let gpu_quadtrees = world.resource::<TerrainViewComponents<GpuQuadtree>>();
+        let culling_bind_groups = world.resource::<TerrainViewComponents<CullingBindGroup>>();
 
         let pipelines = &match TerrainComputePipelineKey::iter()
             .map(|key| pipeline_cache.get_compute_pipeline(self.pipelines[key as usize]))
@@ -237,18 +243,21 @@ impl render_graph::Node for TerrainComputeNode {
             .command_encoder
             .begin_compute_pass(&ComputePassDescriptor::default());
 
-        for (entity, culling_bind_group) in self.query.iter_manual(world) {
-            let gpu_quadtree = gpu_quadtrees.get(&entity).unwrap();
-            let data = compute_data.get(&entity).unwrap();
+        for terrain in self.terrain_query.iter_manual(world) {
+            for view in self.view_query.iter_manual(world) {
+                let gpu_quadtree = gpu_quadtrees.get(&(terrain, view)).unwrap();
+                let data = compute_data.get(&(terrain, view)).unwrap();
+                let culling_bind_group = culling_bind_groups.get(&(terrain, view)).unwrap();
 
-            pass.set_bind_group(1, &culling_bind_group.value, &[]);
+                pass.set_bind_group(1, &culling_bind_group.value, &[]);
 
-            TerrainComputeNode::update_quadtree(pass, pipelines, gpu_quadtree);
-            TerrainComputeNode::tessellate_terrain(pass, pipelines, data);
+                TerrainComputeNode::update_quadtree(pass, pipelines, gpu_quadtree);
+                TerrainComputeNode::tessellate_terrain(pass, pipelines, data);
 
-            pass.set_bind_group(0, &data.prepare_indirect_bind_group, &[]);
-            pass.set_pipeline(pipelines[TerrainComputePipelineKey::PrepareRender as usize]);
-            pass.dispatch(1, 1, 1);
+                pass.set_bind_group(0, &data.prepare_indirect_bind_group, &[]);
+                pass.set_pipeline(pipelines[TerrainComputePipelineKey::PrepareRender as usize]);
+                pass.dispatch(1, 1, 1);
+            }
         }
 
         Ok(())

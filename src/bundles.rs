@@ -1,10 +1,9 @@
-use crate::{config::TerrainConfig, node_atlas::NodeAtlas, quadtree::Quadtree, Terrain};
+use crate::{config::TerrainConfig, node_atlas::NodeAtlas, Terrain};
 use bevy::prelude::*;
 
 #[derive(Bundle)]
 pub struct TerrainBundle {
     terrain: Terrain,
-    quadtree: Quadtree,
     node_atlas: NodeAtlas,
     config: TerrainConfig,
     transform: Transform,
@@ -15,7 +14,6 @@ impl TerrainBundle {
     pub fn new(config: TerrainConfig) -> Self {
         Self {
             terrain: Terrain,
-            quadtree: Quadtree::new(&config),
             node_atlas: NodeAtlas::new(&config),
             config,
             transform: default(),

@@ -162,14 +162,27 @@ pub(crate) const CULL_DATA_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDe
 pub(crate) const PATCH_LIST_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
     // patch list
     label: None,
-    entries: &[BindGroupLayoutEntry {
-        binding: 0,
-        visibility: ShaderStages::VERTEX,
-        ty: BindingType::Buffer {
-            ty: BufferBindingType::Storage { read_only: true },
-            has_dynamic_offset: false,
-            min_binding_size: BufferSize::new(PATCH_SIZE),
+    entries: &[
+        BindGroupLayoutEntry {
+            binding: 0,
+            visibility: ShaderStages::VERTEX,
+            ty: BindingType::Buffer {
+                ty: BufferBindingType::Storage { read_only: true },
+                has_dynamic_offset: false,
+                min_binding_size: BufferSize::new(PATCH_SIZE),
+            },
+            count: None,
         },
-        count: None,
-    }],
+        // quadtree
+        BindGroupLayoutEntry {
+            binding: 1,
+            visibility: ShaderStages::VERTEX_FRAGMENT,
+            ty: BindingType::Texture {
+                sample_type: TextureSampleType::Uint,
+                view_dimension: TextureViewDimension::D2Array,
+                multisampled: false,
+            },
+            count: None,
+        },
+    ],
 };
