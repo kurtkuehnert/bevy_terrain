@@ -34,7 +34,8 @@ fn show_patches(patch: Patch, local_position: vec2<f32>) -> vec4<f32> {
     }
 
 #ifdef MESH_MORPH
-    let viewer_distance = distance(local_position, view.world_position.xz);
+    let world_position = vec3<f32>(local_position.x, config.height / 2.0, local_position.y);
+    let viewer_distance = distance(world_position, view.world_position.xyz);
     let morph_distance = f32(patch.size) * config.view_distance;
     let morph = clamp(1.0 - (1.0 - viewer_distance / morph_distance) / morph_blend, 0.0, 1.0);
 
@@ -44,7 +45,7 @@ fn show_patches(patch: Patch, local_position: vec2<f32>) -> vec4<f32> {
     return color;
 }
 
-fn show_lod(lod: u32, world_position: vec2<f32>) -> vec4<f32> {
+fn show_lod(lod: u32, world_position: vec3<f32>) -> vec4<f32> {
     var color: vec4<f32>;
 
     color = lod_color(lod);
@@ -55,14 +56,14 @@ fn show_lod(lod: u32, world_position: vec2<f32>) -> vec4<f32> {
         let grid_size = node_size * f32(config.node_count);
         let thickness = f32(4u << i);
 
-        let grid_outer = step(grid_position, world_position) * step(world_position, grid_position + grid_size);
-        let grid_inner = step(grid_position + thickness, world_position) * step(world_position, grid_position + grid_size - thickness);
+        let grid_outer = step(grid_position, world_position.xz) * step(world_position.xz, grid_position + grid_size);
+        let grid_inner = step(grid_position + thickness, world_position.xz) * step(world_position.xz, grid_position + grid_size - thickness);
         let outline = grid_outer.x * grid_outer.y - grid_inner.x * grid_inner.y;
 
         color = mix(color, lod_color(i) * 4.0, outline);
     }
 
-    let distance = distance(view.world_position.xz, world_position);
+    let distance = distance(view.world_position.xyz, world_position);
     let circle = f32(1u << lod) * config.view_distance;
 
     if (distance < circle && circle - f32(2 << lod) < distance) {

@@ -25,11 +25,11 @@ var<storage, read_write> final_list: PatchList;
 var<uniform> cull_data: CullData;
 
 fn divide(x: u32, y: u32, size: u32) -> bool {
-    let local_position = vec3<f32>(f32(x) + 0.5, 0.0, f32(y) + 0.5) *
+    var local_position = vec2<f32>(f32(x) + 0.5, f32(y) + 0.5) *
                          config.patch_scale * f32(config.patch_size * size);
 
-    let world_position = local_position;
-    let distance = length(cull_data.world_position.xz - world_position.xz);
+    let world_position = vec3<f32>(local_position.x, config.height / 2.0, local_position.y);
+    let distance = length(cull_data.world_position.xyz - world_position);
     let distance = distance - 0.5 * sqrt(2.0) * config.patch_scale * f32(size * config.patch_size);
 
     return distance < f32(size >> 1u) * config.view_distance;
