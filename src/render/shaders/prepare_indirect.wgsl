@@ -16,8 +16,8 @@ var<storage, read_write> parameters: Parameters;
 
 [[stage(compute), workgroup_size(1, 1, 1)]]
 fn prepare_tessellation() {
-    indirect_buffer.workgroup_count_x = 20u;
-    indirect_buffer.workgroup_count_y = 20u;
+    indirect_buffer.workgroup_count_x = 1u;
+    indirect_buffer.workgroup_count_y = 1u;
     indirect_buffer.workgroup_count_z = 1u;
 
     atomicStore(&parameters.child_index, 0u);
