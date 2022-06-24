@@ -66,7 +66,7 @@ impl TerrainConfig {
         let node_count = 8;
         let load_distance = 0.5 * node_count as f32;
 
-        let terrain_size = 20000;
+        let terrain_size = 12000;
         let patch_count = 100000;
 
         let patch_size = 16;
@@ -75,7 +75,7 @@ impl TerrainConfig {
 
         let view_distance = 3.0 * chunk_size as f32;
 
-        let patch_scale = 2.0;
+        let patch_scale = 4.0;
         let refinement_count = (terrain_size as f32 / (patch_scale * patch_size as f32))
             .log2()
             .ceil() as u32;
