@@ -26,7 +26,7 @@ fn lod_color(lod: u32) -> vec4<f32> {
 fn show_patches(patch: Patch, local_position: vec2<f32>) -> vec4<f32> {
     var color: vec4<f32>;
 
-    if ((patch.coords.x + patch.coords.y) / config.patch_size % 2u == 0u) {
+    if ((patch.coords.x + patch.coords.y) % 2u == 0u) {
         color = vec4<f32>(0.5);
     }
     else {
@@ -35,7 +35,7 @@ fn show_patches(patch: Patch, local_position: vec2<f32>) -> vec4<f32> {
 
 #ifdef MESH_MORPH
     let viewer_distance = distance(local_position, view.world_position.xz);
-    let morph_distance = f32(patch.size << 1u) * config.view_distance;
+    let morph_distance = f32(patch.size) * config.view_distance;
     let morph = clamp(1.0 - (1.0 - viewer_distance / morph_distance) / morph_blend, 0.0, 1.0);
 
     color = mix(color, vec4<f32>(1.0, 0.0, 0.0, 1.0), morph);
@@ -63,9 +63,9 @@ fn show_lod(lod: u32, world_position: vec2<f32>) -> vec4<f32> {
     }
 
     let distance = distance(view.world_position.xz, world_position);
-    let circle = f32(2u << lod) * config.view_distance;
+    let circle = f32(1u << lod) * config.view_distance;
 
-    if (distance < circle && circle - f32(4 << lod) < distance) {
+    if (distance < circle && circle - f32(2 << lod) < distance) {
         color = color * 100.0;
     }
 

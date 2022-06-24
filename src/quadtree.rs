@@ -183,6 +183,7 @@ impl Quadtree {
                 let distance = viewer_position.xz().distance(node_position);
                 let should_be_requested = distance < self.load_distance * node_size as f32;
 
+                // Todo: always request highest lod
                 // request or release node based on their distance to the viewer
                 match (node.requested, should_be_requested) {
                     (false, true) => {
