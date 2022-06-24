@@ -42,7 +42,7 @@ impl TerrainComputeData {
         );
 
         Self {
-            refinement_count: (config.lod_count - 1) as usize,
+            refinement_count: config.refinement_count as usize,
             indirect_buffer: resources.indirect_buffer.clone(),
             prepare_indirect_bind_group,
             tessellation_bind_groups: build_node_list_bind_groups,
