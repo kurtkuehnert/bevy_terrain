@@ -11,7 +11,7 @@ pub struct TerrainResources {
     pub(crate) indirect_buffer: Buffer,
     pub(crate) parameter_buffer: Buffer,
     pub(crate) config_buffer: Buffer,
-    pub(crate) temp_patch_buffers: [Buffer; 2],
+    pub(crate) temporary_patch_buffer: Buffer,
     pub(crate) final_patch_buffer: Buffer,
 }
 
@@ -20,13 +20,14 @@ impl TerrainResources {
         let indirect_buffer = Self::create_indirect_buffer(device);
         let parameter_buffer = Self::create_parameter_buffer(device);
         let config_buffer = Self::create_config_buffer(device, config);
-        let (temp_patch_buffers, final_patch_buffer) = Self::create_patch_buffers(device, config);
+        let (temporary_patch_buffer, final_patch_buffer) =
+            Self::create_patch_buffers(device, config);
 
         Self {
             indirect_buffer,
             parameter_buffer,
             config_buffer,
-            temp_patch_buffers,
+            temporary_patch_buffer,
             final_patch_buffer,
         }
     }
@@ -59,10 +60,7 @@ impl TerrainResources {
         })
     }
 
-    fn create_patch_buffers(
-        device: &RenderDevice,
-        config: &TerrainConfig,
-    ) -> ([Buffer; 2], Buffer) {
+    fn create_patch_buffers(device: &RenderDevice, config: &TerrainConfig) -> (Buffer, Buffer) {
         let buffer_descriptor = BufferDescriptor {
             label: "patch_buffer".into(),
             size: PATCH_SIZE * config.patch_count as BufferAddress,
@@ -70,11 +68,9 @@ impl TerrainResources {
             mapped_at_creation: false,
         };
 
+        // Todo: figure out a better patch buffer size limit
         (
-            [
-                device.create_buffer(&buffer_descriptor),
-                device.create_buffer(&buffer_descriptor),
-            ],
+            device.create_buffer(&buffer_descriptor),
             device.create_buffer(&buffer_descriptor),
         )
     }

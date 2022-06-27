@@ -18,6 +18,7 @@ pub(crate) struct TerrainConfigUniform {
     node_count: u32,
 
     terrain_size: u32,
+    patch_count: u32,
     refinement_count: u32,
     view_distance: f32,
     patch_scale: f32,
@@ -67,7 +68,7 @@ impl TerrainConfig {
         let load_distance = 0.5 * node_count as f32;
 
         let terrain_size = 12000;
-        let patch_count = 100000;
+        let patch_count = 1000000;
 
         let patch_size = 16;
         let vertices_per_row = (patch_size + 2) << 1;
@@ -111,6 +112,7 @@ impl TerrainConfig {
             node_count: self.node_count,
 
             terrain_size: self.terrain_size,
+            patch_count: self.patch_count,
             refinement_count: self.refinement_count,
             view_distance: self.view_distance,
             patch_size: self.patch_size,

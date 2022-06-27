@@ -12,7 +12,7 @@ pub struct TerrainComputeData {
     pub(crate) refinement_count: usize,
     pub(crate) indirect_buffer: Buffer,
     pub(crate) prepare_indirect_bind_group: BindGroup,
-    pub(crate) tessellation_bind_groups: [BindGroup; 2],
+    pub(crate) tessellation_bind_group: BindGroup,
     pub(crate) patch_list_bind_group: BindGroup,
 }
 
@@ -29,7 +29,7 @@ impl TerrainComputeData {
             resources,
             &compute_pipelines.prepare_indirect_layout,
         );
-        let build_node_list_bind_groups = Self::create_build_node_list_bind_groups(
+        let tessellation_bind_group = Self::create_tesselation_bind_group(
             device,
             resources,
             &compute_pipelines.tessellation_layout,
@@ -45,73 +45,12 @@ impl TerrainComputeData {
             refinement_count: config.refinement_count as usize,
             indirect_buffer: resources.indirect_buffer.clone(),
             prepare_indirect_bind_group,
-            tessellation_bind_groups: build_node_list_bind_groups,
+            tessellation_bind_group,
             patch_list_bind_group,
         }
     }
 
-    fn create_build_node_list_bind_groups(
-        device: &RenderDevice,
-        resources: &TerrainResources,
-        layout: &BindGroupLayout,
-    ) -> [BindGroup; 2] {
-        [
-            device.create_bind_group(&BindGroupDescriptor {
-                label: None,
-                entries: &[
-                    BindGroupEntry {
-                        binding: 0,
-                        resource: resources.config_buffer.as_entire_binding(),
-                    },
-                    BindGroupEntry {
-                        binding: 1,
-                        resource: resources.parameter_buffer.as_entire_binding(),
-                    },
-                    BindGroupEntry {
-                        binding: 2,
-                        resource: resources.temp_patch_buffers[0].as_entire_binding(),
-                    },
-                    BindGroupEntry {
-                        binding: 3,
-                        resource: resources.temp_patch_buffers[1].as_entire_binding(),
-                    },
-                    BindGroupEntry {
-                        binding: 4,
-                        resource: resources.final_patch_buffer.as_entire_binding(),
-                    },
-                ],
-                layout,
-            }),
-            device.create_bind_group(&BindGroupDescriptor {
-                label: None,
-                entries: &[
-                    BindGroupEntry {
-                        binding: 0,
-                        resource: resources.config_buffer.as_entire_binding(),
-                    },
-                    BindGroupEntry {
-                        binding: 1,
-                        resource: resources.parameter_buffer.as_entire_binding(),
-                    },
-                    BindGroupEntry {
-                        binding: 2,
-                        resource: resources.temp_patch_buffers[1].as_entire_binding(),
-                    },
-                    BindGroupEntry {
-                        binding: 3,
-                        resource: resources.temp_patch_buffers[0].as_entire_binding(),
-                    },
-                    BindGroupEntry {
-                        binding: 4,
-                        resource: resources.final_patch_buffer.as_entire_binding(),
-                    },
-                ],
-                layout,
-            }),
-        ]
-    }
-
-    fn create_prepare_indirect_bind_group(
+    fn create_tesselation_bind_group(
         device: &RenderDevice,
         resources: &TerrainResources,
         layout: &BindGroupLayout,
@@ -125,13 +64,32 @@ impl TerrainComputeData {
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: resources.indirect_buffer.as_entire_binding(),
+                    resource: resources.parameter_buffer.as_entire_binding(),
                 },
                 BindGroupEntry {
                     binding: 2,
-                    resource: resources.parameter_buffer.as_entire_binding(),
+                    resource: resources.temporary_patch_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 3,
+                    resource: resources.final_patch_buffer.as_entire_binding(),
                 },
             ],
+            layout,
+        })
+    }
+
+    fn create_prepare_indirect_bind_group(
+        device: &RenderDevice,
+        resources: &TerrainResources,
+        layout: &BindGroupLayout,
+    ) -> BindGroup {
+        device.create_bind_group(&BindGroupDescriptor {
+            label: None,
+            entries: &[BindGroupEntry {
+                binding: 0,
+                resource: resources.indirect_buffer.as_entire_binding(),
+            }],
             layout,
         })
     }
