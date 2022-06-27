@@ -111,17 +111,29 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
                 entry_point = "select_finest_patches".into();
             }
             TerrainComputePipelineKey::PrepareTessellation => {
-                layout = Some(vec![self.prepare_indirect_layout.clone()]);
+                layout = Some(vec![
+                    self.tessellation_layout.clone(),
+                    self.cull_data_layout.clone(),
+                    self.prepare_indirect_layout.clone(),
+                ]);
                 shader = self.prepare_indirect_shader.clone();
                 entry_point = "prepare_tessellation".into();
             }
             TerrainComputePipelineKey::PrepareRefinement => {
-                layout = Some(vec![self.prepare_indirect_layout.clone()]);
+                layout = Some(vec![
+                    self.tessellation_layout.clone(),
+                    self.cull_data_layout.clone(),
+                    self.prepare_indirect_layout.clone(),
+                ]);
                 shader = self.prepare_indirect_shader.clone();
                 entry_point = "prepare_refinement".into();
             }
             TerrainComputePipelineKey::PrepareRender => {
-                layout = Some(vec![self.prepare_indirect_layout.clone()]);
+                layout = Some(vec![
+                    self.tessellation_layout.clone(),
+                    self.cull_data_layout.clone(),
+                    self.prepare_indirect_layout.clone(),
+                ]);
                 shader = self.prepare_indirect_shader.clone();
                 entry_point = "prepare_render".into();
             }
@@ -176,34 +188,34 @@ impl TerrainComputeNode {
         pass: &mut ComputePass<'a>,
         pipelines: &'a Vec<&'a ComputePipeline>,
         data: &'a TerrainComputeData,
+        culling_bind_group: &'a BindGroup,
     ) {
-        pass.set_bind_group(0, &data.prepare_indirect_bind_group, &[]);
+        pass.set_bind_group(0, &data.tessellation_bind_group, &[]);
+        pass.set_bind_group(1, culling_bind_group, &[]);
+        pass.set_bind_group(2, &data.prepare_indirect_bind_group, &[]);
+
         pass.set_pipeline(pipelines[TerrainComputePipelineKey::PrepareTessellation as usize]);
         pass.dispatch(1, 1, 1);
 
-        pass.set_bind_group(0, &data.tessellation_bind_groups[1], &[]);
         pass.set_pipeline(pipelines[TerrainComputePipelineKey::SelectCoarsestPatches as usize]);
         pass.dispatch_indirect(&data.indirect_buffer, 0);
 
-        pass.set_bind_group(0, &data.prepare_indirect_bind_group, &[]);
         pass.set_pipeline(pipelines[TerrainComputePipelineKey::PrepareRefinement as usize]);
         pass.dispatch(1, 1, 1);
 
-        let count = data.refinement_count;
-
-        for i in 0..count {
-            pass.set_bind_group(0, &data.tessellation_bind_groups[i % 2], &[]);
+        for _ in 0..data.refinement_count {
             pass.set_pipeline(pipelines[TerrainComputePipelineKey::RefinePatches as usize]);
             pass.dispatch_indirect(&data.indirect_buffer, 0);
 
-            pass.set_bind_group(0, &data.prepare_indirect_bind_group, &[]);
             pass.set_pipeline(pipelines[TerrainComputePipelineKey::PrepareRefinement as usize]);
             pass.dispatch(1, 1, 1);
         }
 
-        pass.set_bind_group(0, &data.tessellation_bind_groups[count % 2], &[]);
         pass.set_pipeline(pipelines[TerrainComputePipelineKey::SelectFinestPatches as usize]);
         pass.dispatch_indirect(&data.indirect_buffer, 0);
+
+        pass.set_pipeline(pipelines[TerrainComputePipelineKey::PrepareRender as usize]);
+        pass.dispatch(1, 1, 1);
     }
 }
 
@@ -249,14 +261,13 @@ impl render_graph::Node for TerrainComputeNode {
                 let data = compute_data.get(&(terrain, view)).unwrap();
                 let culling_bind_group = culling_bind_groups.get(&(terrain, view)).unwrap();
 
-                pass.set_bind_group(1, &culling_bind_group.value, &[]);
-
                 TerrainComputeNode::update_quadtree(pass, pipelines, gpu_quadtree);
-                TerrainComputeNode::tessellate_terrain(pass, pipelines, data);
-
-                pass.set_bind_group(0, &data.prepare_indirect_bind_group, &[]);
-                pass.set_pipeline(pipelines[TerrainComputePipelineKey::PrepareRender as usize]);
-                pass.dispatch(1, 1, 1);
+                TerrainComputeNode::tessellate_terrain(
+                    pass,
+                    pipelines,
+                    data,
+                    &culling_bind_group.value,
+                );
             }
         }
 
