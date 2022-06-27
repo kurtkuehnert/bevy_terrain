@@ -8,6 +8,7 @@ struct TerrainConfig {
     node_count: u32;
 
     terrain_size: u32;
+    patch_count: u32;
     refinement_count: u32;
     view_distance: f32;
     patch_scale: f32;
