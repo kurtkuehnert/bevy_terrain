@@ -116,7 +116,7 @@ fn atlas_lookup(log_distance: f32, local_position: vec2<f32>) -> AtlasLookup {
 #ifndef CIRCULAR_LOD
     for (var lod = 0u; lod < config.lod_count; lod = lod + 1u) {
         let coordinate = local_position / node_size(lod);
-        let grid_coordinate = floor(view.world_position.xz / node_size(lod) - 0.5 * f32(view_config.node_count - 1u));
+        let grid_coordinate = floor(view.world_position.xz / node_size(lod) + 0.5 - f32(view_config.node_count >> 1u));
 
         let grid = step(grid_coordinate, coordinate) * (1.0 - step(grid_coordinate + f32(view_config.node_count), coordinate));
 
