@@ -59,7 +59,7 @@ pub struct TerrainViewConfig {
 impl TerrainViewConfig {
     pub fn new(terrain_size: u32, patch_size: u32, view_distance: f32, patch_scale: f32) -> Self {
         let node_count = 8;
-        let load_distance = 0.5 * node_count as f32;
+        let load_distance = 1.0 * node_count as f32;
 
         let patch_count = 1000000;
 

@@ -147,7 +147,7 @@ impl Quadtree {
 
             // bottom left position of grid in node coordinates
             let grid_coordinate: IVec2 = (viewer_position.xz() / node_size as f32 + 0.5
-                - self.node_count as f32 / 2.0)
+                - (self.node_count >> 1) as f32)
                 .as_ivec2();
 
             for coordinate in iproduct!(0..self.node_count as i32, 0..self.node_count as i32)
@@ -182,7 +182,9 @@ impl Quadtree {
                 }
 
                 let node_position = (coordinate.as_vec2() + 0.5) * node_size as f32;
-                let distance = viewer_position.xz().distance(node_position);
+                let world_position =
+                    Vec3::new(node_position.x, self.height_under_viewer, node_position.y);
+                let distance = viewer_position.xyz().distance(world_position);
                 let should_be_requested = distance < self.load_distance * node_size as f32;
 
                 // Todo: always request highest lod
@@ -209,13 +211,15 @@ impl Quadtree {
         let mut fallback_nodes = mem::take(&mut self.fallback_nodes);
         let mut provided_nodes = mem::take(&mut self.provided_nodes);
 
+        let mut fall_back = Vec::new();
+
         // fall back to the closest present ancestor
         for node_id in fallback_nodes.drain(..) {
-            let mut coordinate = Node::coordinate(node_id);
+            // if provided_nodes.contains_key(&node_id) {
+            //     continue; // will be provided
+            // }
 
-            let lod = coordinate.lod;
-            let x = coordinate.x % self.node_count;
-            let y = coordinate.y % self.node_count;
+            let mut coordinate = Node::coordinate(node_id);
 
             loop {
                 coordinate.lod += 1;
@@ -234,13 +238,44 @@ impl Quadtree {
                 ]];
 
                 let ancestor_id = Node::id(coordinate.lod, coordinate.x, coordinate.y);
-                let atlas_index = ancestor_node.atlas_index;
-                let atlas_lod = ancestor_node.atlas_lod;
 
                 // the node is part of the quadtree
                 if ancestor_id == ancestor_node.node_id {
-                    self.update_node(atlas_index, atlas_lod, lod, x, y);
+                    fall_back.push((node_id, ancestor_node.atlas_index, ancestor_node.atlas_lod));
                     break;
+                }
+            }
+        }
+
+        for (node_id, atlas_index, atlas_lod) in fall_back.drain(..) {
+            let mut queue = VecDeque::new();
+            queue.push_back(node_id);
+
+            while let Some(node_id) = queue.pop_front() {
+                let coordinate = Node::coordinate(node_id);
+
+                let lod = coordinate.lod;
+                let x = coordinate.x % self.node_count;
+                let y = coordinate.y % self.node_count;
+
+                let node = &mut self.nodes[[lod as usize, x as usize, y as usize]];
+
+                // the node is part of the quadtree
+                if node_id == node.node_id {
+                    self.update_node(atlas_index, atlas_lod, lod, x, y);
+
+                    // update children
+                    if lod != 0 {
+                        for (x, y) in iproduct!(0..2, 0..2) {
+                            let child_id = Node::id(
+                                coordinate.lod - 1,
+                                (coordinate.x << 1) | x,
+                                (coordinate.y << 1) | y,
+                            );
+
+                            queue.push_back(child_id);
+                        }
+                    }
                 }
             }
         }
