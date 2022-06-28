@@ -57,20 +57,17 @@ pub struct TerrainViewConfig {
 }
 
 impl TerrainViewConfig {
-    pub fn new() -> Self {
+    pub fn new(terrain_size: u32, patch_size: u32, view_distance: f32, patch_scale: f32) -> Self {
         let node_count = 8;
         let load_distance = 0.5 * node_count as f32;
 
-        let terrain_size = 4000;
         let patch_count = 1000000;
 
-        let patch_size = 16;
         let vertices_per_row = (patch_size + 2) << 1;
         let vertices_per_patch = vertices_per_row * patch_size;
 
-        let view_distance = 3.0 * 128.0;
+        let view_distance = view_distance * 128.0;
 
-        let patch_scale = 4.0;
         let refinement_count = (terrain_size as f32 / (patch_scale * patch_size as f32))
             .log2()
             .ceil() as u32;
