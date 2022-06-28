@@ -1,13 +1,13 @@
 use bevy::{prelude::*, render::render_resource::*};
-use bevy_terrain::quadtree::Quadtree;
-use bevy_terrain::render::TerrainViewComponents;
 use bevy_terrain::{
     attachment::{AtlasAttachmentConfig, AttachmentIndex},
     attachment_loader::{TextureAttachmentFromDisk, TextureAttachmentFromDiskLoader},
     bundles::TerrainBundle,
     preprocess::{preprocess_tiles, ImageFormat},
+    quadtree::Quadtree,
     terrain::TerrainConfig,
-    TerrainPlugin, TerrainView,
+    terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
+    TerrainPlugin,
 };
 
 fn main() {
@@ -46,9 +46,12 @@ fn main() {
     app.run()
 }
 
-fn setup(mut commands: Commands, mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>) {
+fn setup(
+    mut commands: Commands,
+    mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
+    mut terrain_view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
+) {
     let mut from_disk_loader = TextureAttachmentFromDiskLoader::default();
-
     let mut config = TerrainConfig::new(128, 5, 200.0, "terrain/".to_string());
 
     setup_default_sampler(&mut config, 1);
@@ -69,7 +72,10 @@ fn setup(mut commands: Commands, mut quadtrees: ResMut<TerrainViewComponents<Qua
         .insert(TerrainView)
         .id();
 
-    let quadtree = Quadtree::new(&config);
+    let view_config = TerrainViewConfig::new(1024, 16, 3.0, 2.0);
+    let quadtree = Quadtree::new(&config, &view_config);
+
+    terrain_view_configs.insert((terrain, view), view_config);
     quadtrees.insert((terrain, view), quadtree);
 
     commands.spawn_bundle(PointLightBundle {

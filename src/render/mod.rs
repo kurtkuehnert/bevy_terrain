@@ -12,7 +12,7 @@ use bevy::{
     pbr::{MeshUniform, SetMeshBindGroup, SetMeshViewBindGroup},
     prelude::*,
     render::{
-        render_phase::{DrawFunctions, EntityRenderCommand, RenderPhase, SetItemPipeline},
+        render_phase::{DrawFunctions, RenderPhase, SetItemPipeline},
         render_resource::*,
     },
 };

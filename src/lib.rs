@@ -85,7 +85,7 @@ impl Plugin for TerrainPlugin {
         );
         assets.set_untracked(
             ATLAS_HANDLE,
-            Shader::from_wgsl(include_str!("render/shaders/atlas.wgsl")),
+            Shader::from_wgsl(include_str!("render/shaders/utils.wgsl")),
         );
         assets.set_untracked(
             DEBUG_HANDLE,
