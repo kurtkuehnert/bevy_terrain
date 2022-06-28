@@ -1,4 +1,4 @@
-use crate::{config::TerrainConfig, node_atlas::NodeAtlas, Terrain};
+use crate::{node_atlas::NodeAtlas, terrain::Terrain, terrain::TerrainConfig};
 use bevy::prelude::*;
 
 #[derive(Bundle)]

@@ -1,8 +1,8 @@
 use crate::{
     attachment::{AtlasAttachmentConfig, AttachmentIndex, NodeAttachment},
-    config::TerrainConfig,
     quadtree::{NodeId, Quadtree, INVALID_NODE_ID},
-    Terrain, TerrainView, TerrainViewComponents,
+    terrain::{Terrain, TerrainConfig},
+    TerrainView, TerrainViewComponents,
 };
 use bevy::{
     prelude::*,
@@ -89,7 +89,7 @@ pub struct NodeAtlas {
     /// Lists the unused nodes in least recently used order.
     unused_nodes: VecDeque<UnusedNode>,
     /// Stores the cpu accessible data of all present nodes.
-    data: Vec<NodeData>, // Todo: build api for accessing data on the cpu
+    pub(crate) data: Vec<NodeData>, // Todo: build api for accessing data on the cpu
     /// Stores the states of all present nodes.
     node_states: HashMap<NodeId, NodeState>,
 }
