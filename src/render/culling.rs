@@ -1,4 +1,4 @@
-use crate::{Terrain, TerrainComputePipelines, TerrainView, TerrainViewComponents};
+use crate::{terrain::Terrain, TerrainComputePipelines, TerrainView, TerrainViewComponents};
 use bevy::{
     math::Vec3Swizzles,
     pbr::MeshUniform,

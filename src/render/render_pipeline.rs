@@ -1,4 +1,4 @@
-use crate::{render::layouts::PATCH_LIST_LAYOUT, DebugTerrain};
+use crate::{render::layouts::TERRAIN_VIEW_LAYOUT, DebugTerrain};
 use bevy::{
     pbr::MeshPipeline,
     prelude::*,
@@ -129,8 +129,8 @@ impl TerrainPipelineKey {
 pub struct TerrainRenderPipeline {
     pub(crate) view_layout: BindGroupLayout,
     pub(crate) mesh_layout: BindGroupLayout,
-    pub(crate) terrain_data_layouts: Vec<BindGroupLayout>,
-    pub(crate) patch_list_layout: BindGroupLayout,
+    pub(crate) terrain_layouts: Vec<BindGroupLayout>,
+    pub(crate) terrain_view_layout: BindGroupLayout,
     pub(crate) shader: Handle<Shader>,
 }
 
@@ -142,14 +142,14 @@ impl FromWorld for TerrainRenderPipeline {
 
         let view_layout = mesh_pipeline.view_layout.clone();
         let mesh_layout = mesh_pipeline.mesh_layout.clone();
-        let patch_list_layout = device.create_bind_group_layout(&PATCH_LIST_LAYOUT);
+        let terrain_view_layout = device.create_bind_group_layout(&TERRAIN_VIEW_LAYOUT);
         let shader = asset_server.load(&world.resource::<TerrainPipelineConfig>().shader);
 
         Self {
             view_layout,
             mesh_layout,
-            terrain_data_layouts: Vec::new(),
-            patch_list_layout,
+            terrain_layouts: Vec::new(),
+            terrain_view_layout,
             shader,
         }
     }
@@ -165,9 +165,9 @@ impl SpecializedRenderPipeline for TerrainRenderPipeline {
             label: None,
             layout: Some(vec![
                 self.view_layout.clone(),
+                self.terrain_view_layout.clone(),
+                self.terrain_layouts[0].clone(), // Todo: do this properly for multiple maps
                 self.mesh_layout.clone(),
-                self.terrain_data_layouts[0].clone(), // Todo: do this properly for multiple maps
-                self.patch_list_layout.clone(),
             ]),
             vertex: VertexState {
                 shader: self.shader.clone(),

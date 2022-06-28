@@ -8,7 +8,7 @@ struct IndirectBuffer {
 };
 
 [[group(0), binding(0)]]
-var<uniform> config: TerrainConfig;
+var<uniform> config: TerrainViewConfig;
 [[group(0), binding(1)]]
 var<storage, read_write> parameters: Parameters;
 [[group(2), binding(0)]]

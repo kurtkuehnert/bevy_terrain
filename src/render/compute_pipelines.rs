@@ -1,6 +1,7 @@
 use crate::{
-    render::{compute_data::TerrainComputeData, culling::CullingBindGroup, layouts::*},
-    GpuQuadtree, Terrain, TerrainView, TerrainViewComponents, PREPARE_INDIRECT_HANDLE,
+    render::{culling::CullingBindGroup, layouts::*, terrain_view_data::TerrainViewData},
+    terrain::Terrain,
+    GpuQuadtree, TerrainView, TerrainViewComponents, TerrainViewConfig, PREPARE_INDIRECT_HANDLE,
     TESSELATION_HANDLE, UPDATE_QUADTREE_HANDLE,
 };
 use bevy::{
@@ -51,14 +52,6 @@ impl FromWorld for TerrainComputePipelines {
         let prepare_indirect_shader = PREPARE_INDIRECT_HANDLE.typed();
         let update_quadtree_shader = UPDATE_QUADTREE_HANDLE.typed();
         let tessellation_shader = TESSELATION_HANDLE.typed();
-
-        // let asset_server = world.resource::<AssetServer>();
-        // let prepare_indirect_shader =
-        //     asset_server.load("../plugins/bevy_terrain/src/render/shaders/prepare_indirect.wgsl");
-        // let update_quadtree_shader =
-        //     asset_server.load("../plugins/bevy_terrain/src/render/shaders/update_quadtree.wgsl");
-        // let tessellation_shader =
-        //     asset_server.load("../plugins/bevy_terrain/src/render/shaders/tessellation.wgsl");
 
         TerrainComputePipelines {
             prepare_indirect_layout,
@@ -187,8 +180,9 @@ impl TerrainComputeNode {
     fn tessellate_terrain<'a>(
         pass: &mut ComputePass<'a>,
         pipelines: &'a Vec<&'a ComputePipeline>,
-        data: &'a TerrainComputeData,
+        data: &'a TerrainViewData,
         culling_bind_group: &'a BindGroup,
+        refinement_count: u32,
     ) {
         pass.set_bind_group(0, &data.tessellation_bind_group, &[]);
         pass.set_bind_group(1, culling_bind_group, &[]);
@@ -203,7 +197,7 @@ impl TerrainComputeNode {
         pass.set_pipeline(pipelines[TerrainComputePipelineKey::PrepareRefinement as usize]);
         pass.dispatch(1, 1, 1);
 
-        for _ in 0..data.refinement_count {
+        for _ in 0..refinement_count {
             pass.set_pipeline(pipelines[TerrainComputePipelineKey::RefinePatches as usize]);
             pass.dispatch_indirect(&data.indirect_buffer, 0);
 
@@ -239,7 +233,8 @@ impl render_graph::Node for TerrainComputeNode {
         world: &World,
     ) -> Result<(), render_graph::NodeRunError> {
         let pipeline_cache = world.resource::<PipelineCache>();
-        let compute_data = world.resource::<TerrainViewComponents<TerrainComputeData>>();
+        let view_configs = world.resource::<TerrainViewComponents<TerrainViewConfig>>();
+        let terrain_view_data = world.resource::<TerrainViewComponents<TerrainViewData>>();
         let gpu_quadtrees = world.resource::<TerrainViewComponents<GpuQuadtree>>();
         let culling_bind_groups = world.resource::<TerrainViewComponents<CullingBindGroup>>();
 
@@ -257,8 +252,9 @@ impl render_graph::Node for TerrainComputeNode {
 
         for terrain in self.terrain_query.iter_manual(world) {
             for view in self.view_query.iter_manual(world) {
+                let view_config = view_configs.get(&(terrain, view)).unwrap();
+                let data = terrain_view_data.get(&(terrain, view)).unwrap();
                 let gpu_quadtree = gpu_quadtrees.get(&(terrain, view)).unwrap();
-                let data = compute_data.get(&(terrain, view)).unwrap();
                 let culling_bind_group = culling_bind_groups.get(&(terrain, view)).unwrap();
 
                 TerrainComputeNode::update_quadtree(pass, pipelines, gpu_quadtree);
@@ -267,6 +263,7 @@ impl render_graph::Node for TerrainComputeNode {
                     pipelines,
                     data,
                     &culling_bind_group.value,
+                    view_config.refinement_count,
                 );
             }
         }

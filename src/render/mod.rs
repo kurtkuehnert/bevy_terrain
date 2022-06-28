@@ -1,6 +1,7 @@
+use crate::terrain::TerrainComponents;
 use crate::{
-    render::render_pipeline::TerrainPipelineKey, DebugTerrain, Terrain, TerrainComputeData,
-    TerrainRenderData, TerrainRenderPipeline,
+    render::render_pipeline::TerrainPipelineKey, terrain::Terrain, DebugTerrain, TerrainData,
+    TerrainRenderPipeline, TerrainViewComponents, TerrainViewData,
 };
 use bevy::{
     core_pipeline::core_3d::Opaque3d,
@@ -14,59 +15,53 @@ use bevy::{
         },
         render_resource::*,
     },
-    utils::HashMap,
 };
 
-pub mod compute_data;
 pub mod compute_pipelines;
 pub mod culling;
 pub mod gpu_node_atlas;
 pub mod gpu_quadtree;
 pub mod layouts;
-pub mod render_data;
 pub mod render_pipeline;
-pub mod resources;
+pub mod terrain_data;
+pub mod terrain_view_data;
 
-pub type TerrainViewComponents<C> = HashMap<(Entity, Entity), C>;
+pub struct SetTerrainBindGroup<const I: usize>;
 
-pub type PersistentComponents<C> = HashMap<Entity, C>;
-
-pub struct SetTerrainDataBindGroup<const I: usize>;
-
-impl<const I: usize> EntityRenderCommand for SetTerrainDataBindGroup<I> {
-    type Param = SRes<PersistentComponents<TerrainRenderData>>;
+impl<const I: usize> EntityRenderCommand for SetTerrainBindGroup<I> {
+    type Param = SRes<TerrainComponents<TerrainData>>;
 
     #[inline]
     fn render<'w>(
         _view: Entity,
         item: Entity,
-        terrain_render_data: SystemParamItem<'w, '_, Self::Param>,
+        terrain_data: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let render_data = terrain_render_data.into_inner().get(&item).unwrap();
-        pass.set_bind_group(I, &render_data.terrain_data_bind_group, &[]);
+        let data = terrain_data.into_inner().get(&item).unwrap();
+        pass.set_bind_group(I, &data.terrain_bind_group, &[]);
         RenderCommandResult::Success
     }
 }
 
-pub struct SetPatchListBindGroup<const I: usize>;
+pub struct SetTerrainViewBindGroup<const I: usize>;
 
-impl<const I: usize> EntityRenderCommand for SetPatchListBindGroup<I> {
-    type Param = SRes<TerrainViewComponents<TerrainComputeData>>;
+impl<const I: usize> EntityRenderCommand for SetTerrainViewBindGroup<I> {
+    type Param = SRes<TerrainViewComponents<TerrainViewData>>;
 
     #[inline]
     fn render<'w>(
         view: Entity,
         terrain: Entity,
-        terrain_compute_data: SystemParamItem<'w, '_, Self::Param>,
+        terrain_view_data: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let compute_data = terrain_compute_data
+        let data = terrain_view_data
             .into_inner()
             .get(&(terrain, view))
             .unwrap();
 
-        pass.set_bind_group(I, &compute_data.patch_list_bind_group, &[]);
+        pass.set_bind_group(I, &data.terrain_view_bind_group, &[]);
         RenderCommandResult::Success
     }
 }
@@ -74,21 +69,21 @@ impl<const I: usize> EntityRenderCommand for SetPatchListBindGroup<I> {
 pub(crate) struct DrawTerrainCommand;
 
 impl EntityRenderCommand for DrawTerrainCommand {
-    type Param = SRes<TerrainViewComponents<TerrainComputeData>>;
+    type Param = SRes<TerrainViewComponents<TerrainViewData>>;
 
     #[inline]
     fn render<'w>(
         view: Entity,
         terrain: Entity,
-        terrain_compute_data: SystemParamItem<'w, '_, Self::Param>,
+        terrain_view_data: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let compute_data = terrain_compute_data
+        let terrain_view = terrain_view_data
             .into_inner()
             .get(&(terrain, view))
             .unwrap();
 
-        pass.draw_indirect(&compute_data.indirect_buffer, 0);
+        pass.draw_indirect(&terrain_view.indirect_buffer, 0);
         RenderCommandResult::Success
     }
 }
@@ -98,9 +93,9 @@ impl EntityRenderCommand for DrawTerrainCommand {
 pub(crate) type DrawTerrain = (
     SetItemPipeline,
     SetMeshViewBindGroup<0>,
-    SetMeshBindGroup<1>,
-    SetTerrainDataBindGroup<2>,
-    SetPatchListBindGroup<3>,
+    SetTerrainViewBindGroup<1>,
+    SetTerrainBindGroup<2>,
+    SetMeshBindGroup<3>,
     DrawTerrainCommand,
 );
 

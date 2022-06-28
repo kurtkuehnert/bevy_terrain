@@ -1,17 +1,11 @@
-use crate::quadtree::Quadtree;
-use crate::render::culling::CullingBindGroup;
-use crate::render::resources::TerrainResources;
-use crate::render::TerrainViewComponents;
 use crate::{
     attachment_loader::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk},
-    config::TerrainConfig,
-    debug::{extract_debug, toggle_debug_system, DebugTerrain},
+    debug::{extract_debug, toggle_debug, DebugTerrain},
     node_atlas::update_node_atlas,
-    quadtree::{compute_node_updates, traverse_quadtree},
+    quadtree::{compute_node_updates, traverse_quadtree, update_height_under_viewer, Quadtree},
     render::{
-        compute_data::{initialize_terrain_compute_data, TerrainComputeData},
         compute_pipelines::{TerrainComputeNode, TerrainComputePipelines},
-        culling::queue_terrain_culling_bind_group,
+        culling::{queue_terrain_culling_bind_group, CullingBindGroup},
         extract_terrain,
         gpu_node_atlas::{
             initialize_gpu_node_atlas, queue_node_atlas_updates, update_gpu_node_atlas,
@@ -21,36 +15,38 @@ use crate::{
             initialize_gpu_quadtree, queue_quadtree_updates, update_gpu_quadtree, GpuQuadtree,
         },
         queue_terrain,
-        render_data::{initialize_terrain_render_data, TerrainRenderData},
         render_pipeline::{TerrainPipelineConfig, TerrainRenderPipeline},
-        resources::initialize_terrain_resources,
-        DrawTerrain, PersistentComponents,
+        terrain_data::{initialize_terrain_data, TerrainData},
+        terrain_view_data::{initialize_terrain_view_data, TerrainViewData},
+        DrawTerrain,
+    },
+    terrain::{Terrain, TerrainComponents, TerrainConfig},
+    terrain_view::{
+        extract_terrain_view_config, queue_terrain_view_config, TerrainView, TerrainViewComponents,
+        TerrainViewConfig,
     },
 };
 use bevy::{
     core_pipeline::core_3d::Opaque3d,
-    ecs::system::lifetimeless::Read,
     prelude::*,
     reflect::TypeUuid,
     render::{
-        extract_component::{ExtractComponent, ExtractComponentPlugin},
-        main_graph::node::CAMERA_DRIVER,
-        render_graph::RenderGraph,
-        render_phase::AddRenderCommand,
-        render_resource::{SpecializedComputePipelines, SpecializedRenderPipelines},
-        RenderApp, RenderStage,
+        extract_component::ExtractComponentPlugin, main_graph::node::CAMERA_DRIVER,
+        render_graph::RenderGraph, render_phase::AddRenderCommand, render_resource::*, RenderApp,
+        RenderStage,
     },
 };
 
 pub mod attachment;
 pub mod attachment_loader;
 pub mod bundles;
-pub mod config;
 pub mod debug;
 pub mod node_atlas;
 pub mod preprocess;
 pub mod quadtree;
 pub mod render;
+pub mod terrain;
+pub mod terrain_view;
 
 const CONFIG_HANDLE: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 907665645684322571);
@@ -70,38 +66,10 @@ pub const UPDATE_QUADTREE_HANDLE: HandleUntyped =
 pub const TESSELATION_HANDLE: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 938732132468373352);
 
-#[derive(Clone, Copy, Component)]
-pub struct Terrain;
-
-impl ExtractComponent for Terrain {
-    type Query = Read<Self>;
-    type Filter = ();
-
-    #[inline]
-    fn extract_component(_item: bevy::ecs::query::QueryItem<Self::Query>) -> Self {
-        Self
-    }
-}
-
-#[derive(Clone, Copy, Component)]
-pub struct TerrainView;
-
-impl ExtractComponent for TerrainView {
-    type Query = Read<Self>;
-    type Filter = ();
-
-    #[inline]
-    fn extract_component(_item: bevy::ecs::query::QueryItem<Self::Query>) -> Self {
-        Self
-    }
-}
-
 pub struct TerrainPlugin;
 
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
-        // register_inspectable(app);
-
         let mut assets = app.world.resource_mut::<Assets<_>>();
         assets.set_untracked(
             CONFIG_HANDLE,
@@ -123,7 +91,6 @@ impl Plugin for TerrainPlugin {
             DEBUG_HANDLE,
             Shader::from_wgsl(include_str!("render/shaders/debug.wgsl")),
         );
-
         assets.set_untracked(
             PREPARE_INDIRECT_HANDLE,
             Shader::from_wgsl(include_str!("render/shaders/prepare_indirect.wgsl")),
@@ -139,14 +106,15 @@ impl Plugin for TerrainPlugin {
 
         app.add_plugin(ExtractComponentPlugin::<Terrain>::default())
             .add_plugin(ExtractComponentPlugin::<TerrainView>::default())
-            .add_plugin(ExtractComponentPlugin::<TerrainConfig>::default())
             .init_resource::<DebugTerrain>()
             .init_resource::<TerrainViewComponents<Quadtree>>()
-            .add_system(toggle_debug_system)
+            .init_resource::<TerrainViewComponents<TerrainViewConfig>>()
+            .add_system(toggle_debug)
             .add_system(finish_loading_attachment_from_disk.before(update_node_atlas))
             .add_system(traverse_quadtree.before(update_node_atlas))
             .add_system(update_node_atlas)
             .add_system(compute_node_updates.after(update_node_atlas))
+            .add_system(update_height_under_viewer.after(compute_node_updates))
             .add_system(start_loading_attachment_from_disk.after(update_node_atlas));
 
         let render_app = app
@@ -157,29 +125,38 @@ impl Plugin for TerrainPlugin {
             .init_resource::<SpecializedRenderPipelines<TerrainRenderPipeline>>()
             .init_resource::<TerrainComputePipelines>()
             .init_resource::<SpecializedComputePipelines<TerrainComputePipelines>>()
-            .init_resource::<TerrainViewComponents<TerrainResources>>()
-            .init_resource::<TerrainViewComponents<TerrainComputeData>>()
-            .init_resource::<TerrainViewComponents<CullingBindGroup>>()
+            .init_resource::<TerrainComponents<GpuNodeAtlas>>()
+            .init_resource::<TerrainComponents<TerrainData>>()
             .init_resource::<TerrainViewComponents<GpuQuadtree>>()
-            .init_resource::<PersistentComponents<GpuNodeAtlas>>()
-            .init_resource::<PersistentComponents<TerrainRenderData>>()
+            .init_resource::<TerrainViewComponents<TerrainViewData>>()
+            .init_resource::<TerrainViewComponents<TerrainViewConfig>>()
+            .init_resource::<TerrainViewComponents<CullingBindGroup>>()
             .add_system_to_stage(RenderStage::Extract, extract_terrain)
+            .add_system_to_stage(RenderStage::Extract, extract_terrain_view_config)
             .add_system_to_stage(RenderStage::Extract, extract_debug)
-            .add_system_to_stage(RenderStage::Extract, update_gpu_quadtree)
-            .add_system_to_stage(RenderStage::Extract, update_gpu_node_atlas)
-            .add_system_to_stage(RenderStage::Prepare, initialize_terrain_resources)
-            .add_system_to_stage(RenderStage::Prepare, initialize_gpu_quadtree)
-            .add_system_to_stage(RenderStage::Prepare, initialize_gpu_node_atlas)
-            // Todo: initialize should run in prepare
-            .add_system_to_stage(RenderStage::Queue, initialize_terrain_compute_data)
-            .add_system_to_stage(RenderStage::Queue, initialize_terrain_render_data)
+            .add_system_to_stage(RenderStage::Extract, initialize_gpu_node_atlas)
+            .add_system_to_stage(RenderStage::Extract, initialize_gpu_quadtree)
             .add_system_to_stage(
-                RenderStage::Queue,
-                queue_terrain.after(initialize_terrain_render_data),
+                RenderStage::Extract,
+                initialize_terrain_data.after(initialize_gpu_node_atlas),
             )
+            .add_system_to_stage(
+                RenderStage::Extract,
+                initialize_terrain_view_data.after(initialize_gpu_quadtree),
+            )
+            .add_system_to_stage(
+                RenderStage::Extract,
+                update_gpu_node_atlas.after(initialize_gpu_node_atlas),
+            )
+            .add_system_to_stage(
+                RenderStage::Extract,
+                update_gpu_quadtree.after(initialize_gpu_quadtree),
+            )
+            .add_system_to_stage(RenderStage::Queue, queue_terrain)
             .add_system_to_stage(RenderStage::Queue, queue_quadtree_updates)
             .add_system_to_stage(RenderStage::Queue, queue_node_atlas_updates)
-            .add_system_to_stage(RenderStage::Queue, queue_terrain_culling_bind_group);
+            .add_system_to_stage(RenderStage::Queue, queue_terrain_culling_bind_group)
+            .add_system_to_stage(RenderStage::Queue, queue_terrain_view_config);
 
         let compute_node = TerrainComputeNode::from_world(&mut render_app.world);
 

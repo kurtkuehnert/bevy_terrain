@@ -1,14 +1,13 @@
-use crate::node_atlas::NodeAtlas;
 use crate::{
-    config::TerrainConfig,
-    node_atlas::{AtlasIndex, INVALID_ATLAS_INDEX},
-    Terrain, TerrainView, TerrainViewComponents,
+    attachment::NodeAttachment,
+    node_atlas::{AtlasIndex, NodeAtlas, INVALID_ATLAS_INDEX},
+    terrain::{Terrain, TerrainConfig},
+    TerrainView, TerrainViewComponents, TerrainViewConfig,
 };
 use bevy::{math::Vec3Swizzles, prelude::*, utils::HashSet};
 use itertools::iproduct;
 use ndarray::Array3;
-use std::collections::BTreeMap;
-use std::{collections::VecDeque, mem};
+use std::{collections::BTreeMap, collections::VecDeque, mem};
 
 // Todo: may be swap to u64 for giant terrains
 // Todo: consider 3 bit face data, for cube sphere
@@ -86,11 +85,12 @@ impl Node {
 /// [`GpuQuadtree`](crate::render::gpu_quadtree::GpuQuadtree).
 #[derive(Component)]
 pub struct Quadtree {
-    //
-    lod_count: u32,
-    node_count: u32,
+    pub(crate) lod_count: u32,
+    pub(crate) node_count: u32,
     chunk_size: u32,
     load_distance: f32,
+    height: f32,
+    height_under_viewer: f32,
     nodes: Array3<Node>,
     pub(crate) released_nodes: Vec<NodeId>,
     pub(crate) fallback_nodes: Vec<NodeId>,
@@ -103,16 +103,18 @@ pub struct Quadtree {
 
 impl Quadtree {
     /// Creates a new quadtree based on the supplied [`TerrainConfig`].
-    pub fn new(config: &TerrainConfig) -> Self {
+    pub fn new(config: &TerrainConfig, view_config: &TerrainViewConfig) -> Self {
         Self {
             lod_count: config.lod_count,
-            node_count: config.node_count,
+            node_count: view_config.node_count,
             chunk_size: config.chunk_size,
-            load_distance: config.load_distance,
+            load_distance: view_config.load_distance,
+            height: config.height,
+            height_under_viewer: config.height / 2.0,
             nodes: Array3::default((
                 config.lod_count as usize,
-                config.node_count as usize,
-                config.node_count as usize,
+                view_config.node_count as usize,
+                view_config.node_count as usize,
             )),
             released_nodes: default(),
             fallback_nodes: default(),
@@ -316,4 +318,67 @@ pub(crate) fn compute_node_updates(
             }
         }
     }
+}
+
+pub(crate) fn update_height_under_viewer(
+    images: Res<Assets<Image>>,
+    mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
+    mut terrain_view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
+    view_query: Query<(Entity, &GlobalTransform), With<TerrainView>>,
+    mut terrain_query: Query<(Entity, &NodeAtlas), With<Terrain>>,
+) {
+    for (terrain, node_atlas) in terrain_query.iter_mut() {
+        for (view, view_transform) in view_query.iter() {
+            if let Some(quadtree) = quadtrees.get_mut(&(terrain, view)) {
+                quadtree.height_under_viewer = height_under_viewer(
+                    quadtree,
+                    &node_atlas,
+                    &images,
+                    view_transform.translation.xz(),
+                );
+
+                terrain_view_configs
+                    .get_mut(&(terrain, view))
+                    .unwrap()
+                    .height_under_viewer = quadtree.height_under_viewer;
+            }
+        }
+    }
+}
+
+fn height_under_viewer(
+    quadtree: &Quadtree,
+    node_atlas: &NodeAtlas,
+    images: &Assets<Image>,
+    viewer_position: Vec2,
+) -> f32 {
+    let coordinate =
+        (viewer_position / quadtree.chunk_size as f32).as_uvec2() % quadtree.node_count;
+
+    let node = &quadtree.nodes[[0, coordinate.x as usize, coordinate.y as usize]];
+    let atlas_coords = (viewer_position / quadtree.chunk_size as f32) % 1.0;
+
+    if node.atlas_index == INVALID_ATLAS_INDEX {
+        return 0.0;
+    }
+
+    let node = node_atlas.data[node.atlas_index as usize]
+        ._attachments
+        .get(&2)
+        .unwrap();
+
+    match node {
+        NodeAttachment::Texture { handle } => {
+            let image = images.get(handle).unwrap();
+
+            let position = (image.size() * atlas_coords).as_uvec2();
+            let index = 2 * (position.x + position.y * image.size().x as u32) as usize;
+            let height = ((image.data[index + 1] as u16) << 8) + image.data[index] as u16;
+            let height = height as f32 / u16::MAX as f32 * quadtree.height;
+            return height;
+        }
+        _ => {}
+    }
+
+    return 0.0;
 }

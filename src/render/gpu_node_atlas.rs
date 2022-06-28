@@ -1,9 +1,7 @@
 use crate::{
     attachment::{AtlasAttachment, AttachmentIndex, NodeAttachment},
-    config::TerrainConfig,
     node_atlas::{LoadingNode, NodeAtlas},
-    render::PersistentComponents,
-    Terrain,
+    terrain::{Terrain, TerrainComponents, TerrainConfig},
 };
 use bevy::{
     prelude::*,
@@ -44,12 +42,14 @@ impl GpuNodeAtlas {
 
 /// Initializes the [`GpuNodeAtlas`] of newly created terrains.
 pub(crate) fn initialize_gpu_node_atlas(
-    mut components: ResMut<PersistentComponents<GpuNodeAtlas>>,
+    mut render_world: ResMut<RenderWorld>,
     device: Res<RenderDevice>,
-    mut terrain_query: Query<(Entity, &TerrainConfig)>,
+    mut terrain_query: Query<(Entity, &TerrainConfig), Added<Terrain>>,
 ) {
-    for (entity, config) in terrain_query.iter_mut() {
-        components.insert(entity, GpuNodeAtlas::new(config, &device));
+    let mut gpu_node_atlases = render_world.resource_mut::<TerrainComponents<GpuNodeAtlas>>();
+
+    for (terrain, config) in terrain_query.iter_mut() {
+        gpu_node_atlases.insert(terrain, GpuNodeAtlas::new(config, &device));
     }
 }
 
@@ -58,14 +58,10 @@ pub(crate) fn update_gpu_node_atlas(
     mut render_world: ResMut<RenderWorld>,
     mut terrain_query: Query<(Entity, &mut NodeAtlas)>,
 ) {
-    let mut components = render_world.resource_mut::<PersistentComponents<GpuNodeAtlas>>();
+    let mut gpu_node_atlases = render_world.resource_mut::<TerrainComponents<GpuNodeAtlas>>();
 
-    for (entity, mut node_atlas) in terrain_query.iter_mut() {
-        let gpu_node_atlas = match components.get_mut(&entity) {
-            Some(component) => component,
-            None => continue,
-        };
-
+    for (terrain, mut node_atlas) in terrain_query.iter_mut() {
+        let gpu_node_atlas = gpu_node_atlases.get_mut(&terrain).unwrap();
         mem::swap(
             &mut node_atlas.loaded_nodes,
             &mut gpu_node_atlas.loaded_nodes,
@@ -79,13 +75,13 @@ pub(crate) fn queue_node_atlas_updates(
     device: Res<RenderDevice>,
     queue: Res<RenderQueue>,
     images: Res<RenderAssets<Image>>,
-    mut gpu_node_atlases: ResMut<PersistentComponents<GpuNodeAtlas>>,
+    mut gpu_node_atlases: ResMut<TerrainComponents<GpuNodeAtlas>>,
     terrain_query: Query<Entity, With<Terrain>>,
 ) {
     let mut command_encoder = device.create_command_encoder(&CommandEncoderDescriptor::default());
 
-    for entity in terrain_query.iter() {
-        let gpu_node_atlas = gpu_node_atlases.get_mut(&entity).unwrap();
+    for terrain in terrain_query.iter() {
+        let gpu_node_atlas = gpu_node_atlases.get_mut(&terrain).unwrap();
 
         for node in gpu_node_atlas.loaded_nodes.drain(..) {
             for (handle, texture, texture_size) in gpu_node_atlas
