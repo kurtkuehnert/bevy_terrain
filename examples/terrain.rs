@@ -5,8 +5,8 @@ use bevy_terrain::{
     attachment::{AtlasAttachmentConfig, AttachmentIndex},
     attachment_loader::{TextureAttachmentFromDisk, TextureAttachmentFromDiskLoader},
     bundles::TerrainBundle,
-    config::TerrainConfig,
     preprocess::{preprocess_tiles, ImageFormat},
+    terrain::TerrainConfig,
     TerrainPlugin, TerrainView,
 };
 

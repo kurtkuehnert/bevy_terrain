@@ -4,6 +4,10 @@ struct TerrainConfig {
     lod_count: u32;
     height: f32;
     chunk_size: u32;
+};
+
+struct TerrainViewConfig {
+    height_under_viewer: f32;
 
     node_count: u32;
 
@@ -16,7 +20,3 @@ struct TerrainConfig {
     vertices_per_row: u32;
     vertices_per_patch: u32;
 };
-
-
-
-

@@ -11,13 +11,13 @@ struct CullData {
 };
 
 [[group(0), binding(0)]]
-var<uniform> config: TerrainConfig;
+var<uniform> config: TerrainViewConfig;
 [[group(0), binding(1)]]
 var<storage, read_write> parameters: Parameters;
 [[group(0), binding(2)]]
-var<storage, read_write> temporary_list: PatchList;
+var<storage, read_write> temporary_patches: PatchList;
 [[group(0), binding(3)]]
-var<storage, read_write> final_list: PatchList;
+var<storage, read_write> final_patches: PatchList;
 
 [[group(1), binding(0)]]
  var<uniform> cull_data: CullData;
@@ -30,7 +30,7 @@ fn divide(patch_x: u32, patch_y: u32, size: u32) -> bool {
         let y = f32(patch_y + (i >> 1u & 1u));
 
         let local_position = vec2<f32>(x, y) * config.patch_scale * f32(config.patch_size * size);
-        let world_position = vec3<f32>(local_position.x, config.height / 2.0, local_position.y);
+        let world_position = vec3<f32>(local_position.x, config.height_under_viewer, local_position.y);
         let distance = length(cull_data.world_position.xyz - world_position);
 
         divide = divide || (distance < f32(size >> 1u) * config.view_distance);
@@ -60,14 +60,14 @@ fn select_coarsest_patches(
     let size = 1u << config.refinement_count;
     let stitch = 0u; // no stitch required
 
-    temporary_list.data[child_index()] = Patch(vec2<u32>(x, y), size, stitch);
+    temporary_patches.data[child_index()] = Patch(vec2<u32>(x, y), size, stitch);
 }
 
 [[stage(compute), workgroup_size(1, 1, 1)]]
 fn refine_patches(
     [[builtin(global_invocation_id)]] invocation_id: vec3<u32>,
 ) {
-    let parent_patch = temporary_list.data[parent_index(invocation_id.x)];
+    let parent_patch = temporary_patches.data[parent_index(invocation_id.x)];
     let parent_coords = parent_patch.coords;
 
     if (divide(parent_coords.x, parent_coords.y, parent_patch.size)) {
@@ -97,11 +97,11 @@ fn refine_patches(
                 continue;
             }
 
-            temporary_list.data[child_index()] = Patch(vec2<u32>(x, y), size, stitch);
+            temporary_patches.data[child_index()] = Patch(vec2<u32>(x, y), size, stitch);
         }
     }
     else {
-        final_list.data[final_index()] = parent_patch;
+        final_patches.data[final_index()] = parent_patch;
     }
 }
 
@@ -109,7 +109,7 @@ fn refine_patches(
 fn select_finest_patches(
     [[builtin(global_invocation_id)]] invocation_id: vec3<u32>,
 ) {
-    final_list.data[final_index()] = temporary_list.data[parent_index(invocation_id.x)];
+    final_patches.data[final_index()] = temporary_patches.data[parent_index(invocation_id.x)];
 }
 
 

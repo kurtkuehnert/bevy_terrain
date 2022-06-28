@@ -48,11 +48,13 @@ var height_atlas: texture_2d_array<f32>;
 var albedo_atlas: texture_2d_array<f32>;
 #endif
 
-// view data bindings
-[[group(3), binding(0)]]
-var<storage> patch_list: PatchList;
+// terrain view data bindings
+// [[group(3), binding(0)]]
+// var<uniform> view_config: TerrainViewConfig;
 [[group(3), binding(1)]]
 var quadtree: texture_2d_array<u32>;
+[[group(3), binding(2)]]
+var<storage> patch_list: PatchList;
 
 #import bevy_pbr::pbr_types
 #import bevy_pbr::utils

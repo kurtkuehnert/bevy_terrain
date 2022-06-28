@@ -17,9 +17,9 @@ fn atlas_lookup(log_distance: f32, world_position: vec2<f32>) -> AtlasLookup {
 #ifndef CIRCULAR_LOD
     for (var lod = 0u; lod < config.lod_count; lod = lod + 1u) {
         let coordinate = world_position / node_size(lod);
-        let grid_coordinate = floor(view.world_position.xz / node_size(lod) - 0.5 * f32(config.node_count - 1u));
+        let grid_coordinate = floor(view.world_position.xz / node_size(lod) - 0.5 * f32(view_config.node_count - 1u));
 
-        let grid = step(grid_coordinate, coordinate) * (1.0 - step(grid_coordinate + f32(config.node_count), coordinate));
+        let grid = step(grid_coordinate, coordinate) * (1.0 - step(grid_coordinate + f32(view_config.node_count), coordinate));
 
         if (grid.x * grid.y == 1.0) {
             break;
@@ -27,7 +27,7 @@ fn atlas_lookup(log_distance: f32, world_position: vec2<f32>) -> AtlasLookup {
     }
 #endif
 
-    let map_coords = vec2<i32>((world_position / node_size(lod)) % f32(config.node_count));
+    let map_coords = vec2<i32>((world_position / node_size(lod)) % f32(view_config.node_count));
     let lookup = textureLoad(quadtree, map_coords, i32(lod), 0);
 
     let atlas_lod = lookup.z;

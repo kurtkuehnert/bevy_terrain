@@ -1,5 +1,4 @@
-use bevy::prelude::*;
-use bevy::render::RenderWorld;
+use bevy::{prelude::*, render::RenderWorld};
 
 #[derive(Clone)]
 pub struct DebugTerrain {
@@ -33,7 +32,7 @@ impl Default for DebugTerrain {
     }
 }
 
-pub fn toggle_debug_system(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTerrain>) {
+pub fn toggle_debug(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTerrain>) {
     if input.just_pressed(KeyCode::W) {
         debug.wireframe = !debug.wireframe;
     }
