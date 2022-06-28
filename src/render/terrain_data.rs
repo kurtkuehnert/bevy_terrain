@@ -4,8 +4,14 @@ use crate::{
     GpuNodeAtlas, TerrainConfig, TerrainRenderPipeline,
 };
 use bevy::{
+    ecs::system::{lifetimeless::SRes, SystemParamItem},
     prelude::*,
-    render::{render_resource::*, renderer::RenderDevice, RenderWorld},
+    render::{
+        render_phase::{EntityRenderCommand, RenderCommandResult, TrackedRenderPass},
+        render_resource::*,
+        renderer::RenderDevice,
+        RenderWorld,
+    },
 };
 
 pub struct TerrainData {
@@ -126,4 +132,22 @@ pub(crate) fn initialize_terrain_data(
 
     render_world.insert_resource(gpu_node_atlases);
     render_world.insert_resource(terrain_data);
+}
+
+pub struct SetTerrainBindGroup<const I: usize>;
+
+impl<const I: usize> EntityRenderCommand for SetTerrainBindGroup<I> {
+    type Param = SRes<TerrainComponents<TerrainData>>;
+
+    #[inline]
+    fn render<'w>(
+        _view: Entity,
+        item: Entity,
+        terrain_data: SystemParamItem<'w, '_, Self::Param>,
+        pass: &mut TrackedRenderPass<'w>,
+    ) -> RenderCommandResult {
+        let data = terrain_data.into_inner().get(&item).unwrap();
+        pass.set_bind_group(I, &data.terrain_bind_group, &[]);
+        RenderCommandResult::Success
+    }
 }

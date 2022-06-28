@@ -7,14 +7,17 @@ use crate::{
     GpuQuadtree, TerrainComputePipelines, TerrainRenderPipeline, TerrainViewComponents,
 };
 use bevy::{
+    ecs::system::{lifetimeless::SRes, SystemParamItem},
     prelude::*,
     render::{
+        render_phase::{EntityRenderCommand, RenderCommandResult, TrackedRenderPass},
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
         RenderWorld,
     },
 };
 
+// Todo: consider factoring out the tesselation
 pub struct TerrainViewData {
     pub(crate) indirect_buffer: Buffer,
     pub(crate) view_config_buffer: Buffer,
@@ -178,4 +181,48 @@ pub(crate) fn initialize_terrain_view_data(
     }
 
     render_world.insert_resource(terrain_view_data);
+}
+
+pub struct SetTerrainViewBindGroup<const I: usize>;
+
+impl<const I: usize> EntityRenderCommand for SetTerrainViewBindGroup<I> {
+    type Param = SRes<TerrainViewComponents<TerrainViewData>>;
+
+    #[inline]
+    fn render<'w>(
+        view: Entity,
+        terrain: Entity,
+        terrain_view_data: SystemParamItem<'w, '_, Self::Param>,
+        pass: &mut TrackedRenderPass<'w>,
+    ) -> RenderCommandResult {
+        let data = terrain_view_data
+            .into_inner()
+            .get(&(terrain, view))
+            .unwrap();
+
+        pass.set_bind_group(I, &data.terrain_view_bind_group, &[]);
+        RenderCommandResult::Success
+    }
+}
+
+pub(crate) struct DrawTerrainCommand;
+
+impl EntityRenderCommand for DrawTerrainCommand {
+    type Param = SRes<TerrainViewComponents<TerrainViewData>>;
+
+    #[inline]
+    fn render<'w>(
+        view: Entity,
+        terrain: Entity,
+        terrain_view_data: SystemParamItem<'w, '_, Self::Param>,
+        pass: &mut TrackedRenderPass<'w>,
+    ) -> RenderCommandResult {
+        let data = terrain_view_data
+            .into_inner()
+            .get(&(terrain, view))
+            .unwrap();
+
+        pass.draw_indirect(&data.indirect_buffer, 0);
+        RenderCommandResult::Success
+    }
 }
