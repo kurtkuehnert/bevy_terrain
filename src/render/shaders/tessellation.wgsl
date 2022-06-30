@@ -39,6 +39,39 @@ fn divide(patch_x: u32, patch_y: u32, size: u32) -> bool {
     return divide;
 }
 
+fn frustum_cull(position: vec2<f32>, size: f32) -> bool {
+    let model_view_proj = cull_data.view_proj * cull_data.model;
+
+    // getting the min and max y height correct is crucial or there will be boundig boxes,
+    // where all points are outside the frustum (overfitting)
+    let aabb_min = vec3<f32>(position.x, 0.0, position.y);
+    let aabb_max = vec3<f32>(position.x + size, 1000.0, position.y + size);
+
+    var corners = array<vec4<f32>, 8>(
+        vec4<f32>(aabb_min.x, aabb_min.y, aabb_min.z, 1.0),
+        vec4<f32>(aabb_min.x, aabb_min.y, aabb_max.z, 1.0),
+        vec4<f32>(aabb_min.x, aabb_max.y, aabb_min.z, 1.0),
+        vec4<f32>(aabb_min.x, aabb_max.y, aabb_max.z, 1.0),
+        vec4<f32>(aabb_max.x, aabb_min.y, aabb_min.z, 1.0),
+        vec4<f32>(aabb_max.x, aabb_min.y, aabb_max.z, 1.0),
+        vec4<f32>(aabb_max.x, aabb_max.y, aabb_min.z, 1.0),
+        vec4<f32>(aabb_max.x, aabb_max.y, aabb_max.z, 1.0)
+    );
+
+    var visible = false;
+
+    for (var i = 0; i < 8; i = i + 1) {
+        let corner = model_view_proj * corners[i];
+
+        visible = visible ||
+            (-corner.w <= corner.x && corner.x <= corner.w &&
+             -corner.w <= corner.y && corner.y <= corner.w &&
+                   0.0 <= corner.z && corner.z <= corner.w);
+    }
+
+    return visible;
+}
+
 fn child_index() -> i32 {
     return atomicAdd(&parameters.child_index, parameters.counter);
 }
@@ -92,10 +125,14 @@ fn refine_patches(
             let stitch = stitch & (0xC963u >> (i << 2u));
 
             // cull patches outside of the terrain
-            let local_position = vec3<f32>(f32(x), 0.0, f32(y)) * config.patch_scale * f32(config.patch_size * size);
-            if (local_position.x > f32(config.terrain_size) || local_position.z > f32(config.terrain_size)) {
+            let local_position = vec2<f32>(f32(x), f32(y)) * config.patch_scale * f32(config.patch_size * size);
+            if (local_position.x > f32(config.terrain_size) || local_position.y > f32(config.terrain_size)) {
                 continue;
             }
+
+            // if (!frustum_cull(local_position, config.patch_scale * f32(config.patch_size * size))) {
+            //     continue;
+            // }
 
             temporary_patches.data[child_index()] = Patch(vec2<u32>(x, y), size, stitch);
         }

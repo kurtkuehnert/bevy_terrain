@@ -1,3 +1,4 @@
+use crate::{TerrainViewComponents, TerrainViewConfig};
 use bevy::{prelude::*, render::RenderWorld};
 
 #[derive(Clone)]
@@ -67,4 +68,32 @@ pub fn toggle_debug(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTerrain>)
 
 pub fn extract_debug(mut render_world: ResMut<RenderWorld>, debug: Res<DebugTerrain>) {
     render_world.insert_resource(debug.clone());
+}
+
+pub fn change_config(
+    input: Res<Input<KeyCode>>,
+    mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
+) {
+    for config in view_configs.values_mut() {
+        if input.just_pressed(KeyCode::H) && config.patch_size > 2 {
+            config.change_patch_size(config.patch_size - 2);
+        }
+        if input.just_pressed(KeyCode::J) {
+            config.change_patch_size(config.patch_size + 2);
+        }
+
+        if input.just_pressed(KeyCode::X) && config.patch_scale > 0.25 {
+            config.change_patch_scale(config.patch_scale - 0.25);
+        }
+        if input.just_pressed(KeyCode::Q) {
+            config.change_patch_scale(config.patch_scale + 0.25);
+        }
+
+        if input.just_pressed(KeyCode::I) {
+            config.view_distance *= 0.95;
+        }
+        if input.just_pressed(KeyCode::O) {
+            config.view_distance *= 1.05;
+        }
+    }
 }

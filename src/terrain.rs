@@ -40,7 +40,7 @@ pub struct TerrainConfig {
 
 impl TerrainConfig {
     pub fn new(chunk_size: u32, lod_count: u32, height: f32, path: String) -> Self {
-        let node_atlas_size = 2 * (lod_count * 8 * 8) as u16;
+        let node_atlas_size = 1500;
 
         Self {
             lod_count,

@@ -1,3 +1,4 @@
+use crate::debug::change_config;
 use crate::{
     attachment_loader::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk},
     debug::{extract_debug, toggle_debug, DebugTerrain},
@@ -110,6 +111,7 @@ impl Plugin for TerrainPlugin {
             .init_resource::<TerrainViewComponents<Quadtree>>()
             .init_resource::<TerrainViewComponents<TerrainViewConfig>>()
             .add_system(toggle_debug)
+            .add_system(change_config)
             .add_system(finish_loading_attachment_from_disk.before(update_node_atlas))
             .add_system(traverse_quadtree.before(update_node_atlas))
             .add_system(update_node_atlas)

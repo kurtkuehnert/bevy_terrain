@@ -57,9 +57,15 @@ pub struct TerrainViewConfig {
 }
 
 impl TerrainViewConfig {
-    pub fn new(terrain_size: u32, patch_size: u32, view_distance: f32, patch_scale: f32) -> Self {
-        let node_count = 8;
-        let load_distance = 1.0 * node_count as f32;
+    pub fn new(
+        terrain_size: u32,
+        patch_size: u32,
+        view_distance: f32,
+        patch_scale: f32,
+        load_distance: f32,
+    ) -> Self {
+        let node_count = 12;
+        let load_distance = load_distance * node_count as f32;
 
         let patch_count = 1000000;
 
@@ -85,6 +91,24 @@ impl TerrainViewConfig {
             vertices_per_row,
             vertices_per_patch,
         }
+    }
+
+    pub(crate) fn change_patch_size(&mut self, new: u32) {
+        self.patch_size = new;
+        self.vertices_per_row = (self.patch_size + 2) << 1;
+        self.vertices_per_patch = self.vertices_per_row * self.patch_size;
+        self.refinement_count = (self.terrain_size as f32
+            / (self.patch_scale * self.patch_size as f32))
+            .log2()
+            .ceil() as u32;
+    }
+
+    pub(crate) fn change_patch_scale(&mut self, new: f32) {
+        self.patch_scale = new;
+        self.refinement_count = (self.terrain_size as f32
+            / (self.patch_scale * self.patch_size as f32))
+            .log2()
+            .ceil() as u32;
     }
 
     pub(crate) fn shader_data(&self) -> TerrainViewConfigUniform {
