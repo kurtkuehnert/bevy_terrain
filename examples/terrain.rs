@@ -72,7 +72,7 @@ fn setup(
         .insert(TerrainView)
         .id();
 
-    let view_config = TerrainViewConfig::new(1024, 16, 3.0, 2.0);
+    let view_config = TerrainViewConfig::new(1024, 16, 3.0, 2.0, 0.5);
     let quadtree = Quadtree::new(&config, &view_config);
 
     terrain_view_configs.insert((terrain, view), view_config);
