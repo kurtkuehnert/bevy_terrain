@@ -215,9 +215,10 @@ impl Quadtree {
 
         // fall back to the closest present ancestor
         for node_id in fallback_nodes.drain(..) {
-            // if provided_nodes.contains_key(&node_id) {
-            //     continue; // will be provided
-            // }
+            if provided_nodes.contains_key(&node_id) {
+                //                 dbg!(node_id);
+                continue; // will be provided
+            }
 
             let mut coordinate = Node::coordinate(node_id);
 
