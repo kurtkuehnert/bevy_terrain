@@ -75,18 +75,11 @@ pub fn change_config(
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
 ) {
     for config in view_configs.values_mut() {
-        if input.just_pressed(KeyCode::H) && config.patch_size > 2 {
-            config.change_patch_size(config.patch_size - 2);
-        }
-        if input.just_pressed(KeyCode::J) {
-            config.change_patch_size(config.patch_size + 2);
-        }
-
         if input.just_pressed(KeyCode::X) && config.patch_scale > 0.25 {
-            config.change_patch_scale(config.patch_scale - 0.25);
+            config.change_patch_scale(config.patch_scale * 0.95);
         }
         if input.just_pressed(KeyCode::Q) {
-            config.change_patch_scale(config.patch_scale + 0.25);
+            config.change_patch_scale(config.patch_scale * 1.05);
         }
 
         if input.just_pressed(KeyCode::I) {

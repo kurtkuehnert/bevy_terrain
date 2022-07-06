@@ -8,6 +8,7 @@ struct CullData {
     world_position: vec4<f32>;
     view_proj: mat4x4<f32>;
     model: mat4x4<f32>;
+    planes: array<vec4<f32>, 6>;
 };
 
 [[group(0), binding(0)]]
@@ -22,6 +23,31 @@ var<storage, read_write> final_patches: PatchList;
 [[group(1), binding(0)]]
  var<uniform> cull_data: CullData;
 
+//  MIT License. © Ian McEwan, Stefan Gustavson, Munrocket
+//
+ fn permute3(x: vec3<f32>) -> vec3<f32> { return (((x * 34.) + 1.) * x) % vec3<f32>(289.); }
+
+ fn simplexNoise2(v: vec2<f32>) -> f32 {
+   let C = vec4<f32>(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);
+   var i: vec2<f32> = floor(v + dot(v, C.yy));
+   let x0 = v - i + dot(i, C.xx);
+   var i1: vec2<f32> = select(vec2<f32>(1., 0.), vec2<f32>(0., 1.), (x0.x > x0.y));
+   var x12: vec4<f32> = x0.xyxy + C.xxzz - vec4<f32>(i1, 0., 0.);
+   i = i % vec2<f32>(289.);
+   let p = permute3(permute3(i.y + vec3<f32>(0., i1.y, 1.)) + i.x + vec3<f32>(0., i1.x, 1.));
+   var m: vec3<f32> = max(0.5 -
+       vec3<f32>(dot(x0, x0), dot(x12.xy, x12.xy), dot(x12.zw, x12.zw)), vec3<f32>(0.));
+   m = m * m;
+   m = m * m;
+   let x = 2. * fract(p * C.www) - 1.;
+   let h = abs(x) - 0.5;
+   let ox = floor(x + 0.5);
+   let a0 = x - ox;
+   m = m * (1.79284291400159 - 0.85373472095314 * (a0 * a0 + h * h));
+   let g = vec3<f32>(a0.x * x0.x + h.x * x0.y, a0.yz * x12.xz + h.yz * x12.yw);
+   return 130. * dot(m, g);
+ }
+
 fn divide(patch_x: u32, patch_y: u32, size: u32) -> bool {
     var divide = false;
 
@@ -29,7 +55,7 @@ fn divide(patch_x: u32, patch_y: u32, size: u32) -> bool {
         let x = f32(patch_x + (i       & 1u));
         let y = f32(patch_y + (i >> 1u & 1u));
 
-        let local_position = vec2<f32>(x, y) * config.patch_scale * f32(config.patch_size * size);
+        let local_position = vec2<f32>(x, y) * config.patch_scale * f32(size);
         let world_position = vec3<f32>(local_position.x, config.height_under_viewer, local_position.y);
         let distance = length(cull_data.world_position.xyz - world_position);
 
@@ -40,10 +66,6 @@ fn divide(patch_x: u32, patch_y: u32, size: u32) -> bool {
 }
 
 fn frustum_cull(position: vec2<f32>, size: f32) -> bool {
-    let model_view_proj = cull_data.view_proj * cull_data.model;
-
-    // getting the min and max y height correct is crucial or there will be boundig boxes,
-    // where all points are outside the frustum (overfitting)
     let aabb_min = vec3<f32>(position.x, 0.0, position.y);
     let aabb_max = vec3<f32>(position.x + size, 1000.0, position.y + size);
 
@@ -58,26 +80,46 @@ fn frustum_cull(position: vec2<f32>, size: f32) -> bool {
         vec4<f32>(aabb_max.x, aabb_max.y, aabb_max.z, 1.0)
     );
 
-    var visible = false;
+    for (var i = 0; i < 5; i = i + 1) {
+        let plane = cull_data.planes[i];
 
-    for (var i = 0; i < 8; i = i + 1) {
-        let corner = model_view_proj * corners[i];
+        var in = 0u;
 
-        visible = visible ||
-            (-corner.w <= corner.x && corner.x <= corner.w &&
-             -corner.w <= corner.y && corner.y <= corner.w &&
-                   0.0 <= corner.z && corner.z <= corner.w);
+        for (var j = 0; j < 8; j = j + 1) {
+            let corner = corners[j];
+
+            if (dot(plane, corner) < 0.0) {
+                in = in + 1u;
+            }
+
+            if (in == 0u) {
+                return true;
+            }
+        }
     }
 
-    return visible;
+    return false;
 }
 
 fn child_index() -> i32 {
     return atomicAdd(&parameters.child_index, parameters.counter);
 }
 
-fn final_index() -> i32 {
-    return atomicAdd(&parameters.final_index, 1);
+fn final_index(lod: u32) -> i32 {
+    if (lod == 0u) {
+        return atomicAdd(&parameters.final_index1, 1);
+    }
+    if (lod == 1u) {
+        return atomicAdd(&parameters.final_index2, 1) + 100000;
+    }
+    if (lod == 2u) {
+        return atomicAdd(&parameters.final_index3, 1) + 200000;
+    }
+    if (lod == 3u) {
+        return atomicAdd(&parameters.final_index4, 1) + 300000;
+    }
+    return 0;
+    // return atomicAdd(&parameters.final_indices[i32(lod)], 1) + i32(lod) * 1000000;
 }
 
 fn parent_index(id: u32) -> i32 {
@@ -93,14 +135,60 @@ fn select_coarsest_patches(
     let size = 1u << config.refinement_count;
     let stitch = 0u; // no stitch required
 
-    temporary_patches.data[child_index()] = Patch(vec2<u32>(x, y), size, stitch);
+    temporary_patches.data[child_index()] = Patch(vec2<u32>(x, y), size, stitch, 1u, 0u);
+}
+
+fn patch_lod(coords: vec2<u32>, size: u32) -> i32 {
+    let local_position = (vec2<f32>(coords) + 0.5) * config.patch_scale * f32(size);
+    return clamp(i32((simplexNoise2(local_position / 1200.0) + 1.0) * 2.0), 1, 4);
+}
+
+fn add_final_patch(patch: Patch) {
+    var directions = array<vec2<i32>, 4>(
+        vec2<i32>(-1,  0),
+        vec2<i32>( 0, -1),
+        vec2<i32>( 1,  0),
+        vec2<i32>( 0,  1)
+    );
+
+    var stitch = 0u;
+    var morph = 0u;
+
+    let coords = vec2<i32>(patch.coords);
+    let lod = patch_lod(patch.coords, patch.size);
+    let parent_lod = patch_lod(patch.coords >> vec2<u32>(1u), patch.size << 1u);
+
+    for (var i = 0; i < 4; i = i + 1) {
+        let neighbour_coords = vec2<u32>(coords + directions[i]);
+        let neighbour_lod = patch_lod(neighbour_coords, patch.size);
+        let neighbour_parent_lod = patch_lod(neighbour_coords >> vec2<u32>(1u), patch.size << 1u);
+
+        let lod_diff = u32(max(0, lod - neighbour_lod)); // used to align edge vertices with neighbours
+        var morph_diff = 1u; // used to morph edges in synch with neighbours
+        if (neighbour_parent_lod <= neighbour_lod + 1) {
+            morph_diff = u32(neighbour_lod + 1 - neighbour_parent_lod);
+        }
+
+        stitch = stitch | (lod_diff   << u32(i * 8));
+        morph  = morph  | (morph_diff << u32(i * 8));
+    }
+
+    var patch = patch;
+    patch.stitch = stitch;
+    patch.morph = morph;
+    if (parent_lod <= lod + 1) {
+        patch.lod_diff = u32(lod + 1 - parent_lod);
+    }
+    final_patches.data[final_index(u32(lod))] = patch;
+
+    // final_patches.data[final_index(1u)] = patch;
 }
 
 [[stage(compute), workgroup_size(1, 1, 1)]]
 fn refine_patches(
     [[builtin(global_invocation_id)]] invocation_id: vec3<u32>,
 ) {
-    let parent_patch = temporary_patches.data[parent_index(invocation_id.x)];
+    var parent_patch = temporary_patches.data[parent_index(invocation_id.x)];
     let parent_coords = parent_patch.coords;
 
     if (divide(parent_coords.x, parent_coords.y, parent_patch.size)) {
@@ -125,20 +213,20 @@ fn refine_patches(
             let stitch = stitch & (0xC963u >> (i << 2u));
 
             // cull patches outside of the terrain
-            let local_position = vec2<f32>(f32(x), f32(y)) * config.patch_scale * f32(config.patch_size * size);
+            let local_position = vec2<f32>(f32(x), f32(y)) * config.patch_scale * f32(size);
             if (local_position.x > f32(config.terrain_size) || local_position.y > f32(config.terrain_size)) {
                 continue;
             }
 
-            // if (!frustum_cull(local_position, config.patch_scale * f32(config.patch_size * size))) {
+            // if (frustum_cull(local_position, config.patch_scale * f32(config.patch_size * size))) {
             //     continue;
             // }
 
-            temporary_patches.data[child_index()] = Patch(vec2<u32>(x, y), size, stitch);
+            temporary_patches.data[child_index()] = Patch(vec2<u32>(x, y), size, stitch, 1u, 0u);
         }
     }
     else {
-        final_patches.data[final_index()] = parent_patch;
+        add_final_patch(parent_patch);
     }
 }
 
@@ -146,7 +234,7 @@ fn refine_patches(
 fn select_finest_patches(
     [[builtin(global_invocation_id)]] invocation_id: vec3<u32>,
 ) {
-    final_patches.data[final_index()] = temporary_patches.data[parent_index(invocation_id.x)];
+    add_final_patch(temporary_patches.data[parent_index(invocation_id.x)]);
 }
 
 

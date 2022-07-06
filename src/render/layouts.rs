@@ -4,9 +4,9 @@ use std::mem;
 
 pub(crate) const TERRAIN_VIEW_CONFIG_SIZE: BufferAddress = 4 * 48;
 
-pub(crate) const PATCH_SIZE: BufferAddress = 4 * 4;
+pub(crate) const PATCH_SIZE: BufferAddress = 6 * 4;
 pub(crate) const INDIRECT_BUFFER_SIZE: BufferAddress = 5 * 4;
-pub(crate) const PARAMETER_BUFFER_SIZE: BufferAddress = 3 * 4;
+pub(crate) const PARAMETER_BUFFER_SIZE: BufferAddress = 6 * 4;
 pub(crate) const NODE_UPDATE_SIZE: BufferAddress = mem::size_of::<NodeUpdate>() as BufferAddress;
 pub(crate) const CONFIG_BUFFER_SIZE: BufferAddress =
     mem::size_of::<TerrainConfigUniform>() as BufferAddress;
@@ -107,7 +107,7 @@ pub(crate) const TESSELLATION_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayou
             ty: BindingType::Buffer {
                 ty: BufferBindingType::Storage { read_only: false },
                 has_dynamic_offset: false,
-                min_binding_size: BufferSize::new(PATCH_SIZE),
+                min_binding_size: BufferSize::new(32 + PATCH_SIZE),
             },
             count: None,
         },
@@ -118,7 +118,7 @@ pub(crate) const TESSELLATION_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayou
             ty: BindingType::Buffer {
                 ty: BufferBindingType::Storage { read_only: false },
                 has_dynamic_offset: false,
-                min_binding_size: BufferSize::new(PATCH_SIZE),
+                min_binding_size: BufferSize::new(32 + PATCH_SIZE),
             },
             count: None,
         },
@@ -157,7 +157,7 @@ pub(crate) const TERRAIN_VIEW_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayou
             ty: BindingType::Buffer {
                 ty: BufferBindingType::Storage { read_only: true },
                 has_dynamic_offset: false,
-                min_binding_size: BufferSize::new(PATCH_SIZE),
+                min_binding_size: BufferSize::new(32 + PATCH_SIZE),
             },
             count: None,
         },

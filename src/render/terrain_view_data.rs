@@ -129,7 +129,7 @@ impl TerrainViewData {
     ) -> (Buffer, Buffer) {
         let buffer_descriptor = BufferDescriptor {
             label: "patch_buffer".into(),
-            size: PATCH_SIZE * view_config.patch_count as BufferAddress, // Todo: figure out a better patch buffer size limit
+            size: 32 + PATCH_SIZE * view_config.patch_count as BufferAddress, // Todo: figure out a better patch buffer size limit
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
         };
