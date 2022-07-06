@@ -1,5 +1,6 @@
 #import bevy_terrain::config
 #import bevy_terrain::parameters
+#import bevy_terrain::patch
 
 struct IndirectBuffer {
     workgroup_count_x: u32;
@@ -11,6 +12,8 @@ struct IndirectBuffer {
 var<uniform> config: TerrainViewConfig;
 [[group(0), binding(1)]]
 var<storage, read_write> parameters: Parameters;
+[[group(0), binding(3)]]
+var<storage, read_write> final_patches: PatchList;
 [[group(2), binding(0)]]
 var<storage, read_write> indirect_buffer: IndirectBuffer;
 
@@ -22,7 +25,6 @@ fn prepare_tessellation() {
 
     parameters.counter = 1;
     atomicStore(&parameters.child_index, 0);
-    atomicStore(&parameters.final_index, 0);
 }
 
 [[stage(compute), workgroup_size(1, 1, 1)]]
@@ -37,9 +39,40 @@ fn prepare_refinement() {
     }
 }
 
+fn final_index(lod: u32) -> i32 {
+    if (lod == 0u) {
+        return atomicExchange(&parameters.final_index1, 0);
+    }
+    if (lod == 1u) {
+        return atomicExchange(&parameters.final_index2, 0);
+    }
+    if (lod == 2u) {
+        return atomicExchange(&parameters.final_index3, 0);
+    }
+    if (lod == 3u) {
+        return atomicExchange(&parameters.final_index4, 0);
+    }
+
+    return 0;
+}
+
 [[stage(compute), workgroup_size(1, 1, 1)]]
 fn prepare_render() {
-    indirect_buffer.workgroup_count_x = config.vertices_per_patch * u32(atomicExchange(&parameters.final_index, 0));
+    var vertex_count = 0u;
+
+    for (var i = 0u; i < 4u; i = i + 1u) {
+        let patch_size = 2u << i;
+        let vertices_per_row = (patch_size + 2u) << 1u;
+        let vertices_per_patch = vertices_per_row * patch_size;
+
+        let first = vertex_count;
+        vertex_count = vertex_count + vertices_per_patch * u32(final_index(i));
+        let last = vertex_count;
+
+        final_patches.counts[i] = vec2<u32>(first, last);
+    }
+
+    indirect_buffer.workgroup_count_x = vertex_count;
     indirect_buffer.workgroup_count_y = 1u;
     indirect_buffer.workgroup_count_z = 0u;
 }

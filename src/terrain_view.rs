@@ -34,9 +34,6 @@ pub(crate) struct TerrainViewConfigUniform {
     refinement_count: u32,
     view_distance: f32,
     patch_scale: f32,
-    patch_size: u32,
-    vertices_per_row: u32,
-    vertices_per_patch: u32,
 }
 
 #[derive(Clone, Component)]
@@ -51,15 +48,11 @@ pub struct TerrainViewConfig {
     pub refinement_count: u32,
     pub view_distance: f32,
     pub patch_scale: f32,
-    pub patch_size: u32,
-    pub vertices_per_row: u32,
-    pub vertices_per_patch: u32,
 }
 
 impl TerrainViewConfig {
     pub fn new(
         terrain_size: u32,
-        patch_size: u32,
         view_distance: f32,
         patch_scale: f32,
         load_distance: f32,
@@ -69,14 +62,9 @@ impl TerrainViewConfig {
 
         let patch_count = 1000000;
 
-        let vertices_per_row = (patch_size + 2) << 1;
-        let vertices_per_patch = vertices_per_row * patch_size;
-
         let view_distance = view_distance * 128.0;
 
-        let refinement_count = (terrain_size as f32 / (patch_scale * patch_size as f32))
-            .log2()
-            .ceil() as u32;
+        let refinement_count = (terrain_size as f32 / patch_scale).log2().ceil() as u32;
 
         Self {
             height_under_viewer: 0.0,
@@ -87,28 +75,12 @@ impl TerrainViewConfig {
             refinement_count,
             view_distance,
             patch_scale,
-            patch_size,
-            vertices_per_row,
-            vertices_per_patch,
         }
-    }
-
-    pub(crate) fn change_patch_size(&mut self, new: u32) {
-        self.patch_size = new;
-        self.vertices_per_row = (self.patch_size + 2) << 1;
-        self.vertices_per_patch = self.vertices_per_row * self.patch_size;
-        self.refinement_count = (self.terrain_size as f32
-            / (self.patch_scale * self.patch_size as f32))
-            .log2()
-            .ceil() as u32;
     }
 
     pub(crate) fn change_patch_scale(&mut self, new: f32) {
         self.patch_scale = new;
-        self.refinement_count = (self.terrain_size as f32
-            / (self.patch_scale * self.patch_size as f32))
-            .log2()
-            .ceil() as u32;
+        self.refinement_count = (self.terrain_size as f32 / self.patch_scale).log2().ceil() as u32;
     }
 
     pub(crate) fn shader_data(&self) -> TerrainViewConfigUniform {
@@ -119,10 +91,7 @@ impl TerrainViewConfig {
             patch_count: self.patch_count,
             refinement_count: self.refinement_count,
             view_distance: self.view_distance,
-            patch_size: self.patch_size,
             patch_scale: self.patch_scale,
-            vertices_per_row: self.vertices_per_row,
-            vertices_per_patch: self.vertices_per_patch,
         }
     }
 }

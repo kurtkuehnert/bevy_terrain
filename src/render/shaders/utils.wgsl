@@ -45,41 +45,7 @@ fn calculate_blend(world_position: vec3<f32>, blend_range: f32) -> Blend {
     return Blend(ratio, log_distance);
 }
 
-fn calculate_position(vertex_index: u32, patch: Patch) -> vec2<f32> {
-    // use first and last index twice, to form degenerate triangles
-    // Todo: documentation
-    let row_index = clamp(vertex_index % view_config.vertices_per_row, 1u, view_config.vertices_per_row - 2u) - 1u;
-    var vertex_position = vec2<u32>((row_index & 1u) + vertex_index / view_config.vertices_per_row, row_index >> 1u);
 
-#ifndef MESH_MORPH
-    // stitch the edges of the patches together
-    if (vertex_position.x == 0u && (patch.stitch & 1u) != 0u) {
-        vertex_position.y = vertex_position.y & 0xFFFEu;
-    }
-    if (vertex_position.y == 0u && (patch.stitch & 2u) != 0u) {
-        vertex_position.x = vertex_position.x & 0xFFFEu;
-    }
-    if (vertex_position.x == view_config.patch_size && (patch.stitch & 4u) != 0u) {
-        vertex_position.y = vertex_position.y + 1u & 0xFFFEu;
-    }
-    if (vertex_position.y == view_config.patch_size && (patch.stitch & 8u) != 0u) {
-        vertex_position.x = vertex_position.x + 1u & 0xFFFEu;
-    }
-#endif
-
-    var local_position = vec2<f32>((patch.coords * view_config.patch_size + vertex_position)) * f32(patch.size) * view_config.patch_scale;
-
-#ifdef MESH_MORPH
-    let morph = calculate_morph(local_position, patch);
-    let frac_part = vec2<f32>(vertex_position & vec2<u32>(1u));
-    local_position = local_position - frac_part * morph * f32(patch.size) * view_config.patch_scale ;
-#endif
-
-    local_position.x = clamp(local_position.x, 0.0, f32(view_config.terrain_size));
-    local_position.y = clamp(local_position.y, 0.0, f32(view_config.terrain_size));
-
-    return local_position;
-}
 
 fn vertex_output(local_position: vec2<f32>, height: f32) -> VertexOutput {
     let world_position = mesh.model * vec4<f32>(local_position.x, height, local_position.y, 1.0);

@@ -12,11 +12,34 @@ pub struct CullingData {
     pub(crate) world_position: Vec4,
     pub(crate) view_proj: Mat4,
     pub(crate) model: Mat4,
+    pub(crate) planes: [Vec4; 6],
 }
 
 #[derive(Component)]
 pub struct CullingBindGroup {
     pub(crate) value: BindGroup,
+}
+
+pub fn planes(
+    view_projection: &Mat4,
+    view_translation: &Vec3,
+    view_backward: &Vec3,
+    far: f32,
+) -> [Vec4; 6] {
+    let row3 = view_projection.row(3);
+    let mut planes = [Vec4::default(); 6];
+    for (i, plane) in planes.iter_mut().enumerate().take(5) {
+        let row = view_projection.row(i / 2);
+        *plane = if (i & 1) == 0 && i != 4 {
+            row3 + row
+        } else {
+            row3 - row
+        };
+    }
+    let far_center = *view_translation - far * *view_backward;
+    planes[5] = view_backward.extend(-view_backward.dot(far_center));
+
+    planes
 }
 
 pub(crate) fn queue_terrain_culling_bind_group(
@@ -30,11 +53,23 @@ pub(crate) fn queue_terrain_culling_bind_group(
         let view_proj =
             extracted_view.projection * extracted_view.transform.compute_matrix().inverse();
 
+        let _planes = planes(
+            &extracted_view.projection,
+            &extracted_view.transform.translation,
+            &extracted_view.transform.back(),
+            10000.0,
+        );
+
+        // dbg!(&planes);
+
+        let planes = [default(); 6];
+
         for (terrain, mesh_uniform) in terrain_query.iter() {
             let culling_data = CullingData {
                 world_position: extracted_view.transform.translation.xyzx(),
                 view_proj,
                 model: mesh_uniform.transform,
+                planes,
             };
 
             let mut buffer = encase::UniformBuffer::new(Vec::new());
