@@ -1,8 +1,8 @@
 use crate::{
     render::{culling::CullingBindGroup, layouts::*, terrain_view_data::TerrainViewData},
     terrain::Terrain,
-    GpuQuadtree, TerrainView, TerrainViewComponents, TerrainViewConfig, PREPARE_INDIRECT_HANDLE,
-    TESSELATION_HANDLE, UPDATE_QUADTREE_HANDLE,
+    DebugTerrain, GpuQuadtree, TerrainView, TerrainViewComponents, TerrainViewConfig,
+    PREPARE_INDIRECT_HANDLE, TESSELATION_HANDLE, UPDATE_QUADTREE_HANDLE,
 };
 use bevy::{
     ecs::system::{
@@ -19,8 +19,10 @@ use bevy::{
 use strum::{EnumCount, IntoEnumIterator};
 use strum_macros::{EnumCount, EnumIter};
 
+type TerrainComputePipelineKey = (TerrainComputePipelineId, TerrainComputePipelineFlags);
+
 #[derive(Copy, Clone, Hash, PartialEq, Eq, EnumIter, EnumCount)]
-pub enum TerrainComputePipelineKey {
+pub enum TerrainComputePipelineId {
     UpdateQuadtree,
     SelectCoarsestPatches,
     RefinePatches,
@@ -28,6 +30,36 @@ pub enum TerrainComputePipelineKey {
     PrepareTessellation,
     PrepareRefinement,
     PrepareRender,
+}
+
+bitflags::bitflags! {
+#[repr(transparent)]
+pub struct TerrainComputePipelineFlags: u32 {
+    const NONE               = 0;
+    const DENSITY            = (1 << 0);
+}
+}
+
+impl TerrainComputePipelineFlags {
+    pub fn from_debug(debug: &DebugTerrain) -> Self {
+        let mut key = TerrainComputePipelineFlags::NONE;
+
+        if debug.density {
+            key |= TerrainComputePipelineFlags::DENSITY;
+        }
+
+        key
+    }
+
+    pub fn shader_defs(&self) -> Vec<String> {
+        let mut shader_defs = Vec::new();
+
+        if (self.bits & TerrainComputePipelineFlags::DENSITY.bits) != 0 {
+            shader_defs.push("DENSITY".to_string());
+        }
+
+        shader_defs
+    }
 }
 
 pub struct TerrainComputePipelines {
@@ -73,13 +105,15 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
         let shader;
         let entry_point;
 
-        match key {
-            TerrainComputePipelineKey::UpdateQuadtree => {
+        let shader_defs = key.1.shader_defs();
+
+        match key.0 {
+            TerrainComputePipelineId::UpdateQuadtree => {
                 layout = Some(vec![self.update_quadtree_layout.clone()]);
                 shader = self.update_quadtree_shader.clone();
                 entry_point = "update_quadtree".into();
             }
-            TerrainComputePipelineKey::SelectCoarsestPatches => {
+            TerrainComputePipelineId::SelectCoarsestPatches => {
                 layout = Some(vec![
                     self.tessellation_layout.clone(),
                     self.cull_data_layout.clone(),
@@ -87,7 +121,7 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
                 shader = self.tessellation_shader.clone();
                 entry_point = "select_coarsest_patches".into();
             }
-            TerrainComputePipelineKey::RefinePatches => {
+            TerrainComputePipelineId::RefinePatches => {
                 layout = Some(vec![
                     self.tessellation_layout.clone(),
                     self.cull_data_layout.clone(),
@@ -95,7 +129,7 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
                 shader = self.tessellation_shader.clone();
                 entry_point = "refine_patches".into();
             }
-            TerrainComputePipelineKey::SelectFinestPatches => {
+            TerrainComputePipelineId::SelectFinestPatches => {
                 layout = Some(vec![
                     self.tessellation_layout.clone(),
                     self.cull_data_layout.clone(),
@@ -103,7 +137,7 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
                 shader = self.tessellation_shader.clone();
                 entry_point = "select_finest_patches".into();
             }
-            TerrainComputePipelineKey::PrepareTessellation => {
+            TerrainComputePipelineId::PrepareTessellation => {
                 layout = Some(vec![
                     self.tessellation_layout.clone(),
                     self.cull_data_layout.clone(),
@@ -112,7 +146,7 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
                 shader = self.prepare_indirect_shader.clone();
                 entry_point = "prepare_tessellation".into();
             }
-            TerrainComputePipelineKey::PrepareRefinement => {
+            TerrainComputePipelineId::PrepareRefinement => {
                 layout = Some(vec![
                     self.tessellation_layout.clone(),
                     self.cull_data_layout.clone(),
@@ -121,7 +155,7 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
                 shader = self.prepare_indirect_shader.clone();
                 entry_point = "prepare_refinement".into();
             }
-            TerrainComputePipelineKey::PrepareRender => {
+            TerrainComputePipelineId::PrepareRender => {
                 layout = Some(vec![
                     self.tessellation_layout.clone(),
                     self.cull_data_layout.clone(),
@@ -136,7 +170,7 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
             label: Some("terrain_compute_pipeline".into()),
             layout,
             shader,
-            shader_defs: Vec::new(),
+            shader_defs,
             entry_point,
         }
     }
@@ -149,8 +183,9 @@ pub struct TerrainComputeNode {
         SResMut<PipelineCache>,
         SResMut<SpecializedComputePipelines<TerrainComputePipelines>>,
         SRes<TerrainComputePipelines>,
+        SRes<DebugTerrain>,
     )>,
-    pipelines: [CachedComputePipelineId; TerrainComputePipelineKey::COUNT],
+    pipelines: [CachedComputePipelineId; TerrainComputePipelineId::COUNT],
 }
 
 impl FromWorld for TerrainComputeNode {
@@ -159,7 +194,7 @@ impl FromWorld for TerrainComputeNode {
             terrain_query: world.query_filtered(),
             view_query: world.query_filtered(),
             system_state: SystemState::new(world),
-            pipelines: [CachedComputePipelineId::INVALID; TerrainComputePipelineKey::COUNT],
+            pipelines: [CachedComputePipelineId::INVALID; TerrainComputePipelineId::COUNT],
         }
     }
 }
@@ -172,7 +207,7 @@ impl TerrainComputeNode {
     ) {
         if gpu_quadtree.node_updates.len() != 0 {
             pass.set_bind_group(0, &gpu_quadtree.update_bind_group, &[]);
-            pass.set_pipeline(pipelines[TerrainComputePipelineKey::UpdateQuadtree as usize]);
+            pass.set_pipeline(pipelines[TerrainComputePipelineId::UpdateQuadtree as usize]);
             pass.dispatch(gpu_quadtree.node_updates.len() as u32, 1, 1);
         }
     }
@@ -188,27 +223,27 @@ impl TerrainComputeNode {
         pass.set_bind_group(1, culling_bind_group, &[]);
         pass.set_bind_group(2, &data.prepare_indirect_bind_group, &[]);
 
-        pass.set_pipeline(pipelines[TerrainComputePipelineKey::PrepareTessellation as usize]);
+        pass.set_pipeline(pipelines[TerrainComputePipelineId::PrepareTessellation as usize]);
         pass.dispatch(1, 1, 1);
 
-        pass.set_pipeline(pipelines[TerrainComputePipelineKey::SelectCoarsestPatches as usize]);
+        pass.set_pipeline(pipelines[TerrainComputePipelineId::SelectCoarsestPatches as usize]);
         pass.dispatch_indirect(&data.indirect_buffer, 0);
 
-        pass.set_pipeline(pipelines[TerrainComputePipelineKey::PrepareRefinement as usize]);
+        pass.set_pipeline(pipelines[TerrainComputePipelineId::PrepareRefinement as usize]);
         pass.dispatch(1, 1, 1);
 
         for _ in 0..refinement_count {
-            pass.set_pipeline(pipelines[TerrainComputePipelineKey::RefinePatches as usize]);
+            pass.set_pipeline(pipelines[TerrainComputePipelineId::RefinePatches as usize]);
             pass.dispatch_indirect(&data.indirect_buffer, 0);
 
-            pass.set_pipeline(pipelines[TerrainComputePipelineKey::PrepareRefinement as usize]);
+            pass.set_pipeline(pipelines[TerrainComputePipelineId::PrepareRefinement as usize]);
             pass.dispatch(1, 1, 1);
         }
 
-        pass.set_pipeline(pipelines[TerrainComputePipelineKey::SelectFinestPatches as usize]);
+        pass.set_pipeline(pipelines[TerrainComputePipelineId::SelectFinestPatches as usize]);
         pass.dispatch_indirect(&data.indirect_buffer, 0);
 
-        pass.set_pipeline(pipelines[TerrainComputePipelineKey::PrepareRender as usize]);
+        pass.set_pipeline(pipelines[TerrainComputePipelineId::PrepareRender as usize]);
         pass.dispatch(1, 1, 1);
     }
 }
@@ -218,11 +253,12 @@ impl render_graph::Node for TerrainComputeNode {
         self.terrain_query.update_archetypes(world);
         self.view_query.update_archetypes(world);
 
-        let (mut pipeline_cache, mut pipelines, pipeline) = self.system_state.get_mut(world);
+        let (mut pipeline_cache, mut pipelines, pipeline, debug) = self.system_state.get_mut(world);
 
-        for key in TerrainComputePipelineKey::iter() {
-            self.pipelines[key as usize] =
-                pipelines.specialize(&mut pipeline_cache, &pipeline, key);
+        let flags = TerrainComputePipelineFlags::from_debug(&debug);
+        for id in TerrainComputePipelineId::iter() {
+            self.pipelines[id as usize] =
+                pipelines.specialize(&mut pipeline_cache, &pipeline, (id, flags));
         }
     }
 
@@ -238,7 +274,7 @@ impl render_graph::Node for TerrainComputeNode {
         let gpu_quadtrees = world.resource::<TerrainViewComponents<GpuQuadtree>>();
         let culling_bind_groups = world.resource::<TerrainViewComponents<CullingBindGroup>>();
 
-        let pipelines = &match TerrainComputePipelineKey::iter()
+        let pipelines = &match TerrainComputePipelineId::iter()
             .map(|key| pipeline_cache.get_compute_pipeline(self.pipelines[key as usize]))
             .collect::<Option<Vec<_>>>()
         {
