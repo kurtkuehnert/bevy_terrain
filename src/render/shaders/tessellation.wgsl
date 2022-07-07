@@ -57,7 +57,7 @@ fn divide(patch_x: u32, patch_y: u32, size: u32) -> bool {
 
         let local_position = vec2<f32>(x, y) * config.patch_scale * f32(size);
         let world_position = vec3<f32>(local_position.x, config.height_under_viewer, local_position.y);
-        let distance = length(cull_data.world_position.xyz - world_position);
+        let distance = length(cull_data.world_position.xyz - world_position) * 0.99; // consider adding a small error mitigation
 
         divide = divide || (distance < f32(size >> 1u) * config.view_distance);
     }
@@ -140,10 +140,12 @@ fn select_coarsest_patches(
 
 fn patch_lod(coords: vec2<u32>, size: u32) -> i32 {
     let local_position = (vec2<f32>(coords) + 0.5) * config.patch_scale * f32(size);
-    return clamp(i32((simplexNoise2(local_position / 1200.0) + 1.0) * 2.0), 1, 4);
+    return i32((simplexNoise2(local_position / 1600.0) + 1.0) / 2.0 * 4.0);
 }
 
 fn add_final_patch(patch: Patch) {
+    var stitch = 0u;
+    var morph = 0u;
     var directions = array<vec2<i32>, 4>(
         vec2<i32>(-1,  0),
         vec2<i32>( 0, -1),
@@ -151,9 +153,7 @@ fn add_final_patch(patch: Patch) {
         vec2<i32>( 0,  1)
     );
 
-    var stitch = 0u;
-    var morph = 0u;
-
+#ifdef DENSITY
     let coords = vec2<i32>(patch.coords);
     let lod = patch_lod(patch.coords, patch.size);
     let parent_lod = patch_lod(patch.coords >> vec2<u32>(1u), patch.size << 1u);
@@ -163,25 +163,28 @@ fn add_final_patch(patch: Patch) {
         let neighbour_lod = patch_lod(neighbour_coords, patch.size);
         let neighbour_parent_lod = patch_lod(neighbour_coords >> vec2<u32>(1u), patch.size << 1u);
 
-        let lod_diff = u32(max(0, lod - neighbour_lod)); // used to align edge vertices with neighbours
-        var morph_diff = 1u; // used to morph edges in synch with neighbours
-        if (neighbour_parent_lod <= neighbour_lod + 1) {
-            morph_diff = u32(neighbour_lod + 1 - neighbour_parent_lod);
-        }
-
-        stitch = stitch | (lod_diff   << u32(i * 8));
-        morph  = morph  | (morph_diff << u32(i * 8));
+        // stitch = stitch | (lod_diff   << u32(i * 8));
+        stitch = stitch |  calc_patch_size(u32(min(neighbour_lod,        lod)))               << u32(i * 8);
+        morph  = morph  | (calc_patch_size(u32(min(neighbour_parent_lod, parent_lod))) >> 1u) << u32(i * 8);
     }
+#endif
+#ifndef DENSITY
+    let lod = 2u;
+    let parent_lod = lod;
+
+    for (var i = 0; i < 4; i = i + 1) {
+        stitch = stitch |  calc_patch_size(lod)               << u32(i * 8);
+        morph  = morph  | (calc_patch_size(parent_lod) >> 1u) << u32(i * 8);
+    }
+#endif
+
+    // Todo: fix stitching patches of different lod levels
 
     var patch = patch;
     patch.stitch = stitch;
     patch.morph = morph;
-    if (parent_lod <= lod + 1) {
-        patch.lod_diff = u32(lod + 1 - parent_lod);
-    }
+    patch.parent_count = calc_patch_size(u32(parent_lod)) >> 1u;
     final_patches.data[final_index(u32(lod))] = patch;
-
-    // final_patches.data[final_index(1u)] = patch;
 }
 
 [[stage(compute), workgroup_size(1, 1, 1)]]
@@ -196,10 +199,10 @@ fn refine_patches(
 
         //       bit |      3 |      2 |      1 |      0
         // direction | bottom |  right |    top |   left
-        var stitch = u32(!divide(parent_coords.x - 1u, parent_coords.y, parent_patch.size))
-                   | u32(!divide(parent_coords.x, parent_coords.y - 1u, parent_patch.size)) << 1u
-                   | u32(!divide(parent_coords.x + 1u, parent_coords.y, parent_patch.size)) << 2u
-                   | u32(!divide(parent_coords.x, parent_coords.y + 1u, parent_patch.size)) << 3u;
+        var stitch = (u32(!divide(parent_coords.x - 1u, parent_coords.y, parent_patch.size)) << 1u)
+                   | (u32(!divide(parent_coords.x, parent_coords.y - 1u, parent_patch.size)) << 1u) << 8u
+                   | (u32(!divide(parent_coords.x + 1u, parent_coords.y, parent_patch.size)) << 1u) << 16u
+                   | (u32(!divide(parent_coords.x, parent_coords.y + 1u, parent_patch.size)) << 1u) << 24u;
 
         //    i |    3 |    2 |    1 |    0
         //  x y |  1 1 |  0 1 |  1 0 |  0 0
