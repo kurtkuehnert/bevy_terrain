@@ -45,15 +45,15 @@ var<storage, read_write> final_patches: PatchList;
    let a0 = x - ox;
    m = m * (1.79284291400159 - 0.85373472095314 * (a0 * a0 + h * h));
    let g = vec3<f32>(a0.x * x0.x + h.x * x0.y, a0.yz * x12.xz + h.yz * x12.yw);
-   return 130. * dot(m, g);
+   return (130. * dot(m, g) + 1.) / 2.;
  }
 
-fn divide(patch_x: u32, patch_y: u32, size: u32) -> bool {
+fn divide(coords: vec2<u32>, size: u32) -> bool {
     var divide = false;
 
     for (var i: u32 = 0u; i < 4u; i = i + 1u) {
-        let x = f32(patch_x + (i       & 1u));
-        let y = f32(patch_y + (i >> 1u & 1u));
+        let x = f32(coords.x + (i       & 1u));
+        let y = f32(coords.y + (i >> 1u & 1u));
 
         let local_position = vec2<f32>(x, y) * config.patch_scale * f32(size);
         let world_position = vec3<f32>(local_position.x, config.height_under_viewer, local_position.y);
@@ -133,14 +133,13 @@ fn select_coarsest_patches(
     let x = invocation_id.x;
     let y = invocation_id.y;
     let size = 1u << config.refinement_count;
-    let stitch = 0u; // no stitch required
 
-    temporary_patches.data[child_index()] = Patch(vec2<u32>(x, y), size, stitch, 1u, 0u);
+    temporary_patches.data[child_index()] = Patch(vec2<u32>(x, y), size, 0u, 0u, 0u);
 }
 
-fn patch_lod(coords: vec2<u32>, size: u32) -> i32 {
+fn patch_lod(coords: vec2<u32>, size: u32) -> u32 {
     let local_position = (vec2<f32>(coords) + 0.5) * config.patch_scale * f32(size);
-    return i32((simplexNoise2(local_position / 1600.0) + 1.0) / 2.0 * 4.0);
+    return u32(simplexNoise2(local_position / 1.0) * 4.0);
 }
 
 fn add_final_patch(patch: Patch) {
@@ -152,39 +151,120 @@ fn add_final_patch(patch: Patch) {
         vec2<i32>( 1,  0),
         vec2<i32>( 0,  1)
     );
-
-#ifdef DENSITY
-    let coords = vec2<i32>(patch.coords);
-    let lod = patch_lod(patch.coords, patch.size);
-    let parent_lod = patch_lod(patch.coords >> vec2<u32>(1u), patch.size << 1u);
-
-    for (var i = 0; i < 4; i = i + 1) {
-        let neighbour_coords = vec2<u32>(coords + directions[i]);
-        let neighbour_lod = patch_lod(neighbour_coords, patch.size);
-        let neighbour_parent_lod = patch_lod(neighbour_coords >> vec2<u32>(1u), patch.size << 1u);
-
-        // stitch = stitch | (lod_diff   << u32(i * 8));
-        stitch = stitch |  calc_patch_size(u32(min(neighbour_lod,        lod)))               << u32(i * 8);
-        morph  = morph  | (calc_patch_size(u32(min(neighbour_parent_lod, parent_lod))) >> 1u) << u32(i * 8);
-    }
-#endif
-#ifndef DENSITY
-    let lod = 2u;
-    let parent_lod = lod;
-
-    for (var i = 0; i < 4; i = i + 1) {
-        stitch = stitch |  calc_patch_size(lod)               << u32(i * 8);
-        morph  = morph  | (calc_patch_size(parent_lod) >> 1u) << u32(i * 8);
-    }
-#endif
-
-    // Todo: fix stitching patches of different lod levels
+    var test1 = array<vec2<u32>, 4>(
+        vec2<u32>(0u, 0u),
+        vec2<u32>(0u, 0u),
+        vec2<u32>(1u, 0u),
+        vec2<u32>(0u, 1u)
+    );
+    var test2 = array<vec2<u32>, 4>(
+        vec2<u32>(0u, 1u),
+        vec2<u32>(1u, 0u),
+        vec2<u32>(1u, 1u),
+        vec2<u32>(1u, 1u)
+    );
 
     var patch = patch;
+
+#ifdef DENSITY
+    var lod = patch_lod(patch.coords, patch.size);
+    var count = calc_patch_size(lod);
+    var parent_lod = patch_lod(patch.coords >> vec2<u32>(1u), patch.size << 1u);
+    let parent_count = calc_patch_size(parent_lod) >> 1u;
+
+#ifdef TEST
+    if (count < parent_count) {
+        // can not morph into parrent with current lod, thus choose lod that fits parent count
+        lod = ((parent_count + 1u) >> 1u) - 1u;
+        count = parent_count; // jump to fit parent count
+
+    }
+#endif
+        // let count = calc_patch_size(lod); // count might have changed
+        // let parent_count = calc_patch_size(parent_lod) >> 1u;
+
+    for (var i = 0; i < 4; i = i + 1) {
+        let shift = u32(i * 6);
+        let neighbour_coords = vec2<u32>(vec2<i32>(patch.coords) + directions[i]);
+        var neighbour_count = calc_patch_size(patch_lod(neighbour_coords, patch.size));
+        let neighbour_parent_count = calc_patch_size(patch_lod(neighbour_coords >> vec2<u32>(1u), patch.size << 1u)) >> 1u;
+
+#ifdef TEST
+        let neighbour_count = max(neighbour_count, neighbour_parent_count);
+#endif
+
+        if (divide(neighbour_coords >> vec2<u32>(1u), patch.size << 1u)) {
+            if (divide(neighbour_coords, patch.size)) {
+                // neighours children are adjacent
+                // stitch with the lower patch count
+                let left_coords = (neighbour_coords << vec2<u32>(1u)) + test1[i];
+                let right_coords = (neighbour_coords << vec2<u32>(1u)) + test2[i];
+                let left_count = calc_patch_size(patch_lod(left_coords, patch.size >> 1u));
+                let right_count = calc_patch_size(patch_lod(right_coords, patch.size >> 1u));
+                let child_count = min(left_count, right_count);
+#ifdef TEST
+                let child_count = max(child_count, calc_patch_size(patch_lod(neighbour_coords, patch.size)) >> 1u);
+#endif
+                patch.padding = 1u;
+                stitch = stitch | min(count, child_count << 1u) << shift;
+                morph  = morph  | parent_count                  << shift;
+            }
+            else {
+                // neighour is adjacent
+                // stitch and morph side with more resolution
+                stitch = stitch | min(count,        neighbour_count)        << shift;
+                morph  = morph  | min(parent_count, neighbour_parent_count) << shift;
+            }
+        }
+        else {
+            // neighours parent is adjacent
+            // must stitch and morph. neighbour can not
+
+            // if (count < neighbour_parent_count) {
+            //     lod = max(lod, ((neighbour_parent_count + 1u) >> 1u) - 1u);
+            //     patch.padding = 1u;
+            // }
+//
+            // if (parent_count < neighbour_parent_count) {
+            //     parent_lod = max(parent_lod, ((neighbour_parent_count + 1u) >> 1u) - 1u);
+            //     patch.padding = 1u;
+            // }
+
+            stitch = stitch | neighbour_parent_count << shift; // caution: has to stitch
+            morph  = morph  | neighbour_parent_count << shift; // has to morph
+        }
+    }
+
+
+
+
+#endif
+#ifndef DENSITY
+    let lod = 3u;
+    let count = calc_patch_size(lod);
+    let parent_count = (calc_patch_size(lod) >> 1u);
+
+    for (var i = 0; i < 4; i = i + 1) {
+        let shift = u32(i * 6);
+        let neighbour_coords = vec2<u32>(vec2<i32>(patch.coords) + directions[i]);
+
+        if (divide(neighbour_coords >> vec2<u32>(1u), patch.size << 1u)) {
+            stitch = stitch | count << shift;
+        }
+        else {
+            stitch = stitch | parent_count << shift;
+        }
+
+        morph = morph | parent_count << shift;
+    }
+#endif
+
+    stitch = stitch | count        << u32(4 * 6);
+    morph  = morph  | parent_count << u32(4 * 6);
+
     patch.stitch = stitch;
     patch.morph = morph;
-    patch.parent_count = calc_patch_size(u32(parent_lod)) >> 1u;
-    final_patches.data[final_index(u32(lod))] = patch;
+    final_patches.data[final_index(lod)] = patch;
 }
 
 [[stage(compute), workgroup_size(1, 1, 1)]]
@@ -194,26 +274,12 @@ fn refine_patches(
     var parent_patch = temporary_patches.data[parent_index(invocation_id.x)];
     let parent_coords = parent_patch.coords;
 
-    if (divide(parent_coords.x, parent_coords.y, parent_patch.size)) {
+    if (divide(parent_coords, parent_patch.size)) {
         let size = parent_patch.size >> 1u;
 
-        //       bit |      3 |      2 |      1 |      0
-        // direction | bottom |  right |    top |   left
-        var stitch = (u32(!divide(parent_coords.x - 1u, parent_coords.y, parent_patch.size)) << 1u)
-                   | (u32(!divide(parent_coords.x, parent_coords.y - 1u, parent_patch.size)) << 1u) << 8u
-                   | (u32(!divide(parent_coords.x + 1u, parent_coords.y, parent_patch.size)) << 1u) << 16u
-                   | (u32(!divide(parent_coords.x, parent_coords.y + 1u, parent_patch.size)) << 1u) << 24u;
-
-        //    i |    3 |    2 |    1 |    0
-        //  x y |  1 1 |  0 1 |  1 0 |  0 0
-        // mask | 1100 | 1001 | 0110 | 0011
-        // mask |    C |    9 |    6 |    3
         for (var i: u32 = 0u; i < 4u; i = i + 1u) {
             let x = (parent_coords.x << 1u) + (i       & 1u);
             let y = (parent_coords.y << 1u) + (i >> 1u & 1u);
-
-            // select two adjacent edges on parent level
-            let stitch = stitch & (0xC963u >> (i << 2u));
 
             // cull patches outside of the terrain
             let local_position = vec2<f32>(f32(x), f32(y)) * config.patch_scale * f32(size);
@@ -225,7 +291,7 @@ fn refine_patches(
             //     continue;
             // }
 
-            temporary_patches.data[child_index()] = Patch(vec2<u32>(x, y), size, stitch, 1u, 0u);
+            temporary_patches.data[child_index()] = Patch(vec2<u32>(x, y), size, 0u, 0u, 0u);
         }
     }
     else {

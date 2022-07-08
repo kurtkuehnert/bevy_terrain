@@ -17,6 +17,7 @@ pub struct DebugTerrain {
     pub lighting: bool,
 
     pub density: bool,
+    pub test: bool,
 }
 
 impl Default for DebugTerrain {
@@ -32,6 +33,7 @@ impl Default for DebugTerrain {
             bright: false,
             lighting: true,
             density: true,
+            test: false,
         }
     }
 }
@@ -70,6 +72,9 @@ pub fn toggle_debug(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTerrain>)
 
     if input.just_pressed(KeyCode::D) {
         debug.density = !debug.density;
+    }
+    if input.just_pressed(KeyCode::G) {
+        debug.test = !debug.test;
     }
 }
 

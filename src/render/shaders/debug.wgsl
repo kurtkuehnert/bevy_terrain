@@ -27,17 +27,21 @@ fn show_patches(patch: Patch, local_position: vec2<f32>, patch_lod: u32) -> vec4
     var color: vec4<f32>;
 
     if ((patch.coords.x + patch.coords.y) % 2u == 0u) {
-        color = vec4<f32>(0.5);
+        color = vec4<f32>(0.5, 0.5, 0.5, 1.0);
     }
     else {
-        color = vec4<f32>(0.1);
+        color = vec4<f32>(0.1, 0.1, 0.1, 1.0);
     }
 
-    color = mix(color, lod_color(patch_lod), 0.2);
+    color = mix(color, lod_color(patch_lod), 0.5);
+
+    if (patch.padding == 1u) {
+        color = color * 10.0;
+    }
 
 #ifdef MESH_MORPH
     let morph = calculate_morph(local_position, patch);
-    color = mix(color, vec4<f32>(1.0, 0.0, 0.0, 1.0), morph);
+    color = color + vec4<f32>(1.0, 1.0, 1.0, 1.0) * morph;
 #endif
 
     return color;

@@ -30,6 +30,7 @@ pub struct TerrainPipelineKey: u32 {
     const ALBEDO             = (1 << 6);
     const BRIGHT             = (1 << 7);
     const LIGHTING           = (1 << 8);
+    const TEST               = (1 << 9);
     const MSAA_RESERVED_BITS = TerrainPipelineKey::MSAA_MASK_BITS << TerrainPipelineKey::MSAA_SHIFT_BITS;
 }
 }
@@ -77,6 +78,10 @@ impl TerrainPipelineKey {
             key |= TerrainPipelineKey::LIGHTING;
         }
 
+        if debug.test {
+            key |= TerrainPipelineKey::TEST;
+        }
+
         key
     }
 
@@ -119,6 +124,10 @@ impl TerrainPipelineKey {
         }
         if (self.bits & TerrainPipelineKey::LIGHTING.bits) != 0 {
             shader_defs.push("LIGHTING".to_string());
+        }
+
+        if (self.bits & TerrainPipelineKey::TEST.bits) != 0 {
+            shader_defs.push("TEST".to_string());
         }
 
         shader_defs
