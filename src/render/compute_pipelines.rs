@@ -37,6 +37,7 @@ bitflags::bitflags! {
 pub struct TerrainComputePipelineFlags: u32 {
     const NONE               = 0;
     const DENSITY            = (1 << 0);
+    const TEST               = (2 << 0);
 }
 }
 
@@ -47,6 +48,9 @@ impl TerrainComputePipelineFlags {
         if debug.density {
             key |= TerrainComputePipelineFlags::DENSITY;
         }
+        if debug.test {
+            key |= TerrainComputePipelineFlags::TEST;
+        }
 
         key
     }
@@ -56,6 +60,9 @@ impl TerrainComputePipelineFlags {
 
         if (self.bits & TerrainComputePipelineFlags::DENSITY.bits) != 0 {
             shader_defs.push("DENSITY".to_string());
+        }
+        if (self.bits & TerrainComputePipelineFlags::TEST.bits) != 0 {
+            shader_defs.push("TEST".to_string());
         }
 
         shader_defs
