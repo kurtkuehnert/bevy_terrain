@@ -38,6 +38,9 @@ fn show_patches(patch: Patch, local_position: vec2<f32>, patch_lod: u32) -> vec4
     if (patch.padding == 1u) {
         color = color * 10.0;
     }
+    if (patch.padding == 2u) {
+        color = color * 0.2;
+    }
 
 #ifdef MESH_MORPH
     let morph = calculate_morph(local_position, patch);
