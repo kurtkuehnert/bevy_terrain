@@ -28,7 +28,7 @@ impl Default for DebugTerrain {
             show_lod: false,
             show_uv: false,
             circular_lod: true,
-            mesh_morph: true,
+            mesh_morph: false,
             albedo: false,
             bright: false,
             lighting: true,
