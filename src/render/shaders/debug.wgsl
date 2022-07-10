@@ -39,7 +39,7 @@ fn show_patches(patch: Patch, local_position: vec2<f32>, patch_lod: u32) -> vec4
         color = color * 10.0;
     }
     if (patch.padding == 2u) {
-        color = color * 0.2;
+        color = color * 0.1;
     }
 
 #ifdef MESH_MORPH
