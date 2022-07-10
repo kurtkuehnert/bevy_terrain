@@ -61,7 +61,7 @@ fn prepare_render() {
     var vertex_count = 0u;
 
     for (var i = 0u; i < 4u; i = i + 1u) {
-        let patch_size = calc_patch_size(i);
+        let patch_size = calc_patch_count(i);
         let vertices_per_row = (patch_size + 2u) << 1u;
         let vertices_per_patch = vertices_per_row * patch_size;
 

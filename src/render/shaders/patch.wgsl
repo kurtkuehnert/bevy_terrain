@@ -3,8 +3,8 @@
 struct Patch {
     coords: vec2<u32>;
     size: u32;
-    stitch: u32;
-    morph: u32;
+    counts: u32;
+    parent_counts: u32;
     padding: u32;
 };
 
@@ -13,6 +13,6 @@ struct PatchList {
     data: array<Patch>;
 };
 
-fn calc_patch_size(lod: u32) -> u32 {
+fn calc_patch_count(lod: u32) -> u32 {
     return (lod + 1u) << 1u; // 2, 4, 6, 8, ...
 }
