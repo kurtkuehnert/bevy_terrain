@@ -127,37 +127,17 @@ fn divide(coords: vec2<u32>, size: u32) -> bool {
 }
 
 fn patch_lod(coords: vec2<u32>, size: u32) -> u32 {
+#ifdef DENSITY
     let local_position = (vec2<f32>(coords) + 0.5) * config.patch_scale * f32(size);
     return u32(simplexNoise2(local_position / 1600.0) * 4.0);
-}
+#endif
 
-fn calc_border(outside_count: u32, coords: vec2<u32>, size: u32, i: i32) -> u32 {
-    var test1 = array<vec2<u32>, 4>(
-        vec2<u32>(1u, 0u),
-        vec2<u32>(0u, 1u),
-        vec2<u32>(0u, 0u),
-        vec2<u32>(0u, 0u)
-
-    );
-    var test2 = array<vec2<u32>, 4>(
-        vec2<u32>(1u, 1u),
-        vec2<u32>(1u, 1u),
-        vec2<u32>(0u, 1u),
-        vec2<u32>(1u, 0u)
-    );
-
-    let left_coords  = (coords << vec2<u32>(1u)) + test1[i];
-    let right_coords = (coords << vec2<u32>(1u)) + test2[i];
-    let left_count  = calc_patch_count(patch_lod(left_coords,  size >> 1u));
-    let right_count = calc_patch_count(patch_lod(right_coords, size >> 1u));
-    let neighbour_child_count = min(left_count, right_count) << 1u;
-
-    return min(outside_count, neighbour_child_count);
+#ifndef DENSITY
+    return 3u;
+#endif
 }
 
 fn add_final_patch(patch: Patch) {
-    var counts = 0u;
-    var parent_counts = 0u;
     var directions = array<vec2<i32>, 4>(
         vec2<i32>(-1,  0),
         vec2<i32>( 0, -1),
@@ -165,10 +145,8 @@ fn add_final_patch(patch: Patch) {
         vec2<i32>( 0,  1)
     );
 
-
     var patch = patch;
 
-#ifdef DENSITY
     let parent_coords = patch.coords >> vec2<u32>(1u);
     let parent_size = patch.size << 1u;
 
@@ -182,42 +160,8 @@ fn add_final_patch(patch: Patch) {
         lod = ((parent_count + 1u) >> 1u) - 1u;
     }
 
-//    for (var i = 0; i < 4; i = i + 1) {
-//        let neighbour_coords = vec2<u32>(vec2<i32>(patch.coords) + directions[i]);
-//        let neighbour_parent_coords = neighbour_coords >> vec2<u32>(1u);
-//
-//        var edge_count: u32;
-//        var edge_parent_count: u32;
-//
-//        if (divide(neighbour_parent_coords, parent_size)) {
-//            if (divide(neighbour_coords, patch.size)) {
-//                // neighours children are adjacent
-//                // stitch with neighbour parent !!!
-//                edge_count = calc_border(count, neighbour_coords, patch.size, i);
-//                edge_parent_count = edge_count;
-//                patch.padding = 1u;
-//            }
-//            else {
-//                // neighour is adjacent
-//                edge_count        = calc_patch_count(patch_lod(neighbour_coords,        patch.size));
-//                edge_parent_count = calc_patch_count(patch_lod(neighbour_parent_coords, parent_size)) >> 1u;
-//            }
-//
-//            edge_count        = calc_patch_count(patch_lod(neighbour_coords,        patch.size));
-//            edge_parent_count = calc_patch_count(patch_lod(neighbour_parent_coords, parent_size)) >> 1u;
-//        }
-//        else {
-//            // neighours parent is adjacent
-//            let neighbour_count = calc_patch_count(patch_lod(neighbour_parent_coords, parent_size));
-//
-//            edge_count = calc_border(neighbour_count, parent_coords, parent_size, (i + 2) % 4) >> 1u;
-//            edge_parent_count = edge_count;
-//            patch.padding = 2u;
-//        }
-//
-//        counts        = counts        | min(count,        edge_count)        << u32(i * 6);
-//        parent_counts = parent_counts | min(parent_count, edge_parent_count) << u32(i * 6);
-//    }
+    patch.counts        = patch.counts        | count        << u32(4 * 6);
+    patch.parent_counts = patch.parent_counts | parent_count << u32(4 * 6);
 
     for (var i = 0; i < 4; i = i + 1) {
         let neighbour_coords = vec2<u32>(vec2<i32>(patch.coords) + directions[i]);
@@ -226,37 +170,10 @@ fn add_final_patch(patch: Patch) {
         let edge_count        = calc_patch_count(patch_lod(neighbour_coords,        patch.size));
         let edge_parent_count = calc_patch_count(patch_lod(neighbour_parent_coords, parent_size)) >> 1u;
 
-        counts        = counts        | min(count,        edge_count)        << u32(i * 6);
-        parent_counts = parent_counts | min(parent_count, edge_parent_count) << u32(i * 6);
+        patch.counts        = patch.counts        | min(count,        edge_count)        << u32(i * 6);
+        patch.parent_counts = patch.parent_counts | min(parent_count, edge_parent_count) << u32(i * 6);
     }
 
-#endif
-#ifndef DENSITY
-    let lod = 3u;
-    let count = calc_patch_count(lod);
-    let parent_count = (calc_patch_count(lod) >> 1u);
-
-    for (var i = 0; i < 4; i = i + 1) {
-        let shift = u32(i * 6);
-        let neighbour_coords = vec2<u32>(vec2<i32>(patch.coords) + directions[i]);
-        let neighbour_parent_coords = neighbour_coords >> vec2<u32>(1u);
-
-        if (divide(neighbour_parent_coords, patch.size << 1u)) {
-            counts = counts | count << shift;
-        }
-        else {
-            counts = counts | parent_count << shift;
-        }
-
-        parent_counts = parent_counts | parent_count << shift;
-    }
-#endif
-
-    counts        = counts        | count        << u32(4 * 6);
-    parent_counts = parent_counts | parent_count << u32(4 * 6);
-
-    patch.counts = counts;
-    patch.parent_counts = parent_counts;
     final_patches.data[final_index(lod)] = patch;
 }
 
