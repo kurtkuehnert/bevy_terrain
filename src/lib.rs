@@ -128,6 +128,7 @@ impl Plugin for TerrainPlugin {
         let render_app = app
             .sub_app_mut(RenderApp)
             .add_render_command::<Opaque3d, DrawTerrain>()
+            .init_resource::<DebugTerrain>()
             .init_resource::<TerrainPipelineConfig>()
             .init_resource::<TerrainRenderPipeline>()
             .init_resource::<SpecializedRenderPipelines<TerrainRenderPipeline>>()

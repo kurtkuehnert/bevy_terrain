@@ -7,6 +7,7 @@ use crate::{
     terrain::Terrain,
     DebugTerrain, TerrainRenderPipeline,
 };
+use bevy::render::Extract;
 use bevy::{
     core_pipeline::core_3d::Opaque3d,
     pbr::{MeshUniform, SetMeshBindGroup, SetMeshViewBindGroup},
@@ -40,7 +41,7 @@ pub(crate) type DrawTerrain = (
 /// Extracts the [`MeshUniform`] data of all terrains.
 pub(crate) fn extract_terrain(
     mut commands: Commands,
-    terrain_query: Query<(Entity, &GlobalTransform), With<Terrain>>,
+    terrain_query: Extract<Query<(Entity, &GlobalTransform), With<Terrain>>>,
 ) {
     for (entity, transform) in terrain_query.iter() {
         let transform = transform.compute_matrix();
