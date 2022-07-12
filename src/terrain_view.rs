@@ -1,10 +1,9 @@
 use crate::{terrain::Terrain, TerrainViewData};
+use bevy::render::Extract;
 use bevy::{
     ecs::{query::QueryItem, system::lifetimeless::Read},
     prelude::*,
-    render::{
-        extract_component::ExtractComponent, render_resource::*, renderer::RenderQueue, RenderWorld,
-    },
+    render::{extract_component::ExtractComponent, render_resource::*, renderer::RenderQueue},
     utils::HashMap,
 };
 
@@ -97,10 +96,10 @@ impl TerrainViewConfig {
 }
 
 pub(crate) fn extract_terrain_view_config(
-    mut render_world: ResMut<RenderWorld>,
-    view_configs: Res<TerrainViewComponents<TerrainViewConfig>>,
+    mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
+    extracted_view_configs: Extract<Res<TerrainViewComponents<TerrainViewConfig>>>,
 ) {
-    render_world.insert_resource(view_configs.clone());
+    *view_configs = extracted_view_configs.clone();
 }
 
 pub(crate) fn queue_terrain_view_config(

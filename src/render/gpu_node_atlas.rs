@@ -3,13 +3,13 @@ use crate::{
     node_atlas::{LoadingNode, NodeAtlas},
     terrain::{Terrain, TerrainComponents, TerrainConfig},
 };
+use bevy::render::{Extract, MainWorld};
 use bevy::{
     prelude::*,
     render::{
         render_asset::RenderAssets,
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
-        RenderWorld,
     },
     utils::HashMap,
 };
@@ -42,12 +42,10 @@ impl GpuNodeAtlas {
 
 /// Initializes the [`GpuNodeAtlas`] of newly created terrains.
 pub(crate) fn initialize_gpu_node_atlas(
-    mut render_world: ResMut<RenderWorld>,
     device: Res<RenderDevice>,
-    mut terrain_query: Query<(Entity, &TerrainConfig), Added<Terrain>>,
+    mut gpu_node_atlases: ResMut<TerrainComponents<GpuNodeAtlas>>,
+    mut terrain_query: Extract<Query<(Entity, &TerrainConfig), Added<Terrain>>>,
 ) {
-    let mut gpu_node_atlases = render_world.resource_mut::<TerrainComponents<GpuNodeAtlas>>();
-
     for (terrain, config) in terrain_query.iter_mut() {
         gpu_node_atlases.insert(terrain, GpuNodeAtlas::new(config, &device));
     }
@@ -55,12 +53,12 @@ pub(crate) fn initialize_gpu_node_atlas(
 
 /// Updates the [`GpuNodeAtlas`] with the activated nodes of the current frame.
 pub(crate) fn update_gpu_node_atlas(
-    mut render_world: ResMut<RenderWorld>,
-    mut terrain_query: Query<(Entity, &mut NodeAtlas)>,
+    mut main_world: ResMut<MainWorld>,
+    mut gpu_node_atlases: ResMut<TerrainComponents<GpuNodeAtlas>>,
 ) {
-    let mut gpu_node_atlases = render_world.resource_mut::<TerrainComponents<GpuNodeAtlas>>();
+    let mut terrain_query = main_world.query::<(Entity, &mut NodeAtlas)>();
 
-    for (terrain, mut node_atlas) in terrain_query.iter_mut() {
+    for (terrain, mut node_atlas) in terrain_query.iter_mut(&mut main_world) {
         let gpu_node_atlas = gpu_node_atlases.get_mut(&terrain).unwrap();
         mem::swap(
             &mut node_atlas.loaded_nodes,

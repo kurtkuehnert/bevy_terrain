@@ -1,5 +1,6 @@
 use crate::{TerrainViewComponents, TerrainViewConfig};
-use bevy::{prelude::*, render::RenderWorld};
+use bevy::prelude::*;
+use bevy::render::Extract;
 
 #[derive(Clone)]
 pub struct DebugTerrain {
@@ -78,8 +79,8 @@ pub fn toggle_debug(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTerrain>)
     }
 }
 
-pub fn extract_debug(mut render_world: ResMut<RenderWorld>, debug: Res<DebugTerrain>) {
-    render_world.insert_resource(debug.clone());
+pub fn extract_debug(mut debug: ResMut<DebugTerrain>, extracted_debug: Extract<Res<DebugTerrain>>) {
+    *debug = extracted_debug.clone();
 }
 
 pub fn change_config(

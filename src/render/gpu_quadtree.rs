@@ -5,16 +5,15 @@ use crate::{
     terrain_view::TerrainView,
     TerrainComputePipelines, TerrainViewComponents,
 };
+use bevy::render::Extract;
 use bevy::{
     core::cast_slice,
     prelude::*,
     render::{
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
-        RenderWorld,
     },
 };
-use std::mem;
 
 /// Stores the GPU representation of the [`Quadtree`] alongside the data to update it.
 #[derive(Component)]
@@ -91,18 +90,14 @@ impl GpuQuadtree {
 
 /// Initializes the [`GpuQuadtree`] of newly created terrains.
 pub(crate) fn initialize_gpu_quadtree(
-    mut render_world: ResMut<RenderWorld>,
     device: Res<RenderDevice>,
     queue: Res<RenderQueue>,
-    quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
-    view_query: Query<Entity, With<TerrainView>>,
-    terrain_query: Query<Entity, Added<Terrain>>,
+    compute_pipelines: Res<TerrainComputePipelines>,
+    mut gpu_quadtrees: ResMut<TerrainViewComponents<GpuQuadtree>>,
+    quadtrees: Extract<Res<TerrainViewComponents<Quadtree>>>,
+    view_query: Extract<Query<Entity, With<TerrainView>>>,
+    terrain_query: Extract<Query<Entity, Added<Terrain>>>,
 ) {
-    let mut gpu_quadtrees = render_world
-        .remove_resource::<TerrainViewComponents<GpuQuadtree>>()
-        .unwrap();
-    let compute_pipelines = render_world.resource::<TerrainComputePipelines>();
-
     for terrain in terrain_query.iter() {
         for view in view_query.iter() {
             let quadtree = quadtrees.get(&(terrain, view)).unwrap();
@@ -113,28 +108,26 @@ pub(crate) fn initialize_gpu_quadtree(
             );
         }
     }
-
-    render_world.insert_resource(gpu_quadtrees);
 }
 
 /// Extracts the new nodes updates for all [`GpuQuadtree`]s by copying them over from their
 /// corresponding [`Quadtree`]s.
 pub(crate) fn update_gpu_quadtree(
-    mut render_world: ResMut<RenderWorld>,
-    mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
-    view_query: Query<Entity, With<TerrainView>>,
-    terrain_query: Query<Entity, With<Terrain>>,
+    mut gpu_quadtrees: ResMut<TerrainViewComponents<GpuQuadtree>>,
+    quadtrees: Extract<Res<TerrainViewComponents<Quadtree>>>,
+    view_query: Extract<Query<Entity, With<TerrainView>>>,
+    terrain_query: Extract<Query<Entity, With<Terrain>>>,
 ) {
-    let mut gpu_quadtrees = render_world.resource_mut::<TerrainViewComponents<GpuQuadtree>>();
-
     for terrain in terrain_query.iter() {
         for view in view_query.iter() {
             if let Some((quadtree, gpu_quadtree)) = quadtrees
-                .get_mut(&(terrain, view))
+                .get(&(terrain, view))
                 .zip(gpu_quadtrees.get_mut(&(terrain, view)))
             {
                 gpu_quadtree.node_updates.clear();
-                mem::swap(&mut quadtree.node_updates, &mut gpu_quadtree.node_updates);
+                // Todo: enable this again once mutable access to the main world in extract is less painful
+                // mem::swap(&mut quadtree.node_updates, &mut gpu_quadtree.node_updates);
+                gpu_quadtree.node_updates = quadtree.node_updates.clone();
             }
         }
     }

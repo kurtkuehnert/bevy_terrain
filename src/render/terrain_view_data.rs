@@ -6,6 +6,7 @@ use crate::{
     terrain_view::{TerrainView, TerrainViewConfig},
     GpuQuadtree, TerrainComputePipelines, TerrainRenderPipeline, TerrainViewComponents,
 };
+use bevy::render::Extract;
 use bevy::{
     ecs::system::{lifetimeless::SRes, SystemParamItem},
     prelude::*,
@@ -13,7 +14,6 @@ use bevy::{
         render_phase::{EntityRenderCommand, RenderCommandResult, TrackedRenderPass},
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
-        RenderWorld,
     },
 };
 
@@ -31,7 +31,7 @@ impl TerrainViewData {
         device: &RenderDevice,
         view_config: &TerrainViewConfig,
         gpu_quadtree: &GpuQuadtree,
-        terrain_pipeline: &TerrainRenderPipeline,
+        render_pipeline: &TerrainRenderPipeline,
         compute_pipelines: &TerrainComputePipelines,
     ) -> Self {
         let indirect_buffer = Self::create_indirect_buffer(device);
@@ -90,7 +90,7 @@ impl TerrainViewData {
                     resource: final_patch_buffer.as_entire_binding(),
                 },
             ],
-            layout: &terrain_pipeline.terrain_view_layout,
+            layout: &render_pipeline.terrain_view_layout,
         });
 
         Self {
@@ -152,20 +152,15 @@ impl TerrainViewData {
 }
 
 pub(crate) fn initialize_terrain_view_data(
-    mut render_world: ResMut<RenderWorld>,
     device: Res<RenderDevice>,
-    view_configs: Res<TerrainViewComponents<TerrainViewConfig>>,
-    view_query: Query<Entity, With<TerrainView>>,
-    terrain_query: Query<Entity, Added<Terrain>>,
+    render_pipeline: Res<TerrainRenderPipeline>,
+    compute_pipelines: Res<TerrainComputePipelines>,
+    mut terrain_view_data: ResMut<TerrainViewComponents<TerrainViewData>>,
+    gpu_quadtrees: Res<TerrainViewComponents<GpuQuadtree>>,
+    view_configs: Extract<Res<TerrainViewComponents<TerrainViewConfig>>>,
+    view_query: Extract<Query<Entity, With<TerrainView>>>,
+    terrain_query: Extract<Query<Entity, Added<Terrain>>>,
 ) {
-    let mut terrain_view_data = render_world
-        .remove_resource::<TerrainViewComponents<TerrainViewData>>()
-        .unwrap();
-
-    let gpu_quadtrees = render_world.resource::<TerrainViewComponents<GpuQuadtree>>();
-    let terrain_pipeline = render_world.resource::<TerrainRenderPipeline>();
-    let compute_pipelines = render_world.resource::<TerrainComputePipelines>();
-
     for terrain in terrain_query.iter() {
         for view in view_query.iter() {
             let view_config = view_configs.get(&(terrain, view)).unwrap();
@@ -177,14 +172,12 @@ pub(crate) fn initialize_terrain_view_data(
                     &device,
                     view_config,
                     gpu_quadtree,
-                    terrain_pipeline,
-                    compute_pipelines,
+                    &render_pipeline,
+                    &compute_pipelines,
                 ),
             );
         }
     }
-
-    render_world.insert_resource(terrain_view_data);
 }
 
 pub struct SetTerrainViewBindGroup<const I: usize>;
