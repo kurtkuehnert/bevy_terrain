@@ -1,3 +1,5 @@
+pub mod density;
+
 use crate::quadtree::Node;
 use image::{
     imageops::{self, FilterType},
@@ -383,6 +385,7 @@ pub fn preprocess_tiles(
             border_size,
             format,
         );
+
         (offset, (tile_size, tile_size))
     };
 
@@ -394,6 +397,9 @@ pub fn preprocess_tiles(
         div_ceil(offset.0 + size.0 + 2 * border_size, texture_size),
         div_ceil(offset.1 + size.1 + 2 * border_size, texture_size),
     );
+
+    dbg!(&first);
+    dbg!(&last);
 
     for lod in 1..lod_count {
         first = (div_floor(first.0, 2), div_floor(first.1, 2));

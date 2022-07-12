@@ -1,7 +1,7 @@
 use crate::{
     render::layouts::CONFIG_BUFFER_SIZE,
     terrain::{Terrain, TerrainComponents},
-    GpuNodeAtlas, TerrainConfig, TerrainRenderPipeline,
+    GpuNodeAtlas, TerrainComputePipelines, TerrainConfig, TerrainRenderPipeline,
 };
 use bevy::{
     ecs::system::{lifetimeless::SRes, SystemParamItem},
@@ -23,7 +23,8 @@ impl TerrainData {
         device: &RenderDevice,
         config: &TerrainConfig,
         gpu_node_atlas: &GpuNodeAtlas,
-        terrain_pipeline: &mut TerrainRenderPipeline,
+        render_pipeline: &mut TerrainRenderPipeline,
+        compute_pipelines: &mut TerrainComputePipelines,
     ) -> Self {
         let config_buffer = Self::create_config_buffer(device, config);
 
@@ -35,7 +36,8 @@ impl TerrainData {
             &terrain_layout,
         );
 
-        terrain_pipeline.terrain_layouts.push(terrain_layout);
+        render_pipeline.terrain_layouts.push(terrain_layout.clone());
+        compute_pipelines.terrain_layouts.push(terrain_layout);
 
         Self { terrain_bind_group }
     }
@@ -59,7 +61,7 @@ impl TerrainData {
             // config buffer
             BindGroupLayoutEntry {
                 binding: 0,
-                visibility: ShaderStages::VERTEX_FRAGMENT,
+                visibility: ShaderStages::all(),
                 ty: BindingType::Buffer {
                     ty: BufferBindingType::Uniform,
                     has_dynamic_offset: false,
@@ -119,17 +121,27 @@ pub(crate) fn initialize_terrain_data(
     let gpu_node_atlases = render_world
         .remove_resource::<TerrainComponents<GpuNodeAtlas>>()
         .unwrap();
-    let mut terrain_pipeline = render_world.resource_mut::<TerrainRenderPipeline>();
+    let mut render_pipeline = render_world
+        .remove_resource::<TerrainRenderPipeline>()
+        .unwrap();
+    let mut compute_pipelines = render_world.resource_mut::<TerrainComputePipelines>();
 
     for (terrain, config) in terrain_query.iter() {
         let gpu_node_atlas = gpu_node_atlases.get(&terrain).unwrap();
 
         terrain_data.insert(
             terrain,
-            TerrainData::new(&device, config, gpu_node_atlas, &mut terrain_pipeline),
+            TerrainData::new(
+                &device,
+                config,
+                gpu_node_atlas,
+                &mut render_pipeline,
+                &mut compute_pipelines,
+            ),
         );
     }
 
+    render_world.insert_resource(render_pipeline);
     render_world.insert_resource(gpu_node_atlases);
     render_world.insert_resource(terrain_data);
 }

@@ -89,18 +89,18 @@ pub(crate) const TESSELLATION_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayou
             },
             count: None,
         },
-        // parameter buffer
+        // quadtree array texture
         BindGroupLayoutEntry {
             binding: 1,
             visibility: ShaderStages::COMPUTE,
-            ty: BindingType::Buffer {
-                ty: BufferBindingType::Storage { read_only: false },
-                has_dynamic_offset: false,
-                min_binding_size: BufferSize::new(PARAMETER_BUFFER_SIZE),
+            ty: BindingType::Texture {
+                sample_type: TextureSampleType::Uint,
+                view_dimension: TextureViewDimension::D2Array,
+                multisampled: false,
             },
             count: None,
         },
-        // temporary patch buffer
+        // final patch buffer
         BindGroupLayoutEntry {
             binding: 2,
             visibility: ShaderStages::COMPUTE,
@@ -111,7 +111,7 @@ pub(crate) const TESSELLATION_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayou
             },
             count: None,
         },
-        // final patch buffer
+        // temporary patch buffer
         BindGroupLayoutEntry {
             binding: 3,
             visibility: ShaderStages::COMPUTE,
@@ -119,6 +119,17 @@ pub(crate) const TESSELLATION_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayou
                 ty: BufferBindingType::Storage { read_only: false },
                 has_dynamic_offset: false,
                 min_binding_size: BufferSize::new(32 + PATCH_SIZE),
+            },
+            count: None,
+        },
+        // parameter buffer
+        BindGroupLayoutEntry {
+            binding: 4,
+            visibility: ShaderStages::COMPUTE,
+            ty: BindingType::Buffer {
+                ty: BufferBindingType::Storage { read_only: false },
+                has_dynamic_offset: false,
+                min_binding_size: BufferSize::new(PARAMETER_BUFFER_SIZE),
             },
             count: None,
         },

@@ -388,7 +388,7 @@ fn height_under_viewer(
     images: &Assets<Image>,
     viewer_position: Vec2,
 ) -> f32 {
-    return 500.0;
+    // return 500.0;
 
     let coordinate =
         (viewer_position / quadtree.chunk_size as f32).as_uvec2() % quadtree.node_count;
