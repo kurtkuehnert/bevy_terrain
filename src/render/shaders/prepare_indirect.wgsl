@@ -10,11 +10,12 @@ struct IndirectBuffer {
 
 [[group(0), binding(0)]]
 var<uniform> config: TerrainViewConfig;
-[[group(0), binding(1)]]
-var<storage, read_write> parameters: Parameters;
-[[group(0), binding(3)]]
+[[group(0), binding(2)]]
 var<storage, read_write> final_patches: PatchList;
-[[group(2), binding(0)]]
+[[group(0), binding(4)]]
+var<storage, read_write> parameters: Parameters;
+
+[[group(3), binding(0)]]
 var<storage, read_write> indirect_buffer: IndirectBuffer;
 
 [[stage(compute), workgroup_size(1, 1, 1)]]

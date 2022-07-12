@@ -57,15 +57,19 @@ impl TerrainViewData {
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: parameter_buffer.as_entire_binding(),
+                    resource: BindingResource::TextureView(&gpu_quadtree.quadtree_view),
                 },
                 BindGroupEntry {
                     binding: 2,
-                    resource: temporary_patch_buffer.as_entire_binding(),
+                    resource: final_patch_buffer.as_entire_binding(),
                 },
                 BindGroupEntry {
                     binding: 3,
-                    resource: final_patch_buffer.as_entire_binding(),
+                    resource: temporary_patch_buffer.as_entire_binding(),
+                },
+                BindGroupEntry {
+                    binding: 4,
+                    resource: parameter_buffer.as_entire_binding(),
                 },
             ],
             layout: &compute_pipelines.tessellation_layout,

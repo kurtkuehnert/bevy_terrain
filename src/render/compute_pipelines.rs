@@ -1,8 +1,8 @@
 use crate::{
     render::{culling::CullingBindGroup, layouts::*, terrain_view_data::TerrainViewData},
     terrain::Terrain,
-    DebugTerrain, GpuQuadtree, TerrainView, TerrainViewComponents, TerrainViewConfig,
-    PREPARE_INDIRECT_HANDLE, TESSELATION_HANDLE, UPDATE_QUADTREE_HANDLE,
+    DebugTerrain, GpuQuadtree, TerrainComponents, TerrainData, TerrainView, TerrainViewComponents,
+    TerrainViewConfig, PREPARE_INDIRECT_HANDLE, TESSELATION_HANDLE, UPDATE_QUADTREE_HANDLE,
 };
 use bevy::{
     ecs::system::{
@@ -74,6 +74,7 @@ pub struct TerrainComputePipelines {
     pub(crate) update_quadtree_layout: BindGroupLayout,
     pub(crate) tessellation_layout: BindGroupLayout,
     pub(crate) cull_data_layout: BindGroupLayout,
+    pub(crate) terrain_layouts: Vec<BindGroupLayout>,
     prepare_indirect_shader: Handle<Shader>,
     update_quadtree_shader: Handle<Shader>,
     tessellation_shader: Handle<Shader>,
@@ -97,6 +98,7 @@ impl FromWorld for TerrainComputePipelines {
             update_quadtree_layout,
             tessellation_layout,
             cull_data_layout,
+            terrain_layouts: Vec::new(),
             prepare_indirect_shader,
             update_quadtree_shader,
             tessellation_shader,
@@ -124,6 +126,7 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
                 layout = Some(vec![
                     self.tessellation_layout.clone(),
                     self.cull_data_layout.clone(),
+                    self.terrain_layouts[0].clone(),
                 ]);
                 shader = self.tessellation_shader.clone();
                 entry_point = "select_coarsest_patches".into();
@@ -132,6 +135,7 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
                 layout = Some(vec![
                     self.tessellation_layout.clone(),
                     self.cull_data_layout.clone(),
+                    self.terrain_layouts[0].clone(),
                 ]);
                 shader = self.tessellation_shader.clone();
                 entry_point = "refine_patches".into();
@@ -140,6 +144,7 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
                 layout = Some(vec![
                     self.tessellation_layout.clone(),
                     self.cull_data_layout.clone(),
+                    self.terrain_layouts[0].clone(),
                 ]);
                 shader = self.tessellation_shader.clone();
                 entry_point = "select_finest_patches".into();
@@ -148,6 +153,7 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
                 layout = Some(vec![
                     self.tessellation_layout.clone(),
                     self.cull_data_layout.clone(),
+                    self.terrain_layouts[0].clone(),
                     self.prepare_indirect_layout.clone(),
                 ]);
                 shader = self.prepare_indirect_shader.clone();
@@ -157,6 +163,7 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
                 layout = Some(vec![
                     self.tessellation_layout.clone(),
                     self.cull_data_layout.clone(),
+                    self.terrain_layouts[0].clone(),
                     self.prepare_indirect_layout.clone(),
                 ]);
                 shader = self.prepare_indirect_shader.clone();
@@ -166,6 +173,7 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
                 layout = Some(vec![
                     self.tessellation_layout.clone(),
                     self.cull_data_layout.clone(),
+                    self.terrain_layouts[0].clone(),
                     self.prepare_indirect_layout.clone(),
                 ]);
                 shader = self.prepare_indirect_shader.clone();
@@ -222,33 +230,35 @@ impl TerrainComputeNode {
     fn tessellate_terrain<'a>(
         pass: &mut ComputePass<'a>,
         pipelines: &'a Vec<&'a ComputePipeline>,
-        data: &'a TerrainViewData,
+        view_data: &'a TerrainViewData,
+        terrain_data: &'a TerrainData,
         culling_bind_group: &'a BindGroup,
         refinement_count: u32,
     ) {
-        pass.set_bind_group(0, &data.tessellation_bind_group, &[]);
+        pass.set_bind_group(0, &view_data.tessellation_bind_group, &[]);
         pass.set_bind_group(1, culling_bind_group, &[]);
-        pass.set_bind_group(2, &data.prepare_indirect_bind_group, &[]);
+        pass.set_bind_group(2, &terrain_data.terrain_bind_group, &[]);
+        pass.set_bind_group(3, &view_data.prepare_indirect_bind_group, &[]);
 
         pass.set_pipeline(pipelines[TerrainComputePipelineId::PrepareTessellation as usize]);
         pass.dispatch(1, 1, 1);
 
         pass.set_pipeline(pipelines[TerrainComputePipelineId::SelectCoarsestPatches as usize]);
-        pass.dispatch_indirect(&data.indirect_buffer, 0);
+        pass.dispatch_indirect(&view_data.indirect_buffer, 0);
 
         pass.set_pipeline(pipelines[TerrainComputePipelineId::PrepareRefinement as usize]);
         pass.dispatch(1, 1, 1);
 
         for _ in 0..refinement_count {
             pass.set_pipeline(pipelines[TerrainComputePipelineId::RefinePatches as usize]);
-            pass.dispatch_indirect(&data.indirect_buffer, 0);
+            pass.dispatch_indirect(&view_data.indirect_buffer, 0);
 
             pass.set_pipeline(pipelines[TerrainComputePipelineId::PrepareRefinement as usize]);
             pass.dispatch(1, 1, 1);
         }
 
         pass.set_pipeline(pipelines[TerrainComputePipelineId::SelectFinestPatches as usize]);
-        pass.dispatch_indirect(&data.indirect_buffer, 0);
+        pass.dispatch_indirect(&view_data.indirect_buffer, 0);
 
         pass.set_pipeline(pipelines[TerrainComputePipelineId::PrepareRender as usize]);
         pass.dispatch(1, 1, 1);
@@ -277,6 +287,7 @@ impl render_graph::Node for TerrainComputeNode {
     ) -> Result<(), render_graph::NodeRunError> {
         let pipeline_cache = world.resource::<PipelineCache>();
         let view_configs = world.resource::<TerrainViewComponents<TerrainViewConfig>>();
+        let terrain_data = world.resource::<TerrainComponents<TerrainData>>();
         let terrain_view_data = world.resource::<TerrainViewComponents<TerrainViewData>>();
         let gpu_quadtrees = world.resource::<TerrainViewComponents<GpuQuadtree>>();
         let culling_bind_groups = world.resource::<TerrainViewComponents<CullingBindGroup>>();
@@ -294,9 +305,10 @@ impl render_graph::Node for TerrainComputeNode {
             .begin_compute_pass(&ComputePassDescriptor::default());
 
         for terrain in self.terrain_query.iter_manual(world) {
+            let terrain_data = terrain_data.get(&terrain).unwrap();
             for view in self.view_query.iter_manual(world) {
                 let view_config = view_configs.get(&(terrain, view)).unwrap();
-                let data = terrain_view_data.get(&(terrain, view)).unwrap();
+                let view_data = terrain_view_data.get(&(terrain, view)).unwrap();
                 let gpu_quadtree = gpu_quadtrees.get(&(terrain, view)).unwrap();
                 let culling_bind_group = culling_bind_groups.get(&(terrain, view)).unwrap();
 
@@ -304,7 +316,8 @@ impl render_graph::Node for TerrainComputeNode {
                 TerrainComputeNode::tessellate_terrain(
                     pass,
                     pipelines,
-                    data,
+                    view_data,
+                    terrain_data,
                     &culling_bind_group.value,
                     view_config.refinement_count,
                 );
