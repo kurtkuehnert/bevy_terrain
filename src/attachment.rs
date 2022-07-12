@@ -44,7 +44,7 @@ impl AtlasAttachment {
         match self {
             &AtlasAttachment::Buffer { .. } => BindGroupLayoutEntry {
                 binding,
-                visibility: ShaderStages::VERTEX_FRAGMENT,
+                visibility: ShaderStages::all(),
                 ty: BindingType::Buffer {
                     ty: BufferBindingType::Uniform,
                     has_dynamic_offset: false,
@@ -54,7 +54,7 @@ impl AtlasAttachment {
             },
             &AtlasAttachment::Texture { .. } => BindGroupLayoutEntry {
                 binding,
-                visibility: ShaderStages::VERTEX_FRAGMENT,
+                visibility: ShaderStages::all(),
                 ty: BindingType::Texture {
                     sample_type: TextureSampleType::Float { filterable: true },
                     view_dimension: TextureViewDimension::D2Array,
@@ -64,7 +64,7 @@ impl AtlasAttachment {
             },
             &AtlasAttachment::Sampler { .. } => BindGroupLayoutEntry {
                 binding,
-                visibility: ShaderStages::VERTEX_FRAGMENT,
+                visibility: ShaderStages::all(),
                 ty: BindingType::Sampler(SamplerBindingType::Filtering),
                 count: None,
             },

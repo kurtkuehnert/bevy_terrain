@@ -12,16 +12,30 @@ struct CullData {
 };
 
 [[group(0), binding(0)]]
-var<uniform> config: TerrainViewConfig;
+var<uniform> view_config: TerrainViewConfig;
 [[group(0), binding(1)]]
-var<storage, read_write> parameters: Parameters;
+var quadtree: texture_2d_array<u32>;
 [[group(0), binding(2)]]
-var<storage, read_write> temporary_patches: PatchList;
-[[group(0), binding(3)]]
 var<storage, read_write> final_patches: PatchList;
+[[group(0), binding(3)]]
+var<storage, read_write> temporary_patches: PatchList;
+[[group(0), binding(4)]]
+var<storage, read_write> parameters: Parameters;
 
 [[group(1), binding(0)]]
- var<uniform> cull_data: CullData;
+ var<uniform> view: CullData;
+
+ // terrain bindings
+[[group(2), binding(0)]]
+var<uniform> config: TerrainConfig;
+[[group(2), binding(1)]]
+var filter_sampler: sampler;
+[[group(2), binding(2)]]
+var height_atlas: texture_2d_array<f32>;
+[[group(2), binding(3)]]
+var density_atlas: texture_2d_array<f32>;
+
+#import bevy_terrain::utils
 
 //  MIT License. © Ian McEwan, Stefan Gustavson, Munrocket
 //
@@ -53,7 +67,7 @@ fn child_index() -> i32 {
 }
 
 fn parent_index(id: u32) -> i32 {
-    return i32(config.patch_count - 1u) * clamp(parameters.counter, 0, 1) - i32(id) * parameters.counter;
+    return i32(view_config.patch_count - 1u) * clamp(parameters.counter, 0, 1) - i32(id) * parameters.counter;
 }
 
 fn final_index(lod: u32) -> i32 {
@@ -89,7 +103,7 @@ fn frustum_cull(position: vec2<f32>, size: f32) -> bool {
     );
 
     for (var i = 0; i < 5; i = i + 1) {
-        let plane = cull_data.planes[i];
+        let plane = view.planes[i];
 
         var in = 0u;
 
@@ -116,20 +130,30 @@ fn divide(coords: vec2<u32>, size: u32) -> bool {
         let x = f32(coords.x + (i       & 1u));
         let y = f32(coords.y + (i >> 1u & 1u));
 
-        let local_position = vec2<f32>(x, y) * config.patch_scale * f32(size);
-        let world_position = vec3<f32>(local_position.x, config.height_under_viewer, local_position.y);
-        let distance = length(cull_data.world_position.xyz - world_position) * 0.99; // consider adding a small error mitigation
+        let local_position = vec2<f32>(x, y) * view_config.patch_scale * f32(size);
+        let world_position = vec3<f32>(local_position.x, view_config.height_under_viewer, local_position.y);
+        let distance = length(view.world_position.xyz - world_position) * 0.99; // consider adding a small error mitigation
 
-        divide = divide || (distance < f32(size >> 1u) * config.view_distance);
+        divide = divide || (distance < f32(size >> 1u) * view_config.view_distance);
     }
 
     return divide;
 }
 
 fn patch_lod(coords: vec2<u32>, size: u32) -> u32 {
+    let local_position = (vec2<f32>(coords) + 0.5) * view_config.patch_scale * f32(size);
+    let world_position = vec3<f32>(local_position.x, view_config.height_under_viewer, local_position.y);
+    // let viewer_distance = distance(world_position, view.world_position.xyz);
+    // let log_distance = log2(2.0 * viewer_distance / view_config.view_distance);
+    let log_distance = log2(view_config.patch_scale * f32(size));
+
+    let lookup = atlas_lookup(log_distance, local_position);
+    let slope = textureSampleLevel(density_atlas, filter_sampler, lookup.atlas_coords, lookup.atlas_index, 0.0).x;
+
+    let slope = min(slope * 10.0, 0.999);
 #ifdef DENSITY
-    let local_position = (vec2<f32>(coords) + 0.5) * config.patch_scale * f32(size);
-    return u32(simplexNoise2(local_position / 1600.0) * 4.0);
+    return u32(slope * 4.0);
+    // return u32(simplexNoise2(local_position / 1600.0) * 4.0);
 #endif
 
 #ifndef DENSITY
@@ -183,7 +207,7 @@ fn select_coarsest_patches(
 ) {
     let x = invocation_id.x;
     let y = invocation_id.y;
-    let size = 1u << config.refinement_count;
+    let size = 1u << view_config.refinement_count;
 
     temporary_patches.data[child_index()] = Patch(vec2<u32>(x, y), size, 0u, 0u, 0u);
 }
@@ -203,8 +227,8 @@ fn refine_patches(
             let y = (parent_coords.y << 1u) + (i >> 1u & 1u);
 
             // cull patches outside of the terrain
-            let local_position = vec2<f32>(f32(x), f32(y)) * config.patch_scale * f32(size);
-            if (local_position.x > f32(config.terrain_size) || local_position.y > f32(config.terrain_size)) {
+            let local_position = vec2<f32>(f32(x), f32(y)) * view_config.patch_scale * f32(size);
+            if (local_position.x > f32(view_config.terrain_size) || local_position.y > f32(view_config.terrain_size)) {
                 continue;
             }
 

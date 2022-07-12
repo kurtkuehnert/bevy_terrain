@@ -57,6 +57,8 @@ const PARAMETERS_HANDLE: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 656456784512075658);
 const ATLAS_HANDLE: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 124345314345873273);
+const TERRAIN_HANDLE: HandleUntyped =
+    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 234313897973543254);
 const DEBUG_HANDLE: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 513467378691355413);
 
@@ -87,6 +89,10 @@ impl Plugin for TerrainPlugin {
         assets.set_untracked(
             ATLAS_HANDLE,
             Shader::from_wgsl(include_str!("render/shaders/utils.wgsl")),
+        );
+        assets.set_untracked(
+            TERRAIN_HANDLE,
+            Shader::from_wgsl(include_str!("render/shaders/terrain.wgsl")),
         );
         assets.set_untracked(
             DEBUG_HANDLE,
