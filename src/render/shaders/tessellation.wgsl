@@ -83,6 +83,7 @@ fn final_index(lod: u32) -> i32 {
     if (lod == 3u) {
         return atomicAdd(&parameters.final_index4, 1) + 300000;
     }
+
     return 0;
     // return atomicAdd(&parameters.final_indices[i32(lod)], 1) + i32(lod) * 1000000;
 }

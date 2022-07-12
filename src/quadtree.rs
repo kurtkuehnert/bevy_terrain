@@ -335,6 +335,7 @@ pub(crate) fn traverse_quadtree(
             if let Some(quadtree) = quadtrees.get_mut(&(terrain, view)) {
                 let view_position = view_transform.translation;
 
+                quadtree.node_updates.clear();
                 quadtree.traverse(view_position);
             }
         }

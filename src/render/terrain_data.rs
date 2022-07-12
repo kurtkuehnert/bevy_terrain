@@ -3,6 +3,7 @@ use crate::{
     terrain::{Terrain, TerrainComponents},
     GpuNodeAtlas, TerrainComputePipelines, TerrainConfig, TerrainRenderPipeline,
 };
+use bevy::render::Extract;
 use bevy::{
     ecs::system::{lifetimeless::SRes, SystemParamItem},
     prelude::*,
@@ -10,7 +11,6 @@ use bevy::{
         render_phase::{EntityRenderCommand, RenderCommandResult, TrackedRenderPass},
         render_resource::*,
         renderer::RenderDevice,
-        RenderWorld,
     },
 };
 
@@ -111,21 +111,13 @@ impl TerrainData {
 }
 
 pub(crate) fn initialize_terrain_data(
-    mut render_world: ResMut<RenderWorld>,
     device: Res<RenderDevice>,
-    terrain_query: Query<(Entity, &TerrainConfig), Added<Terrain>>,
+    mut render_pipeline: ResMut<TerrainRenderPipeline>,
+    mut compute_pipelines: ResMut<TerrainComputePipelines>,
+    mut terrain_data: ResMut<TerrainComponents<TerrainData>>,
+    gpu_node_atlases: Res<TerrainComponents<GpuNodeAtlas>>,
+    terrain_query: Extract<Query<(Entity, &TerrainConfig), Added<Terrain>>>,
 ) {
-    let mut terrain_data = render_world
-        .remove_resource::<TerrainComponents<TerrainData>>()
-        .unwrap();
-    let gpu_node_atlases = render_world
-        .remove_resource::<TerrainComponents<GpuNodeAtlas>>()
-        .unwrap();
-    let mut render_pipeline = render_world
-        .remove_resource::<TerrainRenderPipeline>()
-        .unwrap();
-    let mut compute_pipelines = render_world.resource_mut::<TerrainComputePipelines>();
-
     for (terrain, config) in terrain_query.iter() {
         let gpu_node_atlas = gpu_node_atlases.get(&terrain).unwrap();
 
@@ -140,10 +132,6 @@ pub(crate) fn initialize_terrain_data(
             ),
         );
     }
-
-    render_world.insert_resource(render_pipeline);
-    render_world.insert_resource(gpu_node_atlases);
-    render_world.insert_resource(terrain_data);
 }
 
 pub struct SetTerrainBindGroup<const I: usize>;

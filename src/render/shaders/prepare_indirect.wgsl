@@ -55,6 +55,7 @@ fn final_index(lod: u32) -> i32 {
     }
 
     return 0;
+    // return atomicExchange(&parameters.final_indices[i32(lod)], 0);
 }
 
 [[stage(compute), workgroup_size(1, 1, 1)]]
