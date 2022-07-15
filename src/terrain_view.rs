@@ -29,10 +29,10 @@ pub(crate) struct TerrainViewConfigUniform {
     node_count: u32,
 
     terrain_size: u32,
-    patch_count: u32,
+    tile_count: u32,
     refinement_count: u32,
     view_distance: f32,
-    patch_scale: f32,
+    tile_scale: f32,
 }
 
 #[derive(Clone, Component)]
@@ -43,43 +43,38 @@ pub struct TerrainViewConfig {
     pub node_count: u32,
     // tesselation
     pub terrain_size: u32,
-    pub patch_count: u32,
+    pub tile_count: u32,
     pub refinement_count: u32,
     pub view_distance: f32,
-    pub patch_scale: f32,
+    pub tile_scale: f32,
 }
 
 impl TerrainViewConfig {
-    pub fn new(
-        terrain_size: u32,
-        view_distance: f32,
-        patch_scale: f32,
-        load_distance: f32,
-    ) -> Self {
+    pub fn new(terrain_size: u32, view_distance: f32, tile_scale: f32, load_distance: f32) -> Self {
         let node_count = 12;
         let load_distance = load_distance * node_count as f32;
 
-        let patch_count = 1000000;
+        let tile_count = 1000000;
 
         let view_distance = view_distance * 128.0;
 
-        let refinement_count = (terrain_size as f32 / patch_scale).log2().ceil() as u32;
+        let refinement_count = (terrain_size as f32 / tile_scale).log2().ceil() as u32;
 
         Self {
             height_under_viewer: 0.0,
             load_distance,
             node_count,
-            patch_count,
+            tile_count,
             terrain_size,
             refinement_count,
             view_distance,
-            patch_scale,
+            tile_scale,
         }
     }
 
-    pub(crate) fn change_patch_scale(&mut self, new: f32) {
-        self.patch_scale = new;
-        self.refinement_count = (self.terrain_size as f32 / self.patch_scale).log2().ceil() as u32;
+    pub(crate) fn change_tile_scale(&mut self, new: f32) {
+        self.tile_scale = new;
+        self.refinement_count = (self.terrain_size as f32 / self.tile_scale).log2().ceil() as u32;
     }
 
     pub(crate) fn shader_data(&self) -> TerrainViewConfigUniform {
@@ -87,10 +82,10 @@ impl TerrainViewConfig {
             node_count: self.node_count,
             height_under_viewer: self.height_under_viewer,
             terrain_size: self.terrain_size,
-            patch_count: self.patch_count,
+            tile_count: self.tile_count,
             refinement_count: self.refinement_count,
             view_distance: self.view_distance,
-            patch_scale: self.patch_scale,
+            tile_scale: self.tile_scale,
         }
     }
 }

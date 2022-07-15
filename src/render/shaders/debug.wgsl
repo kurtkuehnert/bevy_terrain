@@ -23,27 +23,27 @@ fn lod_color(lod: u32) -> vec4<f32> {
     return vec4<f32>(0.0);
 }
 
-fn show_patches(patch: Patch, local_position: vec2<f32>, patch_lod: u32) -> vec4<f32> {
+fn show_tiles(tile: Tile, local_position: vec2<f32>, tile_lod: u32) -> vec4<f32> {
     var color: vec4<f32>;
 
-    if ((patch.coords.x + patch.coords.y) % 2u == 0u) {
+    if ((tile.coords.x + tile.coords.y) % 2u == 0u) {
         color = vec4<f32>(0.5, 0.5, 0.5, 1.0);
     }
     else {
         color = vec4<f32>(0.1, 0.1, 0.1, 1.0);
     }
 
-    color = mix(color, lod_color(patch_lod), 0.5);
+    color = mix(color, lod_color(tile_lod), 0.5);
 
-    if (patch.padding == 1u) {
+    if (tile.padding == 1u) {
         color = color * 10.0;
     }
-    if (patch.padding == 2u) {
+    if (tile.padding == 2u) {
         color = color * 0.1;
     }
 
 #ifdef MESH_MORPH
-    let morph = calculate_morph(local_position, patch);
+    let morph = calculate_morph(local_position, tile);
     color = color + vec4<f32>(1.0, 1.0, 1.0, 1.0) * morph;
 #endif
 

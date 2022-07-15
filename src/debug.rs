@@ -6,7 +6,7 @@ use bevy::render::Extract;
 pub struct DebugTerrain {
     pub wireframe: bool,
 
-    pub show_patches: bool,
+    pub show_tiles: bool,
     pub show_lod: bool,
     pub show_uv: bool,
 
@@ -25,7 +25,7 @@ impl Default for DebugTerrain {
     fn default() -> Self {
         Self {
             wireframe: false,
-            show_patches: false,
+            show_tiles: false,
             show_lod: false,
             show_uv: false,
             circular_lod: true,
@@ -45,7 +45,7 @@ pub fn toggle_debug(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTerrain>)
     }
 
     if input.just_pressed(KeyCode::P) {
-        debug.show_patches = !debug.show_patches;
+        debug.show_tiles = !debug.show_tiles;
     }
     if input.just_pressed(KeyCode::L) {
         debug.show_lod = !debug.show_lod;
@@ -88,11 +88,11 @@ pub fn change_config(
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
 ) {
     for config in view_configs.values_mut() {
-        if input.just_pressed(KeyCode::X) && config.patch_scale > 0.25 {
-            config.change_patch_scale(config.patch_scale * 0.95);
+        if input.just_pressed(KeyCode::X) && config.tile_scale > 0.25 {
+            config.change_tile_scale(config.tile_scale * 0.95);
         }
         if input.just_pressed(KeyCode::Q) {
-            config.change_patch_scale(config.patch_scale * 1.05);
+            config.change_tile_scale(config.tile_scale * 1.05);
         }
 
         if input.just_pressed(KeyCode::I) {
