@@ -1,6 +1,5 @@
 use crate::{TerrainViewComponents, TerrainViewConfig};
-use bevy::prelude::*;
-use bevy::render::Extract;
+use bevy::{prelude::*, render::Extract};
 
 #[derive(Clone)]
 pub struct DebugTerrain {
