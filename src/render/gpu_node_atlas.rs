@@ -3,6 +3,7 @@ use crate::{
     node_atlas::{LoadingNode, NodeAtlas},
     terrain::{Terrain, TerrainComponents, TerrainConfig},
 };
+use bevy::asset::HandleId;
 use bevy::render::{Extract, MainWorld};
 use bevy::{
     prelude::*,

@@ -17,3 +17,4 @@ struct TerrainViewConfig {
     view_distance: f32,
     tile_scale: f32,
 }
+
