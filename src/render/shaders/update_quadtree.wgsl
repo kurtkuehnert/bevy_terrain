@@ -1,15 +1,15 @@
 struct NodeUpdates {
-    data: array<u32>;
-};
+    data: array<u32>,
+}
 
-[[group(0), binding(0)]]
+@group(0) @binding(0)
 var quadtree: texture_storage_2d_array<rgba8uint, read_write>; // consider two 16 bit values
-[[group(0), binding(1)]]
+@group(0) @binding(1)
 var<storage> node_updates: NodeUpdates;
 
 // Todo: consider increasing the workgroup size and pre sorting the updates for better cache coherenze
-[[stage(compute), workgroup_size(1, 1, 1)]]
-fn update_quadtree([[builtin(global_invocation_id)]] invocation_id: vec3<u32>) {
+@compute @workgroup_size(1, 1, 1)
+fn update_quadtree(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
     let index = invocation_id.x;
     let update = node_updates.data[index];
 

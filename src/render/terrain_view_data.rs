@@ -1,6 +1,6 @@
 use crate::{
     render::layouts::{
-        INDIRECT_BUFFER_SIZE, PARAMETER_BUFFER_SIZE, PATCH_SIZE, TERRAIN_VIEW_CONFIG_SIZE,
+        INDIRECT_BUFFER_SIZE, PARAMETER_BUFFER_SIZE, TERRAIN_VIEW_CONFIG_SIZE, TILE_SIZE,
     },
     terrain::Terrain,
     terrain_view::{TerrainView, TerrainViewConfig},
@@ -37,8 +37,8 @@ impl TerrainViewData {
         let indirect_buffer = Self::create_indirect_buffer(device);
         let view_config_buffer = Self::create_view_config_buffer(device);
         let parameter_buffer = Self::create_parameter_buffer(device);
-        let (temporary_patch_buffer, final_patch_buffer) =
-            Self::create_patch_buffers(device, view_config);
+        let (temporary_tile_buffer, final_tile_buffer) =
+            Self::create_tile_buffers(device, view_config);
 
         let prepare_indirect_bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: "prepare_indirect_bind_group".into(),
@@ -61,11 +61,11 @@ impl TerrainViewData {
                 },
                 BindGroupEntry {
                     binding: 2,
-                    resource: final_patch_buffer.as_entire_binding(),
+                    resource: final_tile_buffer.as_entire_binding(),
                 },
                 BindGroupEntry {
                     binding: 3,
-                    resource: temporary_patch_buffer.as_entire_binding(),
+                    resource: temporary_tile_buffer.as_entire_binding(),
                 },
                 BindGroupEntry {
                     binding: 4,
@@ -87,7 +87,7 @@ impl TerrainViewData {
                 },
                 BindGroupEntry {
                     binding: 2,
-                    resource: final_patch_buffer.as_entire_binding(),
+                    resource: final_tile_buffer.as_entire_binding(),
                 },
             ],
             layout: &render_pipeline.terrain_view_layout,
@@ -127,13 +127,13 @@ impl TerrainViewData {
         })
     }
 
-    fn create_patch_buffers(
+    fn create_tile_buffers(
         device: &RenderDevice,
         view_config: &TerrainViewConfig,
     ) -> (Buffer, Buffer) {
         let buffer_descriptor = BufferDescriptor {
-            label: "patch_buffer".into(),
-            size: 32 + PATCH_SIZE * view_config.patch_count as BufferAddress, // Todo: figure out a better patch buffer size limit
+            label: "tile_buffer".into(),
+            size: 32 + TILE_SIZE * view_config.tile_count as BufferAddress, // Todo: figure out a better tile buffer size limit
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
         };

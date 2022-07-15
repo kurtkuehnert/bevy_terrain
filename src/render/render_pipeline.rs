@@ -22,7 +22,7 @@ bitflags::bitflags! {
 pub struct TerrainPipelineKey: u32 {
     const NONE               = 0;
     const WIREFRAME          = (1 << 0);
-    const SHOW_PATCHES       = (1 << 1);
+    const SHOW_TILES         = (1 << 1);
     const SHOW_LOD           = (1 << 2);
     const SHOW_UV            = (1 << 3);
     const CIRCULAR_LOD       = (1 << 4);
@@ -51,8 +51,8 @@ impl TerrainPipelineKey {
             key |= TerrainPipelineKey::WIREFRAME;
         }
 
-        if debug.show_patches {
-            key |= TerrainPipelineKey::SHOW_PATCHES;
+        if debug.show_tiles {
+            key |= TerrainPipelineKey::SHOW_TILES;
         }
         if debug.show_lod {
             key |= TerrainPipelineKey::SHOW_LOD;
@@ -99,8 +99,8 @@ impl TerrainPipelineKey {
     pub fn shader_defs(&self) -> Vec<String> {
         let mut shader_defs = Vec::new();
 
-        if (self.bits & TerrainPipelineKey::SHOW_PATCHES.bits) != 0 {
-            shader_defs.push("SHOW_PATCHES".to_string());
+        if (self.bits & TerrainPipelineKey::SHOW_TILES.bits) != 0 {
+            shader_defs.push("SHOW_TILES".to_string());
         }
         if (self.bits & TerrainPipelineKey::SHOW_LOD.bits) != 0 {
             shader_defs.push("SHOW_LOD".to_string());
@@ -197,11 +197,11 @@ impl SpecializedRenderPipeline for TerrainRenderPipeline {
                 shader: self.shader.clone(),
                 shader_defs,
                 entry_point: "fragment".into(),
-                targets: vec![ColorTargetState {
+                targets: vec![Some(ColorTargetState {
                     format: TextureFormat::bevy_default(),
                     blend: Some(BlendState::REPLACE),
                     write_mask: ColorWrites::ALL,
-                }],
+                })],
             }),
             depth_stencil: Some(DepthStencilState {
                 format: TextureFormat::Depth32Float,

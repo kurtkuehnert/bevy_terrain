@@ -4,7 +4,7 @@ use std::mem;
 
 pub(crate) const TERRAIN_VIEW_CONFIG_SIZE: BufferAddress = 4 * 48;
 
-pub(crate) const PATCH_SIZE: BufferAddress = 6 * 4;
+pub(crate) const TILE_SIZE: BufferAddress = 6 * 4;
 pub(crate) const INDIRECT_BUFFER_SIZE: BufferAddress = 5 * 4;
 pub(crate) const PARAMETER_BUFFER_SIZE: BufferAddress = 6 * 4;
 pub(crate) const NODE_UPDATE_SIZE: BufferAddress = mem::size_of::<NodeUpdate>() as BufferAddress;
@@ -100,25 +100,25 @@ pub(crate) const TESSELLATION_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayou
             },
             count: None,
         },
-        // final patch buffer
+        // final tile buffer
         BindGroupLayoutEntry {
             binding: 2,
             visibility: ShaderStages::COMPUTE,
             ty: BindingType::Buffer {
                 ty: BufferBindingType::Storage { read_only: false },
                 has_dynamic_offset: false,
-                min_binding_size: BufferSize::new(32 + PATCH_SIZE),
+                min_binding_size: BufferSize::new(32 + TILE_SIZE),
             },
             count: None,
         },
-        // temporary patch buffer
+        // temporary tile buffer
         BindGroupLayoutEntry {
             binding: 3,
             visibility: ShaderStages::COMPUTE,
             ty: BindingType::Buffer {
                 ty: BufferBindingType::Storage { read_only: false },
                 has_dynamic_offset: false,
-                min_binding_size: BufferSize::new(32 + PATCH_SIZE),
+                min_binding_size: BufferSize::new(32 + TILE_SIZE),
             },
             count: None,
         },
@@ -161,14 +161,14 @@ pub(crate) const TERRAIN_VIEW_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayou
             },
             count: None,
         },
-        // patch buffer
+        // tile buffer
         BindGroupLayoutEntry {
             binding: 2,
             visibility: ShaderStages::VERTEX,
             ty: BindingType::Buffer {
                 ty: BufferBindingType::Storage { read_only: true },
                 has_dynamic_offset: false,
-                min_binding_size: BufferSize::new(32 + PATCH_SIZE),
+                min_binding_size: BufferSize::new(32 + TILE_SIZE),
             },
             count: None,
         },

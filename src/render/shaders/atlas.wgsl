@@ -1,14 +1,14 @@
-#define_import_path bevy_terrain::utils
+#define_import_path bevy_terrain::atlas
+
+struct AtlasLookup {
+    lod: u32,
+    atlas_index: i32,
+    atlas_coords: vec2<f32>,
+}
 
 fn node_size(lod: u32) -> f32 {
     return f32(config.chunk_size * (1u << lod));
 }
-
-struct AtlasLookup {
-    lod: u32;
-    atlas_index: i32;
-    atlas_coords: vec2<f32>;
-};
 
 fn atlas_lookup(log_distance: f32, local_position: vec2<f32>) -> AtlasLookup {
     let lod = clamp(u32(log_distance), 0u, config.lod_count - 1u);

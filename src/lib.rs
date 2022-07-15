@@ -51,7 +51,7 @@ pub mod terrain_view;
 
 const CONFIG_HANDLE: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 907665645684322571);
-const PATCH_HANDLE: HandleUntyped =
+const TILE_HANDLE: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 556563744564564658);
 const PARAMETERS_HANDLE: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 656456784512075658);
@@ -79,8 +79,8 @@ impl Plugin for TerrainPlugin {
             Shader::from_wgsl(include_str!("render/shaders/config.wgsl")),
         );
         assets.set_untracked(
-            PATCH_HANDLE,
-            Shader::from_wgsl(include_str!("render/shaders/patch.wgsl")),
+            TILE_HANDLE,
+            Shader::from_wgsl(include_str!("render/shaders/tile.wgsl")),
         );
         assets.set_untracked(
             PARAMETERS_HANDLE,
@@ -88,7 +88,7 @@ impl Plugin for TerrainPlugin {
         );
         assets.set_untracked(
             ATLAS_HANDLE,
-            Shader::from_wgsl(include_str!("render/shaders/utils.wgsl")),
+            Shader::from_wgsl(include_str!("render/shaders/atlas.wgsl")),
         );
         assets.set_untracked(
             TERRAIN_HANDLE,
