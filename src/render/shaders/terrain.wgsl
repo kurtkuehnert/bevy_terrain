@@ -1,37 +1,33 @@
 #define_import_path bevy_terrain::terrain
 
 struct VertexInput {
-    [[builtin(instance_index)]] instance: u32;
-    [[builtin(vertex_index)]] index: u32;
-};
+    @builtin(instance_index) instance: u32,
+    @builtin(vertex_index)   index: u32,
+}
 
 struct VertexOutput {
-    [[builtin(position)]] frag_coord: vec4<f32>;
-    [[location(0)]] local_position: vec2<f32>;
-    [[location(1)]] world_position: vec4<f32>;
-    [[location(2)]] color: vec4<f32>;
-};
+    @builtin(position)       frag_coord: vec4<f32>,
+    @location(0)             local_position: vec2<f32>,
+    @location(1)             world_position: vec4<f32>,
+    @location(2)             color: vec4<f32>,
+}
 
 struct FragmentInput {
-    [[builtin(front_facing)]] is_front: bool;
-    [[builtin(position)]] frag_coord: vec4<f32>;
-    [[location(0)]] local_position: vec2<f32>;
-    [[location(1)]] world_position: vec4<f32>;
-    [[location(2)]] color: vec4<f32>;
-};
+    @builtin(front_facing)   is_front: bool,
+    @builtin(position)       frag_coord: vec4<f32>,
+    @location(0)             local_position: vec2<f32>,
+    @location(1)             world_position: vec4<f32>,
+    @location(2)             color: vec4<f32>,
+}
 
-fn calculate_morph(local_position: vec2<f32>, patch: Patch) -> f32 {
-    let world_position = vec3<f32>(local_position.x, view_config.height_under_viewer, local_position.y);
-    let viewer_distance = distance(world_position, view.world_position.xyz);
-    let morph_distance = f32(patch.size) * view_config.view_distance;
-
-    return clamp(1.0 - (1.0 - viewer_distance / morph_distance) / morph_blend, 0.0, 1.0);
+struct FragmentOutput {
+    @location(0)             color: vec4<f32>
 }
 
 struct Blend {
-    ratio: f32;
-    log_distance: f32;
-};
+    ratio: f32,
+    log_distance: f32,
+}
 
 fn calculate_blend(world_position: vec3<f32>, blend_range: f32) -> Blend {
     let viewer_distance = distance(world_position, view.world_position.xyz);
@@ -41,7 +37,15 @@ fn calculate_blend(world_position: vec3<f32>, blend_range: f32) -> Blend {
     return Blend(ratio, log_distance);
 }
 
-fn map_position(patch: Patch, grid_position: vec2<u32>, count: u32, true_count: u32) -> vec2<f32> {
+fn calculate_morph(local_position: vec2<f32>, tile: Tile) -> f32 {
+    let world_position = vec3<f32>(local_position.x, view_config.height_under_viewer, local_position.y);
+    let viewer_distance = distance(world_position, view.world_position.xyz);
+    let morph_distance = f32(tile.size) * view_config.view_distance;
+
+    return clamp(1.0 - (1.0 - viewer_distance / morph_distance) / morph_blend, 0.0, 1.0);
+}
+
+fn map_position(tile: Tile, grid_position: vec2<u32>, count: u32, true_count: u32) -> vec2<f32> {
      var position = grid_position;
 
      let d = true_count - count;
@@ -57,48 +61,47 @@ fn map_position(patch: Patch, grid_position: vec2<u32>, count: u32, true_count: 
          position.y = max(position.y, h + d) - d;
      }
 
-     //
-     return (vec2<f32>(patch.coords) + vec2<f32>(position) / f32(count)) * f32(patch.size) * view_config.patch_scale;
+     return (vec2<f32>(tile.coords) + vec2<f32>(position) / f32(count)) * f32(tile.size) * view_config.tile_scale;
  }
 
-fn calculate_position(vertex_index: u32, patch: Patch, vertices_per_row: u32, true_count: u32) -> vec2<f32> {
+fn calculate_position(vertex_index: u32, tile: Tile, vertices_per_row: u32, true_count: u32) -> vec2<f32> {
     // use first and last index twice, to form degenerate triangles
     // Todo: documentation
     let row_index    = clamp(vertex_index % vertices_per_row, 1u, vertices_per_row - 2u) - 1u;
     let column_index = vertex_index / vertices_per_row;
     var grid_position = vec2<u32>(column_index + (row_index & 1u), row_index >> 1u);
 
-    var count        = (patch.counts        >> 24u) & 0x003Fu;
-    var parent_count = (patch.parent_counts >> 24u) & 0x003Fu;
+    var count        = (tile.counts        >> 24u) & 0x003Fu;
+    var parent_count = (tile.parent_counts >> 24u) & 0x003Fu;
 
     // override edge counts, so that they behave like their neighbours
     if (grid_position.x == 0u) {
-        count        = (patch.counts        >>  0u) & 0x003Fu;
-        parent_count = (patch.parent_counts >>  0u) & 0x003Fu;
+        count        = (tile.counts        >>  0u) & 0x003Fu;
+        parent_count = (tile.parent_counts >>  0u) & 0x003Fu;
     }
     if (grid_position.y == 0u) {
-        count        = (patch.counts        >>  6u) & 0x003Fu;
-        parent_count = (patch.parent_counts >>  6u) & 0x003Fu;
+        count        = (tile.counts        >>  6u) & 0x003Fu;
+        parent_count = (tile.parent_counts >>  6u) & 0x003Fu;
     }
     if (grid_position.x == true_count) {
-        count        = (patch.counts        >> 12u) & 0x003Fu;
-        parent_count = (patch.parent_counts >> 12u) & 0x003Fu;
+        count        = (tile.counts        >> 12u) & 0x003Fu;
+        parent_count = (tile.parent_counts >> 12u) & 0x003Fu;
     }
     if (grid_position.y == true_count) {
-        count        = (patch.counts        >> 18u) & 0x003Fu;
-        parent_count = (patch.parent_counts >> 18u) & 0x003Fu;
+        count        = (tile.counts        >> 18u) & 0x003Fu;
+        parent_count = (tile.parent_counts >> 18u) & 0x003Fu;
     }
 
 #ifndef MESH_MORPH
-    var local_position = (vec2<f32>(patch.coords) + vec2<f32>(grid_position) / f32(true_count)) * f32(patch.size) * view_config.patch_scale;
+    var local_position = (vec2<f32>(tile.coords) + vec2<f32>(grid_position) / f32(true_count)) * f32(tile.size) * view_config.tile_scale;
 #endif
 
 #ifdef MESH_MORPH
-    // smoothly transition between the positions of the patches and that of their parents
-    var local_position        = map_position(patch, grid_position, count,        true_count);
-    let parent_local_position = map_position(patch, grid_position, parent_count, true_count);
+    // smoothly transition between the positions of the tiles and that of their parents
+    var local_position        = map_position(tile, grid_position, count,        true_count);
+    let parent_local_position = map_position(tile, grid_position, parent_count, true_count);
 
-    let morph = calculate_morph(local_position, patch);
+    let morph = calculate_morph(local_position, tile);
 
     local_position = mix(local_position, parent_local_position, morph);
 #endif
