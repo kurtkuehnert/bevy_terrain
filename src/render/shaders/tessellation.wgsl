@@ -85,7 +85,7 @@ fn final_index(lod: u32) -> i32 {
     }
 
     return 0;
-    // return atomicAdd(&parameters.final_indices[i32(lod)], 1) + i32(lod) * 1000000;
+    // return atomicAdd(&parameters.final_indices[lod], 1) + i32(lod) * 1000000;
 }
 
 fn frustum_cull(position: vec2<f32>, size: f32) -> bool {
