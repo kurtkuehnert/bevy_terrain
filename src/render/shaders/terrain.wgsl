@@ -42,7 +42,7 @@ fn calculate_morph(local_position: vec2<f32>, tile: Tile) -> f32 {
     let viewer_distance = distance(world_position, view.world_position.xyz);
     let morph_distance = f32(tile.size) * view_config.view_distance;
 
-    return clamp(1.0 - (1.0 - viewer_distance / morph_distance) / morph_blend, 0.0, 1.0);
+    return clamp(1.0 - (1.0 - viewer_distance / morph_distance) / view_config.morph_blend, 0.0, 1.0);
 }
 
 fn map_position(tile: Tile, grid_position: vec2<u32>, count: u32, true_count: u32) -> vec2<f32> {

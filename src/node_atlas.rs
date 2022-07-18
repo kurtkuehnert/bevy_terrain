@@ -1,5 +1,5 @@
+use crate::terrain::AttachmentIndex;
 use crate::{
-    attachment::{AtlasAttachmentConfig, AttachmentIndex, NodeAttachment},
     quadtree::{NodeId, Quadtree, INVALID_NODE_ID},
     terrain::{Terrain, TerrainConfig},
     TerrainView, TerrainViewComponents,
@@ -21,14 +21,14 @@ pub(crate) const INVALID_ATLAS_INDEX: AtlasIndex = AtlasIndex::MAX;
 pub struct LoadingNode {
     pub(crate) atlas_index: AtlasIndex,
     /// Stores all of the [`NodeAttachment`]s of the node.
-    pub(crate) attachments: HashMap<AttachmentIndex, NodeAttachment>,
+    pub(crate) attachments: HashMap<AttachmentIndex, Handle<Image>>, // Todo: maybe replace with array or vec?
     /// The set of still loading [`NodeAttachment`]s. Is empty if the node is fully loaded.
     loading_attachments: HashSet<AttachmentIndex>,
 }
 
 impl LoadingNode {
     /// Sets the attachment data of the node.
-    pub fn attachment(&mut self, attachment_index: AttachmentIndex, attachment: NodeAttachment) {
+    pub fn set_attachment(&mut self, attachment_index: AttachmentIndex, attachment: Handle<Image>) {
         self.attachments.insert(attachment_index, attachment);
     }
 
@@ -47,7 +47,7 @@ impl LoadingNode {
 #[derive(Default)]
 pub struct NodeData {
     /// Stores all of the cpu accessible [`NodeAttachment`]s of the node.
-    pub(crate) _attachments: HashMap<AttachmentIndex, NodeAttachment>,
+    pub(crate) _attachments: HashMap<AttachmentIndex, Handle<Image>>,
 }
 
 /// Stores the state of a present node in the [`NodeAtlas`].
@@ -97,14 +97,7 @@ pub struct NodeAtlas {
 impl NodeAtlas {
     /// Creates a new node atlas based on the supplied [`TerrainConfig`].
     pub fn new(config: &TerrainConfig) -> Self {
-        let attachments_to_load = config
-            .attachments
-            .iter()
-            .filter_map(|(&attachment_index, config)| match config {
-                AtlasAttachmentConfig::Sampler { .. } => None,
-                _ => Some(attachment_index),
-            })
-            .collect();
+        let attachments_to_load = (0..config.attachments.len()).collect();
 
         let mut data = Vec::with_capacity(config.node_atlas_size as usize);
         let mut unused_nodes = VecDeque::with_capacity(config.node_atlas_size as usize);

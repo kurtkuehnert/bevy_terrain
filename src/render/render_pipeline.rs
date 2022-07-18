@@ -1,3 +1,4 @@
+use crate::render::terrain_data::TerrainMaterial;
 use crate::{render::layouts::TERRAIN_VIEW_LAYOUT, DebugTerrain};
 use bevy::{
     pbr::MeshPipeline,
@@ -157,7 +158,7 @@ impl FromWorld for TerrainRenderPipeline {
         Self {
             view_layout,
             mesh_layout,
-            terrain_layouts: Vec::new(),
+            terrain_layouts: vec![TerrainMaterial::bind_group_layout(&device)],
             terrain_view_layout,
             shader,
         }

@@ -1,3 +1,4 @@
+use crate::render::terrain_data::TerrainMaterial;
 use crate::{
     render::{culling::CullingBindGroup, layouts::*, terrain_view_data::TerrainViewData},
     terrain::Terrain,
@@ -98,7 +99,7 @@ impl FromWorld for TerrainComputePipelines {
             update_quadtree_layout,
             tessellation_layout,
             cull_data_layout,
-            terrain_layouts: Vec::new(),
+            terrain_layouts: vec![TerrainMaterial::bind_group_layout(&device)],
             prepare_indirect_shader,
             update_quadtree_shader,
             tessellation_shader,

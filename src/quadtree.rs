@@ -1,5 +1,4 @@
 use crate::{
-    attachment::NodeAttachment,
     node_atlas::{AtlasIndex, NodeAtlas, INVALID_ATLAS_INDEX},
     terrain::{Terrain, TerrainConfig},
     TerrainView, TerrainViewComponents, TerrainViewConfig,
@@ -389,8 +388,6 @@ fn height_under_viewer(
     images: &Assets<Image>,
     viewer_position: Vec2,
 ) -> f32 {
-    // return 500.0;
-
     let coordinate =
         (viewer_position / quadtree.chunk_size as f32).as_uvec2() % quadtree.node_count;
 
@@ -403,21 +400,15 @@ fn height_under_viewer(
 
     let node = node_atlas.data[node.atlas_index as usize]
         ._attachments
-        .get(&2)
+        .get(&0)
         .unwrap();
 
-    match node {
-        NodeAttachment::Texture { handle } => {
-            let image = images.get(handle).unwrap();
+    let image = images.get(node).unwrap();
 
-            let position = (image.size() * atlas_coords).as_uvec2();
-            let index = 2 * (position.x + position.y * image.size().x as u32) as usize;
-            let height = ((image.data[index + 1] as u16) << 8) + image.data[index] as u16;
-            let height = height as f32 / u16::MAX as f32 * quadtree.height;
-            return height;
-        }
-        _ => {}
-    }
+    let position = (image.size() * atlas_coords).as_uvec2();
+    let index = 2 * (position.x + position.y * image.size().x as u32) as usize;
+    let height = ((image.data[index + 1] as u16) << 8) + image.data[index] as u16;
+    let height = height as f32 / u16::MAX as f32 * quadtree.height;
 
-    return 0.0;
+    return height;
 }

@@ -38,7 +38,6 @@ use bevy::{
     },
 };
 
-pub mod attachment;
 pub mod attachment_loader;
 pub mod bundles;
 pub mod debug;

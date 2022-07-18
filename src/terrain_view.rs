@@ -33,6 +33,10 @@ pub(crate) struct TerrainViewConfigUniform {
     refinement_count: u32,
     view_distance: f32,
     tile_scale: f32,
+
+    morph_blend: f32,
+    vertex_blend: f32,
+    fragment_blend: f32,
 }
 
 #[derive(Clone, Component)]
@@ -47,6 +51,9 @@ pub struct TerrainViewConfig {
     pub refinement_count: u32,
     pub view_distance: f32,
     pub tile_scale: f32,
+    pub morph_blend: f32,
+    pub vertex_blend: f32,
+    pub fragment_blend: f32,
 }
 
 impl TerrainViewConfig {
@@ -60,6 +67,10 @@ impl TerrainViewConfig {
 
         let refinement_count = (terrain_size as f32 / tile_scale).log2().ceil() as u32;
 
+        let morph_blend = 0.2;
+        let vertex_blend = 0.3;
+        let fragment_blend = 0.8;
+
         Self {
             height_under_viewer: 0.0,
             load_distance,
@@ -69,6 +80,9 @@ impl TerrainViewConfig {
             refinement_count,
             view_distance,
             tile_scale,
+            morph_blend,
+            vertex_blend,
+            fragment_blend,
         }
     }
 
@@ -86,6 +100,9 @@ impl TerrainViewConfig {
             refinement_count: self.refinement_count,
             view_distance: self.view_distance,
             tile_scale: self.tile_scale,
+            morph_blend: self.morph_blend,
+            vertex_blend: self.vertex_blend,
+            fragment_blend: self.fragment_blend,
         }
     }
 }
