@@ -23,3 +23,5 @@ bitflags = "*"
 strum = "*"
 strum_macros = "*"
 ron = { version = "*", features = ["indexmap"] }
+
+fastrand = "*"

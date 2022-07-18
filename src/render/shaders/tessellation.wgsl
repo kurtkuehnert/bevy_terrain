@@ -4,6 +4,21 @@
 
 // Todo: increase workgroup size
 
+struct TerrainConfig {
+    lod_count: u32,
+    height: f32,
+    chunk_size: u32,
+    _padding: u32,
+    height_scale: f32,
+    density_scale: f32,
+    _empty: u32,
+    _empty: u32,
+    height_offset: f32,
+    density_offset: f32,
+    _empty: u32,
+    _empty: u32,
+}
+
 struct CullData {
     world_position: vec4<f32>,
     view_proj: mat4x4<f32>,

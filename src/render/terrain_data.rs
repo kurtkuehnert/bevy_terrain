@@ -1,7 +1,7 @@
 use crate::{
     render::layouts::CONFIG_BUFFER_SIZE,
     terrain::{Terrain, TerrainComponents},
-    GpuNodeAtlas, TerrainComputePipelines, TerrainConfig, TerrainRenderPipeline,
+    GpuNodeAtlas, TerrainConfig, TerrainRenderPipeline,
 };
 use bevy::render::render_asset::RenderAssets;
 use bevy::render::texture::FallbackImage;
@@ -16,13 +16,16 @@ use bevy::{
     },
 };
 
+const COUNT: usize = 2;
+
 // Todo: create in setup, extract once added, prepare into terrain data
-pub struct TerrainMaterial<const COUNT: usize> {
+pub struct TerrainMaterial {
+    //<const COUNT: usize> {
     pub config: TerrainConfig,
     pub attachments: [Handle<Image>; COUNT],
 }
 
-impl<const COUNT: usize> AsBindGroup for TerrainMaterial<COUNT> {
+impl AsBindGroup for TerrainMaterial {
     type Data = ();
 
     fn as_bind_group(
@@ -137,102 +140,11 @@ pub struct TerrainData {
     pub(crate) terrain_bind_group: BindGroup,
 }
 
-impl TerrainData {
-    fn new(
-        device: &RenderDevice,
-        config: &TerrainConfig,
-        gpu_node_atlas: &GpuNodeAtlas,
-        render_pipeline: &mut TerrainRenderPipeline,
-        compute_pipelines: &mut TerrainComputePipelines,
-    ) -> Self {
-        let config_buffer = Self::create_config_buffer(device, config);
-
-        let terrain_layout = Self::create_terrain_layout(device, gpu_node_atlas);
-        let terrain_bind_group = Self::create_terrain_bind_group(
-            device,
-            &config_buffer,
-            gpu_node_atlas,
-            &terrain_layout,
-        );
-
-        render_pipeline.terrain_layouts.push(terrain_layout.clone());
-        compute_pipelines.terrain_layouts.push(terrain_layout);
-
-        Self { terrain_bind_group }
-    }
-
-    fn create_config_buffer(device: &RenderDevice, config: &TerrainConfig) -> Buffer {
-        let mut buffer = encase::UniformBuffer::new(Vec::new());
-        buffer.write(&config.shader_data()).unwrap();
-
-        device.create_buffer_with_data(&BufferInitDescriptor {
-            label: "config_buffer".into(),
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            contents: &buffer.into_inner(),
-        })
-    }
-
-    fn create_terrain_layout(
-        device: &RenderDevice,
-        gpu_node_atlas: &GpuNodeAtlas,
-    ) -> BindGroupLayout {
-        let mut entries = vec![
-            // config buffer
-            BindGroupLayoutEntry {
-                binding: 0,
-                visibility: ShaderStages::all(),
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: BufferSize::new(CONFIG_BUFFER_SIZE),
-                },
-                count: None,
-            },
-        ];
-
-        entries.extend(
-            gpu_node_atlas
-                .atlas_attachments
-                .iter()
-                .map(|(&binding, attachment)| attachment.layout_entry(binding)),
-        );
-
-        device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: "terrain_layout".into(),
-            entries: &entries,
-        })
-    }
-
-    fn create_terrain_bind_group(
-        device: &RenderDevice,
-        config_buffer: &Buffer,
-        gpu_node_atlas: &GpuNodeAtlas,
-        layout: &BindGroupLayout,
-    ) -> BindGroup {
-        let mut entries = vec![BindGroupEntry {
-            binding: 0,
-            resource: config_buffer.as_entire_binding(),
-        }];
-
-        entries.extend(
-            gpu_node_atlas
-                .atlas_attachments
-                .iter()
-                .map(|(&binding, attachment)| attachment.bind_group_entry(binding)),
-        );
-
-        device.create_bind_group(&BindGroupDescriptor {
-            label: "terrain_bind_group".into(),
-            entries: &entries,
-            layout,
-        })
-    }
-}
-
 pub(crate) fn initialize_terrain_data(
     device: Res<RenderDevice>,
-    mut render_pipeline: ResMut<TerrainRenderPipeline>,
-    mut compute_pipelines: ResMut<TerrainComputePipelines>,
+    images: Res<RenderAssets<Image>>,
+    fallback_image: Res<FallbackImage>,
+    render_pipeline: Res<TerrainRenderPipeline>,
     mut terrain_data: ResMut<TerrainComponents<TerrainData>>,
     gpu_node_atlases: Res<TerrainComponents<GpuNodeAtlas>>,
     terrain_query: Extract<Query<(Entity, &TerrainConfig), Added<Terrain>>>,
@@ -240,15 +152,27 @@ pub(crate) fn initialize_terrain_data(
     for (terrain, config) in terrain_query.iter() {
         let gpu_node_atlas = gpu_node_atlases.get(&terrain).unwrap();
 
+        let material = TerrainMaterial {
+            config: config.clone(),
+            attachments: gpu_node_atlas.atlas_attachments.clone().try_into().unwrap(),
+        };
+
+        let bind_group = material
+            .as_bind_group(
+                &render_pipeline.terrain_layouts[0],
+                &device,
+                &images,
+                &fallback_image,
+            )
+            .ok()
+            .unwrap()
+            .bind_group;
+
         terrain_data.insert(
             terrain,
-            TerrainData::new(
-                &device,
-                config,
-                gpu_node_atlas,
-                &mut render_pipeline,
-                &mut compute_pipelines,
-            ),
+            TerrainData {
+                terrain_bind_group: bind_group,
+            },
         );
     }
 }

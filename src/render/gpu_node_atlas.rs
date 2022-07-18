@@ -1,9 +1,8 @@
+use crate::terrain::AttachmentIndex;
 use crate::{
-    attachment::{AtlasAttachment, AttachmentIndex, NodeAttachment},
     node_atlas::{LoadingNode, NodeAtlas},
     terrain::{Terrain, TerrainComponents, TerrainConfig},
 };
-use bevy::asset::HandleId;
 use bevy::render::{Extract, MainWorld};
 use bevy::{
     prelude::*,
@@ -12,7 +11,6 @@ use bevy::{
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
     },
-    utils::HashMap,
 };
 use std::mem;
 
@@ -20,17 +18,26 @@ use std::mem;
 /// the [`NodeAttachment`]s of newly activated nodes.
 #[derive(Component)]
 pub struct GpuNodeAtlas {
-    pub(crate) atlas_attachments: HashMap<AttachmentIndex, AtlasAttachment>,
+    pub(crate) atlas_attachments: Vec<Handle<Image>>,
     pub(crate) loaded_nodes: Vec<LoadingNode>, // Todo: consider own component
 }
 
 impl GpuNodeAtlas {
-    fn new(config: &TerrainConfig, device: &RenderDevice) -> Self {
+    fn new(
+        config: &TerrainConfig,
+        device: &RenderDevice,
+        images: &mut RenderAssets<Image>,
+    ) -> Self {
         let atlas_attachments = config
             .attachments
             .iter()
-            .map(|(attachment_index, attachment_config)| {
-                (attachment_index.clone(), attachment_config.create(device))
+            .map(|attachment_config| {
+                images.insert(
+                    attachment_config.atlas_handle.clone(),
+                    attachment_config.create(config, device),
+                );
+
+                attachment_config.atlas_handle.clone()
             })
             .collect();
 
@@ -44,11 +51,12 @@ impl GpuNodeAtlas {
 /// Initializes the [`GpuNodeAtlas`] of newly created terrains.
 pub(crate) fn initialize_gpu_node_atlas(
     device: Res<RenderDevice>,
+    mut images: ResMut<RenderAssets<Image>>,
     mut gpu_node_atlases: ResMut<TerrainComponents<GpuNodeAtlas>>,
     mut terrain_query: Extract<Query<(Entity, &TerrainConfig), Added<Terrain>>>,
 ) {
     for (terrain, config) in terrain_query.iter_mut() {
-        gpu_node_atlases.insert(terrain, GpuNodeAtlas::new(config, &device));
+        gpu_node_atlases.insert(terrain, GpuNodeAtlas::new(config, &device, &mut images));
     }
 }
 
@@ -83,36 +91,28 @@ pub(crate) fn queue_node_atlas_updates(
         let gpu_node_atlas = gpu_node_atlases.get_mut(&terrain).unwrap();
 
         for node in gpu_node_atlas.loaded_nodes.drain(..) {
-            for (handle, texture, texture_size) in gpu_node_atlas
+            for (node_handle, atlas_handle) in gpu_node_atlas
                 .atlas_attachments
                 .iter()
-                .filter_map(|(attachment_index, attachment)| {
-                    let node_attachment = node.attachments.get(attachment_index)?;
+                .enumerate()
+                .map(|(index, atlas_handle)| {
+                    let node_handle = node.attachments.get(&(index as AttachmentIndex)).unwrap();
 
-                    match (node_attachment, attachment) {
-                        (NodeAttachment::Buffer { .. }, AtlasAttachment::Buffer { .. }) => None,
-                        (
-                            NodeAttachment::Texture { handle },
-                            &AtlasAttachment::Texture {
-                                ref texture,
-                                texture_size,
-                                ..
-                            },
-                        ) => Some((handle, texture, texture_size)),
-                        _ => None,
-                    }
+                    (node_handle, atlas_handle)
                 })
             {
-                if let Some(image) = images.get(handle) {
+                if let (Some(node_attachment), Some(atlas_attachment)) =
+                    (images.get(node_handle), images.get(atlas_handle))
+                {
                     command_encoder.copy_texture_to_texture(
                         ImageCopyTexture {
-                            texture: &image.texture,
+                            texture: &node_attachment.texture,
                             mip_level: 0,
                             origin: Origin3d { x: 0, y: 0, z: 0 },
                             aspect: TextureAspect::All,
                         },
                         ImageCopyTexture {
-                            texture,
+                            texture: &atlas_attachment.texture,
                             mip_level: 0,
                             origin: Origin3d {
                                 x: 0,
@@ -122,14 +122,11 @@ pub(crate) fn queue_node_atlas_updates(
                             aspect: TextureAspect::All,
                         },
                         Extent3d {
-                            width: texture_size,
-                            height: texture_size,
+                            width: atlas_attachment.size.x as u32,
+                            height: atlas_attachment.size.y as u32,
                             depth_or_array_layers: 1,
                         },
                     );
-                } else {
-                    // Todo: investigate this occasional missing texture
-                    warn!("Missing texture!")
                 }
             }
         }
