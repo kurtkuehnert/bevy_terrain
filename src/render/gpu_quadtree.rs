@@ -1,17 +1,17 @@
 use crate::{
     quadtree::{NodeUpdate, Quadtree},
-    render::layouts::NODE_UPDATE_SIZE,
+    render::layouts::{NODE_UPDATE_SIZE, UPDATE_QUADTREE_LAYOUT},
     terrain::Terrain,
     terrain_view::TerrainView,
-    TerrainComputePipelines, TerrainViewComponents,
+    TerrainViewComponents,
 };
-use bevy::render::Extract;
 use bevy::{
     core::cast_slice,
     prelude::*,
     render::{
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
+        Extract,
     },
 };
 
@@ -21,16 +21,11 @@ pub struct GpuQuadtree {
     pub(crate) quadtree_view: TextureView,
     pub(crate) update_bind_group: BindGroup,
     pub(crate) update_buffer: Buffer,
-    pub(crate) node_updates: Vec<NodeUpdate>,
+    pub(crate) node_updates: Vec<NodeUpdate>, // Todo: consider own component
 }
 
 impl GpuQuadtree {
-    fn new(
-        device: &RenderDevice,
-        queue: &RenderQueue,
-        quadtree: &Quadtree,
-        compute_pipelines: &TerrainComputePipelines,
-    ) -> Self {
+    fn new(device: &RenderDevice, queue: &RenderQueue, quadtree: &Quadtree) -> Self {
         let size = quadtree.lod_count * quadtree.node_count * quadtree.node_count;
         let data = vec![u64::MAX; size as usize];
 
@@ -66,7 +61,7 @@ impl GpuQuadtree {
 
         let update_bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: "update_quadtree_bind_group".into(),
-            layout: &compute_pipelines.update_quadtree_layout,
+            layout: &device.create_bind_group_layout(&UPDATE_QUADTREE_LAYOUT),
             entries: &[
                 BindGroupEntry {
                     binding: 0,
@@ -86,13 +81,16 @@ impl GpuQuadtree {
             node_updates: default(),
         }
     }
+
+    fn update(&self, queue: &RenderQueue) {
+        queue.write_buffer(&self.update_buffer, 0, cast_slice(&self.node_updates));
+    }
 }
 
 /// Initializes the [`GpuQuadtree`] of newly created terrains.
 pub(crate) fn initialize_gpu_quadtree(
     device: Res<RenderDevice>,
     queue: Res<RenderQueue>,
-    compute_pipelines: Res<TerrainComputePipelines>,
     mut gpu_quadtrees: ResMut<TerrainViewComponents<GpuQuadtree>>,
     quadtrees: Extract<Res<TerrainViewComponents<Quadtree>>>,
     view_query: Extract<Query<Entity, With<TerrainView>>>,
@@ -104,7 +102,7 @@ pub(crate) fn initialize_gpu_quadtree(
 
             gpu_quadtrees.insert(
                 (terrain, view),
-                GpuQuadtree::new(&device, &queue, &quadtree, &compute_pipelines),
+                GpuQuadtree::new(&device, &queue, &quadtree),
             );
         }
     }
@@ -143,13 +141,8 @@ pub(crate) fn queue_quadtree_updates(
 ) {
     for terrain in terrain_query.iter() {
         for view in view_query.iter() {
-            if let Some(gpu_quadtree) = gpu_quadtrees.get_mut(&(terrain, view)) {
-                queue.write_buffer(
-                    &gpu_quadtree.update_buffer,
-                    0,
-                    cast_slice(&gpu_quadtree.node_updates),
-                );
-            }
+            let gpu_quadtree = gpu_quadtrees.get_mut(&(terrain, view)).unwrap();
+            gpu_quadtree.update(&queue);
         }
     }
 }

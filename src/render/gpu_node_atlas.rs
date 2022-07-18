@@ -1,15 +1,14 @@
-use crate::terrain::AttachmentIndex;
 use crate::{
     node_atlas::{LoadingNode, NodeAtlas},
-    terrain::{Terrain, TerrainComponents, TerrainConfig},
+    terrain::{AttachmentIndex, Terrain, TerrainComponents, TerrainConfig},
 };
-use bevy::render::{Extract, MainWorld};
 use bevy::{
     prelude::*,
     render::{
         render_asset::RenderAssets,
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
+        Extract, MainWorld,
     },
 };
 use std::mem;
@@ -44,6 +43,50 @@ impl GpuNodeAtlas {
         Self {
             atlas_attachments,
             loaded_nodes: Vec::new(),
+        }
+    }
+
+    fn update(&mut self, command_encoder: &mut CommandEncoder, images: &RenderAssets<Image>) {
+        for node in self.loaded_nodes.drain(..) {
+            for (node_handle, atlas_handle) in
+                self.atlas_attachments
+                    .iter()
+                    .enumerate()
+                    .map(|(index, atlas_handle)| {
+                        let node_handle =
+                            node.attachments.get(&(index as AttachmentIndex)).unwrap();
+
+                        (node_handle, atlas_handle)
+                    })
+            {
+                if let (Some(node_attachment), Some(atlas_attachment)) =
+                    (images.get(node_handle), images.get(atlas_handle))
+                {
+                    command_encoder.copy_texture_to_texture(
+                        ImageCopyTexture {
+                            texture: &node_attachment.texture,
+                            mip_level: 0,
+                            origin: Origin3d { x: 0, y: 0, z: 0 },
+                            aspect: TextureAspect::All,
+                        },
+                        ImageCopyTexture {
+                            texture: &atlas_attachment.texture,
+                            mip_level: 0,
+                            origin: Origin3d {
+                                x: 0,
+                                y: 0,
+                                z: node.atlas_index as u32,
+                            },
+                            aspect: TextureAspect::All,
+                        },
+                        Extent3d {
+                            width: atlas_attachment.size.x as u32,
+                            height: atlas_attachment.size.y as u32,
+                            depth_or_array_layers: 1,
+                        },
+                    );
+                }
+            }
         }
     }
 }
@@ -89,47 +132,7 @@ pub(crate) fn queue_node_atlas_updates(
 
     for terrain in terrain_query.iter() {
         let gpu_node_atlas = gpu_node_atlases.get_mut(&terrain).unwrap();
-
-        for node in gpu_node_atlas.loaded_nodes.drain(..) {
-            for (node_handle, atlas_handle) in gpu_node_atlas
-                .atlas_attachments
-                .iter()
-                .enumerate()
-                .map(|(index, atlas_handle)| {
-                    let node_handle = node.attachments.get(&(index as AttachmentIndex)).unwrap();
-
-                    (node_handle, atlas_handle)
-                })
-            {
-                if let (Some(node_attachment), Some(atlas_attachment)) =
-                    (images.get(node_handle), images.get(atlas_handle))
-                {
-                    command_encoder.copy_texture_to_texture(
-                        ImageCopyTexture {
-                            texture: &node_attachment.texture,
-                            mip_level: 0,
-                            origin: Origin3d { x: 0, y: 0, z: 0 },
-                            aspect: TextureAspect::All,
-                        },
-                        ImageCopyTexture {
-                            texture: &atlas_attachment.texture,
-                            mip_level: 0,
-                            origin: Origin3d {
-                                x: 0,
-                                y: 0,
-                                z: node.atlas_index as u32,
-                            },
-                            aspect: TextureAspect::All,
-                        },
-                        Extent3d {
-                            width: atlas_attachment.size.x as u32,
-                            height: atlas_attachment.size.y as u32,
-                            depth_or_array_layers: 1,
-                        },
-                    );
-                }
-            }
-        }
+        gpu_node_atlas.update(&mut command_encoder, &images);
     }
 
     queue.submit(vec![command_encoder.finish()]);
