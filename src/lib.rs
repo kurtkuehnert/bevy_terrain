@@ -1,4 +1,6 @@
 use crate::debug::change_config;
+use crate::render::render_pipeline::queue_terrain;
+use crate::render::TerrainPipelineConfig;
 use crate::{
     attachment_loader::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk},
     debug::{extract_debug, toggle_debug, DebugTerrain},
@@ -15,8 +17,7 @@ use crate::{
         gpu_quadtree::{
             initialize_gpu_quadtree, queue_quadtree_updates, update_gpu_quadtree, GpuQuadtree,
         },
-        queue_terrain,
-        render_pipeline::{TerrainPipelineConfig, TerrainRenderPipeline},
+        render_pipeline::TerrainRenderPipeline,
         terrain_data::{initialize_terrain_data, TerrainData},
         terrain_view_data::{initialize_terrain_view_data, TerrainViewData},
         DrawTerrain,
@@ -124,11 +125,16 @@ impl Plugin for TerrainPlugin {
             .add_system(update_height_under_viewer.after(compute_node_updates))
             .add_system(start_loading_attachment_from_disk.after(update_node_atlas));
 
+        let config = app
+            .world
+            .remove_resource::<TerrainPipelineConfig>()
+            .unwrap_or(default());
+
         let render_app = app
             .sub_app_mut(RenderApp)
             .add_render_command::<Opaque3d, DrawTerrain>()
+            .insert_resource(config)
             .init_resource::<DebugTerrain>()
-            .init_resource::<TerrainPipelineConfig>()
             .init_resource::<TerrainRenderPipeline>()
             .init_resource::<SpecializedRenderPipelines<TerrainRenderPipeline>>()
             .init_resource::<TerrainComputePipelines>()

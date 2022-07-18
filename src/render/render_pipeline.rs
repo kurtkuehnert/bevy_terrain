@@ -1,22 +1,13 @@
-use crate::render::terrain_data::TerrainMaterial;
-use crate::{render::layouts::TERRAIN_VIEW_LAYOUT, DebugTerrain};
+use crate::render::terrain_data::terrain_bind_group_layout;
+use crate::render::TerrainPipelineConfig;
+use crate::{render::layouts::TERRAIN_VIEW_LAYOUT, DebugTerrain, DrawTerrain, Terrain};
+use bevy::core_pipeline::core_3d::Opaque3d;
+use bevy::render::render_phase::{DrawFunctions, RenderPhase};
 use bevy::{
     pbr::MeshPipeline,
     prelude::*,
     render::{render_resource::*, renderer::RenderDevice, texture::BevyDefault},
 };
-
-pub struct TerrainPipelineConfig {
-    shader: String,
-}
-
-impl Default for TerrainPipelineConfig {
-    fn default() -> Self {
-        Self {
-            shader: "shaders/terrain.wgsl".into(),
-        }
-    }
-}
 
 bitflags::bitflags! {
 #[repr(transparent)]
@@ -139,7 +130,7 @@ impl TerrainPipelineKey {
 pub struct TerrainRenderPipeline {
     pub(crate) view_layout: BindGroupLayout,
     pub(crate) mesh_layout: BindGroupLayout,
-    pub(crate) terrain_layouts: Vec<BindGroupLayout>,
+    pub(crate) terrain_layout: BindGroupLayout,
     pub(crate) terrain_view_layout: BindGroupLayout,
     pub(crate) shader: Handle<Shader>,
 }
@@ -149,16 +140,18 @@ impl FromWorld for TerrainRenderPipeline {
         let device = world.resource::<RenderDevice>();
         let asset_server = world.resource::<AssetServer>();
         let mesh_pipeline = world.resource::<MeshPipeline>();
+        let config = world.resource::<TerrainPipelineConfig>();
 
         let view_layout = mesh_pipeline.view_layout.clone();
         let mesh_layout = mesh_pipeline.mesh_layout.clone();
+        let terrain_layout = terrain_bind_group_layout(&device, config.attachment_count);
         let terrain_view_layout = device.create_bind_group_layout(&TERRAIN_VIEW_LAYOUT);
-        let shader = asset_server.load(&world.resource::<TerrainPipelineConfig>().shader);
+        let shader = asset_server.load(&config.shader);
 
         Self {
             view_layout,
             mesh_layout,
-            terrain_layouts: vec![TerrainMaterial::bind_group_layout(&device)],
+            terrain_layout,
             terrain_view_layout,
             shader,
         }
@@ -176,7 +169,7 @@ impl SpecializedRenderPipeline for TerrainRenderPipeline {
             layout: Some(vec![
                 self.view_layout.clone(),
                 self.terrain_view_layout.clone(),
-                self.terrain_layouts[0].clone(), // Todo: do this properly for multiple maps
+                self.terrain_layout.clone(), // Todo: do this properly for multiple maps
                 self.mesh_layout.clone(),
             ]),
             vertex: VertexState {
@@ -225,6 +218,36 @@ impl SpecializedRenderPipeline for TerrainRenderPipeline {
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },
+        }
+    }
+}
+
+/// Queses all terrain entities for rendering via the terrain pipeline.
+pub(crate) fn queue_terrain(
+    terrain_pipeline: Res<TerrainRenderPipeline>,
+    draw_functions: Res<DrawFunctions<Opaque3d>>,
+    msaa: Res<Msaa>,
+    debug: Res<DebugTerrain>,
+    mut pipelines: ResMut<SpecializedRenderPipelines<TerrainRenderPipeline>>,
+    mut pipeline_cache: ResMut<PipelineCache>,
+    mut view_query: Query<&mut RenderPhase<Opaque3d>>,
+    terrain_query: Query<Entity, With<Terrain>>,
+) {
+    let draw_function = draw_functions.read().get_id::<DrawTerrain>().unwrap();
+
+    for mut opaque_phase in view_query.iter_mut() {
+        for entity in terrain_query.iter() {
+            let key = TerrainPipelineKey::from_msaa_samples(msaa.samples)
+                | TerrainPipelineKey::from_debug(&debug);
+
+            let pipeline = pipelines.specialize(&mut pipeline_cache, &terrain_pipeline, key);
+
+            opaque_phase.add(Opaque3d {
+                entity,
+                pipeline,
+                draw_function,
+                distance: f32::MIN, // draw terrain first
+            });
         }
     }
 }

@@ -1,10 +1,11 @@
 use crate::{
     render::layouts::{
-        INDIRECT_BUFFER_SIZE, PARAMETER_BUFFER_SIZE, TERRAIN_VIEW_CONFIG_SIZE, TILE_SIZE,
+        INDIRECT_BUFFER_SIZE, PARAMETER_BUFFER_SIZE, TERRAIN_VIEW_CONFIG_SIZE, TERRAIN_VIEW_LAYOUT,
+        TILE_SIZE,
     },
     terrain::Terrain,
     terrain_view::{TerrainView, TerrainViewConfig},
-    GpuQuadtree, TerrainComputePipelines, TerrainRenderPipeline, TerrainViewComponents,
+    GpuQuadtree, TerrainComputePipelines, TerrainViewComponents,
 };
 use bevy::render::Extract;
 use bevy::{
@@ -31,7 +32,6 @@ impl TerrainViewData {
         device: &RenderDevice,
         view_config: &TerrainViewConfig,
         gpu_quadtree: &GpuQuadtree,
-        render_pipeline: &TerrainRenderPipeline,
         compute_pipelines: &TerrainComputePipelines,
     ) -> Self {
         let indirect_buffer = Self::create_indirect_buffer(device);
@@ -90,7 +90,7 @@ impl TerrainViewData {
                     resource: final_tile_buffer.as_entire_binding(),
                 },
             ],
-            layout: &render_pipeline.terrain_view_layout,
+            layout: &device.create_bind_group_layout(&TERRAIN_VIEW_LAYOUT),
         });
 
         Self {
@@ -153,7 +153,6 @@ impl TerrainViewData {
 
 pub(crate) fn initialize_terrain_view_data(
     device: Res<RenderDevice>,
-    render_pipeline: Res<TerrainRenderPipeline>,
     compute_pipelines: Res<TerrainComputePipelines>,
     mut terrain_view_data: ResMut<TerrainViewComponents<TerrainViewData>>,
     gpu_quadtrees: Res<TerrainViewComponents<GpuQuadtree>>,
@@ -168,13 +167,7 @@ pub(crate) fn initialize_terrain_view_data(
 
             terrain_view_data.insert(
                 (terrain, view),
-                TerrainViewData::new(
-                    &device,
-                    view_config,
-                    gpu_quadtree,
-                    &render_pipeline,
-                    &compute_pipelines,
-                ),
+                TerrainViewData::new(&device, view_config, gpu_quadtree, &compute_pipelines),
             );
         }
     }

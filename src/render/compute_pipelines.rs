@@ -1,4 +1,5 @@
-use crate::render::terrain_data::TerrainMaterial;
+use crate::render::terrain_data::terrain_bind_group_layout;
+use crate::render::TerrainPipelineConfig;
 use crate::{
     render::{culling::CullingBindGroup, layouts::*, terrain_view_data::TerrainViewData},
     terrain::Terrain,
@@ -75,7 +76,7 @@ pub struct TerrainComputePipelines {
     pub(crate) update_quadtree_layout: BindGroupLayout,
     pub(crate) tessellation_layout: BindGroupLayout,
     pub(crate) cull_data_layout: BindGroupLayout,
-    pub(crate) terrain_layouts: Vec<BindGroupLayout>,
+    pub(crate) terrain_layout: BindGroupLayout,
     prepare_indirect_shader: Handle<Shader>,
     update_quadtree_shader: Handle<Shader>,
     tessellation_shader: Handle<Shader>,
@@ -84,11 +85,13 @@ pub struct TerrainComputePipelines {
 impl FromWorld for TerrainComputePipelines {
     fn from_world(world: &mut World) -> Self {
         let device = world.resource::<RenderDevice>();
+        let config = world.resource::<TerrainPipelineConfig>();
 
         let prepare_indirect_layout = device.create_bind_group_layout(&PREPARE_INDIRECT_LAYOUT);
         let update_quadtree_layout = device.create_bind_group_layout(&UPDATE_QUADTREE_LAYOUT);
         let tessellation_layout = device.create_bind_group_layout(&TESSELLATION_LAYOUT);
         let cull_data_layout = device.create_bind_group_layout(&CULL_DATA_LAYOUT);
+        let terrain_layout = terrain_bind_group_layout(&device, config.attachment_count);
 
         let prepare_indirect_shader = PREPARE_INDIRECT_HANDLE.typed();
         let update_quadtree_shader = UPDATE_QUADTREE_HANDLE.typed();
@@ -99,7 +102,7 @@ impl FromWorld for TerrainComputePipelines {
             update_quadtree_layout,
             tessellation_layout,
             cull_data_layout,
-            terrain_layouts: vec![TerrainMaterial::bind_group_layout(&device)],
+            terrain_layout,
             prepare_indirect_shader,
             update_quadtree_shader,
             tessellation_shader,
@@ -127,7 +130,7 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
                 layout = Some(vec![
                     self.tessellation_layout.clone(),
                     self.cull_data_layout.clone(),
-                    self.terrain_layouts[0].clone(),
+                    self.terrain_layout.clone(),
                 ]);
                 shader = self.tessellation_shader.clone();
                 entry_point = "select_coarsest_tiles".into();
@@ -136,7 +139,7 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
                 layout = Some(vec![
                     self.tessellation_layout.clone(),
                     self.cull_data_layout.clone(),
-                    self.terrain_layouts[0].clone(),
+                    self.terrain_layout.clone(),
                 ]);
                 shader = self.tessellation_shader.clone();
                 entry_point = "refine_tiles".into();
@@ -145,7 +148,7 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
                 layout = Some(vec![
                     self.tessellation_layout.clone(),
                     self.cull_data_layout.clone(),
-                    self.terrain_layouts[0].clone(),
+                    self.terrain_layout.clone(),
                 ]);
                 shader = self.tessellation_shader.clone();
                 entry_point = "select_finest_tiles".into();
@@ -154,7 +157,7 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
                 layout = Some(vec![
                     self.tessellation_layout.clone(),
                     self.cull_data_layout.clone(),
-                    self.terrain_layouts[0].clone(),
+                    self.terrain_layout.clone(),
                     self.prepare_indirect_layout.clone(),
                 ]);
                 shader = self.prepare_indirect_shader.clone();
@@ -164,7 +167,7 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
                 layout = Some(vec![
                     self.tessellation_layout.clone(),
                     self.cull_data_layout.clone(),
-                    self.terrain_layouts[0].clone(),
+                    self.terrain_layout.clone(),
                     self.prepare_indirect_layout.clone(),
                 ]);
                 shader = self.prepare_indirect_shader.clone();
@@ -174,7 +177,7 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
                 layout = Some(vec![
                     self.tessellation_layout.clone(),
                     self.cull_data_layout.clone(),
-                    self.terrain_layouts[0].clone(),
+                    self.terrain_layout.clone(),
                     self.prepare_indirect_layout.clone(),
                 ]);
                 shader = self.prepare_indirect_shader.clone();

@@ -4,6 +4,7 @@ use bevy_terrain::{
     bundles::TerrainBundle,
     preprocess::{density::preprocess_density, preprocess_tiles, ImageFormat},
     quadtree::Quadtree,
+    render::TerrainPipelineConfig,
     terrain::TerrainConfig,
     terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
     TerrainPlugin,
@@ -18,6 +19,10 @@ fn main() {
     let mut app = App::new();
 
     app.add_plugins(DefaultPlugins)
+        .insert_resource(TerrainPipelineConfig {
+            attachment_count: 3,
+            ..default()
+        })
         .add_plugin(TerrainPlugin)
         .add_startup_system(setup);
 

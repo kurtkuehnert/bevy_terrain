@@ -1,65 +1,89 @@
 use crate::{
     render::layouts::CONFIG_BUFFER_SIZE,
     terrain::{Terrain, TerrainComponents},
-    GpuNodeAtlas, TerrainConfig, TerrainRenderPipeline,
+    TerrainConfig,
 };
-use bevy::render::render_asset::RenderAssets;
-use bevy::render::texture::FallbackImage;
-use bevy::render::Extract;
 use bevy::{
     ecs::system::{lifetimeless::SRes, SystemParamItem},
     prelude::*,
     render::{
+        render_asset::RenderAssets,
         render_phase::{EntityRenderCommand, RenderCommandResult, TrackedRenderPass},
         render_resource::*,
         renderer::RenderDevice,
+        Extract,
     },
 };
 
-const COUNT: usize = 2;
+pub fn terrain_bind_group_layout(
+    device: &RenderDevice,
+    attachment_count: usize,
+) -> BindGroupLayout {
+    let mut entries = vec![
+        BindGroupLayoutEntry {
+            binding: 0,
+            visibility: ShaderStages::all(),
+            ty: BindingType::Buffer {
+                ty: BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: BufferSize::new(CONFIG_BUFFER_SIZE),
+            },
+            count: None,
+        },
+        BindGroupLayoutEntry {
+            binding: 1,
+            visibility: ShaderStages::all(),
+            ty: BindingType::Sampler(SamplerBindingType::Filtering),
+            count: None,
+        },
+    ];
 
-// Todo: create in setup, extract once added, prepare into terrain data
-pub struct TerrainMaterial {
-    //<const COUNT: usize> {
-    pub config: TerrainConfig,
-    pub attachments: [Handle<Image>; COUNT],
+    entries.extend((0..attachment_count).map(|binding| BindGroupLayoutEntry {
+        binding: binding as u32 + 2,
+        visibility: ShaderStages::all(),
+        ty: BindingType::Texture {
+            sample_type: TextureSampleType::Float { filterable: true },
+            view_dimension: TextureViewDimension::D2Array,
+            multisampled: false,
+        },
+        count: None,
+    }));
+
+    device.create_bind_group_layout(&BindGroupLayoutDescriptor {
+        label: "terrain_layout".into(),
+        entries: &entries,
+    })
 }
 
-impl AsBindGroup for TerrainMaterial {
-    type Data = ();
+pub struct TerrainData {
+    pub(crate) terrain_bind_group: BindGroup,
+}
 
-    fn as_bind_group(
-        &self,
-        layout: &BindGroupLayout,
-        render_device: &RenderDevice,
+impl TerrainData {
+    pub(crate) fn new(
+        device: &RenderDevice,
         images: &RenderAssets<Image>,
-        _fallback_image: &FallbackImage,
-    ) -> Result<PreparedBindGroup<Self>, AsBindGroupError> {
-        let mut buffer = encase::UniformBuffer::new(Vec::new());
-        buffer.write(&self.config.shader_data()).unwrap();
+        config: &TerrainConfig,
+    ) -> Self {
+        let layout = terrain_bind_group_layout(&device, config.attachments.len());
 
-        let config_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
-            label: "config_buffer".into(),
+        let mut buffer = encase::UniformBuffer::new(Vec::new());
+        buffer.write(&config.shader_data()).unwrap();
+
+        let config_buffer = device.create_buffer_with_data(&BufferInitDescriptor {
+            label: None,
             usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
             contents: &buffer.into_inner(),
         });
 
         let sampler_descriptor = SamplerDescriptor {
-            label: "default_sampler_attachment".into(),
+            label: None,
             mag_filter: FilterMode::Linear,
             min_filter: FilterMode::Linear,
-            address_mode_u: AddressMode::ClampToEdge,
-            address_mode_v: AddressMode::ClampToEdge,
-            address_mode_w: AddressMode::ClampToEdge,
             ..default()
         };
 
-        let sampler = render_device.create_sampler(&sampler_descriptor);
-
-        let mut bindings = vec![
-            OwnedBindingResource::Buffer(config_buffer.clone()),
-            OwnedBindingResource::Sampler(sampler.clone()),
-        ];
+        let sampler = device.create_sampler(&sampler_descriptor);
 
         let mut entries = vec![
             BindGroupEntry {
@@ -72,108 +96,39 @@ impl AsBindGroup for TerrainMaterial {
             },
         ];
 
-        for (binding, handle) in self.attachments.iter().enumerate() {
-            let attachment = images.get(handle).unwrap();
+        entries.extend(
+            config
+                .attachments
+                .iter()
+                .enumerate()
+                .map(|(binding, attachment)| {
+                    let attachment = images.get(&attachment.atlas_handle).unwrap();
 
-            bindings.push(OwnedBindingResource::TextureView(
-                attachment.texture_view.clone(),
-            ));
+                    BindGroupEntry {
+                        binding: binding as u32 + 2,
+                        resource: BindingResource::TextureView(&attachment.texture_view),
+                    }
+                }),
+        );
 
-            entries.push(BindGroupEntry {
-                binding: binding as u32 + 2,
-                resource: BindingResource::TextureView(&attachment.texture_view),
-            });
-        }
-
-        let bind_group = render_device.create_bind_group(&BindGroupDescriptor {
+        let terrain_bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: "terrain_bind_group".into(),
             entries: &entries,
-            layout,
+            layout: &layout,
         });
 
-        Ok(PreparedBindGroup {
-            bindings,
-            bind_group,
-            data: (),
-        })
+        Self { terrain_bind_group }
     }
-
-    fn bind_group_layout(render_device: &RenderDevice) -> BindGroupLayout {
-        let mut entries = vec![
-            BindGroupLayoutEntry {
-                binding: 0,
-                visibility: ShaderStages::all(),
-                ty: BindingType::Buffer {
-                    ty: BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: BufferSize::new(CONFIG_BUFFER_SIZE),
-                },
-                count: None,
-            },
-            BindGroupLayoutEntry {
-                binding: 1,
-                visibility: ShaderStages::all(),
-                ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                count: None,
-            },
-        ];
-
-        entries.extend((0..COUNT).map(|binding| BindGroupLayoutEntry {
-            binding: binding as u32 + 2,
-            visibility: ShaderStages::all(),
-            ty: BindingType::Texture {
-                sample_type: TextureSampleType::Float { filterable: true },
-                view_dimension: TextureViewDimension::D2Array,
-                multisampled: false,
-            },
-            count: None,
-        }));
-
-        render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: "terrain_layout".into(),
-            entries: &entries,
-        })
-    }
-}
-
-pub struct TerrainData {
-    pub(crate) terrain_bind_group: BindGroup,
 }
 
 pub(crate) fn initialize_terrain_data(
     device: Res<RenderDevice>,
     images: Res<RenderAssets<Image>>,
-    fallback_image: Res<FallbackImage>,
-    render_pipeline: Res<TerrainRenderPipeline>,
     mut terrain_data: ResMut<TerrainComponents<TerrainData>>,
-    gpu_node_atlases: Res<TerrainComponents<GpuNodeAtlas>>,
     terrain_query: Extract<Query<(Entity, &TerrainConfig), Added<Terrain>>>,
 ) {
     for (terrain, config) in terrain_query.iter() {
-        let gpu_node_atlas = gpu_node_atlases.get(&terrain).unwrap();
-
-        let material = TerrainMaterial {
-            config: config.clone(),
-            attachments: gpu_node_atlas.atlas_attachments.clone().try_into().unwrap(),
-        };
-
-        let bind_group = material
-            .as_bind_group(
-                &render_pipeline.terrain_layouts[0],
-                &device,
-                &images,
-                &fallback_image,
-            )
-            .ok()
-            .unwrap()
-            .bind_group;
-
-        terrain_data.insert(
-            terrain,
-            TerrainData {
-                terrain_bind_group: bind_group,
-            },
-        );
+        terrain_data.insert(terrain, TerrainData::new(&device, &images, config));
     }
 }
 
