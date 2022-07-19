@@ -50,14 +50,20 @@ pub struct NodeData {
     pub(crate) _attachments: HashMap<AttachmentIndex, Handle<Image>>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LoadingState {
+    Loading,
+    Loaded,
+}
+
 /// Stores the state of a present node in the [`NodeAtlas`].
-struct NodeState {
-    /// The count of [`Quadtrees`] that have requested this node.
-    requests: u32,
+pub(crate) struct AtlasNode {
     /// Indicates whether or not the node is loading or loaded.
-    loading: bool,
+    pub(crate) state: LoadingState,
     /// The index of the node inside the atlas.
-    atlas_index: AtlasIndex,
+    pub(crate) atlas_index: AtlasIndex,
+    /// The count of [`Quadtrees`] that have demanded this node.
+    dependents: u32,
 }
 
 /// A Node which is not currently requested by any [`Quadtree`].
@@ -84,21 +90,19 @@ pub struct NodeAtlas {
     pub(crate) loaded_nodes: Vec<LoadingNode>,
     /// Stores the currently loading nodes.
     pub(crate) loading_nodes: HashMap<NodeId, LoadingNode>,
-    /// Specifies which [`NodeAttachment`]s to load for each node.
-    attachments_to_load: HashSet<AttachmentIndex>,
-    /// Lists the unused nodes in least recently used order.
-    unused_nodes: VecDeque<UnusedNode>,
+
+    attachment_count: usize,
     /// Stores the cpu accessible data of all present nodes.
     pub(crate) data: Vec<NodeData>, // Todo: build api for accessing data on the cpu
     /// Stores the states of all present nodes.
-    node_states: HashMap<NodeId, NodeState>,
+    pub(crate) nodes: HashMap<NodeId, AtlasNode>, // Todo: change to hash set
+    /// Lists the unused nodes in least recently used order.
+    unused_nodes: VecDeque<UnusedNode>,
 }
 
 impl NodeAtlas {
     /// Creates a new node atlas based on the supplied [`TerrainConfig`].
     pub fn new(config: &TerrainConfig) -> Self {
-        let attachments_to_load = (0..config.attachments.len()).collect();
-
         let mut data = Vec::with_capacity(config.node_atlas_size as usize);
         let mut unused_nodes = VecDeque::with_capacity(config.node_atlas_size as usize);
 
@@ -114,61 +118,62 @@ impl NodeAtlas {
             load_events: default(),
             loaded_nodes: default(),
             loading_nodes: default(),
-            attachments_to_load,
+            attachment_count: config.attachments.len(),
             unused_nodes,
             data,
-            node_states: default(),
+            nodes: default(),
         }
     }
 
     /// Adjusts the nodes atlas according to the requested and released nodes of the [`Quadtree`]
     /// and provides it with the available atlas indices.
-    fn adjust_to_quadtree(&mut self, quadtree: &mut Quadtree) {
+    fn fulfill_request(&mut self, quadtree: &mut Quadtree) {
         let NodeAtlas {
-            ref attachments_to_load,
-            ref mut unused_nodes,
-            ref mut node_states,
-            ref mut loading_nodes,
-            ref mut load_events,
+            attachment_count,
+            unused_nodes,
+            nodes,
+            loading_nodes,
+            load_events,
             ..
         } = self;
 
         // release nodes that are on longer required
         for node_id in quadtree.released_nodes.drain(..) {
-            let state = node_states
+            let node = nodes
                 .get_mut(&node_id)
                 .expect("Tried releasing a node, which is not present.");
-            state.requests -= 1;
+            node.dependents -= 1;
 
-            if state.requests == 0 {
+            if node.dependents == 0 {
                 // the node is not used anymore
                 unused_nodes.push_back(UnusedNode {
                     node_id,
-                    atlas_index: state.atlas_index,
+                    atlas_index: node.atlas_index,
                 });
             }
         }
 
         // load nodes that are requested
-        for node_id in quadtree.requested_nodes.drain(..) {
+        for node_id in quadtree.demanded_nodes.drain(..) {
             // check if the node is already present else start loading it
-            if let Some(state) = node_states.get_mut(&node_id) {
-                if state.requests == 0 {
+            if let Some(node) = nodes.get_mut(&node_id) {
+                if node.dependents == 0 {
                     // the node is now used again
-                    unused_nodes.retain(|node| node.atlas_index != state.atlas_index);
+                    unused_nodes.retain(|unused_node| node.atlas_index != unused_node.atlas_index);
                 }
 
-                state.requests += 1;
+                node.dependents += 1;
             } else {
+                // Todo: implement better loading strategy
                 // remove least recently used node and reuse its atlas index
                 let unused_node = unused_nodes.pop_front().expect("Atlas out of indices");
 
-                node_states.remove(&unused_node.node_id);
-                node_states.insert(
+                nodes.remove(&unused_node.node_id);
+                nodes.insert(
                     node_id,
-                    NodeState {
-                        requests: 1,
-                        loading: true,
+                    AtlasNode {
+                        dependents: 1,
+                        state: LoadingState::Loading,
                         atlas_index: unused_node.atlas_index,
                     },
                 );
@@ -179,34 +184,12 @@ impl NodeAtlas {
                     node_id,
                     LoadingNode {
                         atlas_index: unused_node.atlas_index,
-                        loading_attachments: attachments_to_load.clone(),
+                        loading_attachments: (0..*attachment_count).collect(),
                         attachments: default(),
                     },
                 );
             }
         }
-    }
-
-    pub(crate) fn update_quadtree(&mut self, quadtree: &mut Quadtree) {
-        let Quadtree {
-            ref mut waiting_nodes,
-            ref mut provided_nodes,
-            ..
-        } = quadtree;
-
-        // provide nodes that have finished loading
-        waiting_nodes.retain(|&node_id| {
-            if let Some(state) = self.node_states.get_mut(&node_id) {
-                if !state.loading {
-                    provided_nodes.insert(node_id, state.atlas_index);
-                    false
-                } else {
-                    true
-                }
-            } else {
-                true
-            }
-        });
     }
 
     /// Checks all nodes that have finished loading, marks them accordingly and prepares the data
@@ -215,7 +198,7 @@ impl NodeAtlas {
         let NodeAtlas {
             ref mut data,
             ref mut load_events,
-            ref mut node_states,
+            ref mut nodes,
             ref mut loading_nodes,
             ref mut loaded_nodes,
             ..
@@ -224,16 +207,17 @@ impl NodeAtlas {
         load_events.clear();
 
         // update all nodes that have finished loading
-        for (node_id, node) in loading_nodes.drain_filter(|_, node| node.finished_loading()) {
-            if let Some(state) = node_states.get_mut(&node_id) {
-                state.loading = false;
+        for (node_id, loading_node) in loading_nodes.drain_filter(|_, node| node.finished_loading())
+        {
+            if let Some(node) = nodes.get_mut(&node_id) {
+                node.state = LoadingState::Loaded;
 
                 // Todo: only keep attachments required by the CPU around
-                data[state.atlas_index as usize] = NodeData {
-                    _attachments: node.attachments.clone(),
+                data[node.atlas_index as usize] = NodeData {
+                    _attachments: loading_node.attachments.clone(),
                 };
 
-                loaded_nodes.push(node);
+                loaded_nodes.push(loading_node);
             } else {
                 dbg!("Dropped node after loading.");
                 // node no longer required, can safely be ignored
@@ -253,7 +237,7 @@ pub(crate) fn update_node_atlas(
 
         for view in view_query.iter() {
             if let Some(quadtree) = quadtrees.get_mut(&(terrain, view)) {
-                node_atlas.adjust_to_quadtree(quadtree);
+                node_atlas.fulfill_request(quadtree);
             }
         }
     }
