@@ -19,14 +19,6 @@ pub(crate) type NodeId = u32;
 pub(crate) const INVALID_NODE_ID: NodeId = NodeId::MAX;
 pub(crate) const INVALID_LOD: u16 = u16::MAX;
 
-/// An update to the [`GpuQuadtree`](crate::render::gpu_quadtree::GpuQuadtree).
-/// The update packs the atlas index and atlas lod,
-/// as well as the quadtree coordinate of the node.
-/// Its representation is temporary unique for the corresponding view.
-/// atlas_index | atlas_lod | lod | x | y
-///          12 |         5 |   5 | 5 | 5
-pub(crate) type NodeUpdate = u32;
-
 /// The global coordinate of a node.
 pub struct NodeCoordinate {
     pub lod: u32,
@@ -71,16 +63,6 @@ impl Node {
             y: id & 0x3FFF,
         }
     }
-
-    /// Calculates a node update that can be sent to the GPU.
-    #[inline]
-    fn update(atlas_index: AtlasIndex, atlas_lod: u32, lod: u32, x: u32, y: u32) -> NodeUpdate {
-        (atlas_index as u32) << 20
-            | (atlas_lod & 0x1F) << 15
-            | (lod & 0x1F) << 10
-            | (x & 0x1F) << 5
-            | (y & 0x1F)
-    }
 }
 
 #[repr(C)]
@@ -107,16 +89,15 @@ impl Default for QuadtreeEntry {
 pub struct Quadtree {
     pub(crate) lod_count: u32,
     pub(crate) node_count: u32,
-
+    pub(crate) handle: Handle<Image>,
+    pub(crate) data: Array3<QuadtreeEntry>,
     pub(crate) released_nodes: Vec<NodeId>,
     pub(crate) demanded_nodes: Vec<NodeId>,
-
     chunk_size: u32,
     load_distance: f32,
     height: f32,
     height_under_viewer: f32,
     nodes: Array3<Node>,
-    pub(crate) data: Array3<QuadtreeEntry>,
 }
 
 impl Quadtree {
@@ -141,6 +122,7 @@ impl Quadtree {
             )),
             released_nodes: default(),
             demanded_nodes: default(),
+            handle: view_config.quadtree_handle.clone(),
         }
     }
 

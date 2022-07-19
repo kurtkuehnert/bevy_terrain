@@ -3,8 +3,8 @@ use crate::render::TerrainPipelineConfig;
 use crate::{
     render::{culling::CullingBindGroup, layouts::*, terrain_view_data::TerrainViewData},
     terrain::Terrain,
-    DebugTerrain, GpuQuadtree, TerrainComponents, TerrainData, TerrainView, TerrainViewComponents,
-    TerrainViewConfig, PREPARE_INDIRECT_HANDLE, TESSELATION_HANDLE, UPDATE_QUADTREE_HANDLE,
+    DebugTerrain, TerrainComponents, TerrainData, TerrainView, TerrainViewComponents,
+    TerrainViewConfig, PREPARE_INDIRECT_HANDLE, TESSELATION_HANDLE,
 };
 use bevy::{
     ecs::system::{
