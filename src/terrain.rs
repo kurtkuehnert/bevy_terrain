@@ -70,7 +70,7 @@ pub(crate) struct TerrainConfigUniform {
     lod_count: u32,
     height: f32,
     chunk_size: u32,
-    _padding: u32,
+    terrain_size: u32,
     attachment_scales: Vec4,
     attachment_offsets: Vec4,
 }
@@ -80,13 +80,20 @@ pub struct TerrainConfig {
     pub lod_count: u32,
     pub height: f32,
     pub chunk_size: u32,
+    pub terrain_size: u32,
     pub node_atlas_size: u16,
     pub path: String,
     pub attachments: Vec<AtlasAttachmentConfig>,
 }
 
 impl TerrainConfig {
-    pub fn new(chunk_size: u32, lod_count: u32, height: f32, path: String) -> Self {
+    pub fn new(
+        terrain_size: u32,
+        chunk_size: u32,
+        lod_count: u32,
+        height: f32,
+        path: String,
+    ) -> Self {
         let node_atlas_size = 1500;
 
         Self {
@@ -94,6 +101,7 @@ impl TerrainConfig {
             height,
             node_atlas_size,
             chunk_size,
+            terrain_size,
             path,
             attachments: default(),
         }
@@ -157,7 +165,7 @@ impl TerrainConfig {
             lod_count: self.lod_count,
             height: self.height,
             chunk_size: self.chunk_size,
-            _padding: 0,
+            terrain_size: self.terrain_size,
             attachment_scales: Vec4::from_array(scales),
             attachment_offsets: Vec4::from_array(offsets),
         }

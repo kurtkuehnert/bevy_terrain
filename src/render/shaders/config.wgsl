@@ -5,7 +5,6 @@ struct TerrainViewConfig {
 
     node_count: u32,
 
-    terrain_size: u32,
     tile_count: u32,
     refinement_count: u32,
     view_distance: f32,
