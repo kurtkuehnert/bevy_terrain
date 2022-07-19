@@ -317,6 +317,7 @@ impl render_graph::Node for TerrainComputeNode {
                 let culling_bind_group = culling_bind_groups.get(&(terrain, view)).unwrap();
 
                 TerrainComputeNode::update_quadtree(pass, pipelines, gpu_quadtree);
+
                 TerrainComputeNode::tessellate_terrain(
                     pass,
                     pipelines,

@@ -67,8 +67,8 @@ impl TerrainViewConfig {
         let refinement_count = 15;
 
         let morph_blend = 0.2;
-        let vertex_blend = 0.3;
-        let fragment_blend = 0.8;
+        let vertex_blend = 0.2;
+        let fragment_blend = 0.2;
 
         Self {
             height_under_viewer: 0.0,
