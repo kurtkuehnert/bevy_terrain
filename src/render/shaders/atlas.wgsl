@@ -29,8 +29,8 @@ fn atlas_lookup(log_distance: f32, local_position: vec2<f32>) -> AtlasLookup {
     let map_coords = vec2<i32>((local_position / node_size(lod)) % f32(view_config.node_count));
     let lookup = textureLoad(quadtree, map_coords, i32(lod), 0);
 
-    let atlas_lod = lookup.z;
-    let atlas_index =  i32((lookup.x << 8u) + lookup.y);
+    let atlas_index = i32(lookup.x);
+    let atlas_lod   = lookup.y;
     let atlas_coords = (local_position / node_size(atlas_lod)) % 1.0;
 
     return AtlasLookup(atlas_lod, atlas_index, atlas_coords);

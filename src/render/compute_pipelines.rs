@@ -25,7 +25,6 @@ type TerrainComputePipelineKey = (TerrainComputePipelineId, TerrainComputePipeli
 
 #[derive(Copy, Clone, Hash, PartialEq, Eq, EnumIter, EnumCount)]
 pub enum TerrainComputePipelineId {
-    UpdateQuadtree,
     SelectCoarsestTiles,
     RefineTiles,
     SelectFinestTiles,
@@ -73,12 +72,10 @@ impl TerrainComputePipelineFlags {
 
 pub struct TerrainComputePipelines {
     pub(crate) prepare_indirect_layout: BindGroupLayout,
-    pub(crate) update_quadtree_layout: BindGroupLayout,
     pub(crate) tessellation_layout: BindGroupLayout,
     pub(crate) cull_data_layout: BindGroupLayout,
     pub(crate) terrain_layout: BindGroupLayout,
     prepare_indirect_shader: Handle<Shader>,
-    update_quadtree_shader: Handle<Shader>,
     tessellation_shader: Handle<Shader>,
 }
 
@@ -88,23 +85,19 @@ impl FromWorld for TerrainComputePipelines {
         let config = world.resource::<TerrainPipelineConfig>();
 
         let prepare_indirect_layout = device.create_bind_group_layout(&PREPARE_INDIRECT_LAYOUT);
-        let update_quadtree_layout = device.create_bind_group_layout(&UPDATE_QUADTREE_LAYOUT);
         let tessellation_layout = device.create_bind_group_layout(&TESSELLATION_LAYOUT);
         let cull_data_layout = device.create_bind_group_layout(&CULL_DATA_LAYOUT);
         let terrain_layout = terrain_bind_group_layout(&device, config.attachment_count);
 
         let prepare_indirect_shader = PREPARE_INDIRECT_HANDLE.typed();
-        let update_quadtree_shader = UPDATE_QUADTREE_HANDLE.typed();
         let tessellation_shader = TESSELATION_HANDLE.typed();
 
         TerrainComputePipelines {
             prepare_indirect_layout,
-            update_quadtree_layout,
             tessellation_layout,
             cull_data_layout,
             terrain_layout,
             prepare_indirect_shader,
-            update_quadtree_shader,
             tessellation_shader,
         }
     }
@@ -121,11 +114,6 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
         let shader_defs = key.1.shader_defs();
 
         match key.0 {
-            TerrainComputePipelineId::UpdateQuadtree => {
-                layout = Some(vec![self.update_quadtree_layout.clone()]);
-                shader = self.update_quadtree_shader.clone();
-                entry_point = "update_quadtree".into();
-            }
             TerrainComputePipelineId::SelectCoarsestTiles => {
                 layout = Some(vec![
                     self.tessellation_layout.clone(),
@@ -219,18 +207,6 @@ impl FromWorld for TerrainComputeNode {
 }
 
 impl TerrainComputeNode {
-    fn update_quadtree<'a>(
-        pass: &mut ComputePass<'a>,
-        pipelines: &'a Vec<&'a ComputePipeline>,
-        gpu_quadtree: &'a GpuQuadtree,
-    ) {
-        if gpu_quadtree.node_updates.len() != 0 {
-            pass.set_bind_group(0, &gpu_quadtree.update_bind_group, &[]);
-            pass.set_pipeline(pipelines[TerrainComputePipelineId::UpdateQuadtree as usize]);
-            pass.dispatch_workgroups(gpu_quadtree.node_updates.len() as u32, 1, 1);
-        }
-    }
-
     fn tessellate_terrain<'a>(
         pass: &mut ComputePass<'a>,
         pipelines: &'a Vec<&'a ComputePipeline>,
@@ -293,7 +269,6 @@ impl render_graph::Node for TerrainComputeNode {
         let view_configs = world.resource::<TerrainViewComponents<TerrainViewConfig>>();
         let terrain_data = world.resource::<TerrainComponents<TerrainData>>();
         let terrain_view_data = world.resource::<TerrainViewComponents<TerrainViewData>>();
-        let gpu_quadtrees = world.resource::<TerrainViewComponents<GpuQuadtree>>();
         let culling_bind_groups = world.resource::<TerrainViewComponents<CullingBindGroup>>();
 
         let pipelines = &match TerrainComputePipelineId::iter()
@@ -313,10 +288,7 @@ impl render_graph::Node for TerrainComputeNode {
             for view in self.view_query.iter_manual(world) {
                 let view_config = view_configs.get(&(terrain, view)).unwrap();
                 let view_data = terrain_view_data.get(&(terrain, view)).unwrap();
-                let gpu_quadtree = gpu_quadtrees.get(&(terrain, view)).unwrap();
                 let culling_bind_group = culling_bind_groups.get(&(terrain, view)).unwrap();
-
-                TerrainComputeNode::update_quadtree(pass, pipelines, gpu_quadtree);
 
                 TerrainComputeNode::tessellate_terrain(
                     pass,

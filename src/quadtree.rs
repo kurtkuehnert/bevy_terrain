@@ -5,6 +5,8 @@ use crate::{
     TerrainView, TerrainViewComponents, TerrainViewConfig,
 };
 use bevy::{math::Vec3Swizzles, prelude::*};
+use bytemuck::Pod;
+use bytemuck::Zeroable;
 use itertools::iproduct;
 use ndarray::Array3;
 
@@ -15,6 +17,7 @@ use ndarray::Array3;
 ///   4 | 14 | 14
 pub(crate) type NodeId = u32;
 pub(crate) const INVALID_NODE_ID: NodeId = NodeId::MAX;
+pub(crate) const INVALID_LOD: u16 = u16::MAX;
 
 /// An update to the [`GpuQuadtree`](crate::render::gpu_quadtree::GpuQuadtree).
 /// The update packs the atlas index and atlas lod,
@@ -41,8 +44,6 @@ pub enum RequestState {
 pub struct Node {
     node_id: u32, // current node id at the grid position
     state: RequestState,
-    atlas_index: AtlasIndex, // best active atlas index
-    atlas_lod: u32,          // best active level of detail
 }
 
 impl Default for Node {
@@ -50,8 +51,6 @@ impl Default for Node {
         Self {
             node_id: INVALID_NODE_ID,
             state: RequestState::Released,
-            atlas_index: INVALID_ATLAS_INDEX,
-            atlas_lod: u32::MAX,
         }
     }
 }
@@ -84,6 +83,22 @@ impl Node {
     }
 }
 
+#[repr(C)]
+#[derive(Zeroable, Clone, Copy, Pod, Debug)]
+pub(crate) struct QuadtreeEntry {
+    atlas_index: AtlasIndex,
+    atlas_lod: u16,
+}
+
+impl Default for QuadtreeEntry {
+    fn default() -> Self {
+        Self {
+            atlas_index: INVALID_ATLAS_INDEX,
+            atlas_lod: INVALID_LOD,
+        }
+    }
+}
+
 // Todo: find a suitable name
 /// A quadtree-like view of a terrain, that requests and releases nodes.
 /// Additionally it tracks all [`NodeUpdate`]s, which are send to the GPU by the
@@ -92,15 +107,16 @@ impl Node {
 pub struct Quadtree {
     pub(crate) lod_count: u32,
     pub(crate) node_count: u32,
+
+    pub(crate) released_nodes: Vec<NodeId>,
+    pub(crate) demanded_nodes: Vec<NodeId>,
+
     chunk_size: u32,
     load_distance: f32,
     height: f32,
     height_under_viewer: f32,
     nodes: Array3<Node>,
-    pub(crate) released_nodes: Vec<NodeId>,
-    pub(crate) demanded_nodes: Vec<NodeId>,
-    /// Nodes that should be loading or active.
-    pub(crate) node_updates: Vec<NodeUpdate>,
+    pub(crate) data: Array3<QuadtreeEntry>,
 }
 
 impl Quadtree {
@@ -118,9 +134,13 @@ impl Quadtree {
                 view_config.node_count as usize,
                 view_config.node_count as usize,
             )),
+            data: Array3::default((
+                config.lod_count as usize,
+                view_config.node_count as usize,
+                view_config.node_count as usize,
+            )),
             released_nodes: default(),
             demanded_nodes: default(),
-            node_updates: default(),
         }
     }
 
@@ -192,7 +212,6 @@ impl Quadtree {
     }
 
     fn adjust(&mut self, node_atlas: &NodeAtlas) {
-        self.node_updates.clear();
         for ((lod, x, y), node) in self.nodes.indexed_iter_mut() {
             let mut node_id = node.node_id;
             let mut coordinate = Node::coordinate(node_id);
@@ -200,13 +219,13 @@ impl Quadtree {
             let (atlas_index, atlas_lod) = loop {
                 if coordinate.lod == self.lod_count || node_id == INVALID_NODE_ID {
                     // highest lod is not loaded
-                    break (INVALID_ATLAS_INDEX, u32::MAX);
+                    break (INVALID_ATLAS_INDEX, u16::MAX);
                 }
 
                 if let Some(atlas_node) = node_atlas.nodes.get(&node_id) {
                     if atlas_node.state == LoadingState::Loaded {
                         // found best loaded node
-                        break (atlas_node.atlas_index, coordinate.lod);
+                        break (atlas_node.atlas_index, coordinate.lod as u16);
                     }
                 }
 
@@ -217,15 +236,10 @@ impl Quadtree {
                 node_id = Node::id(coordinate.lod, coordinate.x, coordinate.y);
             };
 
-            node.atlas_index = atlas_index;
-            node.atlas_lod = atlas_lod;
-            self.node_updates.push(Node::update(
+            self.data[[lod, y, x]] = QuadtreeEntry {
                 atlas_index,
                 atlas_lod,
-                lod as u32,
-                x as u32,
-                y as u32,
-            ));
+            };
         }
     }
 }
@@ -297,7 +311,7 @@ fn height_under_viewer(
     let coordinate =
         (viewer_position / quadtree.chunk_size as f32).as_uvec2() % quadtree.node_count;
 
-    let node = &quadtree.nodes[[0, coordinate.x as usize, coordinate.y as usize]];
+    let node = &quadtree.data[[0, coordinate.y as usize, coordinate.x as usize]];
     let atlas_coords = (viewer_position / quadtree.chunk_size as f32) % 1.0;
 
     if node.atlas_index == INVALID_ATLAS_INDEX {
