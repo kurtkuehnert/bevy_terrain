@@ -1,12 +1,12 @@
+use crate::node_atlas::LoadingState;
 use crate::{
     node_atlas::{AtlasIndex, NodeAtlas, INVALID_ATLAS_INDEX},
     terrain::{Terrain, TerrainConfig},
     TerrainView, TerrainViewComponents, TerrainViewConfig,
 };
-use bevy::{math::Vec3Swizzles, prelude::*, utils::HashSet};
+use bevy::{math::Vec3Swizzles, prelude::*};
 use itertools::iproduct;
 use ndarray::Array3;
-use std::{collections::BTreeMap, collections::VecDeque, mem};
 
 // Todo: may be swap to u64 for giant terrains
 // Todo: consider 3 bit face data, for cube sphere
@@ -31,10 +31,16 @@ pub struct NodeCoordinate {
     pub y: u32,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum RequestState {
+    Demanded,
+    Released,
+}
+
 /// The cpu representation of a node.
 pub struct Node {
-    node_id: u32,            // current node id at the grid position
-    requested: bool,         // whether the node should be requested
+    node_id: u32, // current node id at the grid position
+    state: RequestState,
     atlas_index: AtlasIndex, // best active atlas index
     atlas_lod: u32,          // best active level of detail
 }
@@ -43,7 +49,7 @@ impl Default for Node {
     fn default() -> Self {
         Self {
             node_id: INVALID_NODE_ID,
-            requested: false,
+            state: RequestState::Released,
             atlas_index: INVALID_ATLAS_INDEX,
             atlas_lod: u32::MAX,
         }
@@ -92,10 +98,7 @@ pub struct Quadtree {
     height_under_viewer: f32,
     nodes: Array3<Node>,
     pub(crate) released_nodes: Vec<NodeId>,
-    pub(crate) fallback_nodes: Vec<NodeId>,
-    pub(crate) requested_nodes: Vec<NodeId>,
-    pub(crate) waiting_nodes: HashSet<NodeId>,
-    pub(crate) provided_nodes: BTreeMap<NodeId, AtlasIndex>,
+    pub(crate) demanded_nodes: Vec<NodeId>,
     /// Nodes that should be loading or active.
     pub(crate) node_updates: Vec<NodeUpdate>,
 }
@@ -116,10 +119,7 @@ impl Quadtree {
                 view_config.node_count as usize,
             )),
             released_nodes: default(),
-            fallback_nodes: default(),
-            requested_nodes: default(),
-            waiting_nodes: default(),
-            provided_nodes: default(),
+            demanded_nodes: default(),
             node_updates: default(),
         }
     }
@@ -129,19 +129,9 @@ impl Quadtree {
         self.chunk_size * (1 << lod)
     }
 
-    fn update_node(&mut self, atlas_index: AtlasIndex, atlas_lod: u32, lod: u32, x: u32, y: u32) {
-        let node = &mut self.nodes[[lod as usize, x as usize, y as usize]];
-        node.atlas_index = atlas_index;
-        node.atlas_lod = atlas_lod;
-
-        let update = Node::update(atlas_index, atlas_lod, lod, x, y);
-        self.node_updates.push(update);
-    }
-
     /// Traverses the quadtree and selects all nodes to activate/deactivate.
-    pub(crate) fn traverse(&mut self, viewer_position: Vec3) {
-        // traverse the quadtree top down
-        for lod in (0..self.lod_count).rev() {
+    pub(crate) fn request(&mut self, viewer_position: Vec3) {
+        for lod in 0..self.lod_count {
             let node_size = self.node_size(lod);
 
             // bottom left position of grid in node coordinates
@@ -169,14 +159,12 @@ impl Quadtree {
 
                 // quadtree slot refers to a new node
                 if node_id != node.node_id {
-                    // deactivate old node
-                    if node.requested {
+                    // release old node
+                    if node.state == RequestState::Demanded {
                         self.released_nodes.push(node.node_id);
-                        self.waiting_nodes.remove(&node.node_id);
-                        node.requested = false;
+                        node.state = RequestState::Released;
                     }
 
-                    self.fallback_nodes.push(node_id);
                     node.node_id = node_id;
                 }
 
@@ -184,21 +172,18 @@ impl Quadtree {
                 let world_position =
                     Vec3::new(node_position.x, self.height_under_viewer, node_position.y);
                 let distance = viewer_position.xyz().distance(world_position);
-                let should_be_requested = distance < self.load_distance * node_size as f32;
+                let mut demanded = distance < self.load_distance * node_size as f32;
+                demanded |= lod == self.lod_count - 1; // always request highest lod
 
-                // Todo: always request highest lod
-                // request or release node based on their distance to the viewer
-                match (node.requested, should_be_requested) {
-                    (false, true) => {
-                        self.requested_nodes.push(node_id);
-                        self.waiting_nodes.insert(node_id);
-                        node.requested = true;
+                // demand or release node based on their distance to the viewer
+                match (node.state, demanded) {
+                    (RequestState::Released, true) => {
+                        self.demanded_nodes.push(node.node_id);
+                        node.state = RequestState::Demanded;
                     }
-                    (true, false) => {
-                        self.released_nodes.push(node_id);
-                        self.waiting_nodes.remove(&node_id);
-                        self.fallback_nodes.push(node_id);
-                        node.requested = false;
+                    (RequestState::Demanded, false) => {
+                        self.released_nodes.push(node.node_id);
+                        node.state = RequestState::Released;
                     }
                     (_, _) => {}
                 }
@@ -206,124 +191,47 @@ impl Quadtree {
         }
     }
 
-    fn compute_node_updates(&mut self) {
-        let mut fallback_nodes = mem::take(&mut self.fallback_nodes);
-        let mut provided_nodes = mem::take(&mut self.provided_nodes);
-
-        let mut fall_back = Vec::new();
-
-        // fall back to the closest present ancestor
-        for node_id in fallback_nodes.drain(..) {
-            if provided_nodes.contains_key(&node_id) {
-                //                 dbg!(node_id);
-                continue; // will be provided
-            }
-
+    fn adjust(&mut self, node_atlas: &NodeAtlas) {
+        self.node_updates.clear();
+        for ((lod, x, y), node) in self.nodes.indexed_iter_mut() {
+            let mut node_id = node.node_id;
             let mut coordinate = Node::coordinate(node_id);
 
-            loop {
+            let (atlas_index, atlas_lod) = loop {
+                if coordinate.lod == self.lod_count || node_id == INVALID_NODE_ID {
+                    // highest lod is not loaded
+                    break (INVALID_ATLAS_INDEX, u32::MAX);
+                }
+
+                if let Some(atlas_node) = node_atlas.nodes.get(&node_id) {
+                    if atlas_node.state == LoadingState::Loaded {
+                        // found best loaded node
+                        break (atlas_node.atlas_index, coordinate.lod);
+                    }
+                }
+
+                // node not loaded, try parent
                 coordinate.lod += 1;
                 coordinate.x >>= 1;
                 coordinate.y >>= 1;
+                node_id = Node::id(coordinate.lod, coordinate.x, coordinate.y);
+            };
 
-                if coordinate.lod == self.lod_count {
-                    // dbg!("Could not fall back to any ancestor.");
-                    break;
-                }
-
-                let ancestor_node = &self.nodes[[
-                    coordinate.lod as usize,
-                    (coordinate.x % self.node_count) as usize,
-                    (coordinate.y % self.node_count) as usize,
-                ]];
-
-                let ancestor_id = Node::id(coordinate.lod, coordinate.x, coordinate.y);
-
-                // the node is part of the quadtree
-                if ancestor_id == ancestor_node.node_id {
-                    fall_back.push((node_id, ancestor_node.atlas_index, ancestor_node.atlas_lod));
-                    break;
-                }
-            }
+            node.atlas_index = atlas_index;
+            node.atlas_lod = atlas_lod;
+            self.node_updates.push(Node::update(
+                atlas_index,
+                atlas_lod,
+                lod as u32,
+                x as u32,
+                y as u32,
+            ));
         }
-
-        for (node_id, atlas_index, atlas_lod) in fall_back.drain(..) {
-            let mut queue = VecDeque::new();
-            queue.push_back(node_id);
-
-            while let Some(node_id) = queue.pop_front() {
-                let coordinate = Node::coordinate(node_id);
-
-                let lod = coordinate.lod;
-                let x = coordinate.x % self.node_count;
-                let y = coordinate.y % self.node_count;
-
-                let node = &mut self.nodes[[lod as usize, x as usize, y as usize]];
-
-                // the node is part of the quadtree
-                if node_id == node.node_id {
-                    self.update_node(atlas_index, atlas_lod, lod, x, y);
-
-                    // update children
-                    if lod != 0 {
-                        for (x, y) in iproduct!(0..2, 0..2) {
-                            let child_id = Node::id(
-                                coordinate.lod - 1,
-                                (coordinate.x << 1) | x,
-                                (coordinate.y << 1) | y,
-                            );
-
-                            queue.push_back(child_id);
-                        }
-                    }
-                }
-            }
-        }
-
-        // for each provided node update itself and its children
-        for (&node_id, &atlas_index) in provided_nodes.iter() {
-            let atlas_lod = Node::coordinate(node_id).lod;
-
-            let mut queue = VecDeque::new();
-            queue.push_back(node_id);
-
-            while let Some(node_id) = queue.pop_front() {
-                let coordinate = Node::coordinate(node_id);
-
-                let lod = coordinate.lod;
-                let x = coordinate.x % self.node_count;
-                let y = coordinate.y % self.node_count;
-
-                let node = &mut self.nodes[[lod as usize, x as usize, y as usize]];
-
-                // the node is part of the quadtree and the atlas lod is an improvement
-                if node_id == node.node_id && atlas_lod <= node.atlas_lod {
-                    self.update_node(atlas_index, atlas_lod, lod, x, y);
-
-                    // update children
-                    if lod != 0 {
-                        for (x, y) in iproduct!(0..2, 0..2) {
-                            let child_id = Node::id(
-                                coordinate.lod - 1,
-                                (coordinate.x << 1) | x,
-                                (coordinate.y << 1) | y,
-                            );
-
-                            queue.push_back(child_id);
-                        }
-                    }
-                }
-            }
-        }
-        provided_nodes.clear();
-
-        self.fallback_nodes = fallback_nodes;
-        self.provided_nodes = provided_nodes;
     }
 }
 
 /// Traverses all quadtrees and marks all nodes to activate/deactivate.
-pub(crate) fn traverse_quadtree(
+pub(crate) fn request_quadtree(
     mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
     view_query: Query<(Entity, &GlobalTransform), With<TerrainView>>,
     terrain_query: Query<(Entity, &GlobalTransform), With<Terrain>>,
@@ -334,23 +242,21 @@ pub(crate) fn traverse_quadtree(
             if let Some(quadtree) = quadtrees.get_mut(&(terrain, view)) {
                 let view_position = view_transform.translation;
 
-                quadtree.node_updates.clear();
-                quadtree.traverse(view_position);
+                quadtree.request(view_position);
             }
         }
     }
 }
 
-pub(crate) fn compute_node_updates(
+pub(crate) fn adjust_quadtree(
     mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
     view_query: Query<Entity, With<TerrainView>>,
-    mut terrain_query: Query<(Entity, &mut NodeAtlas), With<Terrain>>,
+    mut terrain_query: Query<(Entity, &NodeAtlas), With<Terrain>>,
 ) {
     for (terrain, mut node_atlas) in terrain_query.iter_mut() {
         for view in view_query.iter() {
             if let Some(quadtree) = quadtrees.get_mut(&(terrain, view)) {
-                node_atlas.update_quadtree(quadtree);
-                quadtree.compute_node_updates();
+                quadtree.adjust(&mut node_atlas);
             }
         }
     }

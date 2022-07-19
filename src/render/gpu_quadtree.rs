@@ -54,7 +54,7 @@ impl GpuQuadtree {
 
         let update_buffer = device.create_buffer(&BufferDescriptor {
             label: "node_updates_buffer".into(),
-            size: NODE_UPDATE_SIZE * 10 * size as BufferAddress, // Todo: calculate correctly
+            size: NODE_UPDATE_SIZE * size as BufferAddress, // Todo: calculate correctly
             usage: BufferUsages::STORAGE | BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });

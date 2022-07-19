@@ -5,7 +5,7 @@ use crate::{
     attachment_loader::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk},
     debug::{extract_debug, toggle_debug, DebugTerrain},
     node_atlas::update_node_atlas,
-    quadtree::{compute_node_updates, traverse_quadtree, update_height_under_viewer, Quadtree},
+    quadtree::{adjust_quadtree, request_quadtree, update_height_under_viewer, Quadtree},
     render::{
         compute_pipelines::{TerrainComputeNode, TerrainComputePipelines},
         culling::{queue_terrain_culling_bind_group, CullingBindGroup},
@@ -118,12 +118,21 @@ impl Plugin for TerrainPlugin {
             .init_resource::<TerrainViewComponents<TerrainViewConfig>>()
             .add_system(toggle_debug)
             .add_system(change_config)
-            .add_system(finish_loading_attachment_from_disk.before(update_node_atlas))
-            .add_system(traverse_quadtree.before(update_node_atlas))
-            .add_system(update_node_atlas)
-            .add_system(compute_node_updates.after(update_node_atlas))
-            .add_system(update_height_under_viewer.after(compute_node_updates))
-            .add_system(start_loading_attachment_from_disk.after(update_node_atlas));
+            .add_system_to_stage(
+                CoreStage::Last,
+                finish_loading_attachment_from_disk.before(update_node_atlas),
+            )
+            .add_system_to_stage(CoreStage::Last, request_quadtree.before(update_node_atlas))
+            .add_system_to_stage(CoreStage::Last, update_node_atlas)
+            .add_system_to_stage(CoreStage::Last, adjust_quadtree.after(update_node_atlas))
+            .add_system_to_stage(
+                CoreStage::Last,
+                start_loading_attachment_from_disk.after(update_node_atlas),
+            )
+            .add_system_to_stage(
+                CoreStage::Last,
+                update_height_under_viewer.after(adjust_quadtree),
+            );
 
         let config = app
             .world
