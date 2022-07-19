@@ -106,8 +106,8 @@ fn calculate_position(vertex_index: u32, tile: Tile, vertices_per_row: u32, true
     local_position = mix(local_position, parent_local_position, morph);
 #endif
 
-    local_position.x = clamp(local_position.x, 0.0, f32(view_config.terrain_size));
-    local_position.y = clamp(local_position.y, 0.0, f32(view_config.terrain_size));
+    local_position.x = clamp(local_position.x, 0.0, f32(config.terrain_size));
+    local_position.y = clamp(local_position.y, 0.0, f32(config.terrain_size));
 
     return local_position;
 }
