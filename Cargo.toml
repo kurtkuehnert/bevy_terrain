@@ -25,3 +25,4 @@ strum_macros = "*"
 ron = { version = "*", features = ["indexmap"] }
 
 fastrand = "*"
+bytemuck = "*"

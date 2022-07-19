@@ -1,11 +1,13 @@
 use crate::{terrain::Terrain, TerrainViewData};
 use bevy::render::Extract;
+use bevy::utils::Uuid;
 use bevy::{
     ecs::{query::QueryItem, system::lifetimeless::Read},
     prelude::*,
     render::{extract_component::ExtractComponent, render_resource::*, renderer::RenderQueue},
     utils::HashMap,
 };
+use std::str::FromStr;
 
 pub type TerrainViewComponents<C> = HashMap<(Entity, Entity), C>;
 
@@ -40,6 +42,8 @@ pub(crate) struct TerrainViewConfigUniform {
 
 #[derive(Clone, Component)]
 pub struct TerrainViewConfig {
+    pub(crate) quadtree_handle: Handle<Image>,
+
     pub height_under_viewer: f32,
     // quadtree
     pub load_distance: f32,
@@ -56,6 +60,13 @@ pub struct TerrainViewConfig {
 
 impl TerrainViewConfig {
     pub fn new(view_distance: f32, tile_scale: f32, load_distance: f32) -> Self {
+        // Todo: fix this awful hack
+        let quadtree_handle = HandleUntyped::weak_from_u64(
+            Uuid::from_str("6ea26da6-6cf8-4ea2-9986-1d7bf6c17d6f").unwrap(),
+            fastrand::u64(..),
+        )
+        .typed();
+
         let node_count = 12;
         let load_distance = load_distance * node_count as f32;
 
@@ -71,6 +82,7 @@ impl TerrainViewConfig {
         let fragment_blend = 0.2;
 
         Self {
+            quadtree_handle,
             height_under_viewer: 0.0,
             load_distance,
             node_count,
