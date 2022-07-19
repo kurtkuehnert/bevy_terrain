@@ -8,7 +8,7 @@ struct TerrainConfig {
     lod_count: u32,
     height: f32,
     chunk_size: u32,
-    _padding: u32,
+    terrain_size: u32,
     height_scale: f32,
     density_scale: f32,
     _empty: u32,
@@ -158,9 +158,6 @@ fn divide(coords: vec2<u32>, size: u32) -> bool {
 
 fn tile_lod(coords: vec2<u32>, size: u32) -> u32 {
     let local_position = (vec2<f32>(coords) + 0.5) * view_config.tile_scale * f32(size);
-    let world_position = vec3<f32>(local_position.x, view_config.height_under_viewer, local_position.y);
-    // let viewer_distance = distance(world_position, view.world_position.xyz);
-    // let log_distance = log2(2.0 * viewer_distance / view_config.view_distance);
     let log_distance = log2(view_config.tile_scale * f32(size));
 
     let lookup = atlas_lookup(log_distance, local_position);
@@ -240,7 +237,7 @@ fn refine_tiles(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
 
             // cull tiles outside of the terrain
             let local_position = vec2<f32>(f32(x), f32(y)) * view_config.tile_scale * f32(size);
-            if (local_position.x > f32(view_config.terrain_size) || local_position.y > f32(view_config.terrain_size)) {
+            if (local_position.x > f32(config.terrain_size) || local_position.y > f32(config.terrain_size)) {
                 continue;
             }
 

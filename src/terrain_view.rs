@@ -28,7 +28,6 @@ pub(crate) struct TerrainViewConfigUniform {
 
     node_count: u32,
 
-    terrain_size: u32,
     tile_count: u32,
     refinement_count: u32,
     view_distance: f32,
@@ -46,7 +45,6 @@ pub struct TerrainViewConfig {
     pub load_distance: f32,
     pub node_count: u32,
     // tesselation
-    pub terrain_size: u32,
     pub tile_count: u32,
     pub refinement_count: u32,
     pub view_distance: f32,
@@ -57,7 +55,7 @@ pub struct TerrainViewConfig {
 }
 
 impl TerrainViewConfig {
-    pub fn new(terrain_size: u32, view_distance: f32, tile_scale: f32, load_distance: f32) -> Self {
+    pub fn new(view_distance: f32, tile_scale: f32, load_distance: f32) -> Self {
         let node_count = 12;
         let load_distance = load_distance * node_count as f32;
 
@@ -65,7 +63,8 @@ impl TerrainViewConfig {
 
         let view_distance = view_distance * 128.0;
 
-        let refinement_count = (terrain_size as f32 / tile_scale).log2().ceil() as u32;
+        // let refinement_count = (terrain_size as f32 / tile_scale).log2().ceil() as u32;
+        let refinement_count = 15;
 
         let morph_blend = 0.2;
         let vertex_blend = 0.3;
@@ -76,7 +75,6 @@ impl TerrainViewConfig {
             load_distance,
             node_count,
             tile_count,
-            terrain_size,
             refinement_count,
             view_distance,
             tile_scale,
@@ -88,14 +86,13 @@ impl TerrainViewConfig {
 
     pub(crate) fn change_tile_scale(&mut self, new: f32) {
         self.tile_scale = new;
-        self.refinement_count = (self.terrain_size as f32 / self.tile_scale).log2().ceil() as u32;
+        // self.refinement_count = (self.terrain_size as f32 / self.tile_scale).log2().ceil() as u32;
     }
 
     pub(crate) fn shader_data(&self) -> TerrainViewConfigUniform {
         TerrainViewConfigUniform {
             node_count: self.node_count,
             height_under_viewer: self.height_under_viewer,
-            terrain_size: self.terrain_size,
             tile_count: self.tile_count,
             refinement_count: self.refinement_count,
             view_distance: self.view_distance,
