@@ -1,3 +1,4 @@
+use crate::render::layouts::{PREPARE_INDIRECT_LAYOUT, TESSELLATION_LAYOUT};
 use crate::{
     render::layouts::{
         INDIRECT_BUFFER_SIZE, PARAMETER_BUFFER_SIZE, TERRAIN_VIEW_CONFIG_SIZE, TERRAIN_VIEW_LAYOUT,
@@ -5,8 +6,9 @@ use crate::{
     },
     terrain::Terrain,
     terrain_view::{TerrainView, TerrainViewConfig},
-    GpuQuadtree, TerrainComputePipelines, TerrainViewComponents,
+    TerrainViewComponents,
 };
+use bevy::render::render_asset::RenderAssets;
 use bevy::render::Extract;
 use bevy::{
     ecs::system::{lifetimeless::SRes, SystemParamItem},
@@ -30,9 +32,8 @@ pub struct TerrainViewData {
 impl TerrainViewData {
     fn new(
         device: &RenderDevice,
+        images: &RenderAssets<Image>,
         view_config: &TerrainViewConfig,
-        gpu_quadtree: &GpuQuadtree,
-        compute_pipelines: &TerrainComputePipelines,
     ) -> Self {
         let indirect_buffer = Self::create_indirect_buffer(device);
         let view_config_buffer = Self::create_view_config_buffer(device);
@@ -40,13 +41,15 @@ impl TerrainViewData {
         let (temporary_tile_buffer, final_tile_buffer) =
             Self::create_tile_buffers(device, view_config);
 
+        let quadtree = images.get(&view_config.quadtree_handle).unwrap();
+
         let prepare_indirect_bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: "prepare_indirect_bind_group".into(),
             entries: &[BindGroupEntry {
                 binding: 0,
                 resource: indirect_buffer.as_entire_binding(),
             }],
-            layout: &compute_pipelines.prepare_indirect_layout,
+            layout: &device.create_bind_group_layout(&PREPARE_INDIRECT_LAYOUT),
         });
         let tessellation_bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: "tessellation_bind_group".into(),
@@ -57,7 +60,7 @@ impl TerrainViewData {
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: BindingResource::TextureView(&gpu_quadtree.quadtree_view),
+                    resource: BindingResource::TextureView(&quadtree.texture_view),
                 },
                 BindGroupEntry {
                     binding: 2,
@@ -72,7 +75,7 @@ impl TerrainViewData {
                     resource: parameter_buffer.as_entire_binding(),
                 },
             ],
-            layout: &compute_pipelines.tessellation_layout,
+            layout: &device.create_bind_group_layout(&TESSELLATION_LAYOUT),
         });
         let terrain_view_bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: "terrain_view_bind_group".into(),
@@ -83,7 +86,7 @@ impl TerrainViewData {
                 },
                 BindGroupEntry {
                     binding: 1,
-                    resource: BindingResource::TextureView(&gpu_quadtree.quadtree_view),
+                    resource: BindingResource::TextureView(&quadtree.texture_view),
                 },
                 BindGroupEntry {
                     binding: 2,
@@ -153,9 +156,8 @@ impl TerrainViewData {
 
 pub(crate) fn initialize_terrain_view_data(
     device: Res<RenderDevice>,
-    compute_pipelines: Res<TerrainComputePipelines>,
+    images: Res<RenderAssets<Image>>,
     mut terrain_view_data: ResMut<TerrainViewComponents<TerrainViewData>>,
-    gpu_quadtrees: Res<TerrainViewComponents<GpuQuadtree>>,
     view_configs: Extract<Res<TerrainViewComponents<TerrainViewConfig>>>,
     view_query: Extract<Query<Entity, With<TerrainView>>>,
     terrain_query: Extract<Query<Entity, Added<Terrain>>>,
@@ -163,11 +165,10 @@ pub(crate) fn initialize_terrain_view_data(
     for terrain in terrain_query.iter() {
         for view in view_query.iter() {
             let view_config = view_configs.get(&(terrain, view)).unwrap();
-            let gpu_quadtree = gpu_quadtrees.get(&(terrain, view)).unwrap();
 
             terrain_view_data.insert(
                 (terrain, view),
-                TerrainViewData::new(&device, view_config, gpu_quadtree, &compute_pipelines),
+                TerrainViewData::new(&device, &images, view_config),
             );
         }
     }

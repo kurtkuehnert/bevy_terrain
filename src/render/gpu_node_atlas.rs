@@ -18,12 +18,12 @@ use std::mem;
 #[derive(Component)]
 pub struct GpuNodeAtlas {
     pub(crate) atlas_attachments: Vec<Handle<Image>>,
-    pub(crate) loaded_nodes: Vec<LoadingNode>, // Todo: consider own component
+    pub(crate) loaded_nodes: Vec<LoadingNode>,
 }
 
 impl GpuNodeAtlas {
     fn new(
-        config: &TerrainConfig,
+        config: &TerrainConfig, // Todo: change to NodeAtlas
         device: &RenderDevice,
         images: &mut RenderAssets<Image>,
     ) -> Self {
@@ -62,6 +62,7 @@ impl GpuNodeAtlas {
                 if let (Some(node_attachment), Some(atlas_attachment)) =
                     (images.get(node_handle), images.get(atlas_handle))
                 {
+                    // Todo: change to queue.write_texture
                     command_encoder.copy_texture_to_texture(
                         ImageCopyTexture {
                             texture: &node_attachment.texture,
