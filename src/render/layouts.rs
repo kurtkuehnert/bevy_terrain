@@ -1,45 +1,15 @@
-use crate::{quadtree::NodeUpdate, render::culling::CullingData, terrain::TerrainConfigUniform};
+use crate::{render::culling::CullingData, terrain::TerrainConfigUniform};
 use bevy::render::render_resource::*;
 use std::mem;
 
 pub(crate) const TERRAIN_VIEW_CONFIG_SIZE: BufferAddress = 4 * 48;
-
 pub(crate) const TILE_SIZE: BufferAddress = 6 * 4;
 pub(crate) const INDIRECT_BUFFER_SIZE: BufferAddress = 5 * 4;
 pub(crate) const PARAMETER_BUFFER_SIZE: BufferAddress = 6 * 4;
-pub(crate) const NODE_UPDATE_SIZE: BufferAddress = mem::size_of::<NodeUpdate>() as BufferAddress;
 pub(crate) const CONFIG_BUFFER_SIZE: BufferAddress =
     mem::size_of::<TerrainConfigUniform>() as BufferAddress;
 pub(crate) const CULL_DATA_BUFFER_SIZE: BufferAddress =
     mem::size_of::<CullingData>() as BufferAddress;
-
-pub(crate) const UPDATE_QUADTREE_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
-    label: Some("update_quadtree_layout"),
-    entries: &[
-        // quadtree array texture
-        BindGroupLayoutEntry {
-            binding: 0,
-            visibility: ShaderStages::COMPUTE,
-            ty: BindingType::StorageTexture {
-                access: StorageTextureAccess::ReadWrite,
-                format: TextureFormat::Rgba8Uint,
-                view_dimension: TextureViewDimension::D2Array,
-            },
-            count: None,
-        },
-        // node updates buffer
-        BindGroupLayoutEntry {
-            binding: 1,
-            visibility: ShaderStages::COMPUTE,
-            ty: BindingType::Buffer {
-                ty: BufferBindingType::Storage { read_only: true },
-                has_dynamic_offset: false,
-                min_binding_size: BufferSize::new(NODE_UPDATE_SIZE),
-            },
-            count: None,
-        },
-    ],
-};
 
 pub(crate) const PREPARE_INDIRECT_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
     label: Some("prepare_indirect_layout"),

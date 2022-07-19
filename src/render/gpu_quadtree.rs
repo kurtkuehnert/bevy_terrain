@@ -8,8 +8,10 @@ use bevy::{
     core::cast_slice,
     prelude::*,
     render::{
+        render_asset::RenderAssets,
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
+        texture::GpuImage,
         Extract,
     },
 };
@@ -21,14 +23,15 @@ use std::num::NonZeroU32;
 pub struct GpuQuadtree {
     lod_count: u32,
     node_count: u32,
-    quadtree_texture: Texture, // Todo: consider image handle
-    pub(crate) quadtree_view: TextureView,
-    pub(crate) data: Array3<QuadtreeEntry>, // Todo: consider own component
+    handle: Handle<Image>,
+    data: Array3<QuadtreeEntry>,
 }
 
 impl GpuQuadtree {
-    fn new(device: &RenderDevice, quadtree: &Quadtree) -> Self {
-        let quadtree_texture = device.create_texture(&TextureDescriptor {
+    const FORMAT: TextureFormat = TextureFormat::Rg16Uint;
+
+    fn new(device: &RenderDevice, quadtree: &Quadtree, images: &mut RenderAssets<Image>) -> Self {
+        let texture = device.create_texture(&TextureDescriptor {
             label: "quadtree_texture".into(),
             size: Extent3d {
                 width: quadtree.node_count,
@@ -38,25 +41,35 @@ impl GpuQuadtree {
             mip_level_count: 1,
             sample_count: 1,
             dimension: TextureDimension::D2,
-            format: TextureFormat::Rg16Uint,
+            format: Self::FORMAT,
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
         });
 
-        let quadtree_view = quadtree_texture.create_view(&TextureViewDescriptor::default());
+        images.insert(
+            quadtree.handle.clone(),
+            GpuImage {
+                texture_view: texture.create_view(&TextureViewDescriptor::default()),
+                texture,
+                texture_format: Self::FORMAT,
+                sampler: device.create_sampler(&SamplerDescriptor::default()),
+                size: Vec2::splat(quadtree.node_count as f32),
+            },
+        );
 
         Self {
             lod_count: quadtree.lod_count,
             node_count: quadtree.node_count,
-            quadtree_texture,
-            quadtree_view,
+            handle: quadtree.handle.clone(),
             data: default(),
         }
     }
 
-    fn update(&self, queue: &RenderQueue) {
+    fn update(&self, queue: &RenderQueue, images: &RenderAssets<Image>) {
+        let image = images.get(&self.handle).unwrap();
+
         queue.write_texture(
             ImageCopyTexture {
-                texture: &self.quadtree_texture,
+                texture: &image.texture,
                 mip_level: 0,
                 origin: Origin3d { x: 0, y: 0, z: 0 },
                 aspect: TextureAspect::All,
@@ -79,6 +92,7 @@ impl GpuQuadtree {
 /// Initializes the [`GpuQuadtree`] of newly created terrains.
 pub(crate) fn initialize_gpu_quadtree(
     device: Res<RenderDevice>,
+    mut images: ResMut<RenderAssets<Image>>,
     mut gpu_quadtrees: ResMut<TerrainViewComponents<GpuQuadtree>>,
     quadtrees: Extract<Res<TerrainViewComponents<Quadtree>>>,
     view_query: Extract<Query<Entity, With<TerrainView>>>,
@@ -88,7 +102,10 @@ pub(crate) fn initialize_gpu_quadtree(
         for view in view_query.iter() {
             let quadtree = quadtrees.get(&(terrain, view)).unwrap();
 
-            gpu_quadtrees.insert((terrain, view), GpuQuadtree::new(&device, &quadtree));
+            gpu_quadtrees.insert(
+                (terrain, view),
+                GpuQuadtree::new(&device, &quadtree, &mut images),
+            );
         }
     }
 }
@@ -103,14 +120,12 @@ pub(crate) fn update_gpu_quadtree(
 ) {
     for terrain in terrain_query.iter() {
         for view in view_query.iter() {
-            if let Some((quadtree, gpu_quadtree)) = quadtrees
-                .get(&(terrain, view))
-                .zip(gpu_quadtrees.get_mut(&(terrain, view)))
-            {
-                // Todo: enable this again once mutable access to the main world in extract is less painful
-                // mem::swap(&mut gpu_quadtree.data, &mut gpu_gpu_quadtree.data);
-                gpu_quadtree.data = quadtree.data.clone();
-            }
+            let quadtree = quadtrees.get(&(terrain, view)).unwrap();
+            let gpu_quadtree = gpu_quadtrees.get_mut(&(terrain, view)).unwrap();
+
+            // Todo: enable this again once mutable access to the main world in extract is less painful
+            // mem::swap(&mut gpu_quadtree.data, &mut gpu_gpu_quadtree.data);
+            gpu_quadtree.data = quadtree.data.clone();
         }
     }
 }
@@ -119,6 +134,7 @@ pub(crate) fn update_gpu_quadtree(
 /// by filling the node update buffers with them.
 pub(crate) fn queue_quadtree_updates(
     queue: Res<RenderQueue>,
+    images: Res<RenderAssets<Image>>,
     mut gpu_quadtrees: ResMut<TerrainViewComponents<GpuQuadtree>>,
     view_query: Query<Entity, With<TerrainView>>,
     terrain_query: Query<Entity, With<Terrain>>,
@@ -126,7 +142,7 @@ pub(crate) fn queue_quadtree_updates(
     for terrain in terrain_query.iter() {
         for view in view_query.iter() {
             let gpu_quadtree = gpu_quadtrees.get_mut(&(terrain, view)).unwrap();
-            gpu_quadtree.update(&queue);
+            gpu_quadtree.update(&queue, &images);
         }
     }
 }

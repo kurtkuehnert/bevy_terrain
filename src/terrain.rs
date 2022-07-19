@@ -40,7 +40,7 @@ impl AtlasAttachmentConfig {
     /// Creates the attachment from its config.
     pub(crate) fn create(&self, config: &TerrainConfig, device: &RenderDevice) -> GpuImage {
         let texture = device.create_texture(&TextureDescriptor {
-            label: None,
+            label: None, // Todo: add proper label
             size: Extent3d {
                 width: self.texture_size + 2 * self.border_size,
                 height: self.texture_size + 2 * self.border_size,
@@ -52,14 +52,12 @@ impl AtlasAttachmentConfig {
             format: self.format,
             usage: TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING,
         });
-        let texture_view = texture.create_view(&TextureViewDescriptor::default());
-        let sampler = device.create_sampler(&SamplerDescriptor::default());
 
         GpuImage {
+            texture_view: texture.create_view(&TextureViewDescriptor::default()),
             texture,
-            texture_view,
             texture_format: self.format,
-            sampler,
+            sampler: device.create_sampler(&SamplerDescriptor::default()),
             size: Vec2::splat((self.texture_size + 2 * self.border_size) as f32),
         }
     }
