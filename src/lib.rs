@@ -1,26 +1,27 @@
-use crate::debug::change_config;
-use crate::render::render_pipeline::queue_terrain;
-use crate::render::TerrainPipelineConfig;
+use crate::data_structures::gpu_node_atlas::{
+    initialize_gpu_node_atlas, queue_node_atlas_updates, update_gpu_node_atlas, GpuNodeAtlas,
+};
+use crate::render::shaders::add_shader;
 use crate::{
     attachment_loader::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk},
-    debug::{extract_debug, toggle_debug, DebugTerrain},
-    node_atlas::update_node_atlas,
-    quadtree::{adjust_quadtree, request_quadtree, update_height_under_viewer, Quadtree},
+    data_structures::{
+        gpu_quadtree::{
+            initialize_gpu_quadtree, queue_quadtree_updates, update_gpu_quadtree, GpuQuadtree,
+        },
+        node_atlas::update_node_atlas,
+        quadtree::{
+            adjust_quadtree, compute_quadtree_request, update_height_under_viewer, Quadtree,
+        },
+    },
+    debug::{change_config, extract_debug, toggle_debug, DebugTerrain},
     render::{
         compute_pipelines::{TerrainComputeNode, TerrainComputePipelines},
         culling::{queue_terrain_culling_bind_group, CullingBindGroup},
         extract_terrain,
-        gpu_node_atlas::{
-            initialize_gpu_node_atlas, queue_node_atlas_updates, update_gpu_node_atlas,
-            GpuNodeAtlas,
-        },
-        gpu_quadtree::{
-            initialize_gpu_quadtree, queue_quadtree_updates, update_gpu_quadtree, GpuQuadtree,
-        },
-        render_pipeline::TerrainRenderPipeline,
+        render_pipeline::{queue_terrain, TerrainRenderPipeline},
         terrain_data::{initialize_terrain_data, TerrainData},
         terrain_view_data::{initialize_terrain_view_data, TerrainViewData},
-        DrawTerrain,
+        DrawTerrain, TerrainPipelineConfig,
     },
     terrain::{Terrain, TerrainComponents, TerrainConfig},
     terrain_view::{
@@ -31,7 +32,6 @@ use crate::{
 use bevy::{
     core_pipeline::core_3d::Opaque3d,
     prelude::*,
-    reflect::TypeUuid,
     render::{
         extract_component::ExtractComponentPlugin, main_graph::node::CAMERA_DRIVER,
         render_graph::RenderGraph, render_phase::AddRenderCommand, render_resource::*, RenderApp,
@@ -39,77 +39,35 @@ use bevy::{
     },
 };
 
-pub mod attachment_loader;
-pub mod bundles;
-pub mod debug;
-pub mod node_atlas;
+mod attachment_loader;
+mod bundles;
+mod data_structures;
+mod debug;
 pub mod preprocess;
-pub mod quadtree;
-pub mod render;
-pub mod terrain;
-pub mod terrain_view;
+mod render;
+mod terrain;
+mod terrain_view;
 
-const CONFIG_HANDLE: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 907665645684322571);
-const TILE_HANDLE: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 556563744564564658);
-const PARAMETERS_HANDLE: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 656456784512075658);
-const ATLAS_HANDLE: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 124345314345873273);
-const TERRAIN_HANDLE: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 234313897973543254);
-const DEBUG_HANDLE: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 513467378691355413);
-
-pub const PREPARE_INDIRECT_HANDLE: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 242384313596767307);
-pub const UPDATE_QUADTREE_HANDLE: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 213403787773215143);
-pub const TESSELATION_HANDLE: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 938732132468373352);
+#[allow(missing_docs)]
+pub mod prelude {
+    #[doc(hidden)]
+    pub use crate::{
+        attachment_loader::AttachmentFromDiskLoader,
+        bundles::TerrainBundle,
+        data_structures::quadtree::Quadtree,
+        preprocess::prelude,
+        render::TerrainPipelineConfig,
+        terrain::{Terrain, TerrainConfig},
+        terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
+        TerrainPlugin,
+    };
+}
 
 pub struct TerrainPlugin;
 
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
-        let mut assets = app.world.resource_mut::<Assets<_>>();
-        assets.set_untracked(
-            CONFIG_HANDLE,
-            Shader::from_wgsl(include_str!("render/shaders/config.wgsl")),
-        );
-        assets.set_untracked(
-            TILE_HANDLE,
-            Shader::from_wgsl(include_str!("render/shaders/tile.wgsl")),
-        );
-        assets.set_untracked(
-            PARAMETERS_HANDLE,
-            Shader::from_wgsl(include_str!("render/shaders/parameters.wgsl")),
-        );
-        assets.set_untracked(
-            ATLAS_HANDLE,
-            Shader::from_wgsl(include_str!("render/shaders/atlas.wgsl")),
-        );
-        assets.set_untracked(
-            TERRAIN_HANDLE,
-            Shader::from_wgsl(include_str!("render/shaders/terrain.wgsl")),
-        );
-        assets.set_untracked(
-            DEBUG_HANDLE,
-            Shader::from_wgsl(include_str!("render/shaders/debug.wgsl")),
-        );
-        assets.set_untracked(
-            PREPARE_INDIRECT_HANDLE,
-            Shader::from_wgsl(include_str!("render/shaders/prepare_indirect.wgsl")),
-        );
-        assets.set_untracked(
-            UPDATE_QUADTREE_HANDLE,
-            Shader::from_wgsl(include_str!("render/shaders/update_quadtree.wgsl")),
-        );
-        assets.set_untracked(
-            TESSELATION_HANDLE,
-            Shader::from_wgsl(include_str!("render/shaders/tessellation.wgsl")),
-        );
+        add_shader(app);
 
         app.add_plugin(ExtractComponentPlugin::<Terrain>::default())
             .add_plugin(ExtractComponentPlugin::<TerrainView>::default())
@@ -122,7 +80,10 @@ impl Plugin for TerrainPlugin {
                 CoreStage::Last,
                 finish_loading_attachment_from_disk.before(update_node_atlas),
             )
-            .add_system_to_stage(CoreStage::Last, request_quadtree.before(update_node_atlas))
+            .add_system_to_stage(
+                CoreStage::Last,
+                compute_quadtree_request.before(update_node_atlas),
+            )
             .add_system_to_stage(CoreStage::Last, update_node_atlas)
             .add_system_to_stage(CoreStage::Last, adjust_quadtree.after(update_node_atlas))
             .add_system_to_stage(

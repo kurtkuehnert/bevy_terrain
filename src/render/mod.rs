@@ -11,14 +11,13 @@ use bevy::{
     render::{render_phase::SetItemPipeline, Extract},
 };
 
-pub mod compute_pipelines;
-pub mod culling;
-pub mod gpu_node_atlas;
-pub mod gpu_quadtree;
-pub mod layouts;
-pub mod render_pipeline;
-pub mod terrain_data;
-pub mod terrain_view_data;
+pub(crate) mod compute_pipelines;
+pub(crate) mod culling;
+pub(crate) mod layouts;
+pub(crate) mod render_pipeline;
+pub(crate) mod shaders;
+pub(crate) mod terrain_data;
+pub(crate) mod terrain_view_data;
 
 pub struct TerrainPipelineConfig {
     pub shader: String,

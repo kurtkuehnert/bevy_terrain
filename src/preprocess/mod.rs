@@ -1,6 +1,6 @@
 pub mod density;
 
-use crate::quadtree::Node;
+use crate::data_structures::calc_node_id;
 use image::{
     imageops::{self, FilterType},
     io::Reader,
@@ -8,6 +8,12 @@ use image::{
 };
 use itertools::iproduct;
 use std::{fs, ops::Deref};
+
+#[allow(missing_docs)]
+pub mod prelude {
+    #[doc(hidden)]
+    pub use crate::preprocess::{density::preprocess_density, preprocess_tiles, ImageFormat};
+}
 
 #[inline]
 fn div_floor(x: u32, n: u32) -> u32 {
@@ -214,7 +220,7 @@ pub fn split_tile(
     );
 
     for (x, y) in iproduct!(first.0..last.0, first.1..last.1) {
-        let node_id = Node::id(lod, x, y);
+        let node_id = calc_node_id(lod, x, y);
         let file_path = format!("{output_directory}/{node_id}.png");
 
         let mut node = load_node(&file_path, texture_size, border_size, format);
@@ -238,7 +244,7 @@ pub fn down_sample_nodes(
     format: ImageFormat,
 ) {
     for (x, y) in iproduct!(first.0..last.0, first.1..last.1) {
-        let node_id = Node::id(lod, x, y);
+        let node_id = calc_node_id(lod, x, y);
         let file_path = format!("{directory}/{node_id}.png");
 
         let mut node = load_node(&file_path, texture_size, border_size, format);
@@ -247,7 +253,7 @@ pub fn down_sample_nodes(
         let child_lod = lod - 1;
 
         for (cx, cy) in iproduct!(0..2, 0..2) {
-            let child_id = Node::id(child_lod, child_origin.0 + cx, child_origin.1 + cy);
+            let child_id = calc_node_id(child_lod, child_origin.0 + cx, child_origin.1 + cy);
             let child_path = format!("{directory}/{child_id}.png");
 
             let child_node = load_node(&child_path, texture_size, border_size, format);
@@ -277,7 +283,7 @@ pub fn stitch_nodes(
     format: ImageFormat,
 ) {
     for (x, y) in iproduct!(first.0..last.0, first.1..last.1) {
-        let node_id = Node::id(lod, x, y);
+        let node_id = calc_node_id(lod, x, y);
         let file_path = format!("{directory}/{node_id}.png");
 
         let mut node = load_node(&file_path, texture_size, border_size, format);
@@ -291,7 +297,7 @@ pub fn stitch_nodes(
                 continue;
             };
 
-            let adjacent_id = Node::id(lod, x as u32, y as u32);
+            let adjacent_id = calc_node_id(lod, x as u32, y as u32);
             let adjacent_path = format!("{directory}/{adjacent_id}.png");
 
             let adjacent_node = load_node(&adjacent_path, texture_size, border_size, format);
