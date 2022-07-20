@@ -1,5 +1,5 @@
-use crate::terrain::AttachmentIndex;
-use crate::{node_atlas::NodeAtlas, quadtree::NodeId};
+use crate::data_structures::node_atlas::NodeAtlas;
+use crate::data_structures::{AttachmentIndex, NodeId};
 use bevy::{
     asset::{AssetServer, HandleId, LoadState},
     prelude::*,

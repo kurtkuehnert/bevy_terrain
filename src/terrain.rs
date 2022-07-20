@@ -1,12 +1,13 @@
-use crate::attachment_loader::{AttachmentFromDisk, AttachmentFromDiskLoader};
-use bevy::render::renderer::RenderDevice;
-use bevy::render::texture::GpuImage;
-use bevy::utils::Uuid;
+use crate::{
+    attachment_loader::{AttachmentFromDisk, AttachmentFromDiskLoader},
+    data_structures::{AtlasAttachment, AttachmentIndex},
+};
 use bevy::{
     ecs::{query::QueryItem, system::lifetimeless::Read},
     prelude::*,
     render::{extract_component::ExtractComponent, render_resource::*},
     utils::HashMap,
+    utils::Uuid,
 };
 use std::str::FromStr;
 
@@ -22,44 +23,6 @@ impl ExtractComponent for Terrain {
     #[inline]
     fn extract_component(_item: QueryItem<Self::Query>) -> Self {
         Self
-    }
-}
-
-pub type AttachmentIndex = usize;
-
-/// Configures an [`AtlasAttachment`].
-#[derive(Clone)]
-pub struct AtlasAttachmentConfig {
-    pub(crate) atlas_handle: Handle<Image>,
-    pub(crate) texture_size: u32,
-    pub(crate) border_size: u32,
-    pub(crate) format: TextureFormat,
-}
-
-impl AtlasAttachmentConfig {
-    /// Creates the attachment from its config.
-    pub(crate) fn create(&self, config: &TerrainConfig, device: &RenderDevice) -> GpuImage {
-        let texture = device.create_texture(&TextureDescriptor {
-            label: None, // Todo: add proper label
-            size: Extent3d {
-                width: self.texture_size + 2 * self.border_size,
-                height: self.texture_size + 2 * self.border_size,
-                depth_or_array_layers: config.node_atlas_size as u32,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: TextureDimension::D2,
-            format: self.format,
-            usage: TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING,
-        });
-
-        GpuImage {
-            texture_view: texture.create_view(&TextureViewDescriptor::default()),
-            texture,
-            texture_format: self.format,
-            sampler: device.create_sampler(&SamplerDescriptor::default()),
-            size: Vec2::splat((self.texture_size + 2 * self.border_size) as f32),
-        }
     }
 }
 
@@ -79,9 +42,9 @@ pub struct TerrainConfig {
     pub height: f32,
     pub chunk_size: u32,
     pub terrain_size: u32,
-    pub node_atlas_size: u16,
+    pub node_atlas_size: u32,
     pub path: String,
-    pub attachments: Vec<AtlasAttachmentConfig>,
+    pub attachments: Vec<AtlasAttachment>,
 }
 
 impl TerrainConfig {
@@ -90,10 +53,9 @@ impl TerrainConfig {
         chunk_size: u32,
         lod_count: u32,
         height: f32,
+        node_atlas_size: u32,
         path: String,
     ) -> Self {
-        let node_atlas_size = 1500;
-
         Self {
             lod_count,
             height,
@@ -107,6 +69,7 @@ impl TerrainConfig {
 
     pub fn add_attachment(
         &mut self,
+        name: &'static str,
         format: TextureFormat,
         texture_size: u32,
         border_size: u32,
@@ -118,8 +81,9 @@ impl TerrainConfig {
         )
         .typed();
 
-        self.attachments.push(AtlasAttachmentConfig {
-            atlas_handle,
+        self.attachments.push(AtlasAttachment {
+            name,
+            handle: atlas_handle,
             texture_size,
             border_size,
             format,
@@ -131,12 +95,12 @@ impl TerrainConfig {
     pub fn add_attachment_from_disk(
         &mut self,
         from_disk_loader: &mut AttachmentFromDiskLoader,
-        name: &str,
+        name: &'static str,
         format: TextureFormat,
         texture_size: u32,
         border_size: u32,
     ) {
-        let attachment_index = self.add_attachment(format, texture_size, border_size);
+        let attachment_index = self.add_attachment(name, format, texture_size, border_size);
 
         from_disk_loader.add_attachment(
             attachment_index,

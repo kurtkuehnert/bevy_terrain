@@ -1,18 +1,22 @@
-use crate::{render::culling::CullingData, terrain::TerrainConfigUniform};
+use crate::{
+    render::culling::CullingData, terrain::TerrainConfigUniform,
+    terrain_view::TerrainViewConfigUniform,
+};
 use bevy::render::render_resource::*;
 use std::mem;
 
-pub(crate) const TERRAIN_VIEW_CONFIG_SIZE: BufferAddress = 4 * 48;
+pub(crate) const TERRAIN_CONFIG_SIZE: BufferAddress =
+    mem::size_of::<TerrainConfigUniform>() as BufferAddress;
+pub(crate) const TERRAIN_VIEW_CONFIG_SIZE: BufferAddress =
+    mem::size_of::<TerrainViewConfigUniform>() as BufferAddress;
+pub(crate) const CULL_DATA_BUFFER_SIZE: BufferAddress =
+    mem::size_of::<CullingData>() as BufferAddress;
 pub(crate) const TILE_SIZE: BufferAddress = 6 * 4;
 pub(crate) const INDIRECT_BUFFER_SIZE: BufferAddress = 5 * 4;
 pub(crate) const PARAMETER_BUFFER_SIZE: BufferAddress = 6 * 4;
-pub(crate) const CONFIG_BUFFER_SIZE: BufferAddress =
-    mem::size_of::<TerrainConfigUniform>() as BufferAddress;
-pub(crate) const CULL_DATA_BUFFER_SIZE: BufferAddress =
-    mem::size_of::<CullingData>() as BufferAddress;
 
 pub(crate) const PREPARE_INDIRECT_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
-    label: Some("prepare_indirect_layout"),
+    label: None,
     entries: &[
         // indirect buffer
         BindGroupLayoutEntry {
@@ -29,7 +33,7 @@ pub(crate) const PREPARE_INDIRECT_LAYOUT: BindGroupLayoutDescriptor = BindGroupL
 };
 
 pub(crate) const CULL_DATA_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
-    label: Some("cull data_layout"),
+    label: None,
     entries: &[
         // cull data
         BindGroupLayoutEntry {
@@ -46,9 +50,9 @@ pub(crate) const CULL_DATA_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDe
 };
 
 pub(crate) const TESSELLATION_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
-    label: Some("tessellation_layout"),
+    label: None,
     entries: &[
-        // view config buffer
+        // view config
         BindGroupLayoutEntry {
             binding: 0,
             visibility: ShaderStages::COMPUTE,
@@ -59,7 +63,7 @@ pub(crate) const TESSELLATION_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayou
             },
             count: None,
         },
-        // quadtree array texture
+        // quadtree
         BindGroupLayoutEntry {
             binding: 1,
             visibility: ShaderStages::COMPUTE,
@@ -70,7 +74,7 @@ pub(crate) const TESSELLATION_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayou
             },
             count: None,
         },
-        // final tile buffer
+        // final tiles
         BindGroupLayoutEntry {
             binding: 2,
             visibility: ShaderStages::COMPUTE,
@@ -81,7 +85,7 @@ pub(crate) const TESSELLATION_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayou
             },
             count: None,
         },
-        // temporary tile buffer
+        // temporary tiles
         BindGroupLayoutEntry {
             binding: 3,
             visibility: ShaderStages::COMPUTE,
@@ -92,7 +96,7 @@ pub(crate) const TESSELLATION_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayou
             },
             count: None,
         },
-        // parameter buffer
+        // parameters
         BindGroupLayoutEntry {
             binding: 4,
             visibility: ShaderStages::COMPUTE,
@@ -107,9 +111,9 @@ pub(crate) const TESSELLATION_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayou
 };
 
 pub(crate) const TERRAIN_VIEW_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
-    label: Some("terrain_view_layout"),
+    label: None,
     entries: &[
-        // view config buffer
+        // view config
         BindGroupLayoutEntry {
             binding: 0,
             visibility: ShaderStages::VERTEX_FRAGMENT,
@@ -120,7 +124,7 @@ pub(crate) const TERRAIN_VIEW_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayou
             },
             count: None,
         },
-        // quadtree array texture
+        // quadtree
         BindGroupLayoutEntry {
             binding: 1,
             visibility: ShaderStages::VERTEX_FRAGMENT,
@@ -131,7 +135,7 @@ pub(crate) const TERRAIN_VIEW_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayou
             },
             count: None,
         },
-        // tile buffer
+        // tiles
         BindGroupLayoutEntry {
             binding: 2,
             visibility: ShaderStages::VERTEX,

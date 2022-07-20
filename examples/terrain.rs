@@ -1,44 +1,42 @@
 use bevy::{prelude::*, render::render_resource::*};
-use bevy_terrain::{
-    attachment_loader::AttachmentFromDiskLoader,
-    bundles::TerrainBundle,
-    preprocess::{density::preprocess_density, preprocess_tiles, ImageFormat},
-    quadtree::Quadtree,
-    render::TerrainPipelineConfig,
-    terrain::TerrainConfig,
-    terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
-    TerrainPlugin,
-};
+use bevy_terrain::{prelude::*, preprocess::prelude::*};
 
 const TERRAIN_SIZE: u32 = 1024;
 const LOD_COUNT: u32 = 5;
 const CHUNK_SIZE: u32 = 128;
 const HEIGHT: f32 = 200.0;
+const NODE_ATLAS_SIZE: u32 = 300;
 
 fn main() {
-    let mut app = App::new();
+    // Should only be run once. Comment out after the first run.
+    // preprocess();
 
-    app.add_plugins(DefaultPlugins)
+    App::new()
+        .add_plugins(DefaultPlugins)
         .insert_resource(TerrainPipelineConfig {
-            attachment_count: 3,
+            attachment_count: 3, // has to match the attachments of the terrain
             ..default()
         })
         .add_plugin(TerrainPlugin)
-        .add_startup_system(setup);
-
-    // Should only be run once. Comment out after the first run.
-    preprocess();
-
-    app.run()
+        .add_startup_system(setup)
+        .run();
 }
 
 fn setup(
     mut commands: Commands,
     mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
-    mut terrain_view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
+    mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
 ) {
+    // Configure all the important properties of the terrain, as well as its attachments.
+    let mut config = TerrainConfig::new(
+        TERRAIN_SIZE,
+        CHUNK_SIZE,
+        LOD_COUNT,
+        HEIGHT,
+        NODE_ATLAS_SIZE,
+        "terrain/".to_string(),
+    );
     let mut from_disk_loader = AttachmentFromDiskLoader::default();
-    let mut config = TerrainConfig::new(CHUNK_SIZE, LOD_COUNT, HEIGHT, "terrain/".to_string());
 
     config.add_attachment_from_disk(
         &mut from_disk_loader,
@@ -62,11 +60,16 @@ fn setup(
         1,
     );
 
+    // Create the terrain.
     let terrain = commands
         .spawn_bundle(TerrainBundle::new(config.clone()))
         .insert(from_disk_loader)
         .id();
 
+    // Configure the quality settings of the terrain view. Adapt the settings to your liking.
+    let view_config = TerrainViewConfig::new(&config, 10, 5.0, 3.0, 10.0, 0.2, 0.2, 0.2);
+
+    // Create the view.
     let view = commands
         .spawn_bundle(Camera3dBundle {
             transform: Transform::from_xyz(-200.0, 500.0, -200.0)
@@ -76,20 +79,17 @@ fn setup(
         .insert(TerrainView)
         .id();
 
-    let view_config = TerrainViewConfig::new(TERRAIN_SIZE, 3.0, 10.0, 0.5);
-    let quadtree = Quadtree::new(&config, &view_config);
-
-    terrain_view_configs.insert((terrain, view), view_config);
+    // Store the quadtree and the view config together. This will hopefully be way nicer
+    // once the ECS can handle relations.
+    let quadtree = Quadtree::from_configs(&config, &view_config);
+    view_configs.insert((terrain, view), view_config);
     quadtrees.insert((terrain, view), quadtree);
 
+    // Create a sunlight for the physical based lighting.
     commands.spawn_bundle(DirectionalLightBundle {
         directional_light: DirectionalLight {
-            color: Color::default(),
             illuminance: 10000.0,
-            shadows_enabled: false,
-            shadow_projection: Default::default(),
-            shadow_depth_bias: 0.0,
-            shadow_normal_bias: 0.0,
+            ..default()
         },
         transform: Transform {
             translation: Vec3::new(0.0, 1.0, 0.0),

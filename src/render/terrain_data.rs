@@ -1,5 +1,5 @@
 use crate::{
-    render::layouts::CONFIG_BUFFER_SIZE,
+    render::layouts::TERRAIN_CONFIG_SIZE,
     terrain::{Terrain, TerrainComponents},
     TerrainConfig,
 };
@@ -26,7 +26,7 @@ pub fn terrain_bind_group_layout(
             ty: BindingType::Buffer {
                 ty: BufferBindingType::Uniform,
                 has_dynamic_offset: false,
-                min_binding_size: BufferSize::new(CONFIG_BUFFER_SIZE),
+                min_binding_size: BufferSize::new(TERRAIN_CONFIG_SIZE),
             },
             count: None,
         },
@@ -102,7 +102,7 @@ impl TerrainData {
                 .iter()
                 .enumerate()
                 .map(|(binding, attachment)| {
-                    let attachment = images.get(&attachment.atlas_handle).unwrap();
+                    let attachment = images.get(&attachment.handle).unwrap();
 
                     BindGroupEntry {
                         binding: binding as u32 + 2,
