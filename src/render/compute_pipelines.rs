@@ -1,10 +1,11 @@
+use crate::render::shaders::{PREPARE_INDIRECT_SHADER, TESSELATION_SHADER};
 use crate::render::terrain_data::terrain_bind_group_layout;
 use crate::render::TerrainPipelineConfig;
 use crate::{
     render::{culling::CullingBindGroup, layouts::*, terrain_view_data::TerrainViewData},
     terrain::Terrain,
     DebugTerrain, TerrainComponents, TerrainData, TerrainView, TerrainViewComponents,
-    TerrainViewConfig, PREPARE_INDIRECT_HANDLE, TESSELATION_HANDLE,
+    TerrainViewConfig,
 };
 use bevy::{
     ecs::system::{
@@ -89,8 +90,8 @@ impl FromWorld for TerrainComputePipelines {
         let cull_data_layout = device.create_bind_group_layout(&CULL_DATA_LAYOUT);
         let terrain_layout = terrain_bind_group_layout(&device, config.attachment_count);
 
-        let prepare_indirect_shader = PREPARE_INDIRECT_HANDLE.typed();
-        let tessellation_shader = TESSELATION_HANDLE.typed();
+        let prepare_indirect_shader = PREPARE_INDIRECT_SHADER.typed();
+        let tessellation_shader = TESSELATION_SHADER.typed();
 
         TerrainComputePipelines {
             prepare_indirect_layout,

@@ -1,47 +1,78 @@
-use crate::{
-    node_atlas::{LoadingNode, NodeAtlas},
-    terrain::{AttachmentIndex, Terrain, TerrainComponents, TerrainConfig},
-};
+use crate::terrain::{Terrain, TerrainComponents};
+
+use crate::data_structures::node_atlas::{LoadingNode, NodeAtlas};
+use crate::data_structures::{AtlasAttachment, AtlasIndex};
 use bevy::{
     prelude::*,
     render::{
         render_asset::RenderAssets,
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
+        texture::GpuImage,
         Extract, MainWorld,
     },
 };
 use std::mem;
 
+impl AtlasAttachment {
+    /// Creates the attachment from its config.
+    pub(crate) fn create(
+        &self,
+        device: &RenderDevice,
+        images: &mut RenderAssets<Image>,
+        node_atlas_size: AtlasIndex,
+    ) -> Handle<Image> {
+        let texture = device.create_texture(&TextureDescriptor {
+            label: Some(&(self.name.to_string() + "_attachment")),
+            size: Extent3d {
+                width: self.texture_size + 2 * self.border_size,
+                height: self.texture_size + 2 * self.border_size,
+                depth_or_array_layers: node_atlas_size as u32,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: TextureDimension::D2,
+            format: self.format,
+            usage: TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING,
+        });
+
+        images.insert(
+            self.handle.clone(),
+            GpuImage {
+                texture_view: texture.create_view(&TextureViewDescriptor::default()),
+                texture,
+                texture_format: self.format,
+                sampler: device.create_sampler(&SamplerDescriptor::default()),
+                size: Vec2::splat((self.texture_size + 2 * self.border_size) as f32),
+            },
+        );
+
+        self.handle.clone()
+    }
+}
+
 /// Manages the [`AtlasAttachment`]s of the terrain, by updating them with the data of
 /// the [`NodeAttachment`]s of newly activated nodes.
 #[derive(Component)]
 pub struct GpuNodeAtlas {
-    pub(crate) atlas_attachments: Vec<Handle<Image>>,
+    pub(crate) attachments: Vec<Handle<Image>>,
     pub(crate) loaded_nodes: Vec<LoadingNode>,
 }
 
 impl GpuNodeAtlas {
     fn new(
-        config: &TerrainConfig, // Todo: change to NodeAtlas
         device: &RenderDevice,
         images: &mut RenderAssets<Image>,
+        node_atlas: &NodeAtlas,
     ) -> Self {
-        let atlas_attachments = config
+        let attachments = node_atlas
             .attachments
             .iter()
-            .map(|attachment_config| {
-                images.insert(
-                    attachment_config.atlas_handle.clone(),
-                    attachment_config.create(config, device),
-                );
-
-                attachment_config.atlas_handle.clone()
-            })
+            .map(|attachment| attachment.create(device, images, node_atlas.size))
             .collect();
 
         Self {
-            atlas_attachments,
+            attachments,
             loaded_nodes: Vec::new(),
         }
     }
@@ -49,12 +80,11 @@ impl GpuNodeAtlas {
     fn update(&mut self, command_encoder: &mut CommandEncoder, images: &RenderAssets<Image>) {
         for node in self.loaded_nodes.drain(..) {
             for (node_handle, atlas_handle) in
-                self.atlas_attachments
+                self.attachments
                     .iter()
                     .enumerate()
                     .map(|(index, atlas_handle)| {
-                        let node_handle =
-                            node.attachments.get(&(index as AttachmentIndex)).unwrap();
+                        let node_handle = node.attachments.get(&index).unwrap();
 
                         (node_handle, atlas_handle)
                     })
@@ -86,6 +116,8 @@ impl GpuNodeAtlas {
                             depth_or_array_layers: 1,
                         },
                     );
+                } else {
+                    error!("Something went wrong, attachment is not available!")
                 }
             }
         }
@@ -97,10 +129,13 @@ pub(crate) fn initialize_gpu_node_atlas(
     device: Res<RenderDevice>,
     mut images: ResMut<RenderAssets<Image>>,
     mut gpu_node_atlases: ResMut<TerrainComponents<GpuNodeAtlas>>,
-    mut terrain_query: Extract<Query<(Entity, &TerrainConfig), Added<Terrain>>>,
+    mut terrain_query: Extract<Query<(Entity, &NodeAtlas), Added<Terrain>>>,
 ) {
-    for (terrain, config) in terrain_query.iter_mut() {
-        gpu_node_atlases.insert(terrain, GpuNodeAtlas::new(config, &device, &mut images));
+    for (terrain, node_atlas) in terrain_query.iter_mut() {
+        gpu_node_atlases.insert(
+            terrain,
+            GpuNodeAtlas::new(&device, &mut images, &node_atlas),
+        );
     }
 }
 

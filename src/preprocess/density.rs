@@ -1,5 +1,5 @@
+use crate::data_structures::calc_node_id;
 use crate::preprocess::{div_ceil, div_floor, down_sample_nodes, load_node, ImageFormat};
-use crate::quadtree::Node;
 use crate::Vec3;
 use image::{DynamicImage, ImageBuffer, Luma};
 use itertools::iproduct;
@@ -50,7 +50,7 @@ pub fn density_chunks(
     height: f32,
 ) {
     for (x, y) in iproduct!(first.0..last.0, first.1..last.1) {
-        let node_id = Node::id(0, x, y);
+        let node_id = calc_node_id(0, x, y);
         let density_file_path = format!("{density_directory}/{node_id}.png");
         let height_file_path = format!("{height_directory}/{node_id}.png");
 

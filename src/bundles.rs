@@ -1,4 +1,5 @@
-use crate::{node_atlas::NodeAtlas, terrain::Terrain, terrain::TerrainConfig};
+use crate::data_structures::node_atlas::NodeAtlas;
+use crate::{terrain::Terrain, terrain::TerrainConfig};
 use bevy::prelude::*;
 
 #[derive(Bundle)]
@@ -14,7 +15,7 @@ impl TerrainBundle {
     pub fn new(config: TerrainConfig) -> Self {
         Self {
             terrain: Terrain,
-            node_atlas: NodeAtlas::new(&config),
+            node_atlas: NodeAtlas::from_config(&config),
             config,
             transform: default(),
             global_transform: default(),

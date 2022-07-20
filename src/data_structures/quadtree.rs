@@ -1,44 +1,37 @@
-use crate::node_atlas::LoadingState;
 use crate::{
-    node_atlas::{AtlasIndex, NodeAtlas, INVALID_ATLAS_INDEX},
+    data_structures::{
+        calc_node_id,
+        node_atlas::{LoadingState, NodeAtlas},
+        AtlasIndex, NodeCoordinate, NodeId, INVALID_ATLAS_INDEX, INVALID_LOD, INVALID_NODE_ID,
+    },
     terrain::{Terrain, TerrainConfig},
     TerrainView, TerrainViewComponents, TerrainViewConfig,
 };
 use bevy::{math::Vec3Swizzles, prelude::*};
-use bytemuck::Pod;
-use bytemuck::Zeroable;
+use bytemuck::{Pod, Zeroable};
 use itertools::iproduct;
 use ndarray::Array3;
 
-// Todo: may be swap to u64 for giant terrains
-// Todo: consider 3 bit face data, for cube sphere
-/// A globally unique identifier of a node.
-/// lod |  x |  y
-///   4 | 14 | 14
-pub(crate) type NodeId = u32;
-pub(crate) const INVALID_NODE_ID: NodeId = NodeId::MAX;
-pub(crate) const INVALID_LOD: u16 = u16::MAX;
-
-/// The global coordinate of a node.
-pub struct NodeCoordinate {
-    pub lod: u32,
-    pub x: u32,
-    pub y: u32,
-}
-
+/// The current state of a node of a [`Quadtree`].
+///
+/// This indicates, whether or not the node should be loaded into the [`NodeAtlas`).
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum RequestState {
-    Demanded,
+enum RequestState {
+    /// The node should be loaded.
+    Requested,
+    /// The node does not have to be loaded.
     Released,
 }
 
-/// The cpu representation of a node.
-pub struct Node {
-    node_id: u32, // current node id at the grid position
+/// The internal representation of a node in a [`Quadtree`].
+struct TreeNode {
+    /// The current node id at the quadtree position.
+    node_id: u32,
+    /// Indicates, whether the node is currently demanded or released.
     state: RequestState,
 }
 
-impl Default for Node {
+impl Default for TreeNode {
     fn default() -> Self {
         Self {
             node_id: INVALID_NODE_ID,
@@ -47,28 +40,17 @@ impl Default for Node {
     }
 }
 
-impl Node {
-    /// Calculates a unique identifier for the node at the specified coordinate.
-    #[inline]
-    pub(crate) fn id(lod: u32, x: u32, y: u32) -> NodeId {
-        (lod & 0xF) << 28 | (x & 0x3FFF) << 14 | y & 0x3FFF
-    }
-
-    /// Calculates the coordinate of the node.
-    #[inline]
-    pub(crate) fn coordinate(id: NodeId) -> NodeCoordinate {
-        NodeCoordinate {
-            lod: (id >> 28) & 0xF,
-            x: (id >> 14) & 0x3FFF,
-            y: id & 0x3FFF,
-        }
-    }
-}
-
+/// An entry of the [`Quadtree`], used to access the best currently loaded node
+/// of the [`NodeAtlas`] on the CPU.
+///
+/// These entries are synced each frame with their equivalent representations in the
+/// [`GpuQuadtree`](super::gpu_quadtree::GpuQuadtree) for access on the GPU.
 #[repr(C)]
-#[derive(Zeroable, Clone, Copy, Pod, Debug)]
+#[derive(Clone, Copy, Zeroable, Pod)]
 pub(crate) struct QuadtreeEntry {
+    /// The atlas index of the best entry.
     atlas_index: AtlasIndex,
+    /// The atlas lod of the best entry.
     atlas_lod: u16,
 }
 
@@ -81,58 +63,104 @@ impl Default for QuadtreeEntry {
     }
 }
 
-// Todo: find a suitable name
-/// A quadtree-like view of a terrain, that requests and releases nodes.
-/// Additionally it tracks all [`NodeUpdate`]s, which are send to the GPU by the
-/// [`GpuQuadtree`](crate::render::gpu_quadtree::GpuQuadtree).
+/// A quadtree-like view of a terrain, that requests and releases nodes from the [`NodeAtlas`]
+/// depending on the distance to the viewer.
+///
+/// It can be used to access the best currently loaded node of the [`NodeAtlas`].
+/// Additionally its sends this data to the GPU via the
+/// [`GpuQuadtree`](super::gpu_quadtree::GpuQuadtree) so that it can be utilised
+/// in shaders as well.
+///
+/// Each view (camera, shadow-casting light) that should consider the terrain has to
+/// have an associated quadtree.
+///
+/// This quadtree is a "cube" with a size of (`node_count`x`node_count`x`lod_count`), where each layer
+/// corresponds to a lod. These layers are wrapping (modulo `node_count`), that means that
+/// the quadtree is always centered under the viewer and only considers `node_count` / 2 nodes
+/// in each direction.
+///
+/// Each frame the quadtree determines the state of each node via the
+/// [`compute_requests`](Quadtree::compute_requests) methode.
+/// After the [`NodeAtlas`] has adjusted to these requests, the quadtree retrieves the best
+/// currently loaded nodes from the node atlas via the
+/// [`adjust`](Quadtree::adjust) methode, which can later be used to access the terrain data.
 #[derive(Component)]
 pub struct Quadtree {
-    pub(crate) lod_count: u32,
-    pub(crate) node_count: u32,
+    /// The handle of the quadtree texture.
     pub(crate) handle: Handle<Image>,
+    /// The current cpu quadtree data. This is synced each frame with the gpu quadtree data.
     pub(crate) data: Array3<QuadtreeEntry>,
+    /// Nodes that are no longer required by this quadtree.
     pub(crate) released_nodes: Vec<NodeId>,
-    pub(crate) demanded_nodes: Vec<NodeId>,
+    /// Nodes that are requested to be loaded by this quadtree.
+    pub(crate) requested_nodes: Vec<NodeId>,
+    /// The count of level of detail layers.
+    pub(crate) lod_count: u32,
+    /// The count of nodes in x and y direction per layer.
+    pub(crate) node_count: u32,
+    /// The size of a chunk (node with lod 0).
     chunk_size: u32,
+    /// The distance (measured in node sizes) until which to request nodes to be loaded.
     load_distance: f32,
-    height: f32,
+    height: f32, // Todo: reconsider where to store this
     height_under_viewer: f32,
-    nodes: Array3<Node>,
+    /// The internal node states of the quadtree.
+    nodes: Array3<TreeNode>,
 }
 
 impl Quadtree {
-    /// Creates a new quadtree based on the supplied [`TerrainConfig`].
-    pub fn new(config: &TerrainConfig, view_config: &TerrainViewConfig) -> Self {
+    /// Creates a new quadtree from parameters.
+    ///
+    /// * `handle` - The handle of the quadtree texture.
+    /// * `lod_count` - The count of level of detail layers.
+    /// * `node_count` - The count of nodes in x and y direction per layer.
+    /// * `chunk_size` - The size of a chunk (node with lod 0).
+    /// * `load_distance` - The distance (measured in node sizes) until which to request nodes to be loaded.
+    /// * `height` - The height of the terrain.
+    pub fn new(
+        handle: Handle<Image>,
+        lod_count: u32,
+        node_count: u32,
+        chunk_size: u32,
+        load_distance: f32,
+        height: f32,
+    ) -> Self {
         Self {
-            lod_count: config.lod_count,
-            node_count: view_config.node_count,
-            chunk_size: config.chunk_size,
-            load_distance: view_config.load_distance,
-            height: config.height,
-            height_under_viewer: config.height / 2.0,
-            nodes: Array3::default((
-                config.lod_count as usize,
-                view_config.node_count as usize,
-                view_config.node_count as usize,
-            )),
-            data: Array3::default((
-                config.lod_count as usize,
-                view_config.node_count as usize,
-                view_config.node_count as usize,
-            )),
+            handle,
+            lod_count,
+            node_count,
+            chunk_size,
+            load_distance,
+            height,
+            height_under_viewer: height / 2.0,
+            data: Array3::default((lod_count as usize, node_count as usize, node_count as usize)),
+            nodes: Array3::default((lod_count as usize, node_count as usize, node_count as usize)),
             released_nodes: default(),
-            demanded_nodes: default(),
-            handle: view_config.quadtree_handle.clone(),
+            requested_nodes: default(),
         }
     }
 
+    /// Creates a new quadtree from a terrain and a terrain view config.
+    pub fn from_configs(config: &TerrainConfig, view_config: &TerrainViewConfig) -> Self {
+        Self::new(
+            view_config.quadtree_handle.clone(),
+            config.lod_count,
+            view_config.node_count,
+            config.chunk_size,
+            view_config.load_distance,
+            config.height,
+        )
+    }
+
+    /// Calculates the size of a node.
     #[inline]
     fn node_size(&self, lod: u32) -> u32 {
         self.chunk_size * (1 << lod)
     }
 
-    /// Traverses the quadtree and selects all nodes to activate/deactivate.
-    pub(crate) fn request(&mut self, viewer_position: Vec3) {
+    /// Traverses the quadtree and updates the node states,
+    /// while selecting newly requested and released nodes.
+    pub(crate) fn compute_requests(&mut self, viewer_position: Vec3) {
         for lod in 0..self.lod_count {
             let node_size = self.node_size(lod);
 
@@ -152,7 +180,7 @@ impl Quadtree {
                     }
                 })
             {
-                let node_id = Node::id(lod, coordinate.x, coordinate.y);
+                let node_id = calc_node_id(lod, coordinate.x, coordinate.y);
                 let node = &mut self.nodes[[
                     lod as usize,
                     (coordinate.x % self.node_count) as usize,
@@ -162,7 +190,7 @@ impl Quadtree {
                 // quadtree slot refers to a new node
                 if node_id != node.node_id {
                     // release old node
-                    if node.state == RequestState::Demanded {
+                    if node.state == RequestState::Requested {
                         self.released_nodes.push(node.node_id);
                         node.state = RequestState::Released;
                     }
@@ -180,10 +208,10 @@ impl Quadtree {
                 // demand or release node based on their distance to the viewer
                 match (node.state, demanded) {
                     (RequestState::Released, true) => {
-                        self.demanded_nodes.push(node.node_id);
-                        node.state = RequestState::Demanded;
+                        self.requested_nodes.push(node.node_id);
+                        node.state = RequestState::Requested;
                     }
-                    (RequestState::Demanded, false) => {
+                    (RequestState::Requested, false) => {
                         self.released_nodes.push(node.node_id);
                         node.state = RequestState::Released;
                     }
@@ -193,10 +221,11 @@ impl Quadtree {
         }
     }
 
+    /// Adjusts the quadtree to the node atlas by updating the entries with the best available nodes.
     fn adjust(&mut self, node_atlas: &NodeAtlas) {
         for ((lod, x, y), node) in self.nodes.indexed_iter_mut() {
             let mut node_id = node.node_id;
-            let mut coordinate = Node::coordinate(node_id);
+            let mut coordinate = NodeCoordinate::from(node_id);
 
             let (atlas_index, atlas_lod) = loop {
                 if coordinate.lod == self.lod_count || node_id == INVALID_NODE_ID {
@@ -215,7 +244,7 @@ impl Quadtree {
                 coordinate.lod += 1;
                 coordinate.x >>= 1;
                 coordinate.y >>= 1;
-                node_id = Node::id(coordinate.lod, coordinate.x, coordinate.y);
+                node_id = calc_node_id(coordinate.lod, coordinate.x, coordinate.y);
             };
 
             self.data[[lod, y, x]] = QuadtreeEntry {
@@ -226,8 +255,9 @@ impl Quadtree {
     }
 }
 
-/// Traverses all quadtrees and marks all nodes to activate/deactivate.
-pub(crate) fn request_quadtree(
+/// Traverses all quadtrees and updates the node states,
+/// while selecting newly requested and released nodes.
+pub(crate) fn compute_quadtree_request(
     mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
     view_query: Query<(Entity, &GlobalTransform), With<TerrainView>>,
     terrain_query: Query<(Entity, &GlobalTransform), With<Terrain>>,
@@ -235,15 +265,16 @@ pub(crate) fn request_quadtree(
     // Todo: properly take the terrain transform into account
     for (terrain, _terrain_transform) in terrain_query.iter() {
         for (view, view_transform) in view_query.iter() {
-            if let Some(quadtree) = quadtrees.get_mut(&(terrain, view)) {
-                let view_position = view_transform.translation;
+            let view_position = view_transform.translation;
+            let quadtree = quadtrees.get_mut(&(terrain, view)).unwrap();
 
-                quadtree.request(view_position);
-            }
+            quadtree.compute_requests(view_position);
         }
     }
 }
 
+/// Adjusts all quadtrees to their corresponding node atlas
+/// by updating the entries with the best available nodes.
 pub(crate) fn adjust_quadtree(
     mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
     view_query: Query<Entity, With<TerrainView>>,
@@ -251,9 +282,9 @@ pub(crate) fn adjust_quadtree(
 ) {
     for (terrain, mut node_atlas) in terrain_query.iter_mut() {
         for view in view_query.iter() {
-            if let Some(quadtree) = quadtrees.get_mut(&(terrain, view)) {
-                quadtree.adjust(&mut node_atlas);
-            }
+            let quadtree = quadtrees.get_mut(&(terrain, view)).unwrap();
+
+            quadtree.adjust(&mut node_atlas);
         }
     }
 }

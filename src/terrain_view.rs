@@ -1,4 +1,4 @@
-use crate::{terrain::Terrain, TerrainViewData};
+use crate::{terrain::Terrain, TerrainConfig, TerrainViewData};
 use bevy::render::Extract;
 use bevy::utils::Uuid;
 use bevy::{
@@ -59,7 +59,16 @@ pub struct TerrainViewConfig {
 }
 
 impl TerrainViewConfig {
-    pub fn new(view_distance: f32, tile_scale: f32, load_distance: f32) -> Self {
+    pub fn new(
+        config: &TerrainConfig,
+        node_count: u32,
+        load_distance: f32,
+        view_distance: f32,
+        tile_scale: f32,
+        morph_blend: f32,
+        vertex_blend: f32,
+        fragment_blend: f32,
+    ) -> Self {
         // Todo: fix this awful hack
         let quadtree_handle = HandleUntyped::weak_from_u64(
             Uuid::from_str("6ea26da6-6cf8-4ea2-9986-1d7bf6c17d6f").unwrap(),
@@ -67,19 +76,12 @@ impl TerrainViewConfig {
         )
         .typed();
 
-        let node_count = 12;
-        let load_distance = load_distance * node_count as f32;
-
         let tile_count = 1000000;
 
-        let view_distance = view_distance * 128.0;
+        let view_distance = view_distance * config.chunk_size as f32; // same scale as load distance
 
-        // let refinement_count = (terrain_size as f32 / tile_scale).log2().ceil() as u32;
+        // let refinement_count = (config.terrain_size as f32 / tile_scale).log2().ceil() as u32;
         let refinement_count = 15;
-
-        let morph_blend = 0.2;
-        let vertex_blend = 0.2;
-        let fragment_blend = 0.2;
 
         Self {
             quadtree_handle,

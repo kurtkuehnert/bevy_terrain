@@ -7,7 +7,8 @@ struct TerrainConfig {
     lod_count: u32,
     height: f32,
     chunk_size: u32,
-    _padding: u32,
+    terrain_size: u32,
+
     height_scale: f32,
     density_scale: f32,
     albedo_scale: f32,
@@ -52,8 +53,8 @@ var<uniform> mesh: Mesh;
 #import bevy_pbr::shadows
 #import bevy_pbr::pbr_functions
 
-#import bevy_terrain::terrain
 #import bevy_terrain::atlas
+#import bevy_terrain::terrain
 #import bevy_terrain::debug
 
 fn height_vertex(atlas_index: i32, atlas_coords: vec2<f32>) -> f32 {
@@ -72,6 +73,8 @@ fn color_fragment(
     let height_coords = atlas_coords * config.height_scale + config.height_offset;
     let albedo_coords = atlas_coords * config.albedo_scale + config.albedo_offset;
 
+    let world_normal = calculate_normal(height_coords, atlas_index, lod);
+
     #ifndef BRIGHT
         color = mix(color, vec4<f32>(1.0), 0.5);
     #endif
@@ -89,22 +92,25 @@ fn color_fragment(
     #endif
 
     #ifdef LIGHTING
-        let world_normal = calculate_normal(height_coords, atlas_index, lod);
-
-        // let ambient = 0.3;
-        // let direction = normalize(vec3<f32>(3.0, 1.0, -2.0));
-        // let diffuse = max(dot(direction, world_normal), 0.0);
-        // color = color * (ambient + diffuse);
-
         var pbr_input: PbrInput = pbr_input_new();
         pbr_input.material.base_color = color;
+        pbr_input.material.perceptual_roughness = 0.6;
+        pbr_input.material.reflectance = 0.1;
         pbr_input.frag_coord = in.frag_coord;
         pbr_input.world_position = in.world_position;
         pbr_input.world_normal = world_normal;
         pbr_input.is_orthographic = view.projection[3].w == 1.0;
         pbr_input.N = world_normal;
         pbr_input.V = calculate_view(in.world_position, pbr_input.is_orthographic);
+
         color = pbr(pbr_input);
+    #endif
+    #ifndef LIGHTING
+        let ambient = 0.1;
+        let direction = normalize(vec3<f32>(0.0, 1.0, 1.0));
+        let diffuse = max(dot(direction, world_normal), 0.0);
+
+        color = color * (ambient + diffuse);
     #endif
 
     return color;

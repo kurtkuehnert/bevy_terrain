@@ -1,9 +1,5 @@
-use crate::{
-    quadtree::{Quadtree, QuadtreeEntry},
-    terrain::Terrain,
-    terrain_view::TerrainView,
-    TerrainViewComponents,
-};
+use crate::data_structures::quadtree::{Quadtree, QuadtreeEntry};
+use crate::{terrain::Terrain, terrain_view::TerrainView, TerrainViewComponents};
 use bevy::{
     core::cast_slice,
     prelude::*,
@@ -30,7 +26,7 @@ pub struct GpuQuadtree {
 impl GpuQuadtree {
     const FORMAT: TextureFormat = TextureFormat::Rg16Uint;
 
-    fn new(device: &RenderDevice, quadtree: &Quadtree, images: &mut RenderAssets<Image>) -> Self {
+    fn new(device: &RenderDevice, images: &mut RenderAssets<Image>, quadtree: &Quadtree) -> Self {
         let texture = device.create_texture(&TextureDescriptor {
             label: "quadtree_texture".into(),
             size: Extent3d {
@@ -104,7 +100,7 @@ pub(crate) fn initialize_gpu_quadtree(
 
             gpu_quadtrees.insert(
                 (terrain, view),
-                GpuQuadtree::new(&device, &quadtree, &mut images),
+                GpuQuadtree::new(&device, &mut images, &quadtree),
             );
         }
     }
