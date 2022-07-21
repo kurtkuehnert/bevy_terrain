@@ -1,7 +1,10 @@
-use crate::terrain::{Terrain, TerrainComponents};
-
-use crate::data_structures::node_atlas::{LoadingNode, NodeAtlas};
-use crate::data_structures::{AtlasAttachment, AtlasIndex};
+use crate::{
+    data_structures::{
+        node_atlas::{LoadingNode, NodeAtlas},
+        AtlasAttachment, AtlasIndex,
+    },
+    terrain::{Terrain, TerrainComponents},
+};
 use bevy::{
     prelude::*,
     render::{
@@ -16,7 +19,7 @@ use std::mem;
 
 impl AtlasAttachment {
     /// Creates the attachment from its config.
-    pub(crate) fn create(
+    fn create(
         &self,
         device: &RenderDevice,
         images: &mut RenderAssets<Image>,
@@ -51,15 +54,20 @@ impl AtlasAttachment {
     }
 }
 
-/// Manages the [`AtlasAttachment`]s of the terrain, by updating them with the data of
-/// the [`NodeAttachment`]s of newly activated nodes.
+/// Stores the GPU representation of the [`NodeAtlas`] (array textures)
+/// alongside the data to update it.
+///
+/// All attachments of newly loaded nodes are copied into their according atlas attachment.
 #[derive(Component)]
 pub struct GpuNodeAtlas {
+    /// Stores the atlas attachments of the terrain.
     pub(crate) attachments: Vec<Handle<Image>>,
+    /// Stores the nodes, that have finished loading this frame.
     pub(crate) loaded_nodes: Vec<LoadingNode>,
 }
 
 impl GpuNodeAtlas {
+    /// Creates a new gpu node atlas and initializes its attachment textures.
     fn new(
         device: &RenderDevice,
         images: &mut RenderAssets<Image>,
@@ -77,6 +85,8 @@ impl GpuNodeAtlas {
         }
     }
 
+    /// Updates the atlas attachments, by copying over the data of the nodes that have
+    /// finished loading this frame.
     fn update(&mut self, command_encoder: &mut CommandEncoder, images: &RenderAssets<Image>) {
         for node in self.loaded_nodes.drain(..) {
             for (node_handle, atlas_handle) in
@@ -139,8 +149,9 @@ pub(crate) fn initialize_gpu_node_atlas(
     }
 }
 
-/// Updates the [`GpuNodeAtlas`] with the activated nodes of the current frame.
-pub(crate) fn update_gpu_node_atlas(
+/// Extracts the nodes that have finished loading from all [`NodeAtlas`]es into the
+/// corresponding [`GpuNodeAtlas`]es.
+pub(crate) fn extract_node_atlas(
     mut main_world: ResMut<MainWorld>,
     mut gpu_node_atlases: ResMut<TerrainComponents<GpuNodeAtlas>>,
 ) {
@@ -155,8 +166,8 @@ pub(crate) fn update_gpu_node_atlas(
     }
 }
 
-/// Updates the [`AtlasAttachment`]s of the terrain, by updating them with the data of
-/// the [`NodeAttachment`]s of activated nodes.
+/// Queues the attachments of the nodes that have finished loading to be copied into the
+/// corresponding atlas attachments.
 pub(crate) fn queue_node_atlas_updates(
     device: Res<RenderDevice>,
     queue: Res<RenderQueue>,
