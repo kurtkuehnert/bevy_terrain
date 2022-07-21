@@ -1,13 +1,15 @@
 [package]
 name = "bevy_terrain"
-version = "0.1.0"
-authors = ["Kurt Kühnert <kurt@kuehnert.dev"]
-edition = "2021"
-license = "MIT"
 description = "Terrain Rendering for the Bevy Engine."
-repository = "https://github.com/ku95/bevy_terrain"
-keywords = ["gamedev", "graphics", "bevy", "3d", "terrain"]
+version = "0.1.0-dev"
+license = "MIT OR Apache-2.0"
+edition = "2021"
 categories = ["game-engines", "rendering"]
+keywords = ["gamedev", "graphics", "bevy", "3d", "terrain"]
+exclude = ["assets/"]
+readme = "README.md"
+authors = ["Kurt Kühnert <kurt@kuehnert.dev"]
+repository = "https://github.com/ku95/bevy_terrain"
 
 [features]
 default = []
@@ -15,14 +17,13 @@ default = []
 [dependencies]
 bevy = { git="https://github.com/bevyengine/bevy" }
 
-ndarray = "*"
-itertools = "*"
-image = "*"
-lru = "*"
-bitflags = "*"
-strum = "*"
-strum_macros = "*"
-ron = { version = "*", features = ["indexmap"] }
+ndarray = "0.15"
+itertools = "0.10"
+image = "0.24"
+lru = "0.7"
+bitflags = "1.3"
+strum = "0.24"
+strum_macros = "0.24"
 
-fastrand = "*"
-bytemuck = "*"
+fastrand = "1.7"
+bytemuck = "1.10"

@@ -55,7 +55,7 @@ pub(crate) fn queue_terrain_culling_bind_group(
 
         let _planes = planes(
             &extracted_view.projection,
-            &extracted_view.transform.translation,
+            &extracted_view.transform.translation(),
             &extracted_view.transform.back(),
             10000.0,
         );
@@ -66,7 +66,7 @@ pub(crate) fn queue_terrain_culling_bind_group(
 
         for (terrain, mesh_uniform) in terrain_query.iter() {
             let culling_data = CullingData {
-                world_position: extracted_view.transform.translation.xyzx(),
+                world_position: extracted_view.transform.translation().xyzx(),
                 view_proj,
                 model: mesh_uniform.transform,
                 planes,
