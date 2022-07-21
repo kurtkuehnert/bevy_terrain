@@ -1,12 +1,45 @@
-use crate::data_structures::gpu_node_atlas::{
-    initialize_gpu_node_atlas, queue_node_atlas_updates, update_gpu_node_atlas, GpuNodeAtlas,
-};
-use crate::render::shaders::add_shader;
+//! This crate provides the ability to render beautiful height-field terrains of any size.
+//! This is achieved in extensible and modular manner, so that the terrain data
+//! can be accessed from nearly anywhere (systems, shaders) [^note].
+//!
+//! # Background
+//! There are two critical questions that each terrain renderer has to solve:
+//!
+//! ## How to store, manage and access the terrain data?
+//! Each terrain has different types of textures associated with it.
+//! For example a simple one might only need height and albedo information.
+//! Because terrains can be quite large the space required for all of these so called
+//! attachments, can/should not be stored in RAM and VRAM all at once.
+//! Thus they have to be streamed in and out depending on the positions of the
+//! viewers (cameras, lights, etc.).
+//! Therefore the terrain is subdivided into a giant quadtree, whose nodes store their
+//! section of these attachments.
+//! The wrapping [`Quadtree`](data_structures::quadtree::Quadtree) views together with
+//! the [`NodeAtlas`](data_structures::node_atlas::NodeAtlas) (the data structure
+//! that stores all of the currently loaded data) can be used to efficiently retrieve
+//! the best currently available data at any position for terrains of any size.
+//! See the [`data_structures`] module for more information.
+//!
+//! ## How to best approximate the terrain geometry?
+//! Even a small terrain with a height map of 1000x1000 pixels would require 1 million vertices
+//! to be rendered each frame per view, with an naive approach without any lod strategy.
+//! To better distribute the vertices over the screen there exist many different algorithms.
+//! This crate comes with its own default terrain geometry algorithm which was developed with
+//! performance and quality scalability in mind.
+//! See the [`render`] module for more information.
+//! You can also implement a different algorithm yourself and only use the terrain
+//! data structures to solve the first question.
+//!
+//! [^note]: Some of these claims are not yet fully implemented.
+
 use crate::{
     attachment_loader::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk},
+    data_structures::gpu_node_atlas::{
+        extract_node_atlas, initialize_gpu_node_atlas, queue_node_atlas_updates, GpuNodeAtlas,
+    },
     data_structures::{
         gpu_quadtree::{
-            initialize_gpu_quadtree, queue_quadtree_updates, update_gpu_quadtree, GpuQuadtree,
+            extract_quadtree, initialize_gpu_quadtree, queue_quadtree_update, GpuQuadtree,
         },
         node_atlas::update_node_atlas,
         quadtree::{
@@ -19,6 +52,7 @@ use crate::{
         culling::{queue_terrain_culling_bind_group, CullingBindGroup},
         extract_terrain,
         render_pipeline::{queue_terrain, TerrainRenderPipeline},
+        shaders::add_shader,
         terrain_data::{initialize_terrain_data, TerrainData},
         terrain_view_data::{initialize_terrain_view_data, TerrainViewData},
         DrawTerrain, TerrainPipelineConfig,
@@ -130,14 +164,14 @@ impl Plugin for TerrainPlugin {
             )
             .add_system_to_stage(
                 RenderStage::Extract,
-                update_gpu_node_atlas.after(initialize_gpu_node_atlas),
+                extract_node_atlas.after(initialize_gpu_node_atlas),
             )
             .add_system_to_stage(
                 RenderStage::Extract,
-                update_gpu_quadtree.after(initialize_gpu_quadtree),
+                extract_quadtree.after(initialize_gpu_quadtree),
             )
             .add_system_to_stage(RenderStage::Queue, queue_terrain)
-            .add_system_to_stage(RenderStage::Queue, queue_quadtree_updates)
+            .add_system_to_stage(RenderStage::Queue, queue_quadtree_update)
             .add_system_to_stage(RenderStage::Queue, queue_node_atlas_updates)
             .add_system_to_stage(RenderStage::Queue, queue_terrain_culling_bind_group)
             .add_system_to_stage(RenderStage::Queue, queue_terrain_view_config);
