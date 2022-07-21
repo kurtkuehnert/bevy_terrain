@@ -265,7 +265,7 @@ pub(crate) fn compute_quadtree_request(
     // Todo: properly take the terrain transform into account
     for (terrain, _terrain_transform) in terrain_query.iter() {
         for (view, view_transform) in view_query.iter() {
-            let view_position = view_transform.translation;
+            let view_position = view_transform.translation();
             let quadtree = quadtrees.get_mut(&(terrain, view)).unwrap();
 
             quadtree.compute_requests(view_position);
@@ -303,7 +303,7 @@ pub(crate) fn update_height_under_viewer(
                     quadtree,
                     &node_atlas,
                     &images,
-                    view_transform.translation.xz(),
+                    view_transform.translation().xz(),
                 );
 
                 terrain_view_configs

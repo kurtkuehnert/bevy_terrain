@@ -6,7 +6,15 @@ A terrain rendering plugin for the bevy game engine.
 This plugin is still in early development.
 For a simple example see the examples folder.
 
-Documentation and usage instructions comming soon.
+Documentation and usage instructions coming soon.
+
+## License
+Bevy Terrain is dual-licensed under either
+
+* MIT License (LICENSE-MIT or http://opensource.org/licenses/MIT)
+* Apache License, Version 2.0 (LICENSE-APACHE or http://www.apache.org/licenses/LICENSE-2.0)
+
+at your option.
 
 ## Controls
 
@@ -19,3 +27,7 @@ Documentation and usage instructions comming soon.
 - P - show patches
 - L - show LOD
 - U - show UVs
+- X - decrease patch scale
+- Q - increase patch scale
+- I - decrease view distance
+- O - increase view distance
