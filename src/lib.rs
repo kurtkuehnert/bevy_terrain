@@ -73,14 +73,14 @@ use bevy::{
     },
 };
 
-mod attachment_loader;
-mod bundles;
-mod data_structures;
-mod debug;
+pub mod attachment_loader;
+pub mod bundles;
+pub mod data_structures;
+pub mod debug;
 pub mod preprocess;
-mod render;
-mod terrain;
-mod terrain_view;
+pub mod render;
+pub mod terrain;
+pub mod terrain_view;
 
 #[allow(missing_docs)]
 pub mod prelude {

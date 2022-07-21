@@ -9,6 +9,7 @@ use bevy::{
 };
 use std::str::FromStr;
 
+/// Resource that stores components that are associated to a terrain entity and a view entity.
 pub type TerrainViewComponents<C> = HashMap<(Entity, Entity), C>;
 
 #[derive(Clone, Copy, Component)]

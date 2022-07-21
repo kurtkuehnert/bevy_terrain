@@ -80,10 +80,10 @@ impl Default for QuadtreeEntry {
 /// in each direction.
 ///
 /// Each frame the quadtree determines the state of each node via the
-/// [`compute_requests`](Quadtree::compute_requests) methode.
+/// `compute_requests` methode.
 /// After the [`NodeAtlas`] has adjusted to these requests, the quadtree retrieves the best
 /// currently loaded nodes from the node atlas via the
-/// [`adjust`](Quadtree::adjust) methode, which can later be used to access the terrain data.
+/// `adjust` methode, which can later be used to access the terrain data.
 #[derive(Component)]
 pub struct Quadtree {
     /// The handle of the quadtree texture.

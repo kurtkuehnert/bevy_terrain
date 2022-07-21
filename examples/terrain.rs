@@ -9,7 +9,7 @@ const NODE_ATLAS_SIZE: u32 = 300;
 
 fn main() {
     // Should only be run once. Comment out after the first run.
-    // preprocess();
+    preprocess();
 
     App::new()
         .add_plugins(DefaultPlugins)
@@ -79,8 +79,8 @@ fn setup(
         .insert(TerrainView)
         .id();
 
-    // Store the quadtree and the view config together. This will hopefully be way nicer
-    // once the ECS can handle relations.
+    // Store the quadtree and the view config for the terrain and view.
+    // This will hopefully be way nicer once the ECS can handle relations.
     let quadtree = Quadtree::from_configs(&config, &view_config);
     view_configs.insert((terrain, view), view_config);
     quadtrees.insert((terrain, view), quadtree);
