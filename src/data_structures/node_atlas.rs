@@ -11,7 +11,7 @@ use bevy::{
 };
 use std::collections::VecDeque;
 
-/// Stores all of the [`NodeAttachment`]s of the node, alongside their loading state.
+/// Stores all of the attachments of the node, alongside their loading state.
 #[derive(Clone)]
 pub struct LoadingNode {
     /// The atlas index of the node.
