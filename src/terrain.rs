@@ -1,5 +1,5 @@
 use crate::{
-    attachment_loader::{AttachmentFromDisk, AttachmentFromDiskLoader},
+    attachment_loader::AttachmentFromDiskLoader,
     data_structures::{AtlasAttachment, AttachmentIndex},
 };
 use bevy::{
@@ -104,10 +104,8 @@ impl TerrainConfig {
 
         from_disk_loader.add_attachment(
             attachment_index,
-            AttachmentFromDisk {
-                path: self.path.clone() + "data/" + name,
-                format,
-            },
+            self.path.clone() + "data/" + name,
+            format,
         );
     }
 

@@ -17,24 +17,24 @@
 
 use bevy::{prelude::*, render::render_resource::*};
 
-pub(crate) mod gpu_node_atlas;
-pub(crate) mod gpu_quadtree;
-pub(crate) mod node_atlas;
-pub(crate) mod quadtree;
+pub mod gpu_node_atlas;
+pub mod gpu_quadtree;
+pub mod node_atlas;
+pub mod quadtree;
 
 // Todo: may be swap to u64 for giant terrains
 // Todo: consider 3 bit face data, for cube sphere
 /// A globally unique identifier of a node.
 /// lod |  x |  y
 ///   4 | 14 | 14
-pub(crate) type NodeId = u32;
-pub(crate) const INVALID_NODE_ID: NodeId = NodeId::MAX;
+pub type NodeId = u32;
+pub const INVALID_NODE_ID: NodeId = NodeId::MAX;
 
 /// Identifier of a node (and its attachments) inside the node atlas.
 pub type AtlasIndex = u16;
-pub(crate) const INVALID_ATLAS_INDEX: AtlasIndex = AtlasIndex::MAX;
+pub const INVALID_ATLAS_INDEX: AtlasIndex = AtlasIndex::MAX;
 
-pub(crate) const INVALID_LOD: u16 = u16::MAX;
+pub const INVALID_LOD: u16 = u16::MAX;
 
 /// Identifier of an attachment inside the node atlas.
 pub type AttachmentIndex = usize;
@@ -64,7 +64,7 @@ impl From<NodeId> for NodeCoordinate {
 
 /// Calculates the node identifier from the node coordinate.
 #[inline]
-pub(crate) fn calc_node_id(lod: u32, x: u32, y: u32) -> NodeId {
+pub fn calc_node_id(lod: u32, x: u32, y: u32) -> NodeId {
     (lod & 0xF) << 28 | (x & 0x3FFF) << 14 | y & 0x3FFF
 }
 

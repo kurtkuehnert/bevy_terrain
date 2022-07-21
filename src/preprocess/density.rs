@@ -1,8 +1,11 @@
-use crate::data_structures::calc_node_id;
-use crate::preprocess::{div_ceil, div_floor, down_sample_nodes, load_node, ImageFormat};
-use crate::Vec3;
+use crate::{
+    data_structures::calc_node_id,
+    preprocess::{div_ceil, div_floor, down_sample_nodes, load_node, ImageFormat},
+    Vec3,
+};
 use image::{DynamicImage, ImageBuffer, Luma};
 use itertools::iproduct;
+use std::fs;
 
 fn height_to_density(
     height_node: &DynamicImage,
@@ -79,6 +82,9 @@ pub fn preprocess_density(
     border_size: u32,
     height: f32,
 ) {
+    let _ = fs::remove_dir_all(density_directory);
+    fs::create_dir_all(density_directory).unwrap();
+
     density_chunks(
         height_directory,
         density_directory,

@@ -19,8 +19,11 @@ pub(crate) mod shaders;
 pub(crate) mod terrain_data;
 pub(crate) mod terrain_view_data;
 
+/// Configures the default terrain pipeline.
 pub struct TerrainPipelineConfig {
+    /// The path of the terrain shader.
     pub shader: String,
+    /// The number of terrain attachments.
     pub attachment_count: usize,
 }
 

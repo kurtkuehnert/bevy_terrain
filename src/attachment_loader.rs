@@ -8,24 +8,28 @@ use bevy::{
 };
 
 pub struct AttachmentFromDisk {
-    pub path: String,
-    pub format: TextureFormat,
+    path: String,
+    format: TextureFormat,
 }
 
+/// This component is used to load attachments from disk memory into the corresponding
+/// [`NodeAtlas`].
 #[derive(Default, Component)]
 pub struct AttachmentFromDiskLoader {
-    pub attachments: HashMap<AttachmentIndex, AttachmentFromDisk>,
+    pub(crate) attachments: HashMap<AttachmentIndex, AttachmentFromDisk>,
     /// Maps the id of an asset to the corresponding node id.
-    pub handle_mapping: HashMap<HandleId, (NodeId, AttachmentIndex)>,
+    handle_mapping: HashMap<HandleId, (NodeId, AttachmentIndex)>,
 }
 
 impl AttachmentFromDiskLoader {
     pub fn add_attachment(
         &mut self,
         attachment_index: AttachmentIndex,
-        attachment: AttachmentFromDisk,
+        path: String,
+        format: TextureFormat,
     ) {
-        self.attachments.insert(attachment_index, attachment);
+        self.attachments
+            .insert(attachment_index, AttachmentFromDisk { path, format });
     }
 }
 
@@ -63,7 +67,7 @@ pub fn start_loading_attachment_from_disk(
     }
 }
 
-pub fn finish_loading_attachment_from_disk(
+pub(crate) fn finish_loading_attachment_from_disk(
     mut asset_events: EventReader<AssetEvent<Image>>,
     mut images: ResMut<Assets<Image>>,
     mut terrain_query: Query<(&mut NodeAtlas, &mut AttachmentFromDiskLoader)>,
