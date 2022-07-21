@@ -1,5 +1,9 @@
-use crate::data_structures::quadtree::{Quadtree, QuadtreeEntry};
-use crate::{terrain::Terrain, terrain_view::TerrainView, TerrainViewComponents};
+use crate::{
+    data_structures::quadtree::{Quadtree, QuadtreeEntry},
+    terrain::Terrain,
+    terrain_view::TerrainView,
+    TerrainViewComponents,
+};
 use bevy::{
     core::cast_slice,
     prelude::*,
@@ -14,18 +18,29 @@ use bevy::{
 use ndarray::Array3;
 use std::num::NonZeroU32;
 
-/// Stores the GPU representation of the [`Quadtree`] alongside the data to update it.
+/// Stores the GPU representation of the [`Quadtree`] (array texture)
+/// alongside the data to update it.
+///
+/// The data is synchronized each frame by copying it from the [`Quadtree`] to the texture.
 #[derive(Component)]
 pub struct GpuQuadtree {
-    lod_count: u32,
-    node_count: u32,
+    /// The handle of the quadtree texture.
     handle: Handle<Image>,
+    /// The current cpu quadtree data. This is synced each frame with the quadtree data.
     data: Array3<QuadtreeEntry>,
+    /// The count of level of detail layers.
+    lod_count: u32,
+    /// The count of nodes in x and y direction per layer.
+    node_count: u32,
 }
 
 impl GpuQuadtree {
+    /// The format of the quadtree texture.
+    /// * R - The atlas index of the node.
+    /// * G - The lod of the node.
     const FORMAT: TextureFormat = TextureFormat::Rg16Uint;
 
+    /// Creates a new gpu quadtree and initializes its texture.
     fn new(device: &RenderDevice, images: &mut RenderAssets<Image>, quadtree: &Quadtree) -> Self {
         let texture = device.create_texture(&TextureDescriptor {
             label: "quadtree_texture".into(),
@@ -53,13 +68,14 @@ impl GpuQuadtree {
         );
 
         Self {
-            lod_count: quadtree.lod_count,
-            node_count: quadtree.node_count,
             handle: quadtree.handle.clone(),
             data: default(),
+            lod_count: quadtree.lod_count,
+            node_count: quadtree.node_count,
         }
     }
 
+    /// Updates the quadtree texture with the current data.
     fn update(&self, queue: &RenderQueue, images: &RenderAssets<Image>) {
         let image = images.get(&self.handle).unwrap();
 
@@ -106,9 +122,8 @@ pub(crate) fn initialize_gpu_quadtree(
     }
 }
 
-/// Extracts the new nodes updates for all [`GpuQuadtree`]s by copying them over from their
-/// corresponding [`Quadtree`]s.
-pub(crate) fn update_gpu_quadtree(
+/// Extracts the current data from all [`Quadtree`]s into the corresponding [`GpuQuadtree`]s.
+pub(crate) fn extract_quadtree(
     mut gpu_quadtrees: ResMut<TerrainViewComponents<GpuQuadtree>>,
     quadtrees: Extract<Res<TerrainViewComponents<Quadtree>>>,
     view_query: Extract<Query<Entity, With<TerrainView>>>,
@@ -126,9 +141,8 @@ pub(crate) fn update_gpu_quadtree(
     }
 }
 
-/// Queues the [`NodeUpdate`]s generated this frame for the quadtree update pipeline,
-/// by filling the node update buffers with them.
-pub(crate) fn queue_quadtree_updates(
+/// Queues the quadtree data to be copied into the quadtree texture.
+pub(crate) fn queue_quadtree_update(
     queue: Res<RenderQueue>,
     images: Res<RenderAssets<Image>>,
     mut gpu_quadtrees: ResMut<TerrainViewComponents<GpuQuadtree>>,
