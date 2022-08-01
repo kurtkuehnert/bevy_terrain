@@ -1,4 +1,4 @@
-#define_import_path bevy_terrain::terrain
+#define_import_path bevy_terrain::functions
 
 struct VertexInput {
     @builtin(instance_index) instance: u32,
@@ -113,16 +113,16 @@ fn calculate_position(vertex_index: u32, tile: Tile, vertices_per_row: u32, true
 }
 
 fn calculate_normal(uv: vec2<f32>, atlas_index: i32, lod: u32) -> vec3<f32> {
-    let left  = textureSampleLevel(height_atlas, filter_sampler, uv, atlas_index, 0.0, vec2<i32>(-1,  0)).x;
-    let up    = textureSampleLevel(height_atlas, filter_sampler, uv, atlas_index, 0.0, vec2<i32>( 0, -1)).x;
-    let right = textureSampleLevel(height_atlas, filter_sampler, uv, atlas_index, 0.0, vec2<i32>( 1,  0)).x;
-    let down  = textureSampleLevel(height_atlas, filter_sampler, uv, atlas_index, 0.0, vec2<i32>( 0,  1)).x;
+    let left  = textureSampleLevel(height_atlas, terrain_sampler, uv, atlas_index, 0.0, vec2<i32>(-1,  0)).x;
+    let up    = textureSampleLevel(height_atlas, terrain_sampler, uv, atlas_index, 0.0, vec2<i32>( 0, -1)).x;
+    let right = textureSampleLevel(height_atlas, terrain_sampler, uv, atlas_index, 0.0, vec2<i32>( 1,  0)).x;
+    let down  = textureSampleLevel(height_atlas, terrain_sampler, uv, atlas_index, 0.0, vec2<i32>( 0,  1)).x;
 
     return normalize(vec3<f32>(right - left, f32(2u << lod) / config.height, down - up));
 }
 
 fn vertex_output(local_position: vec2<f32>, height: f32) -> VertexOutput {
-    let world_position = mesh.model * vec4<f32>(local_position.x, height, local_position.y, 1.0);
+    let world_position = vec4<f32>(local_position.x, height, local_position.y, 1.0);
 
     var output: VertexOutput;
     output.frag_coord = view.view_proj * world_position;
