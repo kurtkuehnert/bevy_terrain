@@ -1,5 +1,10 @@
-use bevy::{prelude::*, render::render_resource::*};
-use bevy_terrain::{prelude::*, preprocess::prelude::*};
+use bevy::{
+    asset::LoadState,
+    prelude::*,
+    reflect::TypeUuid,
+    render::{render_resource::*, texture::ImageSampler},
+};
+use bevy_terrain::prelude::*;
 
 const TERRAIN_SIZE: u32 = 1024;
 const LOD_COUNT: u32 = 5;
@@ -7,26 +12,46 @@ const CHUNK_SIZE: u32 = 128;
 const HEIGHT: f32 = 200.0;
 const NODE_ATLAS_SIZE: u32 = 300;
 
-fn main() {
-    // Should only be run once. Comment out after the first run.
-    preprocess();
+#[derive(AsBindGroup, TypeUuid, Clone)]
+#[uuid = "4ccc53dd-2cfd-48ba-b659-c0e1a9bc0bdb"]
+pub struct TerrainMaterial {
+    #[texture(0, dimension = "2d_array")]
+    #[sampler(1)]
+    array_texture: Handle<Image>,
+}
 
+impl Material for TerrainMaterial {
+    fn fragment_shader() -> ShaderRef {
+        "shaders/advanced.wgsl".into()
+    }
+}
+
+fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .insert_resource(TerrainPipelineConfig {
-            attachment_count: 3, // has to match the attachments of the terrain
-            ..default()
+            attachment_count: 2, // has to match the attachments of the terrain
         })
         .add_plugin(TerrainPlugin)
+        .add_plugin(TerrainMaterialPlugin::<TerrainMaterial>::default())
         .add_startup_system(setup)
+        .add_system(create_array_texture)
         .run();
 }
 
 fn setup(
     mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    mut materials: ResMut<Assets<TerrainMaterial>>,
     mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
 ) {
+    let texture = asset_server.load("textures/array_texture.png");
+    commands.insert_resource(LoadingTexture {
+        is_loaded: false,
+        handle: texture.clone(),
+    });
+
     // Configure all the important properties of the terrain, as well as its attachments.
     let mut config = TerrainConfig::new(
         TERRAIN_SIZE,
@@ -34,7 +59,7 @@ fn setup(
         LOD_COUNT,
         HEIGHT,
         NODE_ATLAS_SIZE,
-        "terrain/".to_string(),
+        "terrain/".into(),
     );
     let mut from_disk_loader = AttachmentFromDiskLoader::default();
 
@@ -52,18 +77,14 @@ fn setup(
         CHUNK_SIZE,
         0,
     );
-    config.add_attachment_from_disk(
-        &mut from_disk_loader,
-        "albedo",
-        TextureFormat::Rgba8UnormSrgb,
-        2 * CHUNK_SIZE,
-        1,
-    );
 
     // Create the terrain.
     let terrain = commands
         .spawn_bundle(TerrainBundle::new(config.clone()))
         .insert(from_disk_loader)
+        .insert(materials.add(TerrainMaterial {
+            array_texture: texture,
+        }))
         .id();
 
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
@@ -100,39 +121,36 @@ fn setup(
     });
 }
 
-fn preprocess() {
-    preprocess_tiles(
-        "assets/terrain/source/height",
-        "assets/terrain/data/height",
-        0,
-        LOD_COUNT,
-        (0, 0),
-        TERRAIN_SIZE,
-        CHUNK_SIZE,
-        2,
-        ImageFormat::LUMA16,
-    );
+struct LoadingTexture {
+    is_loaded: bool,
+    handle: Handle<Image>,
+}
 
-    preprocess_density(
-        "assets/terrain/data/height",
-        "assets/terrain/data/density",
-        LOD_COUNT,
-        (0, 0),
-        (9, 9),
-        CHUNK_SIZE,
-        2,
-        HEIGHT,
-    );
+fn create_array_texture(
+    asset_server: Res<AssetServer>,
+    mut loading_texture: ResMut<LoadingTexture>,
+    mut images: ResMut<Assets<Image>>,
+) {
+    if loading_texture.is_loaded
+        || asset_server.get_load_state(loading_texture.handle.clone()) != LoadState::Loaded
+    {
+        return;
+    }
 
-    preprocess_tiles(
-        "assets/terrain/source/albedo.png",
-        "assets/terrain/data/albedo",
-        0,
-        LOD_COUNT,
-        (0, 0),
-        2 * TERRAIN_SIZE,
-        2 * CHUNK_SIZE,
-        1,
-        ImageFormat::RGB,
-    );
+    loading_texture.is_loaded = true;
+    let image = images.get_mut(&loading_texture.handle).unwrap();
+    image.sampler_descriptor = ImageSampler::Descriptor(SamplerDescriptor {
+        label: None,
+        address_mode_u: AddressMode::Repeat,
+        address_mode_v: AddressMode::Repeat,
+        address_mode_w: AddressMode::Repeat,
+        mag_filter: FilterMode::Linear,
+        min_filter: FilterMode::Linear,
+        mipmap_filter: FilterMode::Linear,
+        ..default()
+    });
+
+    // Create a new array texture asset from the loaded texture.
+    let array_layers = 4;
+    image.reinterpret_stacked_2d_as_array(array_layers);
 }

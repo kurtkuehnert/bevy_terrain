@@ -1,7 +1,6 @@
 use crate::{terrain::Terrain, TerrainComputePipelines, TerrainView, TerrainViewComponents};
 use bevy::{
     math::Vec3Swizzles,
-    pbr::MeshUniform,
     prelude::*,
     render::{render_resource::*, renderer::RenderDevice, view::ExtractedView},
 };
@@ -46,7 +45,7 @@ pub(crate) fn queue_terrain_culling_bind_group(
     device: Res<RenderDevice>,
     compute_pipelines: Res<TerrainComputePipelines>,
     mut culling_bind_groups: ResMut<TerrainViewComponents<CullingBindGroup>>,
-    terrain_query: Query<(Entity, &MeshUniform), With<Terrain>>,
+    terrain_query: Query<Entity, With<Terrain>>,
     view_query: Query<(Entity, &ExtractedView), With<TerrainView>>,
 ) {
     for (view, extracted_view) in view_query.iter() {
@@ -64,11 +63,11 @@ pub(crate) fn queue_terrain_culling_bind_group(
 
         let planes = [default(); 6];
 
-        for (terrain, mesh_uniform) in terrain_query.iter() {
+        for terrain in terrain_query.iter() {
             let culling_data = CullingData {
                 world_position: extracted_view.transform.translation().xyzx(),
                 view_proj,
-                model: mesh_uniform.transform,
+                model: default(),
                 planes,
             };
 

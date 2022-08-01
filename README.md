@@ -22,7 +22,6 @@ at your option.
 - M - toggle mesh morph (circular transitions)
 - A - toggle alpha (if loaded)
 - N - toggle full nodes (or circular lod)
-- B - brighten
 - S - toggle light
 - P - show patches
 - L - show LOD
