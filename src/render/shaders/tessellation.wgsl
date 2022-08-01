@@ -1,6 +1,5 @@
-#import bevy_terrain::config
+#import bevy_terrain::types
 #import bevy_terrain::parameters
-#import bevy_terrain::tile
 
 // Todo: increase workgroup size
 

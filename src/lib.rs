@@ -50,12 +50,10 @@ use crate::{
     render::{
         compute_pipelines::{TerrainComputeNode, TerrainComputePipelines},
         culling::{queue_terrain_culling_bind_group, CullingBindGroup},
-        extract_terrain,
-        render_pipeline::{queue_terrain, TerrainRenderPipeline},
         shaders::add_shader,
         terrain_data::{initialize_terrain_data, TerrainData},
         terrain_view_data::{initialize_terrain_view_data, TerrainViewData},
-        DrawTerrain, TerrainPipelineConfig,
+        TerrainPipelineConfig,
     },
     terrain::{Terrain, TerrainComponents, TerrainConfig},
     terrain_view::{
@@ -64,12 +62,10 @@ use crate::{
     },
 };
 use bevy::{
-    core_pipeline::core_3d::Opaque3d,
     prelude::*,
     render::{
         extract_component::ExtractComponentPlugin, main_graph::node::CAMERA_DRIVER,
-        render_graph::RenderGraph, render_phase::AddRenderCommand, render_resource::*, RenderApp,
-        RenderStage,
+        render_graph::RenderGraph, render_resource::*, RenderApp, RenderStage,
     },
 };
 
@@ -90,7 +86,7 @@ pub mod prelude {
         bundles::TerrainBundle,
         data_structures::quadtree::Quadtree,
         preprocess::prelude,
-        render::TerrainPipelineConfig,
+        render::{render_pipeline::TerrainMaterialPlugin, TerrainPipelineConfig},
         terrain::{Terrain, TerrainConfig},
         terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
         TerrainPlugin,
@@ -136,11 +132,8 @@ impl Plugin for TerrainPlugin {
 
         let render_app = app
             .sub_app_mut(RenderApp)
-            .add_render_command::<Opaque3d, DrawTerrain>()
             .insert_resource(config)
             .init_resource::<DebugTerrain>()
-            .init_resource::<TerrainRenderPipeline>()
-            .init_resource::<SpecializedRenderPipelines<TerrainRenderPipeline>>()
             .init_resource::<TerrainComputePipelines>()
             .init_resource::<SpecializedComputePipelines<TerrainComputePipelines>>()
             .init_resource::<TerrainComponents<GpuNodeAtlas>>()
@@ -149,7 +142,6 @@ impl Plugin for TerrainPlugin {
             .init_resource::<TerrainViewComponents<TerrainViewData>>()
             .init_resource::<TerrainViewComponents<TerrainViewConfig>>()
             .init_resource::<TerrainViewComponents<CullingBindGroup>>()
-            .add_system_to_stage(RenderStage::Extract, extract_terrain)
             .add_system_to_stage(RenderStage::Extract, extract_terrain_view_config)
             .add_system_to_stage(RenderStage::Extract, extract_debug)
             .add_system_to_stage(RenderStage::Extract, initialize_gpu_node_atlas)
@@ -170,7 +162,6 @@ impl Plugin for TerrainPlugin {
                 RenderStage::Extract,
                 extract_quadtree.after(initialize_gpu_quadtree),
             )
-            .add_system_to_stage(RenderStage::Queue, queue_terrain)
             .add_system_to_stage(RenderStage::Queue, queue_quadtree_update)
             .add_system_to_stage(RenderStage::Queue, queue_node_atlas_updates)
             .add_system_to_stage(RenderStage::Queue, queue_terrain_culling_bind_group)

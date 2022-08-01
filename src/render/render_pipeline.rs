@@ -1,17 +1,63 @@
-use crate::render::terrain_data::terrain_bind_group_layout;
+use crate::render::shaders::DEFAULT_SHADER;
+use crate::render::terrain_data::{terrain_bind_group_layout, SetTerrainBindGroup};
+use crate::render::terrain_view_data::{DrawTerrainCommand, SetTerrainViewBindGroup};
 use crate::render::TerrainPipelineConfig;
-use crate::{render::layouts::TERRAIN_VIEW_LAYOUT, DebugTerrain, DrawTerrain, Terrain};
+use crate::{
+    render::layouts::TERRAIN_VIEW_LAYOUT, DebugTerrain, ExtractComponentPlugin, RenderApp, Terrain,
+};
 use bevy::core_pipeline::core_3d::Opaque3d;
-use bevy::render::render_phase::{DrawFunctions, RenderPhase};
+use bevy::pbr::{RenderMaterials, SetMaterialBindGroup, SetMeshViewBindGroup};
+use bevy::render::render_phase::{AddRenderCommand, DrawFunctions, RenderPhase, SetItemPipeline};
+use bevy::render::RenderStage;
 use bevy::{
     pbr::MeshPipeline,
     prelude::*,
     render::{render_resource::*, renderer::RenderDevice, texture::BevyDefault},
 };
+use std::hash::Hash;
+use std::marker::PhantomData;
+
+pub struct TerrainPipelineKey<M: Material> {
+    pub flags: TerrainPipelineFlags,
+    pub bind_group_data: M::Data,
+}
+
+impl<M: Material> Eq for TerrainPipelineKey<M> where M::Data: PartialEq {}
+
+impl<M: Material> PartialEq for TerrainPipelineKey<M>
+where
+    M::Data: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.flags == other.flags && self.bind_group_data == other.bind_group_data
+    }
+}
+
+impl<M: Material> Clone for TerrainPipelineKey<M>
+where
+    M::Data: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            flags: self.flags,
+            bind_group_data: self.bind_group_data.clone(),
+        }
+    }
+}
+
+impl<M: Material> Hash for TerrainPipelineKey<M>
+where
+    M::Data: Hash,
+{
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.flags.hash(state);
+        self.bind_group_data.hash(state);
+    }
+}
 
 bitflags::bitflags! {
 #[repr(transparent)]
-pub struct TerrainPipelineKey: u32 {
+pub struct TerrainPipelineFlags: u32 {
     const NONE               = 0;
     const WIREFRAME          = (1 << 0);
     const SHOW_TILES         = (1 << 1);
@@ -23,55 +69,55 @@ pub struct TerrainPipelineKey: u32 {
     const BRIGHT             = (1 << 7);
     const LIGHTING           = (1 << 8);
     const TEST               = (1 << 9);
-    const MSAA_RESERVED_BITS = TerrainPipelineKey::MSAA_MASK_BITS << TerrainPipelineKey::MSAA_SHIFT_BITS;
+    const MSAA_RESERVED_BITS = TerrainPipelineFlags::MSAA_MASK_BITS << TerrainPipelineFlags::MSAA_SHIFT_BITS;
 }
 }
 
-impl TerrainPipelineKey {
+impl TerrainPipelineFlags {
     const MSAA_MASK_BITS: u32 = 0b111111;
     const MSAA_SHIFT_BITS: u32 = 32 - 6;
 
     pub fn from_msaa_samples(msaa_samples: u32) -> Self {
         let msaa_bits = ((msaa_samples - 1) & Self::MSAA_MASK_BITS) << Self::MSAA_SHIFT_BITS;
-        TerrainPipelineKey::from_bits(msaa_bits).unwrap()
+        TerrainPipelineFlags::from_bits(msaa_bits).unwrap()
     }
 
     pub fn from_debug(debug: &DebugTerrain) -> Self {
-        let mut key = TerrainPipelineKey::NONE;
+        let mut key = TerrainPipelineFlags::NONE;
 
         if debug.wireframe {
-            key |= TerrainPipelineKey::WIREFRAME;
+            key |= TerrainPipelineFlags::WIREFRAME;
         }
 
         if debug.show_tiles {
-            key |= TerrainPipelineKey::SHOW_TILES;
+            key |= TerrainPipelineFlags::SHOW_TILES;
         }
         if debug.show_lod {
-            key |= TerrainPipelineKey::SHOW_LOD;
+            key |= TerrainPipelineFlags::SHOW_LOD;
         }
         if debug.show_uv {
-            key |= TerrainPipelineKey::SHOW_UV;
+            key |= TerrainPipelineFlags::SHOW_UV;
         }
 
         if debug.circular_lod {
-            key |= TerrainPipelineKey::CIRCULAR_LOD;
+            key |= TerrainPipelineFlags::CIRCULAR_LOD;
         }
         if debug.mesh_morph {
-            key |= TerrainPipelineKey::MESH_MORPH;
+            key |= TerrainPipelineFlags::MESH_MORPH;
         }
 
         if debug.albedo {
-            key |= TerrainPipelineKey::ALBEDO;
+            key |= TerrainPipelineFlags::ALBEDO;
         }
         if debug.bright {
-            key |= TerrainPipelineKey::BRIGHT;
+            key |= TerrainPipelineFlags::BRIGHT;
         }
         if debug.lighting {
-            key |= TerrainPipelineKey::LIGHTING;
+            key |= TerrainPipelineFlags::LIGHTING;
         }
 
         if debug.test {
-            key |= TerrainPipelineKey::TEST;
+            key |= TerrainPipelineFlags::TEST;
         }
 
         key
@@ -82,7 +128,7 @@ impl TerrainPipelineKey {
     }
 
     pub fn polygon_mode(&self) -> PolygonMode {
-        match (self.bits & TerrainPipelineKey::WIREFRAME.bits) != 0 {
+        match (self.bits & TerrainPipelineFlags::WIREFRAME.bits) != 0 {
             true => PolygonMode::Line,
             false => PolygonMode::Fill,
         }
@@ -91,34 +137,34 @@ impl TerrainPipelineKey {
     pub fn shader_defs(&self) -> Vec<String> {
         let mut shader_defs = Vec::new();
 
-        if (self.bits & TerrainPipelineKey::SHOW_TILES.bits) != 0 {
+        if (self.bits & TerrainPipelineFlags::SHOW_TILES.bits) != 0 {
             shader_defs.push("SHOW_TILES".to_string());
         }
-        if (self.bits & TerrainPipelineKey::SHOW_LOD.bits) != 0 {
+        if (self.bits & TerrainPipelineFlags::SHOW_LOD.bits) != 0 {
             shader_defs.push("SHOW_LOD".to_string());
         }
-        if (self.bits & TerrainPipelineKey::SHOW_UV.bits) != 0 {
+        if (self.bits & TerrainPipelineFlags::SHOW_UV.bits) != 0 {
             shader_defs.push("SHOW_UV".to_string());
         }
 
-        if (self.bits & TerrainPipelineKey::CIRCULAR_LOD.bits) != 0 {
+        if (self.bits & TerrainPipelineFlags::CIRCULAR_LOD.bits) != 0 {
             shader_defs.push("CIRCULAR_LOD".to_string());
         }
-        if (self.bits & TerrainPipelineKey::MESH_MORPH.bits) != 0 {
+        if (self.bits & TerrainPipelineFlags::MESH_MORPH.bits) != 0 {
             shader_defs.push("MESH_MORPH".to_string());
         }
 
-        if (self.bits & TerrainPipelineKey::ALBEDO.bits) != 0 {
+        if (self.bits & TerrainPipelineFlags::ALBEDO.bits) != 0 {
             shader_defs.push("ALBEDO".to_string());
         }
-        if (self.bits & TerrainPipelineKey::BRIGHT.bits) != 0 {
+        if (self.bits & TerrainPipelineFlags::BRIGHT.bits) != 0 {
             shader_defs.push("BRIGHT".to_string());
         }
-        if (self.bits & TerrainPipelineKey::LIGHTING.bits) != 0 {
+        if (self.bits & TerrainPipelineFlags::LIGHTING.bits) != 0 {
             shader_defs.push("LIGHTING".to_string());
         }
 
-        if (self.bits & TerrainPipelineKey::TEST.bits) != 0 {
+        if (self.bits & TerrainPipelineFlags::TEST.bits) != 0 {
             shader_defs.push("TEST".to_string());
         }
 
@@ -127,15 +173,17 @@ impl TerrainPipelineKey {
 }
 
 /// The pipeline used to render the terrain entities.
-pub struct TerrainRenderPipeline {
+pub struct TerrainRenderPipeline<M: Material> {
     pub(crate) view_layout: BindGroupLayout,
-    pub(crate) mesh_layout: BindGroupLayout,
     pub(crate) terrain_layout: BindGroupLayout,
     pub(crate) terrain_view_layout: BindGroupLayout,
-    pub(crate) shader: Handle<Shader>,
+    pub(crate) material_layout: BindGroupLayout,
+    pub vertex_shader: Handle<Shader>,
+    pub fragment_shader: Handle<Shader>,
+    marker: PhantomData<M>,
 }
 
-impl FromWorld for TerrainRenderPipeline {
+impl<M: Material> FromWorld for TerrainRenderPipeline<M> {
     fn from_world(world: &mut World) -> Self {
         let device = world.resource::<RenderDevice>();
         let asset_server = world.resource::<AssetServer>();
@@ -143,26 +191,42 @@ impl FromWorld for TerrainRenderPipeline {
         let config = world.resource::<TerrainPipelineConfig>();
 
         let view_layout = mesh_pipeline.view_layout.clone();
-        let mesh_layout = mesh_pipeline.mesh_layout.clone();
         let terrain_layout = terrain_bind_group_layout(&device, config.attachment_count);
         let terrain_view_layout = device.create_bind_group_layout(&TERRAIN_VIEW_LAYOUT);
-        let shader = asset_server.load(&config.shader);
+        let material_layout = M::bind_group_layout(device);
+
+        let vertex_shader = match M::vertex_shader() {
+            ShaderRef::Default => DEFAULT_SHADER.typed(),
+            ShaderRef::Handle(handle) => handle,
+            ShaderRef::Path(path) => asset_server.load(path),
+        };
+
+        let fragment_shader = match M::fragment_shader() {
+            ShaderRef::Default => DEFAULT_SHADER.typed(),
+            ShaderRef::Handle(handle) => handle,
+            ShaderRef::Path(path) => asset_server.load(path),
+        };
 
         Self {
             view_layout,
-            mesh_layout,
             terrain_layout,
             terrain_view_layout,
-            shader,
+            material_layout,
+            vertex_shader,
+            fragment_shader,
+            marker: PhantomData,
         }
     }
 }
 
-impl SpecializedRenderPipeline for TerrainRenderPipeline {
-    type Key = TerrainPipelineKey;
+impl<M: Material> SpecializedRenderPipeline for TerrainRenderPipeline<M>
+where
+    M::Data: PartialEq + Eq + Hash + Clone,
+{
+    type Key = TerrainPipelineKey<M>;
 
     fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
-        let shader_defs = key.shader_defs();
+        let shader_defs = key.flags.shader_defs();
 
         RenderPipelineDescriptor {
             label: None,
@@ -170,10 +234,10 @@ impl SpecializedRenderPipeline for TerrainRenderPipeline {
                 self.view_layout.clone(),
                 self.terrain_view_layout.clone(),
                 self.terrain_layout.clone(), // Todo: do this properly for multiple maps
-                self.mesh_layout.clone(),
+                self.material_layout.clone(),
             ]),
             vertex: VertexState {
-                shader: self.shader.clone(),
+                shader: self.vertex_shader.clone(),
                 entry_point: "vertex".into(),
                 shader_defs: shader_defs.clone(),
                 buffers: Vec::new(),
@@ -182,13 +246,13 @@ impl SpecializedRenderPipeline for TerrainRenderPipeline {
                 front_face: FrontFace::Ccw,
                 cull_mode: Some(Face::Back),
                 unclipped_depth: false,
-                polygon_mode: key.polygon_mode(),
+                polygon_mode: key.flags.polygon_mode(),
                 conservative: false,
                 topology: PrimitiveTopology::TriangleStrip,
                 strip_index_format: None,
             },
             fragment: Some(FragmentState {
-                shader: self.shader.clone(),
+                shader: self.fragment_shader.clone(),
                 shader_defs,
                 entry_point: "fragment".into(),
                 targets: vec![Some(ColorTargetState {
@@ -214,40 +278,98 @@ impl SpecializedRenderPipeline for TerrainRenderPipeline {
                 },
             }),
             multisample: MultisampleState {
-                count: key.msaa_samples(),
+                count: key.flags.msaa_samples(),
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },
         }
+
+        // Todo: specialize material
     }
 }
 
+/// The draw function of the terrain. It sets the pipeline and the bind groups and then issues the
+/// draw call.
+pub(crate) type DrawTerrain<M> = (
+    SetItemPipeline,
+    SetMeshViewBindGroup<0>,
+    SetTerrainViewBindGroup<1>,
+    SetTerrainBindGroup<2>,
+    SetMaterialBindGroup<M, 3>,
+    DrawTerrainCommand,
+);
+
 /// Queses all terrain entities for rendering via the terrain pipeline.
-pub(crate) fn queue_terrain(
-    terrain_pipeline: Res<TerrainRenderPipeline>,
+pub(crate) fn queue_terrain<M: Material>(
+    terrain_pipeline: Res<TerrainRenderPipeline<M>>,
     draw_functions: Res<DrawFunctions<Opaque3d>>,
     msaa: Res<Msaa>,
     debug: Res<DebugTerrain>,
-    mut pipelines: ResMut<SpecializedRenderPipelines<TerrainRenderPipeline>>,
+    render_materials: Res<RenderMaterials<M>>,
+    mut pipelines: ResMut<SpecializedRenderPipelines<TerrainRenderPipeline<M>>>,
     mut pipeline_cache: ResMut<PipelineCache>,
     mut view_query: Query<&mut RenderPhase<Opaque3d>>,
-    terrain_query: Query<Entity, With<Terrain>>,
-) {
-    let draw_function = draw_functions.read().get_id::<DrawTerrain>().unwrap();
+    terrain_query: Query<(Entity, &Handle<M>), With<Terrain>>,
+) where
+    M::Data: PartialEq + Eq + Hash + Clone,
+{
+    let draw_function = draw_functions.read().get_id::<DrawTerrain<M>>().unwrap();
 
     for mut opaque_phase in view_query.iter_mut() {
-        for entity in terrain_query.iter() {
-            let key = TerrainPipelineKey::from_msaa_samples(msaa.samples)
-                | TerrainPipelineKey::from_debug(&debug);
+        for (entity, material) in terrain_query.iter() {
+            if let Some(material) = render_materials.get(material) {
+                let flags = TerrainPipelineFlags::from_msaa_samples(msaa.samples)
+                    | TerrainPipelineFlags::from_debug(&debug);
 
-            let pipeline = pipelines.specialize(&mut pipeline_cache, &terrain_pipeline, key);
+                let key = TerrainPipelineKey {
+                    flags,
+                    bind_group_data: material.key.clone(),
+                };
 
-            opaque_phase.add(Opaque3d {
-                entity,
-                pipeline,
-                draw_function,
-                distance: f32::MIN, // draw terrain first
-            });
+                let pipeline = pipelines.specialize(&mut pipeline_cache, &terrain_pipeline, key);
+
+                opaque_phase.add(Opaque3d {
+                    entity,
+                    pipeline,
+                    draw_function,
+                    distance: f32::MIN, // draw terrain first
+                });
+            }
+        }
+    }
+}
+
+pub struct TerrainMaterialPlugin<M: Material>(PhantomData<M>);
+
+impl<M: Material> Default for TerrainMaterialPlugin<M> {
+    fn default() -> Self {
+        Self(Default::default())
+    }
+}
+
+impl<M: Material> Plugin for TerrainMaterialPlugin<M>
+where
+    M::Data: PartialEq + Eq + Hash + Clone,
+{
+    fn build(&self, app: &mut App) {
+        app.add_asset::<M>()
+            .add_plugin(ExtractComponentPlugin::<Handle<M>>::default());
+
+        app.add_plugin(MaterialPlugin::<M>::default());
+
+        if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
+            render_app
+                // .init_resource::<ExtractedMaterials<M>>()
+                // .init_resource::<RenderMaterials<M>>()
+                // .add_system_to_stage(RenderStage::Extract, extract_materials::<M>)
+                // .add_system_to_stage(
+                //     RenderStage::Prepare,
+                //     prepare_materials::<M>.after(PrepareAssetLabel::PreAssetPrepare),
+                // )
+                .add_render_command::<Opaque3d, DrawTerrain<M>>()
+                .init_resource::<TerrainRenderPipeline<M>>()
+                .init_resource::<SpecializedRenderPipelines<TerrainRenderPipeline<M>>>()
+                .add_system_to_stage(RenderStage::Queue, queue_terrain::<M>);
         }
     }
 }
