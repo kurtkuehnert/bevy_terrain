@@ -34,14 +34,14 @@
 
 use crate::{
     attachment_loader::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk},
-    data_structures::gpu_node_atlas::{
-        extract_node_atlas, initialize_gpu_node_atlas, queue_node_atlas_updates, GpuNodeAtlas,
-    },
     data_structures::{
+        gpu_node_atlas::{
+            extract_node_atlas, initialize_gpu_node_atlas, queue_node_atlas_updates, GpuNodeAtlas,
+        },
         gpu_quadtree::{
             extract_quadtree, initialize_gpu_quadtree, queue_quadtree_update, GpuQuadtree,
         },
-        node_atlas::update_node_atlas,
+        node_atlas::{update_node_atlas, NodeAtlas},
         quadtree::{
             adjust_quadtree, compute_quadtree_request, update_height_under_viewer, Quadtree,
         },
@@ -70,7 +70,6 @@ use bevy::{
 };
 
 pub mod attachment_loader;
-pub mod bundles;
 pub mod data_structures;
 pub mod debug;
 pub mod preprocess;
@@ -83,14 +82,34 @@ pub mod prelude {
     #[doc(hidden)]
     pub use crate::{
         attachment_loader::AttachmentFromDiskLoader,
-        bundles::TerrainBundle,
-        data_structures::quadtree::Quadtree,
-        preprocess::prelude,
+        data_structures::{quadtree::Quadtree, AttachmentConfig, AttachmentFormat},
+        preprocess::{Preprocessor, TileConfig},
         render::{render_pipeline::TerrainMaterialPlugin, TerrainPipelineConfig},
         terrain::{Terrain, TerrainConfig},
         terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
-        TerrainPlugin,
+        TerrainBundle, TerrainPlugin,
     };
+}
+
+#[derive(Bundle)]
+pub struct TerrainBundle {
+    terrain: Terrain,
+    node_atlas: NodeAtlas,
+    config: TerrainConfig,
+    transform: Transform,
+    global_transform: GlobalTransform,
+}
+
+impl TerrainBundle {
+    pub fn new(config: TerrainConfig) -> Self {
+        Self {
+            terrain: Terrain,
+            node_atlas: NodeAtlas::from_config(&config),
+            config,
+            transform: default(),
+            global_transform: default(),
+        }
+    }
 }
 
 pub struct TerrainPlugin;

@@ -15,7 +15,9 @@
 //! Both the node atlas and the quadtrees also have a corresponding GPU representation,
 //! which can be used to access the terrain data in shaders.
 
+use bevy::utils::Uuid;
 use bevy::{prelude::*, render::render_resource::*};
+use std::str::FromStr;
 
 pub mod gpu_node_atlas;
 pub mod gpu_quadtree;
@@ -68,17 +70,66 @@ pub fn calc_node_id(lod: u32, x: u32, y: u32) -> NodeId {
     (lod & 0xF) << 28 | (x & 0x3FFF) << 14 | y & 0x3FFF
 }
 
-/// Configures an attachment of a [`NodeAtlas`](node_atlas::NodeAtlas).
+#[derive(Clone, Copy)]
+pub enum AttachmentFormat {
+    RGB,
+    RGBA,
+    LUMA16,
+}
+
+impl From<AttachmentFormat> for TextureFormat {
+    fn from(format: AttachmentFormat) -> Self {
+        match format {
+            AttachmentFormat::RGB => TextureFormat::Rgba8UnormSrgb,
+            AttachmentFormat::RGBA => TextureFormat::Rgba8UnormSrgb,
+            AttachmentFormat::LUMA16 => TextureFormat::R16Unorm,
+        }
+    }
+}
+
+/// Configures an [AtlasAttachment].
+#[derive(Clone, Copy)]
+pub struct AttachmentConfig {
+    /// The name of the attachment.
+    pub name: &'static str,
+    /// The none overlapping center size in pixels.
+    pub center_size: u32,
+    /// The overlapping border size around the node, used to prevent sampling artifacts.
+    pub border_size: u32,
+    /// The format of the attachment.
+    pub format: AttachmentFormat,
+}
+
+/// An attachment of a [`NodeAtlas`](node_atlas::NodeAtlas).
 #[derive(Clone)]
 pub struct AtlasAttachment {
     /// The handle of the attachment array texture.
     pub(crate) handle: Handle<Image>,
     /// The name of the attachment.
     pub(crate) name: &'static str,
-    /// The none overlapping texture size in pixels.
-    pub(crate) texture_size: u32,
-    /// The overlapping border size around the texture, used to prevent sampling artifacts.
+    /// The none overlapping center size in pixels.
+    pub(crate) center_size: u32,
+    /// The overlapping border size around the node, used to prevent sampling artifacts.
     pub(crate) border_size: u32,
     /// The format of the attachment.
     pub(crate) format: TextureFormat,
+}
+
+impl From<AttachmentConfig> for AtlasAttachment {
+    fn from(config: AttachmentConfig) -> Self {
+        // Todo: fix this awful hack
+        let handle = HandleUntyped::weak_from_u64(
+            Uuid::from_str("6ea26da6-6cf8-4ea2-9986-1d7bf6c17d6f").unwrap(),
+            fastrand::u64(..),
+        )
+        .typed();
+
+        Self {
+            handle,
+            name: config.name,
+            center_size: config.center_size,
+            border_size: config.border_size,
+            format: config.format.into(),
+        }
+    }
 }
