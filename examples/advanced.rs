@@ -11,6 +11,7 @@ const LOD_COUNT: u32 = 5;
 const CHUNK_SIZE: u32 = 128;
 const HEIGHT: f32 = 200.0;
 const NODE_ATLAS_SIZE: u32 = 300;
+const PATH: &str = "terrain/";
 
 #[derive(AsBindGroup, TypeUuid, Clone)]
 #[uuid = "4ccc53dd-2cfd-48ba-b659-c0e1a9bc0bdb"]
@@ -52,6 +53,9 @@ fn setup(
         handle: texture.clone(),
     });
 
+    let mut preprocessor = Preprocessor::default();
+    let mut from_disk_loader = AttachmentFromDiskLoader::default();
+
     // Configure all the important properties of the terrain, as well as its attachments.
     let mut config = TerrainConfig::new(
         TERRAIN_SIZE,
@@ -59,23 +63,19 @@ fn setup(
         LOD_COUNT,
         HEIGHT,
         NODE_ATLAS_SIZE,
-        "terrain/".into(),
+        PATH,
     );
-    let mut from_disk_loader = AttachmentFromDiskLoader::default();
 
-    config.add_attachment_from_disk(
+    config.add_base_attachment(
+        &mut preprocessor,
         &mut from_disk_loader,
-        "height",
-        TextureFormat::R16Unorm,
         CHUNK_SIZE,
-        2,
-    );
-    config.add_attachment_from_disk(
-        &mut from_disk_loader,
-        "density",
-        TextureFormat::R16Unorm,
-        CHUNK_SIZE,
-        0,
+        TileConfig {
+            path: "assets/terrain/source/height",
+            lod: 0,
+            offset: Default::default(),
+            size: TERRAIN_SIZE,
+        },
     );
 
     // Create the terrain.
@@ -119,6 +119,10 @@ fn setup(
         },
         ..default()
     });
+
+    // Preprocesses the terrain data.
+    // Todo: Should be commented out after the first run.
+    preprocessor.preprocess(&config);
 }
 
 struct LoadingTexture {
