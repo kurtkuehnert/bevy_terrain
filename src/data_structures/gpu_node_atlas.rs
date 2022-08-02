@@ -25,11 +25,13 @@ impl AtlasAttachment {
         images: &mut RenderAssets<Image>,
         node_atlas_size: AtlasIndex,
     ) -> Handle<Image> {
+        let texture_size = self.center_size + 2 * self.border_size;
+
         let texture = device.create_texture(&TextureDescriptor {
             label: Some(&(self.name.to_string() + "_attachment")),
             size: Extent3d {
-                width: self.texture_size + 2 * self.border_size,
-                height: self.texture_size + 2 * self.border_size,
+                width: texture_size,
+                height: texture_size,
                 depth_or_array_layers: node_atlas_size as u32,
             },
             mip_level_count: 1,
@@ -46,7 +48,7 @@ impl AtlasAttachment {
                 texture,
                 texture_format: self.format,
                 sampler: device.create_sampler(&SamplerDescriptor::default()),
-                size: Vec2::splat((self.texture_size + 2 * self.border_size) as f32),
+                size: Vec2::splat(texture_size as f32),
             },
         );
 

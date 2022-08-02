@@ -1,5 +1,4 @@
-use crate::data_structures::node_atlas::NodeAtlas;
-use crate::data_structures::{AttachmentIndex, NodeId};
+use crate::data_structures::{node_atlas::NodeAtlas, AttachmentIndex, NodeId};
 use bevy::{
     asset::{AssetServer, HandleId, LoadState},
     prelude::*,
@@ -7,9 +6,9 @@ use bevy::{
     utils::HashMap,
 };
 
-pub struct AttachmentFromDisk {
-    path: String,
-    format: TextureFormat,
+pub(crate) struct AttachmentFromDisk {
+    pub(crate) path: String,
+    pub(crate) format: TextureFormat,
 }
 
 /// This component is used to load attachments from disk memory into the corresponding
@@ -19,18 +18,6 @@ pub struct AttachmentFromDiskLoader {
     pub(crate) attachments: HashMap<AttachmentIndex, AttachmentFromDisk>,
     /// Maps the id of an asset to the corresponding node id.
     handle_mapping: HashMap<HandleId, (NodeId, AttachmentIndex)>,
-}
-
-impl AttachmentFromDiskLoader {
-    pub fn add_attachment(
-        &mut self,
-        attachment_index: AttachmentIndex,
-        path: String,
-        format: TextureFormat,
-    ) {
-        self.attachments
-            .insert(attachment_index, AttachmentFromDisk { path, format });
-    }
 }
 
 pub fn start_loading_attachment_from_disk(
