@@ -1,6 +1,6 @@
 use crate::{
-    data_structures::quadtree::{Quadtree, QuadtreeEntry},
     terrain::Terrain,
+    terrain_data::quadtree::{Quadtree, QuadtreeEntry},
     terrain_view::TerrainView,
     TerrainViewComponents,
 };

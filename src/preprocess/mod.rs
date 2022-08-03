@@ -2,23 +2,24 @@ pub mod attachment;
 pub mod base;
 
 use crate::{
-    data_structures::{calc_node_id, AttachmentConfig, AttachmentFormat},
     preprocess::{attachment::preprocess_attachment, base::preprocess_base},
+    terrain_data::{calc_node_id, AttachmentConfig, AttachmentFormat},
     TerrainConfig,
 };
 use bevy::prelude::UVec2;
-use image::{io::Reader, DynamicImage, ImageBuffer, Luma, RgbImage, RgbaImage};
+use image::{io::Reader, DynamicImage, ImageBuffer, ImageResult, Luma, RgbImage, RgbaImage};
 use itertools::{Itertools, Product};
+use std::fs;
+use std::fs::{DirEntry, ReadDir};
+use std::iter::Map;
 use std::ops::Range;
 
+#[macro_export]
 macro_rules! skip_fail {
     ($res:expr) => {
         match $res {
             Ok(val) => val,
-            Err(e) => {
-                warn!("An error: {}; skipped.", e);
-                continue;
-            }
+            Err(_) => continue,
         }
     };
 }
@@ -30,7 +31,7 @@ pub struct BaseConfig {
 
 #[derive(Default)]
 pub struct TileConfig {
-    pub path: &'static str,
+    pub path: String,
     pub lod: u32,
     pub offset: UVec2,
     pub size: u32,
@@ -50,6 +51,11 @@ impl Preprocessor {
             preprocess_attachment(config, &tile, &attachment);
         }
     }
+}
+
+pub(crate) fn reset_directory(directory: &str) {
+    let _ = fs::remove_dir_all(directory);
+    fs::create_dir_all(directory).unwrap();
 }
 
 pub(crate) trait UVec2Utils {
@@ -74,7 +80,7 @@ impl UVec2Utils for UVec2 {
 
 pub(crate) type LUMA16Image = ImageBuffer<Luma<u16>, Vec<u16>>;
 
-pub(crate) fn node_path(directory: &str, lod: u32, x: u32, y: u32) -> String {
+pub(crate) fn format_node_path(directory: &str, lod: u32, x: u32, y: u32) -> String {
     let node_id = calc_node_id(lod, x, y);
 
     format!("{directory}/{node_id}.png")
@@ -84,31 +90,41 @@ pub(crate) fn format_path(path: &str, name: &str) -> String {
     format!("assets/{path}/data/{name}")
 }
 
-pub(crate) fn read_image(file_path: &str) -> DynamicImage {
-    let mut reader = Reader::open(file_path).unwrap();
+pub(crate) fn load_image(file_path: &str) -> ImageResult<DynamicImage> {
+    let mut reader = Reader::open(file_path)?;
     reader.no_limits();
-    reader.decode().unwrap()
+    reader.decode()
 }
 
-pub(crate) fn load_node(
-    file_path: &str,
-    center_size: u32,
-    border_size: u32,
-    format: AttachmentFormat,
-) -> DynamicImage {
-    if let Ok(output) = image::open(file_path) {
+pub(crate) fn load_or_create_node(node_path: &str, attachment: &AttachmentConfig) -> DynamicImage {
+    if let Ok(output) = load_image(node_path) {
         output
     } else {
-        let texture_size = center_size + 2 * border_size;
+        let size = attachment.texture_size();
 
-        match format {
-            AttachmentFormat::RGB => DynamicImage::from(RgbImage::new(texture_size, texture_size)),
-            AttachmentFormat::RGBA => {
-                DynamicImage::from(RgbaImage::new(texture_size, texture_size))
-            }
-            AttachmentFormat::LUMA16 => {
-                DynamicImage::from(LUMA16Image::new(texture_size, texture_size))
-            }
+        match attachment.format {
+            AttachmentFormat::RGB => DynamicImage::from(RgbImage::new(size, size)),
+            AttachmentFormat::RGBA => DynamicImage::from(RgbaImage::new(size, size)),
+            AttachmentFormat::LUMA16 => DynamicImage::from(LUMA16Image::new(size, size)),
         }
     }
+}
+
+pub(crate) fn iterate_images(
+    directory: &str,
+) -> Map<ReadDir, fn(std::io::Result<DirEntry>) -> (String, String)> {
+    fs::read_dir(directory).unwrap().map(|path| {
+        let path = path.unwrap().path();
+        let name = path
+            .with_extension("")
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
+
+        let path = path.into_os_string().into_string().unwrap();
+
+        (name, path)
+    })
 }

@@ -1,4 +1,4 @@
-use crate::data_structures::{node_atlas::NodeAtlas, AttachmentIndex, NodeId};
+use crate::terrain_data::{node_atlas::NodeAtlas, AttachmentIndex, NodeId};
 use bevy::{
     asset::{AssetServer, HandleId, LoadState},
     prelude::*,

@@ -1,10 +1,10 @@
 use crate::{
-    data_structures::{
+    terrain::{Terrain, TerrainConfig},
+    terrain_data::{
         calc_node_id,
         node_atlas::{LoadingState, NodeAtlas},
         AtlasIndex, NodeCoordinate, NodeId, INVALID_ATLAS_INDEX, INVALID_LOD, INVALID_NODE_ID,
     },
-    terrain::{Terrain, TerrainConfig},
     TerrainView, TerrainViewComponents, TerrainViewConfig,
 };
 use bevy::{math::Vec3Swizzles, prelude::*};
