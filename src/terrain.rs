@@ -1,7 +1,7 @@
 use crate::{
     attachment_loader::{AttachmentFromDisk, AttachmentFromDiskLoader},
-    data_structures::{AtlasAttachment, AttachmentConfig, AttachmentFormat, AttachmentIndex},
     preprocess::{BaseConfig, Preprocessor, TileConfig},
+    terrain_data::{AtlasAttachment, AttachmentConfig, AttachmentFormat, AttachmentIndex},
 };
 use bevy::{
     ecs::{query::QueryItem, system::lifetimeless::Read},
@@ -42,7 +42,7 @@ pub struct TerrainConfig {
     pub chunk_size: u32,
     pub terrain_size: u32,
     pub node_atlas_size: u32,
-    pub path: &'static str,
+    pub path: String,
     pub attachments: Vec<AtlasAttachment>,
 }
 
@@ -53,7 +53,7 @@ impl TerrainConfig {
         lod_count: u32,
         height: f32,
         node_atlas_size: u32,
-        path: &'static str,
+        path: String,
     ) -> Self {
         Self {
             lod_count,
@@ -79,38 +79,39 @@ impl TerrainConfig {
         tile: TileConfig,
     ) {
         let height_attachment = AttachmentConfig {
-            name: "height",
+            name: "height".to_string(),
             center_size,
             border_size: 2,
             format: AttachmentFormat::LUMA16,
         };
         let density_attachment = AttachmentConfig {
-            name: "density",
+            name: "density".to_string(),
             center_size,
             border_size: 0,
             format: AttachmentFormat::LUMA16,
         };
 
-        self.attachments.push(height_attachment.into());
-        self.attachments.push(density_attachment.into());
-
         preprocessor.base = (tile, BaseConfig { center_size });
 
         from_disk_loader.attachments.insert(
-            self.attachments.len() - 2,
+            self.attachments.len(),
             AttachmentFromDisk {
-                path: self.path.to_string() + "data/height",
+                path: format!("{}/data/{}", self.path, height_attachment.name),
                 format: AttachmentFormat::LUMA16.into(),
             },
         );
 
+        self.attachments.push(height_attachment.into());
+
         from_disk_loader.attachments.insert(
-            self.attachments.len() - 1,
+            self.attachments.len(),
             AttachmentFromDisk {
-                path: self.path.to_string() + "data/density",
+                path: format!("{}/data/{}", self.path, density_attachment.name),
                 format: AttachmentFormat::LUMA16.into(),
             },
         );
+
+        self.attachments.push(density_attachment.into());
     }
 
     pub fn add_attachment_from_disk(
@@ -120,17 +121,17 @@ impl TerrainConfig {
         attachment: AttachmentConfig,
         tile: TileConfig,
     ) {
-        let attachment_index = self.add_attachment(attachment);
-
-        preprocessor.attachments.push((tile, attachment));
+        let attachment_index = self.add_attachment(attachment.clone());
 
         from_disk_loader.attachments.insert(
             attachment_index,
             AttachmentFromDisk {
-                path: self.path.to_string() + "data/" + attachment.name,
+                path: format!("{}/data/{}", self.path, attachment.name),
                 format: attachment.format.into(),
             },
         );
+
+        preprocessor.attachments.push((tile, attachment));
     }
 
     pub(crate) fn shader_data(&self) -> TerrainConfigUniform {

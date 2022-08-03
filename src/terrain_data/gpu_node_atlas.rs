@@ -1,9 +1,9 @@
 use crate::{
-    data_structures::{
+    terrain::{Terrain, TerrainComponents},
+    terrain_data::{
         node_atlas::{LoadingNode, NodeAtlas},
         AtlasAttachment, AtlasIndex,
     },
-    terrain::{Terrain, TerrainComponents},
 };
 use bevy::{
     prelude::*,

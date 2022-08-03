@@ -88,10 +88,10 @@ impl From<AttachmentFormat> for TextureFormat {
 }
 
 /// Configures an [AtlasAttachment].
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct AttachmentConfig {
     /// The name of the attachment.
-    pub name: &'static str,
+    pub name: String,
     /// The none overlapping center size in pixels.
     pub center_size: u32,
     /// The overlapping border size around the node, used to prevent sampling artifacts.
@@ -100,13 +100,19 @@ pub struct AttachmentConfig {
     pub format: AttachmentFormat,
 }
 
+impl AttachmentConfig {
+    pub fn texture_size(&self) -> u32 {
+        self.center_size + 2 * self.border_size
+    }
+}
+
 /// An attachment of a [`NodeAtlas`](node_atlas::NodeAtlas).
 #[derive(Clone)]
 pub struct AtlasAttachment {
     /// The handle of the attachment array texture.
     pub(crate) handle: Handle<Image>,
     /// The name of the attachment.
-    pub(crate) name: &'static str,
+    pub(crate) name: String,
     /// The none overlapping center size in pixels.
     pub(crate) center_size: u32,
     /// The overlapping border size around the node, used to prevent sampling artifacts.
