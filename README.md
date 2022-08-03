@@ -8,6 +8,17 @@ For a simple example see the examples folder.
 
 Documentation and usage instructions coming soon.
 
+## Examples
+Currently there are two examples. 
+
+The basic one showcases the different debug views of the terrain. See controls down below.
+
+The advanced one showcases how to use the Bevy material system for texturing.
+
+Before running the examples you have to preprocess the terrain data first, by running the prepocess example.
+
+`cargo run --example preprocess`
+
 ## License
 Bevy Terrain is dual-licensed under either
 
