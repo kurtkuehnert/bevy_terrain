@@ -1,8 +1,8 @@
 use crate::{
-    data_structures::{
+    terrain::{Terrain, TerrainConfig},
+    terrain_data::{
         quadtree::Quadtree, AtlasAttachment, AtlasIndex, AttachmentIndex, NodeId, INVALID_NODE_ID,
     },
-    terrain::{Terrain, TerrainConfig},
     TerrainView, TerrainViewComponents,
 };
 use bevy::{

@@ -11,7 +11,7 @@ const LOD_COUNT: u32 = 5;
 const CHUNK_SIZE: u32 = 128;
 const HEIGHT: f32 = 200.0;
 const NODE_ATLAS_SIZE: u32 = 300;
-const PATH: &str = "terrain/";
+const PATH: &str = "terrain";
 
 #[derive(AsBindGroup, TypeUuid, Clone)]
 #[uuid = "4ccc53dd-2cfd-48ba-b659-c0e1a9bc0bdb"]
@@ -63,7 +63,7 @@ fn setup(
         LOD_COUNT,
         HEIGHT,
         NODE_ATLAS_SIZE,
-        PATH,
+        PATH.to_string(),
     );
 
     config.add_base_attachment(
@@ -71,7 +71,7 @@ fn setup(
         &mut from_disk_loader,
         CHUNK_SIZE,
         TileConfig {
-            path: "assets/terrain/source/height",
+            path: "assets/terrain/source/height".to_string(),
             lod: 0,
             offset: Default::default(),
             size: TERRAIN_SIZE,

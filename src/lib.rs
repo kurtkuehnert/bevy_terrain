@@ -14,11 +14,11 @@
 //! viewers (cameras, lights, etc.).
 //! Therefore the terrain is subdivided into a giant quadtree, whose nodes store their
 //! section of these attachments.
-//! The wrapping [`Quadtree`](data_structures::quadtree::Quadtree) views together with
-//! the [`NodeAtlas`](data_structures::node_atlas::NodeAtlas) (the data structure
+//! The wrapping [`Quadtree`](terrain_data::quadtree::Quadtree) views together with
+//! the [`NodeAtlas`](terrain_data::node_atlas::NodeAtlas) (the data structure
 //! that stores all of the currently loaded data) can be used to efficiently retrieve
 //! the best currently available data at any position for terrains of any size.
-//! See the [`data_structures`] module for more information.
+//! See the [`terrain_data`] module for more information.
 //!
 //! ## How to best approximate the terrain geometry?
 //! Even a small terrain with a height map of 1000x1000 pixels would require 1 million vertices
@@ -34,7 +34,17 @@
 
 use crate::{
     attachment_loader::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk},
-    data_structures::{
+    debug::{change_config, extract_debug, toggle_debug, DebugTerrain},
+    render::{
+        compute_pipelines::{TerrainComputeNode, TerrainComputePipelines},
+        culling::{queue_terrain_culling_bind_group, CullingBindGroup},
+        shaders::add_shader,
+        terrain_data::{initialize_terrain_data, TerrainData},
+        terrain_view_data::{initialize_terrain_view_data, TerrainViewData},
+        TerrainPipelineConfig,
+    },
+    terrain::{Terrain, TerrainComponents, TerrainConfig},
+    terrain_data::{
         gpu_node_atlas::{
             extract_node_atlas, initialize_gpu_node_atlas, queue_node_atlas_updates, GpuNodeAtlas,
         },
@@ -46,16 +56,6 @@ use crate::{
             adjust_quadtree, compute_quadtree_request, update_height_under_viewer, Quadtree,
         },
     },
-    debug::{change_config, extract_debug, toggle_debug, DebugTerrain},
-    render::{
-        compute_pipelines::{TerrainComputeNode, TerrainComputePipelines},
-        culling::{queue_terrain_culling_bind_group, CullingBindGroup},
-        shaders::add_shader,
-        terrain_data::{initialize_terrain_data, TerrainData},
-        terrain_view_data::{initialize_terrain_view_data, TerrainViewData},
-        TerrainPipelineConfig,
-    },
-    terrain::{Terrain, TerrainComponents, TerrainConfig},
     terrain_view::{
         extract_terrain_view_config, queue_terrain_view_config, TerrainView, TerrainViewComponents,
         TerrainViewConfig,
@@ -70,11 +70,11 @@ use bevy::{
 };
 
 pub mod attachment_loader;
-pub mod data_structures;
 pub mod debug;
 pub mod preprocess;
 pub mod render;
 pub mod terrain;
+pub mod terrain_data;
 pub mod terrain_view;
 
 #[allow(missing_docs)]
@@ -82,10 +82,10 @@ pub mod prelude {
     #[doc(hidden)]
     pub use crate::{
         attachment_loader::AttachmentFromDiskLoader,
-        data_structures::{quadtree::Quadtree, AttachmentConfig, AttachmentFormat},
         preprocess::{Preprocessor, TileConfig},
         render::{render_pipeline::TerrainMaterialPlugin, TerrainPipelineConfig},
         terrain::{Terrain, TerrainConfig},
+        terrain_data::{quadtree::Quadtree, AttachmentConfig, AttachmentFormat},
         terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
         TerrainBundle, TerrainPlugin,
     };
