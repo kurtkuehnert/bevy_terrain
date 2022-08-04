@@ -1,5 +1,5 @@
 use crate::{
-    render::layouts::TERRAIN_CONFIG_SIZE,
+    render::TERRAIN_CONFIG_SIZE,
     terrain::{Terrain, TerrainComponents},
     TerrainConfig,
 };

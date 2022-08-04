@@ -58,19 +58,40 @@ var array_sampler: sampler;
 #import bevy_terrain::functions
 #import bevy_terrain::debug
 
-// The function that evaluates the color of the fragment.
-// It will be called in the fragment shader and blended between different lods.
-fn color_fragment(
-    in: FragmentInput,
-    lod: u32,
-    atlas_index: i32,
-    atlas_coords: vec2<f32>
-) -> vec4<f32> {
+// The terrain data required by your `fragment_color` function.
+// This data will be fetched from the atlases by means of the `AtlasLookup`.
+// To smoothen the transition between different lods the fragment data will be blended at the fringe between them.
+struct FragmentData {
+    world_normal: vec3<f32>,
+}
+
+// Lookup the terrain data required by your `fragment_color` function.
+// This will happen once or twice (lod fringe).
+fn lookup_fragment_data(in: FragmentInput, lookup: AtlasLookup) -> FragmentData {
+    let lod = lookup.lod;
+    let atlas_index = lookup.atlas_index;
+    let atlas_coords = lookup.atlas_coords;
+
     // Adjust the uvs for your attachments.
     let height_coords = atlas_coords * config.height_scale + config.height_offset;
 
     // Calculate the normal from the heightmap.
     let world_normal = calculate_normal(height_coords, atlas_index, lod);
+
+    return FragmentData(world_normal);
+}
+
+// Blend the terrain data at the fringe between two lods.
+fn blend_fragment_data(data1: FragmentData, data2: FragmentData, blend_ratio: f32) -> FragmentData {
+    let world_normal =  mix(data2.world_normal, data1.world_normal, blend_ratio);
+
+    return FragmentData(world_normal);
+}
+
+// The function that evaluates the color of the fragment.
+// It will be called once in the fragment shader with the blended fragment data.
+fn fragment_color(in: FragmentInput, data: FragmentData) -> vec4<f32> {
+    let world_normal = data.world_normal;
 
     let slope = 1.0 - world_normal.y;
     let height = in.world_position.y / config.height;
@@ -108,5 +129,5 @@ fn color_fragment(
     return pbr(pbr_input);
 }
 
-// Import the default vertex and fragment entry points.
-#import bevy_terrain::entry_points
+// The default fragment entry point, which blends the terrain data at the fringe between two lods.
+#import bevy_terrain::fragment

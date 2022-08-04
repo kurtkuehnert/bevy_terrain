@@ -49,24 +49,43 @@ var density_atlas: texture_2d_array<f32>;
 #import bevy_terrain::functions
 #import bevy_terrain::debug
 
-fn color_fragment(
-    in: FragmentInput,
-    lod: u32,
-    atlas_index: i32,
-    atlas_coords: vec2<f32>
-) -> vec4<f32> {
-    var color = vec4<f32>(0.5);
+struct FragmentData {
+    world_normal: vec3<f32>,
+    debug_color: vec4<f32>,
+}
+
+fn lookup_fragment_data(in: FragmentInput, lookup: AtlasLookup) -> FragmentData {
+    let lod = lookup.lod;
+    let atlas_index = lookup.atlas_index;
+    let atlas_coords = lookup.atlas_coords;
 
     let height_coords = atlas_coords * config.height_scale + config.height_offset;
+
     let world_normal = calculate_normal(height_coords, atlas_index, lod);
 
+    var debug_color = vec4<f32>(0.5);
+
     #ifdef SHOW_LOD
-        color = mix(color, show_lod(lod, in.world_position.xyz), 0.4);
+        debug_color = mix(debug_color, show_lod(lod, in.world_position.xyz), 0.4);
     #endif
 
     #ifdef SHOW_UV
-        color = mix(color, vec4<f32>(atlas_coords.x, atlas_coords.y, 0.0, 1.0), 0.5);
+        debug_color = mix(debug_color, vec4<f32>(atlas_coords.x, atlas_coords.y, 0.0, 1.0), 0.5);
     #endif
+
+    return FragmentData(world_normal, debug_color);
+}
+
+fn blend_fragment_data(data1: FragmentData, data2: FragmentData, blend_ratio: f32) -> FragmentData {
+    let world_normal =  mix(data2.world_normal, data1.world_normal, blend_ratio);
+    let debug_color = mix(data2.debug_color, data1.debug_color, blend_ratio);
+
+    return FragmentData(world_normal, debug_color);
+}
+
+fn fragment_color(in: FragmentInput, data: FragmentData) -> vec4<f32> {
+    let world_normal = data.world_normal;
+    var color = data.debug_color;
 
     #ifdef LIGHTING
         var pbr_input: PbrInput = pbr_input_new();
@@ -86,4 +105,5 @@ fn color_fragment(
     return color;
 }
 
-#import bevy_terrain::entry_points
+#import bevy_terrain::vertex
+#import bevy_terrain::fragment

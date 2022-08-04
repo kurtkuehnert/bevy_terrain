@@ -1,22 +1,21 @@
-use crate::render::layouts::{PREPARE_INDIRECT_LAYOUT, TESSELLATION_LAYOUT};
 use crate::{
-    render::layouts::{
-        INDIRECT_BUFFER_SIZE, PARAMETER_BUFFER_SIZE, TERRAIN_VIEW_CONFIG_SIZE, TERRAIN_VIEW_LAYOUT,
-        TILE_SIZE,
+    render::{
+        INDIRECT_BUFFER_SIZE, PARAMETER_BUFFER_SIZE, PREPARE_INDIRECT_LAYOUT,
+        TERRAIN_VIEW_CONFIG_SIZE, TERRAIN_VIEW_LAYOUT, TESSELLATION_LAYOUT, TILE_SIZE,
     },
     terrain::Terrain,
     terrain_view::{TerrainView, TerrainViewConfig},
     TerrainViewComponents,
 };
-use bevy::render::render_asset::RenderAssets;
-use bevy::render::Extract;
 use bevy::{
     ecs::system::{lifetimeless::SRes, SystemParamItem},
     prelude::*,
     render::{
+        render_asset::RenderAssets,
         render_phase::{EntityRenderCommand, RenderCommandResult, TrackedRenderPass},
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
+        Extract,
     },
 };
 
