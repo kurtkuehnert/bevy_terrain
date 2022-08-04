@@ -1,3 +1,5 @@
+//! Functions for preprocessing source tiles into streamable nodes.
+
 pub mod attachment;
 pub mod base;
 
@@ -9,10 +11,11 @@ use crate::{
 use bevy::prelude::UVec2;
 use image::{io::Reader, DynamicImage, ImageBuffer, ImageResult, Luma, RgbImage, RgbaImage};
 use itertools::{Itertools, Product};
-use std::fs;
-use std::fs::{DirEntry, ReadDir};
-use std::iter::Map;
-use std::ops::Range;
+use std::{
+    fs::{self, DirEntry, ReadDir},
+    iter::Map,
+    ops::Range,
+};
 
 #[macro_export]
 macro_rules! skip_fail {
@@ -25,18 +28,26 @@ macro_rules! skip_fail {
 }
 
 #[derive(Default)]
-pub struct BaseConfig {
+pub(crate) struct BaseConfig {
     pub center_size: u32,
 }
 
+/// The configuration of the source tile(s) of an attachment.
 #[derive(Default)]
 pub struct TileConfig {
+    /// The path to the tile/directory of tiles.
     pub path: String,
+    /// The lod of the tile.
     pub lod: u32,
+    /// The offset of the tile.
     pub offset: UVec2,
+    /// The size of the tile in pixels.
     pub size: u32,
 }
 
+/// The preprocessor converts attachments from source data to streamable nodes.
+///
+/// It gathers all configurations of the attachments and then optionally processes them.
 #[derive(Default)]
 pub struct Preprocessor {
     pub(crate) base: (TileConfig, BaseConfig),
@@ -44,6 +55,7 @@ pub struct Preprocessor {
 }
 
 impl Preprocessor {
+    /// Preprocesses all attachments of the terrain.
     pub fn preprocess(self, config: &TerrainConfig) {
         preprocess_base(config, &self.base.0, &self.base.1);
 

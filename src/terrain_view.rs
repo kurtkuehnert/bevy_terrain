@@ -1,17 +1,18 @@
+//! Types for configuring terrain views.
+
 use crate::{terrain::Terrain, TerrainConfig, TerrainViewData};
-use bevy::render::Extract;
-use bevy::utils::Uuid;
 use bevy::{
     ecs::{query::QueryItem, system::lifetimeless::Read},
     prelude::*,
-    render::{extract_component::ExtractComponent, render_resource::*, renderer::RenderQueue},
-    utils::HashMap,
+    render::{extract_component::ExtractComponent, renderer::RenderQueue, Extract},
+    utils::{HashMap, Uuid},
 };
 use std::str::FromStr;
 
 /// Resource that stores components that are associated to a terrain entity and a view entity.
 pub type TerrainViewComponents<C> = HashMap<(Entity, Entity), C>;
 
+/// A marker component used to identify a terrain view entity.
 #[derive(Clone, Copy, Component)]
 pub struct TerrainView;
 
@@ -25,41 +26,37 @@ impl ExtractComponent for TerrainView {
     }
 }
 
-#[derive(Clone, Default, ShaderType)]
-pub(crate) struct TerrainViewConfigUniform {
-    height_under_viewer: f32,
-
-    node_count: u32,
-
-    tile_count: u32,
-    refinement_count: u32,
-    view_distance: f32,
-    tile_scale: f32,
-
-    morph_blend: f32,
-    vertex_blend: f32,
-    fragment_blend: f32,
-}
-
+/// The configuration of a terrain view.
+///
+/// A terrain view describes the quality settings the corresponding terrain will be rendered with.
 #[derive(Clone, Component)]
 pub struct TerrainViewConfig {
+    /// A handle to the quadtree texture.
     pub(crate) quadtree_handle: Handle<Image>,
-
+    /// The current height under the viewer.
     pub height_under_viewer: f32,
-    // quadtree
+    /// The distance (measured in node sizes) until which to request nodes to be loaded.
     pub load_distance: f32,
+    /// The count of nodes in x and y direction per quadtree layer.
     pub node_count: u32,
-    // tesselation
+    /// The size of the tile buffer.
     pub tile_count: u32,
+    /// The amount of steps the tile list will be refined.
     pub refinement_count: u32,
+    /// The distance (measured in node sizes) of each lod layer to the viewer.
     pub view_distance: f32,
+    /// The size of the tiles.
     pub tile_scale: f32,
+    /// The morph percentage of the mesh.
     pub morph_blend: f32,
+    /// The blend percentage in the vertex shader.
     pub vertex_blend: f32,
+    /// The blend percentage in the fragment shader.
     pub fragment_blend: f32,
 }
 
 impl TerrainViewConfig {
+    /// Creates a new terrain view config for the terrain.
     pub fn new(
         config: &TerrainConfig,
         node_count: u32,
@@ -77,16 +74,17 @@ impl TerrainViewConfig {
         )
         .typed();
 
-        let tile_count = 1000000;
-
         let view_distance = view_distance * config.chunk_size as f32; // same scale as load distance
 
         // let refinement_count = (config.terrain_size as f32 / tile_scale).log2().ceil() as u32;
+        // Todo: make these configurable ?
         let refinement_count = 15;
+        let tile_count = 1000000;
+        let height_under_viewer = 0.0;
 
         Self {
             quadtree_handle,
-            height_under_viewer: 0.0,
+            height_under_viewer,
             load_distance,
             node_count,
             tile_count,
@@ -96,25 +94,6 @@ impl TerrainViewConfig {
             morph_blend,
             vertex_blend,
             fragment_blend,
-        }
-    }
-
-    pub(crate) fn change_tile_scale(&mut self, new: f32) {
-        self.tile_scale = new;
-        // self.refinement_count = (self.terrain_size as f32 / self.tile_scale).log2().ceil() as u32;
-    }
-
-    pub(crate) fn shader_data(&self) -> TerrainViewConfigUniform {
-        TerrainViewConfigUniform {
-            node_count: self.node_count,
-            height_under_viewer: self.height_under_viewer,
-            tile_count: self.tile_count,
-            refinement_count: self.refinement_count,
-            view_distance: self.view_distance,
-            tile_scale: self.tile_scale,
-            morph_blend: self.morph_blend,
-            vertex_blend: self.vertex_blend,
-            fragment_blend: self.fragment_blend,
         }
     }
 }

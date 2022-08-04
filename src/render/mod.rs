@@ -1,6 +1,6 @@
-use crate::{
-    render::culling::CullingData, terrain::TerrainConfigUniform,
-    terrain_view::TerrainViewConfigUniform,
+use crate::render::{
+    culling::CullingData, terrain_data::TerrainConfigUniform,
+    terrain_view_data::TerrainViewConfigUniform,
 };
 use bevy::render::render_resource::*;
 use std::mem;

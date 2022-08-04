@@ -19,7 +19,38 @@ use bevy::{
     },
 };
 
-// Todo: consider factoring out the tesselation
+#[derive(Clone, Default, ShaderType)]
+pub(crate) struct TerrainViewConfigUniform {
+    height_under_viewer: f32,
+
+    node_count: u32,
+
+    tile_count: u32,
+    refinement_count: u32,
+    view_distance: f32,
+    tile_scale: f32,
+
+    morph_blend: f32,
+    vertex_blend: f32,
+    fragment_blend: f32,
+}
+
+impl From<&TerrainViewConfig> for TerrainViewConfigUniform {
+    fn from(config: &TerrainViewConfig) -> Self {
+        TerrainViewConfigUniform {
+            node_count: config.node_count,
+            height_under_viewer: config.height_under_viewer,
+            tile_count: config.tile_count,
+            refinement_count: config.refinement_count,
+            view_distance: config.view_distance,
+            tile_scale: config.tile_scale,
+            morph_blend: config.morph_blend,
+            vertex_blend: config.vertex_blend,
+            fragment_blend: config.fragment_blend,
+        }
+    }
+}
+
 pub struct TerrainViewData {
     pub(crate) indirect_buffer: Buffer,
     pub(crate) view_config_buffer: Buffer,
@@ -146,9 +177,11 @@ impl TerrainViewData {
         )
     }
 
-    pub(crate) fn update(&self, queue: &RenderQueue, terrain_view_config: &TerrainViewConfig) {
+    pub(crate) fn update(&self, queue: &RenderQueue, view_config: &TerrainViewConfig) {
         let mut buffer = encase::UniformBuffer::new(Vec::new());
-        buffer.write(&terrain_view_config.shader_data()).unwrap();
+        buffer
+            .write(&TerrainViewConfigUniform::from(view_config))
+            .unwrap();
         queue.write_buffer(&self.view_config_buffer, 0, &buffer.into_inner());
     }
 }
