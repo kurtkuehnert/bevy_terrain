@@ -1,21 +1,40 @@
-use crate::render::shaders::DEFAULT_SHADER;
-use crate::render::terrain_data::{terrain_bind_group_layout, SetTerrainBindGroup};
-use crate::render::terrain_view_data::{DrawTerrainCommand, SetTerrainViewBindGroup};
-use crate::render::TerrainPipelineConfig;
 use crate::{
-    render::layouts::TERRAIN_VIEW_LAYOUT, DebugTerrain, ExtractComponentPlugin, RenderApp, Terrain,
+    render::{
+        shaders::DEFAULT_SHADER,
+        terrain_data::{terrain_bind_group_layout, SetTerrainBindGroup},
+        terrain_view_data::{DrawTerrainCommand, SetTerrainViewBindGroup},
+        TERRAIN_VIEW_LAYOUT,
+    },
+    DebugTerrain, Terrain,
 };
-use bevy::core_pipeline::core_3d::Opaque3d;
-use bevy::pbr::{RenderMaterials, SetMaterialBindGroup, SetMeshViewBindGroup};
-use bevy::render::render_phase::{AddRenderCommand, DrawFunctions, RenderPhase, SetItemPipeline};
-use bevy::render::RenderStage;
 use bevy::{
-    pbr::MeshPipeline,
+    core_pipeline::core_3d::Opaque3d,
+    pbr::{MeshPipeline, RenderMaterials, SetMaterialBindGroup, SetMeshViewBindGroup},
     prelude::*,
-    render::{render_resource::*, renderer::RenderDevice, texture::BevyDefault},
+    render::{
+        extract_component::ExtractComponentPlugin,
+        render_phase::{AddRenderCommand, DrawFunctions, RenderPhase, SetItemPipeline},
+        render_resource::*,
+        renderer::RenderDevice,
+        texture::BevyDefault,
+        RenderApp, RenderStage,
+    },
 };
-use std::hash::Hash;
-use std::marker::PhantomData;
+use std::{hash::Hash, marker::PhantomData};
+
+/// Configures the default terrain pipeline.
+pub struct TerrainPipelineConfig {
+    /// The number of terrain attachments.
+    pub attachment_count: usize,
+}
+
+impl Default for TerrainPipelineConfig {
+    fn default() -> Self {
+        Self {
+            attachment_count: 2,
+        }
+    }
+}
 
 pub struct TerrainPipelineKey<M: Material> {
     pub flags: TerrainPipelineFlags,

@@ -1,4 +1,4 @@
-#define_import_path bevy_terrain::entry_points
+#define_import_path bevy_terrain::vertex
 
 fn height_vertex(atlas_index: i32, atlas_coords: vec2<f32>) -> f32 {
     let height_coords = atlas_coords * config.height_scale + config.height_offset;
@@ -43,22 +43,4 @@ fn vertex(vertex: VertexInput) -> VertexOutput {
 #endif
 
     return output;
-}
-
-@fragment
-fn fragment(fragment: FragmentInput) -> FragmentOutput {
-    let blend = calculate_blend(fragment.world_position.xyz, view_config.fragment_blend);
-
-    let lookup = atlas_lookup(blend.log_distance, fragment.local_position);
-    var color = color_fragment(fragment, lookup.lod, lookup.atlas_index, lookup.atlas_coords);
-
-    if (blend.ratio < 1.0) {
-        let lookup2 = atlas_lookup(blend.log_distance + 1.0, fragment.local_position);
-        let color2 = color_fragment(fragment, lookup2.lod, lookup2.atlas_index, lookup2.atlas_coords);
-        color = mix(color2, color, blend.ratio);
-    }
-
-    color = mix(fragment.color, color, 0.8);
-
-    return FragmentOutput(color);
 }

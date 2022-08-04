@@ -1,5 +1,6 @@
 #define_import_path bevy_terrain::atlas
 
+// A lookup in the node atlas based on the view of a quadtree.
 struct AtlasLookup {
     lod: u32,
     atlas_index: i32,
@@ -10,6 +11,8 @@ fn node_size(lod: u32) -> f32 {
     return f32(config.chunk_size * (1u << lod));
 }
 
+// Looks up the best availale node in the node atlas from the viewers point of view.
+// This is done by sampling the viewers quadtree at the caluclated location.
 fn atlas_lookup(log_distance: f32, local_position: vec2<f32>) -> AtlasLookup {
     let lod = clamp(u32(log_distance), 0u, config.lod_count - 1u);
 

@@ -3,7 +3,7 @@
 //! can be accessed from nearly anywhere (systems, shaders) [^note].
 //!
 //! # Background
-//! There are two critical questions that each terrain renderer has to solve:
+//! There are three critical questions that each terrain renderer has to solve:
 //!
 //! ## How to store, manage and access the terrain data?
 //! Each terrain has different types of textures associated with it.
@@ -22,13 +22,22 @@
 //!
 //! ## How to best approximate the terrain geometry?
 //! Even a small terrain with a height map of 1000x1000 pixels would require 1 million vertices
-//! to be rendered each frame per view, with an naive approach without any lod strategy.
+//! to be rendered each frame per view, with an naive approach without an lod strategy.
 //! To better distribute the vertices over the screen there exist many different algorithms.
 //! This crate comes with its own default terrain geometry algorithm which was developed with
 //! performance and quality scalability in mind.
 //! See the [`render`] module for more information.
 //! You can also implement a different algorithm yourself and only use the terrain
 //! data structures to solve the first question.
+//!
+//! ## How to shade the terrain?
+//! The third and most important challenge of terrain rendering is the shading. This is a very
+//! project specific problem and thus there does not exist a one-size-fits-all solution.
+//! You can define your own terrain [Material](bevy::pbr::Material) and shader with all the the detail textures tailored
+//! to your application.
+//! In the future this plugin will provide modular shader functions to make techniques like splat
+//! mapping, triplane mapping, etc. easier.
+//! Additionally a virtual texturing solution might be integrated to achieve better performance.
 //!
 //! [^note]: Some of these claims are not yet fully implemented.
 
@@ -38,10 +47,10 @@ use crate::{
     render::{
         compute_pipelines::{TerrainComputeNode, TerrainComputePipelines},
         culling::{queue_terrain_culling_bind_group, CullingBindGroup},
+        render_pipeline::TerrainPipelineConfig,
         shaders::add_shader,
         terrain_data::{initialize_terrain_data, TerrainData},
         terrain_view_data::{initialize_terrain_view_data, TerrainViewData},
-        TerrainPipelineConfig,
     },
     terrain::{Terrain, TerrainComponents, TerrainConfig},
     terrain_data::{
@@ -77,18 +86,19 @@ pub mod terrain;
 pub mod terrain_data;
 pub mod terrain_view;
 
-#[allow(missing_docs)]
 pub mod prelude {
-    #[doc(hidden)]
+    //! `use bevy_terrain::prelude::*;` to import common components, bundles, and plugins.
+    // #[doc(hidden)]
     pub use crate::{
         attachment_loader::AttachmentFromDiskLoader,
         preprocess::{Preprocessor, TileConfig},
-        render::{render_pipeline::TerrainMaterialPlugin, TerrainPipelineConfig},
         terrain::{Terrain, TerrainConfig},
         terrain_data::{quadtree::Quadtree, AttachmentConfig, AttachmentFormat},
         terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
         TerrainBundle, TerrainPlugin,
     };
+    // #[doc(hidden)]
+    pub use crate::render::render_pipeline::{TerrainMaterialPlugin, TerrainPipelineConfig};
 }
 
 #[derive(Bundle)]
