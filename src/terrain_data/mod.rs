@@ -15,8 +15,7 @@
 //! Both the node atlas and the quadtrees also have a corresponding GPU representation,
 //! which can be used to access the terrain data in shaders.
 
-use bevy::utils::Uuid;
-use bevy::{prelude::*, render::render_resource::*};
+use bevy::{prelude::*, render::render_resource::*, utils::Uuid};
 use std::str::FromStr;
 
 pub mod gpu_node_atlas;

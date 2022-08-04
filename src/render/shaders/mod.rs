@@ -10,7 +10,9 @@ const FUNCTIONS_SHADER: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 234313897973543254);
 const DEBUG_SHADER: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 513467378691355413);
-const ENTRY_POINT_SHADER: HandleUntyped =
+const VERTEX_SHADER: HandleUntyped =
+    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 187371091254673438);
+const FRAGMENT_SHADER: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 312347731894135735);
 
 pub(crate) const PREPARE_INDIRECT_SHADER: HandleUntyped =
@@ -28,7 +30,7 @@ pub(crate) fn add_shader(app: &mut App) {
 
     assets.set_untracked(
         PARAMETERS_SHADER,
-        Shader::from_wgsl(include_str!("parameters.wgsl")),
+        Shader::from_wgsl(include_str!("compute/parameters.wgsl")),
     );
     assets.set_untracked(ATLAS_SHADER, Shader::from_wgsl(include_str!("atlas.wgsl")));
     assets.set_untracked(
@@ -37,21 +39,26 @@ pub(crate) fn add_shader(app: &mut App) {
     );
     assets.set_untracked(DEBUG_SHADER, Shader::from_wgsl(include_str!("debug.wgsl")));
     assets.set_untracked(
-        ENTRY_POINT_SHADER,
-        Shader::from_wgsl(include_str!("entry_points.wgsl")),
+        VERTEX_SHADER,
+        Shader::from_wgsl(include_str!("render/vertex.wgsl")),
+    );
+
+    assets.set_untracked(
+        FRAGMENT_SHADER,
+        Shader::from_wgsl(include_str!("render/fragment.wgsl")),
     );
 
     assets.set_untracked(
         PREPARE_INDIRECT_SHADER,
-        Shader::from_wgsl(include_str!("prepare_indirect.wgsl")),
+        Shader::from_wgsl(include_str!("compute/prepare_indirect.wgsl")),
     );
     assets.set_untracked(
         TESSELATION_SHADER,
-        Shader::from_wgsl(include_str!("tessellation.wgsl")),
+        Shader::from_wgsl(include_str!("compute/tessellation.wgsl")),
     );
 
     assets.set_untracked(
         DEFAULT_SHADER,
-        Shader::from_wgsl(include_str!("default.wgsl")),
+        Shader::from_wgsl(include_str!("render/default.wgsl")),
     );
 }
