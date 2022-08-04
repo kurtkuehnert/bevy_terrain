@@ -323,7 +323,7 @@ pub(crate) fn queue_terrain<M: Material>(
     terrain_pipeline: Res<TerrainRenderPipeline<M>>,
     draw_functions: Res<DrawFunctions<Opaque3d>>,
     msaa: Res<Msaa>,
-    debug: Res<DebugTerrain>,
+    debug: Option<Res<DebugTerrain>>,
     render_materials: Res<RenderMaterials<M>>,
     mut pipelines: ResMut<SpecializedRenderPipelines<TerrainRenderPipeline<M>>>,
     mut pipeline_cache: ResMut<PipelineCache>,
@@ -337,8 +337,15 @@ pub(crate) fn queue_terrain<M: Material>(
     for mut opaque_phase in view_query.iter_mut() {
         for (entity, material) in terrain_query.iter() {
             if let Some(material) = render_materials.get(material) {
-                let flags = TerrainPipelineFlags::from_msaa_samples(msaa.samples)
-                    | TerrainPipelineFlags::from_debug(&debug);
+                let mut flags = TerrainPipelineFlags::from_msaa_samples(msaa.samples);
+
+                if let Some(debug) = &debug {
+                    flags |= TerrainPipelineFlags::from_debug(debug);
+                } else {
+                    flags |= TerrainPipelineFlags::LIGHTING
+                        | TerrainPipelineFlags::CIRCULAR_LOD
+                        | TerrainPipelineFlags::MESH_MORPH;
+                }
 
                 let key = TerrainPipelineKey {
                     flags,

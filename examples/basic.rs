@@ -21,6 +21,7 @@ fn main() {
             attachment_count: 2, // has to match the attachments of the terrain
         })
         .add_plugin(TerrainPlugin)
+        .add_plugin(TerrainDebugPlugin) // enable debug settings and controls
         .add_plugin(TerrainMaterialPlugin::<TerrainMaterial>::default())
         .add_startup_system(setup)
         .run();

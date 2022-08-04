@@ -1,5 +1,5 @@
 use bevy::{
-    asset::LoadState,
+    asset::{AssetServerSettings, LoadState},
     prelude::*,
     reflect::TypeUuid,
     render::{render_resource::*, texture::ImageSampler},
@@ -29,6 +29,10 @@ impl Material for TerrainMaterial {
 
 fn main() {
     App::new()
+        .insert_resource(AssetServerSettings {
+            watch_for_changes: true, // enable hot reloading for shader easy customization
+            ..default()
+        })
         .add_plugins(DefaultPlugins)
         .insert_resource(TerrainPipelineConfig {
             attachment_count: 2, // has to match the attachments of the terrain
