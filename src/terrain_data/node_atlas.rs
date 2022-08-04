@@ -101,7 +101,7 @@ pub struct NodeAtlas {
     pub(crate) loaded_nodes: Vec<LoadingNode>,
     /// Stores the currently loading nodes.
     pub(crate) loading_nodes: HashMap<NodeId, LoadingNode>,
-    /// The size of the node atlas, which determines how many nodes it can store.
+    /// The amount of nodes the can be loaded simultaneously in the node atlas.
     pub(crate) size: u16,
     /// Stores the states of all present nodes.
     pub(crate) nodes: HashMap<NodeId, AtlasNode>,
@@ -112,7 +112,7 @@ pub struct NodeAtlas {
 impl NodeAtlas {
     /// Creates a new quadtree from parameters.
     ///
-    /// * `size` - The size of the node atlas, which determines how many nodes it can store.
+    /// * `size` - The amount of nodes the can be loaded simultaneously in the node atlas.
     /// * `attachments` - The atlas attachments of the terrain.
     pub fn new(size: u16, attachments: Vec<AtlasAttachment>) -> Self {
         let unused_nodes = (0..size)

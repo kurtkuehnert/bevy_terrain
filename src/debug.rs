@@ -88,10 +88,10 @@ pub fn change_config(
 ) {
     for config in view_configs.values_mut() {
         if input.just_pressed(KeyCode::X) && config.tile_scale > 0.25 {
-            config.change_tile_scale(config.tile_scale * 0.95);
+            config.tile_scale *= 0.95;
         }
         if input.just_pressed(KeyCode::Q) {
-            config.change_tile_scale(config.tile_scale * 1.05);
+            config.tile_scale *= 1.05;
         }
 
         if input.just_pressed(KeyCode::I) {
