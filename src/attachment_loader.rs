@@ -1,3 +1,5 @@
+//! The default attachment loader, which loads node data from disk.
+
 use crate::terrain_data::{node_atlas::NodeAtlas, AttachmentIndex, NodeId};
 use bevy::{
     asset::{AssetServer, HandleId, LoadState},
@@ -20,7 +22,7 @@ pub struct AttachmentFromDiskLoader {
     handle_mapping: HashMap<HandleId, (NodeId, AttachmentIndex)>,
 }
 
-pub fn start_loading_attachment_from_disk(
+pub(crate) fn start_loading_attachment_from_disk(
     asset_server: Res<AssetServer>,
     mut terrain_query: Query<(&mut NodeAtlas, &mut AttachmentFromDiskLoader)>,
 ) {

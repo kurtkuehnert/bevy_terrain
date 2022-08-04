@@ -69,10 +69,14 @@ pub fn calc_node_id(lod: u32, x: u32, y: u32) -> NodeId {
     (lod & 0xF) << 28 | (x & 0x3FFF) << 14 | y & 0x3FFF
 }
 
+/// The data format of an attachment.
 #[derive(Clone, Copy)]
 pub enum AttachmentFormat {
+    /// Three channels 8 bit
     RGB,
+    /// Four channels 8 bit
     RGBA,
+    /// Single channel 16 bit
     LUMA16,
 }
 
@@ -86,7 +90,7 @@ impl From<AttachmentFormat> for TextureFormat {
     }
 }
 
-/// Configures an [AtlasAttachment].
+/// Configures an attachment.
 #[derive(Clone)]
 pub struct AttachmentConfig {
     /// The name of the attachment.

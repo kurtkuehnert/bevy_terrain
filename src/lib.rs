@@ -33,8 +33,8 @@
 //! ## How to shade the terrain?
 //! The third and most important challenge of terrain rendering is the shading. This is a very
 //! project specific problem and thus there does not exist a one-size-fits-all solution.
-//! You can define your own terrain [Material](bevy::pbr::Material) and shader with all the the detail textures tailored
-//! to your application.
+//! You can define your own terrain [Material](bevy::pbr::Material) and shader with all the the
+//! detail textures tailored to your application.
 //! In the future this plugin will provide modular shader functions to make techniques like splat
 //! mapping, triplane mapping, etc. easier.
 //! Additionally a virtual texturing solution might be integrated to achieve better performance.
@@ -92,15 +92,19 @@ pub mod prelude {
     pub use crate::{
         attachment_loader::AttachmentFromDiskLoader,
         preprocess::{Preprocessor, TileConfig},
+        render::render_pipeline::{TerrainMaterialPlugin, TerrainPipelineConfig},
         terrain::{Terrain, TerrainConfig},
-        terrain_data::{quadtree::Quadtree, AttachmentConfig, AttachmentFormat},
+        terrain_data::{
+            node_atlas::NodeAtlas, quadtree::Quadtree, AttachmentConfig, AttachmentFormat,
+        },
         terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
         TerrainBundle, TerrainPlugin,
     };
-    // #[doc(hidden)]
-    pub use crate::render::render_pipeline::{TerrainMaterialPlugin, TerrainPipelineConfig};
 }
 
+/// The components of a terrain.
+///
+/// Does not include loader(s) and a material.
 #[derive(Bundle)]
 pub struct TerrainBundle {
     terrain: Terrain,
@@ -111,6 +115,7 @@ pub struct TerrainBundle {
 }
 
 impl TerrainBundle {
+    /// Creates a new terrain bundle from the config.
     pub fn new(config: TerrainConfig) -> Self {
         Self {
             terrain: Terrain,
@@ -122,6 +127,7 @@ impl TerrainBundle {
     }
 }
 
+/// The plugin for the terrain renderer.
 pub struct TerrainPlugin;
 
 impl Plugin for TerrainPlugin {

@@ -15,6 +15,41 @@ use bevy::{
     },
 };
 
+/// The terrain config data that is available in shaders.
+#[derive(Clone, Default, ShaderType)]
+pub(crate) struct TerrainConfigUniform {
+    lod_count: u32,
+    height: f32,
+    chunk_size: u32,
+    terrain_size: u32,
+    attachment_scales: Vec4,
+    attachment_offsets: Vec4,
+}
+
+impl From<&TerrainConfig> for TerrainConfigUniform {
+    fn from(config: &TerrainConfig) -> Self {
+        // Todo: figure out a better way to store data for more than four attachments
+        let mut scales = [1.0; 4];
+        let mut offsets = [0.0; 4];
+
+        for (i, attachment) in config.attachments.iter().enumerate() {
+            scales[i] = attachment.center_size as f32
+                / (attachment.center_size + 2 * attachment.border_size) as f32;
+            offsets[i] = attachment.border_size as f32
+                / (attachment.center_size + 2 * attachment.border_size) as f32;
+        }
+
+        Self {
+            lod_count: config.lod_count,
+            height: config.height,
+            chunk_size: config.chunk_size,
+            terrain_size: config.terrain_size,
+            attachment_scales: Vec4::from_array(scales),
+            attachment_offsets: Vec4::from_array(offsets),
+        }
+    }
+}
+
 pub fn terrain_bind_group_layout(
     device: &RenderDevice,
     attachment_count: usize,
@@ -68,7 +103,7 @@ impl TerrainData {
         let layout = terrain_bind_group_layout(&device, config.attachments.len());
 
         let mut buffer = encase::UniformBuffer::new(Vec::new());
-        buffer.write(&config.shader_data()).unwrap();
+        buffer.write(&TerrainConfigUniform::from(config)).unwrap();
 
         let config_buffer = device.create_buffer_with_data(&BufferInitDescriptor {
             label: None,
