@@ -43,7 +43,7 @@
 
 use crate::{
     attachment_loader::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk},
-    debug::{change_config, extract_debug, toggle_debug, DebugTerrain},
+    debug::DebugTerrain,
     render::{
         compute_pipelines::{TerrainComputeNode, TerrainComputePipelines},
         culling::{queue_terrain_culling_bind_group, CullingBindGroup},
@@ -91,6 +91,7 @@ pub mod prelude {
     // #[doc(hidden)]
     pub use crate::{
         attachment_loader::AttachmentFromDiskLoader,
+        debug::TerrainDebugPlugin,
         preprocess::{Preprocessor, TileConfig},
         render::render_pipeline::{TerrainMaterialPlugin, TerrainPipelineConfig},
         terrain::{Terrain, TerrainConfig},
@@ -139,8 +140,6 @@ impl Plugin for TerrainPlugin {
             .init_resource::<DebugTerrain>()
             .init_resource::<TerrainViewComponents<Quadtree>>()
             .init_resource::<TerrainViewComponents<TerrainViewConfig>>()
-            .add_system(toggle_debug)
-            .add_system(change_config)
             .add_system_to_stage(
                 CoreStage::Last,
                 finish_loading_attachment_from_disk.before(update_node_atlas),
@@ -168,7 +167,6 @@ impl Plugin for TerrainPlugin {
         let render_app = app
             .sub_app_mut(RenderApp)
             .insert_resource(config)
-            .init_resource::<DebugTerrain>()
             .init_resource::<TerrainComputePipelines>()
             .init_resource::<SpecializedComputePipelines<TerrainComputePipelines>>()
             .init_resource::<TerrainComponents<GpuNodeAtlas>>()
@@ -178,7 +176,6 @@ impl Plugin for TerrainPlugin {
             .init_resource::<TerrainViewComponents<TerrainViewConfig>>()
             .init_resource::<TerrainViewComponents<CullingBindGroup>>()
             .add_system_to_stage(RenderStage::Extract, extract_terrain_view_config)
-            .add_system_to_stage(RenderStage::Extract, extract_debug)
             .add_system_to_stage(RenderStage::Extract, initialize_gpu_node_atlas)
             .add_system_to_stage(RenderStage::Extract, initialize_gpu_quadtree)
             .add_system_to_stage(

@@ -1,5 +1,23 @@
+//! Contains a debug resource and systems controlling it to visualize different internal
+//! data of the plugin.
 use crate::{TerrainViewComponents, TerrainViewConfig};
-use bevy::{prelude::*, render::Extract};
+use bevy::{
+    prelude::*,
+    render::{Extract, RenderApp, RenderStage},
+};
+
+/// Adds a terrain debug config and debug control systems.
+pub struct TerrainDebugPlugin;
+
+impl Plugin for TerrainDebugPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_system(toggle_debug)
+            .add_system(change_config)
+            .sub_app_mut(RenderApp)
+            .init_resource::<DebugTerrain>()
+            .add_system_to_stage(RenderStage::Extract, extract_debug);
+    }
+}
 
 #[derive(Clone)]
 pub struct DebugTerrain {

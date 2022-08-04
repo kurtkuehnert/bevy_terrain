@@ -194,7 +194,7 @@ pub struct TerrainComputeNode {
         SResMut<PipelineCache>,
         SResMut<SpecializedComputePipelines<TerrainComputePipelines>>,
         SRes<TerrainComputePipelines>,
-        SRes<DebugTerrain>,
+        Option<SRes<DebugTerrain>>,
     )>,
     pipelines: [CachedComputePipelineId; TerrainComputePipelineId::COUNT],
 }
@@ -256,7 +256,14 @@ impl render_graph::Node for TerrainComputeNode {
 
         let (mut pipeline_cache, mut pipelines, pipeline, debug) = self.system_state.get_mut(world);
 
-        let flags = TerrainComputePipelineFlags::from_debug(&debug);
+        let mut flags = TerrainComputePipelineFlags::NONE;
+
+        if let Some(debug) = &debug {
+            flags |= TerrainComputePipelineFlags::from_debug(debug);
+        } else {
+            flags |= TerrainComputePipelineFlags::DENSITY
+        }
+
         for id in TerrainComputePipelineId::iter() {
             self.pipelines[id as usize] =
                 pipelines.specialize(&mut pipeline_cache, &pipeline, (id, flags));
