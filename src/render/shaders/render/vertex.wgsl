@@ -24,7 +24,7 @@ fn vertex(vertex: VertexInput) -> VertexOutput {
     let tile = tiles.data[tile_index];
     let local_position = calculate_position(vertex_index, tile, vertices_per_row, tile_size);
 
-    let world_position = vec3<f32>(local_position.x, view_config.height_under_viewer, local_position.y);
+    let world_position = approximate_world_position(local_position);
     let blend = calculate_blend(world_position, view_config.vertex_blend);
 
     let lookup = atlas_lookup(blend.log_distance, local_position);

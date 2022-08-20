@@ -1,4 +1,4 @@
 .idea
 /target
-/assets/terrain/data/*/*.png
+/assets/terrain/data
 Cargo.lock

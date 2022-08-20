@@ -331,17 +331,19 @@ fn height_under_viewer(
         return 0.0;
     }
 
-    let node = node_atlas.data[node.atlas_index as usize]
+    if let Some(node) = node_atlas.data[node.atlas_index as usize]
         ._attachments
         .get(&0)
-        .unwrap();
+    {
+        let image = images.get(node).unwrap();
 
-    let image = images.get(node).unwrap();
+        let position = (image.size() * atlas_coords).as_uvec2();
+        let index = 2 * (position.x + position.y * image.size().x as u32) as usize;
+        let height = ((image.data[index + 1] as u16) << 8) + image.data[index] as u16;
+        let height = height as f32 / u16::MAX as f32 * quadtree.height;
 
-    let position = (image.size() * atlas_coords).as_uvec2();
-    let index = 2 * (position.x + position.y * image.size().x as u32) as usize;
-    let height = ((image.data[index + 1] as u16) << 8) + image.data[index] as u16;
-    let height = height as f32 / u16::MAX as f32 * quadtree.height;
+        return height;
+    };
 
-    return height;
+    return quadtree.height_under_viewer;
 }

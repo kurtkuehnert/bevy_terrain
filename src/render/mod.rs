@@ -20,7 +20,7 @@ pub(crate) const CULL_DATA_BUFFER_SIZE: BufferAddress =
     mem::size_of::<CullingData>() as BufferAddress;
 pub(crate) const TILE_SIZE: BufferAddress = 6 * 4;
 pub(crate) const INDIRECT_BUFFER_SIZE: BufferAddress = 5 * 4;
-pub(crate) const PARAMETER_BUFFER_SIZE: BufferAddress = 6 * 4;
+pub(crate) const PARAMETER_BUFFER_SIZE: BufferAddress = 7 * 4;
 
 pub(crate) const PREPARE_INDIRECT_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
     label: None,
