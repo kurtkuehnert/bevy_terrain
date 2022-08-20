@@ -29,9 +29,7 @@ type TerrainComputePipelineKey = (TerrainComputePipelineId, TerrainComputePipeli
 
 #[derive(Copy, Clone, Hash, PartialEq, Eq, EnumIter, EnumCount)]
 pub enum TerrainComputePipelineId {
-    SelectCoarsestTiles,
     RefineTiles,
-    SelectFinestTiles,
     PrepareTessellation,
     PrepareRefinement,
     PrepareRender,
@@ -118,15 +116,6 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
         let shader_defs = key.1.shader_defs();
 
         match key.0 {
-            TerrainComputePipelineId::SelectCoarsestTiles => {
-                layout = Some(vec![
-                    self.tessellation_layout.clone(),
-                    self.cull_data_layout.clone(),
-                    self.terrain_layout.clone(),
-                ]);
-                shader = self.tessellation_shader.clone();
-                entry_point = "select_coarsest_tiles".into();
-            }
             TerrainComputePipelineId::RefineTiles => {
                 layout = Some(vec![
                     self.tessellation_layout.clone(),
@@ -135,15 +124,6 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
                 ]);
                 shader = self.tessellation_shader.clone();
                 entry_point = "refine_tiles".into();
-            }
-            TerrainComputePipelineId::SelectFinestTiles => {
-                layout = Some(vec![
-                    self.tessellation_layout.clone(),
-                    self.cull_data_layout.clone(),
-                    self.terrain_layout.clone(),
-                ]);
-                shader = self.tessellation_shader.clone();
-                entry_point = "select_finest_tiles".into();
             }
             TerrainComputePipelineId::PrepareTessellation => {
                 layout = Some(vec![
@@ -227,12 +207,6 @@ impl TerrainComputeNode {
         pass.set_pipeline(pipelines[TerrainComputePipelineId::PrepareTessellation as usize]);
         pass.dispatch_workgroups(1, 1, 1);
 
-        pass.set_pipeline(pipelines[TerrainComputePipelineId::SelectCoarsestTiles as usize]);
-        pass.dispatch_workgroups_indirect(&view_data.indirect_buffer, 0);
-
-        pass.set_pipeline(pipelines[TerrainComputePipelineId::PrepareRefinement as usize]);
-        pass.dispatch_workgroups(1, 1, 1);
-
         for _ in 0..refinement_count {
             pass.set_pipeline(pipelines[TerrainComputePipelineId::RefineTiles as usize]);
             pass.dispatch_workgroups_indirect(&view_data.indirect_buffer, 0);
@@ -241,7 +215,7 @@ impl TerrainComputeNode {
             pass.dispatch_workgroups(1, 1, 1);
         }
 
-        pass.set_pipeline(pipelines[TerrainComputePipelineId::SelectFinestTiles as usize]);
+        pass.set_pipeline(pipelines[TerrainComputePipelineId::RefineTiles as usize]);
         pass.dispatch_workgroups_indirect(&view_data.indirect_buffer, 0);
 
         pass.set_pipeline(pipelines[TerrainComputePipelineId::PrepareRender as usize]);

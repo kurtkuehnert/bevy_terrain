@@ -38,7 +38,7 @@ fn calculate_blend(world_position: vec3<f32>, blend_range: f32) -> Blend {
 }
 
 fn calculate_morph(local_position: vec2<f32>, tile: Tile) -> f32 {
-    let world_position = vec3<f32>(local_position.x, view_config.height_under_viewer, local_position.y);
+    let world_position = approximate_world_position(local_position);
     let viewer_distance = distance(world_position, view.world_position.xyz);
     let morph_distance = f32(tile.size) * view_config.view_distance;
 
