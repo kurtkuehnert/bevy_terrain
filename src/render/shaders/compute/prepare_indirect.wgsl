@@ -2,15 +2,15 @@
 #import bevy_terrain::parameters
 
 struct IndirectBuffer {
-    workgroup_count_x: u32,
-    workgroup_count_y: u32,
-    workgroup_count_z: u32,
+    workgroup_count: vec3<u32>,
 }
 
 @group(0) @binding(0)
-var<uniform> config: TerrainViewConfig;
+var<uniform> view_config: TerrainViewConfig;
 @group(0) @binding(2)
 var<storage, read_write> final_tiles: TileList;
+@group(0) @binding(3)
+var<storage, read_write> temporary_tiles: TemporaryTileList;
 @group(0) @binding(4)
 var<storage, read_write> parameters: Parameters;
 
@@ -33,29 +33,37 @@ fn final_index(lod: u32) -> i32 {
     }
 
     return 0;
-    // return atomicExchange(&parameters.final_indices[lod], 0);
+    // return atomicExchange(&atomics.final_indices[lod], 0);
 }
 
 @compute @workgroup_size(1, 1, 1)
 fn prepare_tessellation() {
-    indirect_buffer.workgroup_count_x = 1u;
-    indirect_buffer.workgroup_count_y = 1u;
-    indirect_buffer.workgroup_count_z = 1u;
+    indirect_buffer.workgroup_count = vec3<u32>(1u, 1u, 1u);
 
     parameters.counter = 1;
-    atomicStore(&parameters.child_index, 0);
+    atomicStore(&parameters.child_index, 1);
+
+    let size = 1u << view_config.refinement_count;
+
+    temporary_tiles.data[0] = TileInfo(vec2<u32>(0u), size);
 }
 
 @compute @workgroup_size(1, 1, 1)
 fn prepare_refinement() {
+    var refinement_count: u32;
+
     if (parameters.counter == 1) {
         parameters.counter = -1;
-        indirect_buffer.workgroup_count_x = u32(atomicExchange(&parameters.child_index, i32(config.tile_count - 1u)));
+        refinement_count = u32(atomicExchange(&parameters.child_index, i32(view_config.tile_count - 1u)));
     }
     else {
         parameters.counter = 1;
-        indirect_buffer.workgroup_count_x = config.tile_count - 1u - u32(atomicExchange(&parameters.child_index, 0));
+        refinement_count =  view_config.tile_count - 1u - u32(atomicExchange(&parameters.child_index, 0));
     }
+
+    parameters.refinement_count = refinement_count;
+    indirect_buffer.workgroup_count.x = (refinement_count + 63u) / 64u;
+    // indirect_buffer.workgroup_count.x = refinement_count;
 }
 
 @compute @workgroup_size(1, 1, 1)
@@ -74,7 +82,5 @@ fn prepare_render() {
         final_tiles.counts[i] = vec2<u32>(first, last);
     }
 
-    indirect_buffer.workgroup_count_x = vertex_count;
-    indirect_buffer.workgroup_count_y = 1u;
-    indirect_buffer.workgroup_count_z = 0u;
+    indirect_buffer.workgroup_count = vec3<u32>(vertex_count, 1u, 0u);
 }
