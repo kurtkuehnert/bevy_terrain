@@ -67,54 +67,21 @@ fn vertex(vertex: VertexInput) -> VertexOutput {
     output.color = show_tiles(tile, local_position, tile_lod);
 #endif
 
-#ifdef TEST1
+#ifdef TEST2
     let size = f32(tile.size) * view_config.tile_scale;
-    let lod = ceil(log2(size));
+    let local_position = (vec2<f32>(tile.coords) + 0.5) * size;
 
-    let center_position = (vec2<f32>(tile.coords) + 0.5) * size;
+    let minmax = minmax(local_position, size);
 
-    let lookup = atlas_lookup(lod, center_position);
-    let coords = lookup.atlas_coords * config.minmax_scale + config.minmax_offset;
-    let lod = min(u32(lod), config.lod_count - 1u);
+    output.color = vec4<f32>((minmax.y - height) / 20.0, 0.0, (height - minmax.x) / 20.0, 1.0);
 
-    let height = textureSampleLevel(height_atlas, terrain_sampler, coords, lookup.atlas_index, 0.0).x;
-
-    var min_height = 1.0;
-    var max_height = 0.0;
-
-    for (var i: u32 = 0u; i < 4u; i = i + 1u) {
-        let offset = vec2<f32>(vec2<u32>((i & 1u), (i >> 1u & 1u))) - 0.5;
-
-        let corner = vec2<i32>((coords + offset * size / node_size(lod)) * 132.0);
-
-        let minmax = textureLoad(minmax_atlas, corner, lookup.atlas_index, 0).xy;
-
-        min_height = min(min_height, minmax.x);
-        max_height = max(max_height, minmax.y);
+    if (height + 0.1 < minmax.x) {
+        output.color = vec4<f32>(0.0, 0.0, 1.0, 1.0);
     }
 
-    let min_position = vec4<f32>(center_position.x, min_height * config.height, center_position.y, 1.0);
-    let max_position = vec4<f32>(center_position.x, max_height * config.height, center_position.y, 1.0);
-
-    let min_screen = view.view_proj * min_position;
-    let min_screen = min_screen.xy / min_screen.w;
-    let max_screen = view.view_proj * max_position;
-    let max_screen = max_screen.xy / max_screen.w;
-
-    let dist = (max_screen - min_screen) * vec2<f32>(1920.0, 1080.0) / 2.0;
-
-    let error = length(dist) / 100.0;
-
-    // let min_dif = (height - min_height) * config.height;
-    // let max_dif = (max_height - height) * config.height;
-    //
-    // output.color = vec4<f32>(min_dif / 50.0, 0.0, max_dif / 50.0, 1.0);
-    //
-    // let error = (max_height - min_height) * config.height;
-    // let error = error / size * 1.0;
-    //
-
-    output.color = vec4<f32>(error, 0.0, 0.0, 1.0);
+    if (height - 0.1 > minmax.y) {
+        output.color = vec4<f32>(1.0, 0.0, 0.0, 1.0);
+    }
 #endif
 
     return output;

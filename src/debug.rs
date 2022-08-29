@@ -50,7 +50,7 @@ impl Default for DebugTerrain {
             show_uv: false,
             circular_lod: true,
             mesh_morph: true,
-            adaptive: true,
+            adaptive: false,
             vertex_normal: false,
             albedo: false,
             bright: false,
