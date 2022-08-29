@@ -10,6 +10,9 @@ struct VertexOutput {
     @location(0)             local_position: vec2<f32>,
     @location(1)             world_position: vec4<f32>,
     @location(2)             color: vec4<f32>,
+#ifdef VERTEX_NORMAL
+    @location(3)             world_normal: vec3<f32>,
+#endif
 }
 
 struct FragmentInput {
@@ -18,6 +21,9 @@ struct FragmentInput {
     @location(0)             local_position: vec2<f32>,
     @location(1)             world_position: vec4<f32>,
     @location(2)             color: vec4<f32>,
+#ifdef VERTEX_NORMAL
+    @location(3)             world_normal: vec3<f32>,
+#endif
 }
 
 struct FragmentOutput {
@@ -40,7 +46,7 @@ fn calculate_blend(world_position: vec3<f32>, blend_range: f32) -> Blend {
 fn calculate_morph(local_position: vec2<f32>, tile: Tile) -> f32 {
     let world_position = approximate_world_position(local_position);
     let viewer_distance = distance(world_position, view.world_position.xyz);
-    let morph_distance = f32(tile.size) * view_config.view_distance;
+    let morph_distance = view_config.refinement_distance * f32(tile.size << 1u);
 
     return clamp(1.0 - (1.0 - viewer_distance / morph_distance) / view_config.morph_blend, 0.0, 1.0);
 }
@@ -71,6 +77,9 @@ fn calculate_position(vertex_index: u32, tile: Tile, vertices_per_row: u32, true
     let column_index = vertex_index / vertices_per_row;
     var grid_position = vec2<u32>(column_index + (row_index & 1u), row_index >> 1u);
 
+    let size = f32(tile.size) * view_config.tile_scale;
+
+#ifdef ADAPTIVE
     var count        = (tile.counts        >> 24u) & 0x003Fu;
     var parent_count = (tile.parent_counts >> 24u) & 0x003Fu;
 
@@ -92,18 +101,25 @@ fn calculate_position(vertex_index: u32, tile: Tile, vertices_per_row: u32, true
         parent_count = (tile.parent_counts >> 18u) & 0x003Fu;
     }
 
-#ifndef MESH_MORPH
-    var local_position = (vec2<f32>(tile.coords) + vec2<f32>(grid_position) / f32(true_count)) * f32(tile.size) * view_config.tile_scale;
-#endif
+    #ifdef MESH_MORPH
+        // smoothly transition between the positions of the tiles and that of their parents
+        var local_position        = map_position(tile, grid_position, count,        true_count);
+        let parent_local_position = map_position(tile, grid_position, parent_count, true_count);
 
-#ifdef MESH_MORPH
-    // smoothly transition between the positions of the tiles and that of their parents
-    var local_position        = map_position(tile, grid_position, count,        true_count);
-    let parent_local_position = map_position(tile, grid_position, parent_count, true_count);
+        let morph = calculate_morph(local_position, tile);
 
-    let morph = calculate_morph(local_position, tile);
+        local_position = mix(local_position, parent_local_position, morph);
+    #else
+        var local_position = (vec2<f32>(tile.coords) + vec2<f32>(grid_position) / f32(true_count)) * size;
+    #endif
+#else
+    var local_position = (vec2<f32>(tile.coords) + vec2<f32>(grid_position) / f32(true_count)) * size;
 
-    local_position = mix(local_position, parent_local_position, morph);
+    #ifdef MESH_MORPH
+        let morph = calculate_morph(local_position, tile);
+        let even_grid_position = vec2<f32>(grid_position & vec2<u32>(1u));
+        local_position = local_position - morph * even_grid_position / f32(true_count) * size;
+    #endif
 #endif
 
     local_position.x = clamp(local_position.x, 0.0, f32(config.terrain_size));

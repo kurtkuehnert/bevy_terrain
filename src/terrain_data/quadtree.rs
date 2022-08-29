@@ -84,7 +84,7 @@ impl Default for QuadtreeEntry {
 /// After the [`NodeAtlas`] has adjusted to these requests, the quadtree retrieves the best
 /// currently loaded nodes from the node atlas via the
 /// `adjust` methode, which can later be used to access the terrain data.
-#[derive(Component)]
+#[derive(Default, Component)]
 pub struct Quadtree {
     /// The handle of the quadtree texture.
     pub(crate) handle: Handle<Image>,

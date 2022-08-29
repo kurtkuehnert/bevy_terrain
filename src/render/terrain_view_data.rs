@@ -27,6 +27,7 @@ pub(crate) struct TerrainViewConfigUniform {
 
     tile_count: u32,
     refinement_count: u32,
+    refinement_distance: f32,
     view_distance: f32,
     tile_scale: f32,
 
@@ -42,6 +43,7 @@ impl From<&TerrainViewConfig> for TerrainViewConfigUniform {
             height_under_viewer: config.height_under_viewer,
             tile_count: config.tile_count,
             refinement_count: config.refinement_count,
+            refinement_distance: config.view_distance / 2.0_f32.powf(config.refinement_lod as f32),
             view_distance: config.view_distance,
             tile_scale: config.tile_scale,
             morph_blend: config.morph_blend,

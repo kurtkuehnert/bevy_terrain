@@ -7,11 +7,11 @@ struct TerrainConfig {
     terrain_size: u32,
 
     height_scale: f32,
-    density_scale: f32,
+    minmax_scale: f32,
     _empty: u32,
     _empty: u32,
     height_offset: f32,
-    density_offset: f32,
+    minmax_offset: f32,
     _empty: u32,
     _empty: u32,
 }
@@ -35,7 +35,7 @@ var terrain_sampler: sampler;
 @group(2) @binding(2)
 var height_atlas: texture_2d_array<f32>;
 @group(2) @binding(3)
-var density_atlas: texture_2d_array<f32>;
+var minmax_atlas: texture_2d_array<f32>;
 
 #import bevy_pbr::mesh_types
 #import bevy_pbr::pbr_types
@@ -61,17 +61,21 @@ fn lookup_fragment_data(in: FragmentInput, lookup: AtlasLookup) -> FragmentData 
 
     let height_coords = atlas_coords * config.height_scale + config.height_offset;
 
+#ifdef VERTEX_NORMAL
+    let world_normal = in.world_normal;
+#else
     let world_normal = calculate_normal(height_coords, atlas_index, lod);
+#endif
 
     var debug_color = vec4<f32>(0.5);
 
-    #ifdef SHOW_LOD
-        debug_color = mix(debug_color, show_lod(lod, in.world_position.xyz), 0.4);
-    #endif
+#ifdef SHOW_LOD
+    debug_color = mix(debug_color, show_lod(lod, in.world_position.xyz), 0.4);
+#endif
 
-    #ifdef SHOW_UV
-        debug_color = mix(debug_color, vec4<f32>(atlas_coords.x, atlas_coords.y, 0.0, 1.0), 0.5);
-    #endif
+#ifdef SHOW_UV
+    debug_color = mix(debug_color, vec4<f32>(atlas_coords.x, atlas_coords.y, 0.0, 1.0), 0.5);
+#endif
 
     return FragmentData(world_normal, debug_color);
 }
@@ -87,20 +91,20 @@ fn fragment_color(in: FragmentInput, data: FragmentData) -> vec4<f32> {
     let world_normal = data.world_normal;
     var color = data.debug_color;
 
-    #ifdef LIGHTING
-        var pbr_input: PbrInput = pbr_input_new();
-        pbr_input.material.base_color = color;
-        pbr_input.material.perceptual_roughness = 0.6;
-        pbr_input.material.reflectance = 0.1;
-        pbr_input.frag_coord = in.frag_coord;
-        pbr_input.world_position = in.world_position;
-        pbr_input.world_normal = world_normal;
-        pbr_input.is_orthographic = view.projection[3].w == 1.0;
-        pbr_input.N = world_normal;
-        pbr_input.V = calculate_view(in.world_position, pbr_input.is_orthographic);
+#ifdef LIGHTING
+    var pbr_input: PbrInput = pbr_input_new();
+    pbr_input.material.base_color = color;
+    pbr_input.material.perceptual_roughness = 0.6;
+    pbr_input.material.reflectance = 0.1;
+    pbr_input.frag_coord = in.frag_coord;
+    pbr_input.world_position = in.world_position;
+    pbr_input.world_normal = world_normal;
+    pbr_input.is_orthographic = view.projection[3].w == 1.0;
+    pbr_input.N = world_normal;
+    pbr_input.V = calculate_view(in.world_position, pbr_input.is_orthographic);
 
-        color = pbr(pbr_input);
-    #endif
+    color = pbr(pbr_input);
+#endif
 
     return color;
 }

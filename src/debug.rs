@@ -19,7 +19,7 @@ impl Plugin for TerrainDebugPlugin {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Resource)]
 pub struct DebugTerrain {
     pub wireframe: bool,
 
@@ -29,13 +29,16 @@ pub struct DebugTerrain {
 
     pub circular_lod: bool,
     pub mesh_morph: bool,
+    pub adaptive: bool,
+    pub vertex_normal: bool,
 
     pub albedo: bool,
     pub bright: bool,
     pub lighting: bool,
 
-    pub density: bool,
-    pub test: bool,
+    pub test1: bool,
+    pub test2: bool,
+    pub test3: bool,
 }
 
 impl Default for DebugTerrain {
@@ -47,11 +50,14 @@ impl Default for DebugTerrain {
             show_uv: false,
             circular_lod: true,
             mesh_morph: true,
+            adaptive: true,
+            vertex_normal: false,
             albedo: false,
             bright: false,
             lighting: true,
-            density: true,
-            test: false,
+            test1: false,
+            test2: false,
+            test3: false,
         }
     }
 }
@@ -77,6 +83,9 @@ pub fn toggle_debug(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTerrain>)
     if input.just_pressed(KeyCode::M) {
         debug.mesh_morph = !debug.mesh_morph;
     }
+    if input.just_pressed(KeyCode::D) {
+        debug.adaptive = !debug.adaptive;
+    }
 
     if input.just_pressed(KeyCode::A) {
         debug.albedo = !debug.albedo;
@@ -87,12 +96,18 @@ pub fn toggle_debug(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTerrain>)
     if input.just_pressed(KeyCode::S) {
         debug.lighting = !debug.lighting;
     }
-
-    if input.just_pressed(KeyCode::D) {
-        debug.density = !debug.density;
+    if input.just_pressed(KeyCode::V) {
+        debug.vertex_normal = !debug.vertex_normal;
     }
-    if input.just_pressed(KeyCode::G) {
-        debug.test = !debug.test;
+
+    if input.just_pressed(KeyCode::Key1) {
+        debug.test1 = !debug.test1;
+    }
+    if input.just_pressed(KeyCode::Key2) {
+        debug.test2 = !debug.test2;
+    }
+    if input.just_pressed(KeyCode::Key3) {
+        debug.test3 = !debug.test3;
     }
 }
 
@@ -104,7 +119,7 @@ pub fn change_config(
     input: Res<Input<KeyCode>>,
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
 ) {
-    for config in view_configs.values_mut() {
+    for config in view_configs.0.values_mut() {
         if input.just_pressed(KeyCode::X) && config.tile_scale > 0.25 {
             config.tile_scale *= 0.95;
         }

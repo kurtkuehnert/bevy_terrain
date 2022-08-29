@@ -72,20 +72,23 @@ pub fn calc_node_id(lod: u32, x: u32, y: u32) -> NodeId {
 /// The data format of an attachment.
 #[derive(Clone, Copy)]
 pub enum AttachmentFormat {
-    /// Three channels 8 bit
-    RGB,
-    /// Four channels 8 bit
-    RGBA,
-    /// Single channel 16 bit
-    LUMA16,
+    /// Three channels  8 bit
+    Rgb8,
+    /// Four  channels  8 bit
+    Rgba8,
+    /// One   channel  16 bit
+    R16,
+    /// Two   channels 16 bit
+    Rg16,
 }
 
 impl From<AttachmentFormat> for TextureFormat {
     fn from(format: AttachmentFormat) -> Self {
         match format {
-            AttachmentFormat::RGB => TextureFormat::Rgba8UnormSrgb,
-            AttachmentFormat::RGBA => TextureFormat::Rgba8UnormSrgb,
-            AttachmentFormat::LUMA16 => TextureFormat::R16Unorm,
+            AttachmentFormat::Rgb8 => TextureFormat::Rgba8UnormSrgb,
+            AttachmentFormat::Rgba8 => TextureFormat::Rgba8UnormSrgb,
+            AttachmentFormat::R16 => TextureFormat::R16Unorm,
+            AttachmentFormat::Rg16 => TextureFormat::Rg16Unorm,
         }
     }
 }

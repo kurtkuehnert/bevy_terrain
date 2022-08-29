@@ -15,8 +15,9 @@ repository = "https://github.com/ku95/bevy_terrain"
 default = []
 
 [dependencies]
+bevy = { git="https://github.com/Ku95/bevy", branch="texture-format-rg16unorm" }
 # bevy = { git="https://github.com/bevyengine/bevy" }
-bevy = "0.8.0"
+# bevy = "0.8.0"
 
 ndarray = "0.15"
 itertools = "0.10"

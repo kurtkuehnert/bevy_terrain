@@ -15,7 +15,28 @@ use bevy::{
 /// Resource that stores components that are associated to a terrain entity.
 /// This is used to persist components in the render world.
 /// Todo: replace this once the render world can persist components
-pub(crate) type TerrainComponents<C> = HashMap<Entity, C>;
+#[derive(Clone, Resource)]
+pub struct TerrainComponents<C>(pub HashMap<Entity, C>);
+
+impl<C> TerrainComponents<C> {
+    pub fn get(&self, k: &Entity) -> Option<&C> {
+        self.0.get(k)
+    }
+
+    pub fn get_mut(&mut self, k: &Entity) -> Option<&mut C> {
+        self.0.get_mut(k)
+    }
+
+    pub fn insert(&mut self, k: Entity, v: C) {
+        self.0.insert(k, v);
+    }
+}
+
+impl<C> FromWorld for TerrainComponents<C> {
+    fn from_world(_world: &mut World) -> Self {
+        Self(default())
+    }
+}
 
 /// A marker component used to identify a terrain entity.
 #[derive(Clone, Copy, Component)]
@@ -102,7 +123,7 @@ impl TerrainConfig {
         preprocessor.attachments.push((tile, attachment));
     }
 
-    /// Adds the base attachment, which contains a height and density information.
+    /// Adds the base attachment, which contains a height and minmax information.
     ///
     /// This is required by terrains, that use the default render pipeline.
     pub fn add_base_attachment(
@@ -112,26 +133,34 @@ impl TerrainConfig {
         center_size: u32,
         tile: TileConfig,
     ) {
+        let border_size = 2;
+
         let height_attachment = AttachmentConfig {
             name: "height".to_string(),
             center_size,
-            border_size: 2,
-            format: AttachmentFormat::LUMA16,
+            border_size,
+            format: AttachmentFormat::R16,
         };
-        let density_attachment = AttachmentConfig {
-            name: "density".to_string(),
+        let minmax_attachment = AttachmentConfig {
+            name: "minmax".to_string(),
             center_size,
-            border_size: 0,
-            format: AttachmentFormat::LUMA16,
+            border_size,
+            format: AttachmentFormat::Rg16,
         };
 
-        preprocessor.base = (tile, BaseConfig { center_size });
+        preprocessor.base = (
+            tile,
+            BaseConfig {
+                center_size,
+                border_size,
+            },
+        );
 
         from_disk_loader.attachments.insert(
             self.attachments.len(),
             AttachmentFromDisk {
                 path: format!("{}/data/{}", self.path, height_attachment.name),
-                format: AttachmentFormat::LUMA16.into(),
+                format: height_attachment.format.into(),
             },
         );
 
@@ -140,11 +169,11 @@ impl TerrainConfig {
         from_disk_loader.attachments.insert(
             self.attachments.len(),
             AttachmentFromDisk {
-                path: format!("{}/data/{}", self.path, density_attachment.name),
-                format: AttachmentFormat::LUMA16.into(),
+                path: format!("{}/data/{}", self.path, minmax_attachment.name),
+                format: minmax_attachment.format.into(),
             },
         );
 
-        self.attachments.push(density_attachment.into());
+        self.attachments.push(minmax_attachment.into());
     }
 }
