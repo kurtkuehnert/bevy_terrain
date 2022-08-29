@@ -2,7 +2,7 @@ use bevy::{prelude::*, reflect::TypeUuid, render::render_resource::*};
 use bevy_terrain::prelude::*;
 
 const TERRAIN_SIZE: u32 = 1024;
-const LOD_COUNT: u32 = 5;
+const LOD_COUNT: u32 = 10;
 const CHUNK_SIZE: u32 = 128;
 const HEIGHT: f32 = 200.0;
 const NODE_ATLAS_SIZE: u32 = 300;

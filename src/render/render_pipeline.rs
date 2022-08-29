@@ -23,6 +23,7 @@ use bevy::{
 use std::{hash::Hash, marker::PhantomData};
 
 /// Configures the default terrain pipeline.
+#[derive(Resource)]
 pub struct TerrainPipelineConfig {
     /// The number of terrain attachments.
     pub attachment_count: usize,
@@ -78,16 +79,20 @@ bitflags::bitflags! {
 #[repr(transparent)]
 pub struct TerrainPipelineFlags: u32 {
     const NONE               = 0;
-    const WIREFRAME          = (1 << 0);
-    const SHOW_TILES         = (1 << 1);
-    const SHOW_LOD           = (1 << 2);
-    const SHOW_UV            = (1 << 3);
-    const CIRCULAR_LOD       = (1 << 4);
-    const MESH_MORPH         = (1 << 5);
-    const ALBEDO             = (1 << 6);
-    const BRIGHT             = (1 << 7);
-    const LIGHTING           = (1 << 8);
-    const TEST               = (1 << 9);
+    const WIREFRAME          = (1 <<  0);
+    const SHOW_TILES         = (1 <<  1);
+    const SHOW_LOD           = (1 <<  2);
+    const SHOW_UV            = (1 <<  3);
+    const CIRCULAR_LOD       = (1 <<  4);
+    const MESH_MORPH         = (1 <<  5);
+    const ADAPTIVE           = (1 <<  6);
+    const ALBEDO             = (1 <<  7);
+    const BRIGHT             = (1 <<  8);
+    const LIGHTING           = (1 <<  9);
+    const VERTEX_NORMAL      = (1 << 10);
+    const TEST1              = (1 << 11);
+    const TEST2              = (1 << 12);
+    const TEST3              = (1 << 13);
     const MSAA_RESERVED_BITS = TerrainPipelineFlags::MSAA_MASK_BITS << TerrainPipelineFlags::MSAA_SHIFT_BITS;
 }
 }
@@ -124,6 +129,9 @@ impl TerrainPipelineFlags {
         if debug.mesh_morph {
             key |= TerrainPipelineFlags::MESH_MORPH;
         }
+        if debug.adaptive {
+            key |= TerrainPipelineFlags::ADAPTIVE;
+        }
 
         if debug.albedo {
             key |= TerrainPipelineFlags::ALBEDO;
@@ -134,9 +142,18 @@ impl TerrainPipelineFlags {
         if debug.lighting {
             key |= TerrainPipelineFlags::LIGHTING;
         }
+        if debug.vertex_normal {
+            key |= TerrainPipelineFlags::VERTEX_NORMAL;
+        }
 
-        if debug.test {
-            key |= TerrainPipelineFlags::TEST;
+        if debug.test1 {
+            key |= TerrainPipelineFlags::TEST1;
+        }
+        if debug.test2 {
+            key |= TerrainPipelineFlags::TEST2;
+        }
+        if debug.test3 {
+            key |= TerrainPipelineFlags::TEST3;
         }
 
         key
@@ -172,6 +189,12 @@ impl TerrainPipelineFlags {
         if (self.bits & TerrainPipelineFlags::MESH_MORPH.bits) != 0 {
             shader_defs.push("MESH_MORPH".to_string());
         }
+        if (self.bits & TerrainPipelineFlags::ADAPTIVE.bits) != 0 {
+            shader_defs.push("ADAPTIVE".to_string());
+        }
+        if (self.bits & TerrainPipelineFlags::VERTEX_NORMAL.bits) != 0 {
+            shader_defs.push("VERTEX_NORMAL".to_string());
+        }
 
         if (self.bits & TerrainPipelineFlags::ALBEDO.bits) != 0 {
             shader_defs.push("ALBEDO".to_string());
@@ -183,8 +206,14 @@ impl TerrainPipelineFlags {
             shader_defs.push("LIGHTING".to_string());
         }
 
-        if (self.bits & TerrainPipelineFlags::TEST.bits) != 0 {
-            shader_defs.push("TEST".to_string());
+        if (self.bits & TerrainPipelineFlags::TEST1.bits) != 0 {
+            shader_defs.push("TEST1".to_string());
+        }
+        if (self.bits & TerrainPipelineFlags::TEST2.bits) != 0 {
+            shader_defs.push("TEST2".to_string());
+        }
+        if (self.bits & TerrainPipelineFlags::TEST3.bits) != 0 {
+            shader_defs.push("TEST3".to_string());
         }
 
         shader_defs
@@ -192,6 +221,7 @@ impl TerrainPipelineFlags {
 }
 
 /// The pipeline used to render the terrain entities.
+#[derive(Resource)]
 pub struct TerrainRenderPipeline<M: Material> {
     pub(crate) view_layout: BindGroupLayout,
     pub(crate) terrain_layout: BindGroupLayout,

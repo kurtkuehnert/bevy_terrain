@@ -1,8 +1,7 @@
-use crate::preprocess::iterate_images;
 use crate::{
     preprocess::{
-        format_node_path, format_path, load_image, load_or_create_node, reset_directory,
-        TileConfig, UVec2Utils,
+        format_node_path, format_path, iterate_images, load_image, load_or_create_node,
+        reset_directory, TileConfig, UVec2Utils,
     },
     skip_fail,
     terrain_data::{AttachmentConfig, AttachmentFormat},
@@ -29,21 +28,27 @@ fn tile_to_node(
         (tile.offset.y + attachment.border_size) as i64 - (coord.y * attachment.center_size) as i64;
 
     match attachment.format {
-        AttachmentFormat::RGB => imageops::replace(
+        AttachmentFormat::Rgb8 => imageops::replace(
             node_image.as_mut_rgb8().unwrap(),
             tile_image.as_rgb8().unwrap(),
             x,
             y,
         ),
-        AttachmentFormat::RGBA => imageops::replace(
+        AttachmentFormat::Rgba8 => imageops::replace(
             node_image.as_mut_rgba8().unwrap(),
             tile_image.as_rgba8().unwrap(),
             x,
             y,
         ),
-        AttachmentFormat::LUMA16 => imageops::replace(
+        AttachmentFormat::R16 => imageops::replace(
             node_image.as_mut_luma16().unwrap(),
             tile_image.as_luma16().unwrap(),
+            x,
+            y,
+        ),
+        AttachmentFormat::Rg16 => imageops::replace(
+            node_image.as_mut_luma_alpha16().unwrap(),
+            tile_image.as_luma_alpha16().unwrap(),
             x,
             y,
         ),
@@ -120,7 +125,7 @@ fn split_tiles(
     (first, last)
 }
 
-fn down_sample_node(
+fn down_sample(
     node_image: &mut DynamicImage,
     child_image: &DynamicImage,
     attachment: &AttachmentConfig,
@@ -133,7 +138,7 @@ fn down_sample_node(
     let y = (child_y * child_size + attachment.border_size) as i64;
 
     match attachment.format {
-        AttachmentFormat::RGB => {
+        AttachmentFormat::Rgb8 => {
             let child_image = child_image.as_rgb8().unwrap().view(
                 attachment.border_size,
                 attachment.border_size,
@@ -149,7 +154,7 @@ fn down_sample_node(
 
             imageops::replace(node_image.as_mut_rgb8().unwrap(), &child_image, x, y);
         }
-        AttachmentFormat::RGBA => {
+        AttachmentFormat::Rgba8 => {
             let child_image = child_image.as_rgba8().unwrap().view(
                 attachment.border_size,
                 attachment.border_size,
@@ -164,7 +169,7 @@ fn down_sample_node(
             );
             imageops::replace(node_image.as_mut_rgba8().unwrap(), &child_image, x, y);
         }
-        AttachmentFormat::LUMA16 => {
+        AttachmentFormat::R16 => {
             let child_image = child_image.as_luma16().unwrap().view(
                 attachment.border_size,
                 attachment.border_size,
@@ -179,10 +184,30 @@ fn down_sample_node(
             );
             imageops::replace(node_image.as_mut_luma16().unwrap(), &child_image, x, y);
         }
+        AttachmentFormat::Rg16 => {
+            let child_image = child_image.as_luma_alpha16().unwrap().view(
+                attachment.border_size,
+                attachment.border_size,
+                attachment.center_size,
+                attachment.center_size,
+            );
+            let child_image = imageops::resize(
+                child_image.deref(),
+                child_size,
+                child_size,
+                FilterType::Triangle,
+            );
+            imageops::replace(
+                node_image.as_mut_luma_alpha16().unwrap(),
+                &child_image,
+                x,
+                y,
+            );
+        }
     }
 }
 
-pub(crate) fn down_sample_nodes(
+pub(crate) fn down_sample_layer(
     directory: &str,
     attachment: &AttachmentConfig,
     lod: u32,
@@ -199,7 +224,7 @@ pub(crate) fn down_sample_nodes(
             // Todo: if a child node is not available, we should fill the gap in the parent one
             // maybe this should not even be possible
 
-            down_sample_node(&mut node_image, &child_image, attachment, cx, cy);
+            down_sample(&mut node_image, &child_image, attachment, cx, cy);
         }
 
         node_image.save(node_path).expect("Could not save node.");
@@ -233,7 +258,7 @@ fn stitch(
     });
 
     match attachment.format {
-        AttachmentFormat::RGB => {
+        AttachmentFormat::Rgb8 => {
             let node_image = node_image.as_mut_rgb8().unwrap();
             let adjacent_image = adjacent_image.as_rgb8().unwrap();
 
@@ -241,7 +266,7 @@ fn stitch(
                 node_image.put_pixel(x1, y1, *adjacent_image.get_pixel(x2, y2));
             }
         }
-        AttachmentFormat::RGBA => {
+        AttachmentFormat::Rgba8 => {
             let node_image = node_image.as_mut_rgba8().unwrap();
             let adjacent_image = adjacent_image.as_rgba8().unwrap();
 
@@ -249,9 +274,17 @@ fn stitch(
                 node_image.put_pixel(x1, y1, *adjacent_image.get_pixel(x2, y2));
             }
         }
-        AttachmentFormat::LUMA16 => {
+        AttachmentFormat::R16 => {
             let node_image = node_image.as_mut_luma16().unwrap();
             let adjacent_image = adjacent_image.as_luma16().unwrap();
+
+            for (x1, y1, x2, y2) in iter {
+                node_image.put_pixel(x1, y1, *adjacent_image.get_pixel(x2, y2));
+            }
+        }
+        AttachmentFormat::Rg16 => {
+            let node_image = node_image.as_mut_luma_alpha16().unwrap();
+            let adjacent_image = adjacent_image.as_luma_alpha16().unwrap();
 
             for (x1, y1, x2, y2) in iter {
                 node_image.put_pixel(x1, y1, *adjacent_image.get_pixel(x2, y2));
@@ -282,22 +315,29 @@ fn extend(node_image: &mut DynamicImage, attachment: &AttachmentConfig, directio
     });
 
     match attachment.format {
-        AttachmentFormat::RGB => {
+        AttachmentFormat::Rgb8 => {
             let node_image = node_image.as_mut_rgb8().unwrap();
 
             for (x1, y1, x2, y2) in iter {
                 node_image.put_pixel(x1, y1, *node_image.get_pixel(x2, y2));
             }
         }
-        AttachmentFormat::RGBA => {
+        AttachmentFormat::Rgba8 => {
             let node_image = node_image.as_mut_rgba8().unwrap();
 
             for (x1, y1, x2, y2) in iter {
                 node_image.put_pixel(x1, y1, *node_image.get_pixel(x2, y2));
             }
         }
-        AttachmentFormat::LUMA16 => {
+        AttachmentFormat::R16 => {
             let node_image = node_image.as_mut_luma16().unwrap();
+
+            for (x1, y1, x2, y2) in iter {
+                node_image.put_pixel(x1, y1, *node_image.get_pixel(x2, y2));
+            }
+        }
+        AttachmentFormat::Rg16 => {
+            let node_image = node_image.as_mut_luma_alpha16().unwrap();
 
             for (x1, y1, x2, y2) in iter {
                 node_image.put_pixel(x1, y1, *node_image.get_pixel(x2, y2));
@@ -306,7 +346,7 @@ fn extend(node_image: &mut DynamicImage, attachment: &AttachmentConfig, directio
     }
 }
 
-fn stitch_nodes(
+pub(crate) fn stitch_layer(
     directory: &str,
     attachment: &AttachmentConfig,
     lod: u32,
@@ -346,18 +386,22 @@ pub(crate) fn preprocess_attachment(
     config: &TerrainConfig,
     tile: &TileConfig,
     attachment: &AttachmentConfig,
-) {
+) -> (UVec2, UVec2) {
     let directory = format_path(&config.path, &attachment.name);
 
     reset_directory(&directory);
 
     let (mut first, mut last) = split_tiles(&directory, tile, attachment);
 
+    let output = (first, last);
+
     for lod in (tile.lod + 1)..config.lod_count {
         first = first.div_floor(2);
         last = last.div_ceil(2);
 
-        down_sample_nodes(&directory, attachment, lod, first, last);
-        stitch_nodes(&directory, attachment, lod, first, last);
+        down_sample_layer(&directory, attachment, lod, first, last);
+        stitch_layer(&directory, attachment, lod, first, last);
     }
+
+    output
 }

@@ -39,7 +39,7 @@ bitflags::bitflags! {
 #[repr(transparent)]
 pub struct TerrainComputePipelineFlags: u32 {
     const NONE               = 0;
-    const DENSITY            = (1 << 0);
+    const ADAPTIVE           = (1 << 0);
     const TEST               = (2 << 0);
 }
 }
@@ -48,10 +48,10 @@ impl TerrainComputePipelineFlags {
     pub fn from_debug(debug: &DebugTerrain) -> Self {
         let mut key = TerrainComputePipelineFlags::NONE;
 
-        if debug.density {
-            key |= TerrainComputePipelineFlags::DENSITY;
+        if debug.adaptive {
+            key |= TerrainComputePipelineFlags::ADAPTIVE;
         }
-        if debug.test {
+        if debug.test1 {
             key |= TerrainComputePipelineFlags::TEST;
         }
 
@@ -61,8 +61,8 @@ impl TerrainComputePipelineFlags {
     pub fn shader_defs(&self) -> Vec<String> {
         let mut shader_defs = Vec::new();
 
-        if (self.bits & TerrainComputePipelineFlags::DENSITY.bits) != 0 {
-            shader_defs.push("DENSITY".to_string());
+        if (self.bits & TerrainComputePipelineFlags::ADAPTIVE.bits) != 0 {
+            shader_defs.push("ADAPTIVE".to_string());
         }
         if (self.bits & TerrainComputePipelineFlags::TEST.bits) != 0 {
             shader_defs.push("TEST".to_string());
@@ -72,6 +72,7 @@ impl TerrainComputePipelineFlags {
     }
 }
 
+#[derive(Resource)]
 pub struct TerrainComputePipelines {
     pub(crate) prepare_indirect_layout: BindGroupLayout,
     pub(crate) tessellation_layout: BindGroupLayout,
@@ -235,7 +236,7 @@ impl render_graph::Node for TerrainComputeNode {
         if let Some(debug) = &debug {
             flags |= TerrainComputePipelineFlags::from_debug(debug);
         } else {
-            flags |= TerrainComputePipelineFlags::DENSITY
+            flags |= TerrainComputePipelineFlags::ADAPTIVE
         }
 
         for id in TerrainComputePipelineId::iter() {
