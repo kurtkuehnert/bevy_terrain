@@ -18,7 +18,7 @@ struct TerrainConfig {
     _empty: u32,
 }
 
-struct CullData {
+struct CullingData {
     world_position: vec4<f32>,
     view_proj: mat4x4<f32>,
     model: mat4x4<f32>,
@@ -37,7 +37,7 @@ var<storage, read_write> temporary_tiles: TemporaryTileList;
 var<storage, read_write> parameters: Parameters;
 
 @group(1) @binding(0)
-var<uniform> view: CullData;
+var<uniform> view: CullingData;
 
  // terrain bindings
 @group(2) @binding(0)
@@ -50,6 +50,7 @@ var height_atlas: texture_2d_array<f32>;
 var minmax_atlas: texture_2d_array<f32>;
 
 #import bevy_terrain::atlas
+#import bevy_terrain::functions
 
 fn child_index() -> i32 {
     return atomicAdd(&parameters.child_index, parameters.counter);
@@ -77,40 +78,101 @@ fn final_index(lod: u32) -> i32 {
     // return atomicAdd(&parameters.final_indices[lod], 1) + i32(lod) * 1000000;
 }
 
-fn frustum_cull(position: vec2<f32>, size: f32) -> bool {
-    let aabb_min = vec3<f32>(position.x, 0.0, position.y);
-    let aabb_max = vec3<f32>(position.x + size, 1000.0, position.y + size);
+fn frustum_cull(tile: TileInfo) -> bool {
+    let size = f32(tile.size) * view_config.tile_scale;
+    let local_position = (vec2<f32>(tile.coords) + 0.5) * size;
 
-    var corners = array<vec4<f32>, 8>(
-        vec4<f32>(aabb_min.x, aabb_min.y, aabb_min.z, 1.0),
-        vec4<f32>(aabb_min.x, aabb_min.y, aabb_max.z, 1.0),
-        vec4<f32>(aabb_min.x, aabb_max.y, aabb_min.z, 1.0),
-        vec4<f32>(aabb_min.x, aabb_max.y, aabb_max.z, 1.0),
-        vec4<f32>(aabb_max.x, aabb_min.y, aabb_min.z, 1.0),
-        vec4<f32>(aabb_max.x, aabb_min.y, aabb_max.z, 1.0),
-        vec4<f32>(aabb_max.x, aabb_max.y, aabb_min.z, 1.0),
-        vec4<f32>(aabb_max.x, aabb_max.y, aabb_max.z, 1.0)
-    );
+    let minmax = minmax(local_position, size);
+    let minmax = vec2<f32>(0.0, 1000.0);
 
-    for (var i = 0; i < 5; i = i + 1) {
+    // frustum culling optimized
+    let aabb_min = vec3<f32>(local_position.x - size / 2.0, minmax.x, local_position.y - size / 2.0);
+    let aabb_max = vec3<f32>(local_position.x + size / 2.0, minmax.y, local_position.y + size / 2.0);
+
+    for (var i = 0; i < 6; i = i + 1) {
         let plane = view.planes[i];
 
-        var in = 0u;
+        var p_corner = vec4<f32>(aabb_min.x, aabb_min.y, aabb_min.z, 1.0);
+        var n_corner = vec4<f32>(aabb_max.x, aabb_max.y, aabb_max.z, 1.0);
+        if (plane.x >= 0.0) { p_corner.x = aabb_max.x; n_corner.x = aabb_min.x; }
+        if (plane.y >= 0.0) { p_corner.y = aabb_max.y; n_corner.y = aabb_min.y; }
+        if (plane.z >= 0.0) { p_corner.z = aabb_max.z; n_corner.z = aabb_min.z; }
 
-        for (var j = 0; j < 8; j = j + 1) {
-            let corner = corners[j];
-
-            if (dot(plane, corner) < 0.0) {
-                in = in + 1u;
-            }
-
-            if (in == 0u) {
-                return true;
-            }
-        }
+    	if (dot(plane, p_corner) < 0.0) {
+    	    // the clostest corner is outside the plane -> cull
+    	    return true;
+    	}
+    	if (dot(plane, n_corner) < 0.0) {
+    	    // the furthest corner is inside the plane -> don't cull
+    	    return false;
+    	}
     }
 
     return false;
+
+    // frustum culling bevy
+    // let center_position = vec4<f32>(local_position.x, (minmax.y + minmax.x) / 2.0, local_position.y, 1.0);
+    // let half_extents    = vec3<f32>(size,              minmax.y - minmax.x,        size) / 2.0;
+    //
+    // // let size = f32(tile.size) * view_config.tile_scale;
+    // // let local_position = (vec2<f32>(tile.coords) + 0.5) * size;
+    // // let center_position = vec4<f32>(local_position.x, 500.0, local_position.y, 1.0);
+    // // let half_extends = vec3<f32>(size / 2.0, 500.0, size / 2.0);
+    //
+    // for (var i = 0; i < 6; i = i + 1) {
+    //     let p_normal_d = view.planes[i];
+    //     let relative_radius = dot(abs(p_normal_d.xyz), half_extents);
+    //
+    //     if (dot(p_normal_d, center_position) + relative_radius <= 0.0) {
+    //         // no intersection -> cull
+    //         return true;
+    //     }
+    // }
+    //
+    // return false;
+
+    // frustum culling naive
+    // let aabb_min = vec3<f32>(local_position.x - size / 2.0, minmax.x, local_position.y - size / 2.0);
+    // let aabb_max = vec3<f32>(local_position.x + size / 2.0, minmax.y, local_position.y + size / 2.0);
+    //
+    // var corners = array<vec4<f32>, 8>(
+    //     vec4<f32>(aabb_min.x, aabb_min.y, aabb_min.z, 1.0),
+    //     vec4<f32>(aabb_min.x, aabb_min.y, aabb_max.z, 1.0),
+    //     vec4<f32>(aabb_min.x, aabb_max.y, aabb_min.z, 1.0),
+    //     vec4<f32>(aabb_min.x, aabb_max.y, aabb_max.z, 1.0),
+    //     vec4<f32>(aabb_max.x, aabb_min.y, aabb_min.z, 1.0),
+    //     vec4<f32>(aabb_max.x, aabb_min.y, aabb_max.z, 1.0),
+    //     vec4<f32>(aabb_max.x, aabb_max.y, aabb_min.z, 1.0),
+    //     vec4<f32>(aabb_max.x, aabb_max.y, aabb_max.z, 1.0)
+    // );
+    //
+    // for (var i = 0; i < 6; i = i + 1) {
+    //     var out = 0u;
+    //
+    //     for (var j = 0; j < 8; j = j + 1) {
+    //         if (dot(view.planes[i], corners[j]) < 0.0) {
+    //             out = out + 1u;
+    //         }
+    //     }
+    //
+    //     if (out == 8u) {
+    //         // all points are outside the frustum -> cull
+    //         return true;
+    //     }
+    // }
+    //
+    // return false;
+}
+
+fn outside_cull(tile: TileInfo) -> bool {
+    // cull tiles outside of the terrain
+    let local_position = vec2<f32>(tile.coords * tile.size) * view_config.tile_scale ;
+
+    return local_position.x > f32(config.terrain_size) || local_position.y > f32(config.terrain_size);
+}
+
+fn cull(tile: TileInfo) -> bool {
+    return outside_cull(tile) && frustum_cull(tile);
 }
 
 fn determine_lod(tile: TileInfo) -> u32 {
@@ -160,27 +222,12 @@ fn determine_lod(tile: TileInfo) -> u32 {
     return u32(min(error, 0.999) * 4.0);
 }
 
-fn cull(tile: TileInfo) -> bool {
-    // cull tiles outside of the terrain
-    let local_position = vec2<f32>(tile.coords * tile.size) * view_config.tile_scale ;
-    if (local_position.x > f32(config.terrain_size) || local_position.y > f32(config.terrain_size)) {
-        return true;
-    }
-
-    // if (frustum_cull(local_position, config.tile_scale * f32(config.tile_size * size))) {
-    //     return true;
-    // }
-
-    return false;
-}
-
-
 fn should_be_divided(tile: TileInfo) -> bool {
     if (tile.size == 1u) {
         return false;
     }
 
-    var divide = false;
+    var dist = 1000000000.0;
 
     for (var i: u32 = 0u; i < 4u; i = i + 1u) {
         let corner_coords = vec2<u32>(tile.coords.x + (i       & 1u),
@@ -188,12 +235,11 @@ fn should_be_divided(tile: TileInfo) -> bool {
 
         let local_position = vec2<f32>(corner_coords * tile.size) * view_config.tile_scale;
         let world_position = approximate_world_position(local_position);
-        let distance = length(view.world_position.xyz - world_position) * 0.99; // consider adding a small error mitigation
-
-        divide = divide || (distance < view_config.refinement_distance * f32(tile.size));
+        dist = min(dist, distance(world_position, view.world_position.xyz, ));
     }
 
-    return divide;
+    // ADLOD might required small error toleranze.
+    return dist < view_config.refinement_distance * f32(tile.size);
 }
 
 fn subdivide(tile: TileInfo) {

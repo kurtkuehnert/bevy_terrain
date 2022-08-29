@@ -38,9 +38,7 @@ fn fragment(fragment: FragmentInput) -> FragmentOutput {
 
     var color = fragment_color(fragment, fragment_data);
 
-#ifdef SHOW_TILES
     color = mix(fragment.color, color, 0.8);
-#endif
 
     return FragmentOutput(color);
 }

@@ -52,16 +52,12 @@ pub(crate) fn queue_terrain_culling_bind_group(
         let view_proj =
             extracted_view.projection * extracted_view.transform.compute_matrix().inverse();
 
-        let _planes = planes(
-            &extracted_view.projection,
+        let planes = planes(
+            &view_proj,
             &extracted_view.transform.translation(),
             &extracted_view.transform.back(),
             10000.0,
         );
-
-        // dbg!(&planes);
-
-        let planes = [default(); 6];
 
         for terrain in terrain_query.iter() {
             let culling_data = CullingData {
