@@ -5,8 +5,14 @@ fn height_vertex(atlas_index: i32, atlas_coords: vec2<f32>) -> f32 {
     return config.height * textureSampleLevel(height_atlas, terrain_sampler, height_coords, atlas_index, 0.0).x;
 }
 
+fn normal_vertex(atlas_index: i32, atlas_coords: vec2<f32>, lod: u32) -> vec3<f32> {
+    let height_coords = atlas_coords * config.height_scale + config.height_offset;
+    return calculate_normal(height_coords, atlas_index, lod);
+}
+
 @vertex
 fn vertex(vertex: VertexInput) -> VertexOutput {
+#ifdef ADAPTIVE
     var tile_lod = 0u;
     for (; tile_lod < 4u; tile_lod = tile_lod + 1u) {
         if (vertex.index < tiles.counts[tile_lod].y) {
@@ -15,6 +21,11 @@ fn vertex(vertex: VertexInput) -> VertexOutput {
     }
 
     let tile_size = calc_tile_count(tile_lod);
+#else
+    let tile_lod = 0u;
+    let tile_size = 8u;
+#endif
+
     let vertices_per_row = (tile_size + 2u) << 1u;
     let vertices_per_tile = vertices_per_row * tile_size;
 
@@ -30,16 +41,80 @@ fn vertex(vertex: VertexInput) -> VertexOutput {
     let lookup = atlas_lookup(blend.log_distance, local_position);
     var height = height_vertex(lookup.atlas_index, lookup.atlas_coords);
 
+#ifdef VERTEX_NORMAL
+    var normal = normal_vertex(lookup.atlas_index, lookup.atlas_coords, lookup.lod);
+#endif
+
     if (blend.ratio < 1.0) {
         let lookup2 = atlas_lookup(blend.log_distance + 1.0, local_position);
-        var height2 = height_vertex(lookup2.atlas_index, lookup2.atlas_coords);
+
+        let height2 = height_vertex(lookup2.atlas_index, lookup2.atlas_coords);
         height = mix(height2, height, blend.ratio);
+
+#ifdef VERTEX_NORMAL
+        let normal2 = normal_vertex(lookup.atlas_index, lookup.atlas_coords, lookup.lod);
+        normal = mix(normal2, normal, blend.ratio);
+#endif
     }
 
     var output = vertex_output(local_position, height);
 
+#ifdef VERTEX_NORMAL
+    output.world_normal = normal;
+#endif
+
 #ifdef SHOW_TILES
     output.color = show_tiles(tile, local_position, tile_lod);
+#endif
+
+#ifdef TEST1
+    let size = f32(tile.size) * view_config.tile_scale;
+    let lod = ceil(log2(size));
+
+    let center_position = (vec2<f32>(tile.coords) + 0.5) * size;
+
+    let lookup = atlas_lookup(lod, center_position);
+    let coords = lookup.atlas_coords * config.minmax_scale + config.minmax_offset;
+    let lod = min(u32(lod), config.lod_count - 1u);
+
+    let height = textureSampleLevel(height_atlas, terrain_sampler, coords, lookup.atlas_index, 0.0).x;
+
+    var min_height = 1.0;
+    var max_height = 0.0;
+
+    for (var i: u32 = 0u; i < 4u; i = i + 1u) {
+        let offset = vec2<f32>(vec2<u32>((i & 1u), (i >> 1u & 1u))) - 0.5;
+
+        let corner = vec2<i32>((coords + offset * size / node_size(lod)) * 132.0);
+
+        let minmax = textureLoad(minmax_atlas, corner, lookup.atlas_index, 0).xy;
+
+        min_height = min(min_height, minmax.x);
+        max_height = max(max_height, minmax.y);
+    }
+
+    let min_position = vec4<f32>(center_position.x, min_height * config.height, center_position.y, 1.0);
+    let max_position = vec4<f32>(center_position.x, max_height * config.height, center_position.y, 1.0);
+
+    let min_screen = view.view_proj * min_position;
+    let min_screen = min_screen.xy / min_screen.w;
+    let max_screen = view.view_proj * max_position;
+    let max_screen = max_screen.xy / max_screen.w;
+
+    let dist = (max_screen - min_screen) * vec2<f32>(1920.0, 1080.0) / 2.0;
+
+    let error = length(dist) / 100.0;
+
+    // let min_dif = (height - min_height) * config.height;
+    // let max_dif = (max_height - height) * config.height;
+    //
+    // output.color = vec4<f32>(min_dif / 50.0, 0.0, max_dif / 50.0, 1.0);
+    //
+    // let error = (max_height - min_height) * config.height;
+    // let error = error / size * 1.0;
+    //
+
+    output.color = vec4<f32>(error, 0.0, 0.0, 1.0);
 #endif
 
     return output;

@@ -9,6 +9,7 @@ struct TerrainViewConfig {
 
     tile_count: u32,
     refinement_count: u32,
+    refinement_distance: f32,
     view_distance: f32,
     tile_scale: f32,
 

@@ -9,11 +9,11 @@ struct TerrainConfig {
     chunk_size: u32,
     terrain_size: u32,
     height_scale: f32,
-    density_scale: f32,
+    minmax_scale: f32,
     _empty: u32,
     _empty: u32,
     height_offset: f32,
-    density_offset: f32,
+    minmax_offset: f32,
     _empty: u32,
     _empty: u32,
 }
@@ -43,11 +43,11 @@ var<uniform> view: CullData;
 @group(2) @binding(0)
 var<uniform> config: TerrainConfig;
 @group(2) @binding(1)
-var filter_sampler: sampler;
+var terrain_sampler: sampler;
 @group(2) @binding(2)
 var height_atlas: texture_2d_array<f32>;
 @group(2) @binding(3)
-var density_atlas: texture_2d_array<f32>;
+var minmax_atlas: texture_2d_array<f32>;
 
 #import bevy_terrain::atlas
 
@@ -114,19 +114,50 @@ fn frustum_cull(position: vec2<f32>, size: f32) -> bool {
 }
 
 fn determine_lod(tile: TileInfo) -> u32 {
-#ifdef DENSITY
-    let local_position = (vec2<f32>(tile.coords) + 0.5) * f32(tile.size) * view_config.tile_scale;
-    let log_distance = log2(f32(tile.size) * view_config.tile_scale);
+    let size = f32(tile.size) * view_config.tile_scale;
+    let lod = ceil(log2(size));
 
-    let lookup = atlas_lookup(log_distance, local_position);
-    let slope = textureSampleLevel(density_atlas, filter_sampler, lookup.atlas_coords, lookup.atlas_index, 0.0).x;
+    let center_position = (vec2<f32>(tile.coords) + 0.5) * size;
 
-    let slope = min(slope * 10.0, 0.999);
+    let lookup = atlas_lookup(lod, center_position);
+    let coords = lookup.atlas_coords * config.minmax_scale + config.minmax_offset;
+    let lod = min(u32(lod), config.lod_count - 1u);
 
-    return u32(slope * 4.0);
-#else
-    return 3u;
-#endif
+    let height = textureSampleLevel(height_atlas, terrain_sampler, coords, lookup.atlas_index, 0.0).x;
+
+    var min_height = 1.0;
+    var max_height = 0.0;
+
+    for (var i: u32 = 0u; i < 4u; i = i + 1u) {
+        let offset = vec2<f32>(vec2<u32>((i & 1u), (i >> 1u & 1u))) - 0.5;
+
+        let corner = vec2<i32>((coords + offset * size / node_size(lod)) * 132.0);
+
+        let minmax = textureLoad(minmax_atlas, corner, lookup.atlas_index, 0).xy;
+
+        min_height = min(min_height, minmax.x);
+        max_height = max(max_height, minmax.y);
+    }
+
+    let min_position = vec4<f32>(center_position.x, min_height * config.height, center_position.y, 1.0);
+    let max_position = vec4<f32>(center_position.x, max_height * config.height, center_position.y, 1.0);
+
+    let min_screen = view.view_proj * min_position;
+    let min_screen = min_screen.xy / min_screen.w;
+    let max_screen = view.view_proj * max_position;
+    let max_screen = max_screen.xy / max_screen.w;
+
+    var dist = max_screen - min_screen; // * vec2<f32>(1920.0, 1080.0);
+    dist = vec2<f32>(dist.x * 16.0 / 9.0, dist.y);
+
+    let error = length(dist) * 200.0;
+
+
+    // let error = (max_height - min_height) * config.height;
+    // let error = error / size * 40.0;
+
+
+    return u32(min(error, 0.999) * 4.0);
 }
 
 fn cull(tile: TileInfo) -> bool {
@@ -145,7 +176,7 @@ fn cull(tile: TileInfo) -> bool {
 
 
 fn should_be_divided(tile: TileInfo) -> bool {
-    if (tile.size == 2u) {
+    if (tile.size == 1u) {
         return false;
     }
 
@@ -159,7 +190,7 @@ fn should_be_divided(tile: TileInfo) -> bool {
         let world_position = approximate_world_position(local_position);
         let distance = length(view.world_position.xyz - world_position) * 0.99; // consider adding a small error mitigation
 
-        divide = divide || (distance < f32(tile.size >> 1u) * view_config.view_distance);
+        divide = divide || (distance < view_config.refinement_distance * f32(tile.size));
     }
 
     return divide;
@@ -181,6 +212,7 @@ fn subdivide(tile: TileInfo) {
 }
 
 fn finalise(tile: TileInfo) {
+#ifdef ADAPTIVE
     let parent_tile  = TileInfo(tile.coords >> vec2<u32>(1u), tile.size << 1u);
     var lod          = determine_lod(tile);
     let parent_lod   = determine_lod(parent_tile);
@@ -213,7 +245,13 @@ fn finalise(tile: TileInfo) {
         parent_counts = parent_counts | min(parent_count, edge_parent_count) << u32(i * 6);
     }
 
-    final_tiles.data[final_index(lod)] = Tile(tile.coords, tile.size, counts, parent_counts, 0u);
+    let tile = Tile(tile.coords, tile.size, counts, parent_counts, 0u);
+#else
+    let lod = 0u;
+    let tile = Tile(tile.coords, tile.size, 0u, 0u, 0u);
+#endif
+
+    final_tiles.data[final_index(lod)] = tile;
 }
 
 @compute @workgroup_size(64, 1, 1)

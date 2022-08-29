@@ -9,7 +9,7 @@ use crate::{
     TerrainConfig,
 };
 use bevy::prelude::UVec2;
-use image::{io::Reader, DynamicImage, ImageBuffer, ImageResult, Luma, RgbImage, RgbaImage};
+use image::{io::Reader, DynamicImage, ImageBuffer, ImageResult, Luma, LumaA, Rgb, Rgba};
 use itertools::{Itertools, Product};
 use std::{
     fs::{self, DirEntry, ReadDir},
@@ -30,6 +30,7 @@ macro_rules! skip_fail {
 #[derive(Default)]
 pub(crate) struct BaseConfig {
     pub center_size: u32,
+    pub border_size: u32,
 }
 
 /// The configuration of the source tile(s) of an attachment.
@@ -90,7 +91,10 @@ impl UVec2Utils for UVec2 {
     }
 }
 
-pub(crate) type LUMA16Image = ImageBuffer<Luma<u16>, Vec<u16>>;
+pub(crate) type Rgb8Image = ImageBuffer<Rgb<u8>, Vec<u8>>;
+pub(crate) type Rgba8Image = ImageBuffer<Rgba<u8>, Vec<u8>>;
+pub(crate) type R16Image = ImageBuffer<Luma<u16>, Vec<u16>>;
+pub(crate) type Rg16Image = ImageBuffer<LumaA<u16>, Vec<u16>>;
 
 pub(crate) fn format_node_path(directory: &str, lod: u32, x: u32, y: u32) -> String {
     let node_id = calc_node_id(lod, x, y);
@@ -115,9 +119,10 @@ pub(crate) fn load_or_create_node(node_path: &str, attachment: &AttachmentConfig
         let size = attachment.texture_size();
 
         match attachment.format {
-            AttachmentFormat::RGB => DynamicImage::from(RgbImage::new(size, size)),
-            AttachmentFormat::RGBA => DynamicImage::from(RgbaImage::new(size, size)),
-            AttachmentFormat::LUMA16 => DynamicImage::from(LUMA16Image::new(size, size)),
+            AttachmentFormat::Rgb8 => DynamicImage::from(Rgb8Image::new(size, size)),
+            AttachmentFormat::Rgba8 => DynamicImage::from(Rgba8Image::new(size, size)),
+            AttachmentFormat::R16 => DynamicImage::from(R16Image::new(size, size)),
+            AttachmentFormat::Rg16 => DynamicImage::from(Rg16Image::new(size, size)),
         }
     }
 }
