@@ -137,6 +137,28 @@ fn calculate_normal(uv: vec2<f32>, atlas_index: i32, lod: u32) -> vec3<f32> {
     return normalize(vec3<f32>(right - left, f32(2u << lod) / config.height, down - up));
 }
 
+fn minmax(local_position: vec2<f32>, size: f32) -> vec2<f32> {
+    let lod = ceil(log2(size));
+    let lookup = atlas_lookup(lod, local_position);
+    let coords = lookup.atlas_coords * config.minmax_scale + config.minmax_offset;
+
+    var min_height = 1.0;
+    var max_height = 0.0;
+
+    for (var i: u32 = 0u; i < 4u; i = i + 1u) {
+        let offset = vec2<f32>(vec2<u32>((i & 1u), (i >> 1u & 1u))) - 0.5;
+
+        let corner = vec2<i32>((coords + offset * size / node_size(lookup.lod)) * 132.0);
+
+        let minmax = textureLoad(minmax_atlas, corner, lookup.atlas_index, 0).xy;
+
+        min_height = min(min_height, minmax.x);
+        max_height = max(max_height, minmax.y);
+    }
+
+    return vec2(min_height, max_height) * config.height;
+}
+
 fn vertex_output(local_position: vec2<f32>, height: f32) -> VertexOutput {
     let world_position = vec4<f32>(local_position.x, height, local_position.y, 1.0);
 
