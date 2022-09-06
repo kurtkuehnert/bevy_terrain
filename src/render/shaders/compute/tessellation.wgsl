@@ -22,7 +22,7 @@ struct CullingData {
     world_position: vec4<f32>,
     view_proj: mat4x4<f32>,
     model: mat4x4<f32>,
-    planes: array<vec4<f32>, 6>,
+    planes: array<vec4<f32>, 5>,
 }
 
 @group(0) @binding(0)
@@ -83,13 +83,13 @@ fn frustum_cull(tile: TileInfo) -> bool {
     let local_position = (vec2<f32>(tile.coords) + 0.5) * size;
 
     let minmax = minmax(local_position, size);
-    let minmax = vec2<f32>(0.0, 1000.0);
+    let minmax = vec2<f32>(0.0, 1000.0); // Todo: fix this
 
     // frustum culling optimized
     let aabb_min = vec3<f32>(local_position.x - size / 2.0, minmax.x, local_position.y - size / 2.0);
     let aabb_max = vec3<f32>(local_position.x + size / 2.0, minmax.y, local_position.y + size / 2.0);
 
-    for (var i = 0; i < 6; i = i + 1) {
+    for (var i = 0; i < 5; i = i + 1) {
         let plane = view.planes[i];
 
         var p_corner = vec4<f32>(aabb_min.x, aabb_min.y, aabb_min.z, 1.0);
@@ -172,12 +172,12 @@ fn outside_cull(tile: TileInfo) -> bool {
 }
 
 fn cull(tile: TileInfo) -> bool {
-    return outside_cull(tile) && frustum_cull(tile);
+    return outside_cull(tile) || frustum_cull(tile);
 }
 
 fn determine_lod(tile: TileInfo) -> u32 {
     let size = f32(tile.size) * view_config.tile_scale;
-    let lod = ceil(log2(size));
+    let lod = u32(ceil(log2(size)));
 
     let center_position = (vec2<f32>(tile.coords) + 0.5) * size;
 

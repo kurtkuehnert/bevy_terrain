@@ -38,7 +38,7 @@ fn vertex(vertex: VertexInput) -> VertexOutput {
     let world_position = approximate_world_position(local_position);
     let blend = calculate_blend(world_position, view_config.vertex_blend);
 
-    let lookup = atlas_lookup(blend.log_distance, local_position);
+    let lookup = atlas_lookup(blend.lod, local_position);
     var height = height_vertex(lookup.atlas_index, lookup.atlas_coords);
 
 #ifdef VERTEX_NORMAL
@@ -46,7 +46,7 @@ fn vertex(vertex: VertexInput) -> VertexOutput {
 #endif
 
     if (blend.ratio < 1.0) {
-        let lookup2 = atlas_lookup(blend.log_distance + 1.0, local_position);
+        let lookup2 = atlas_lookup(blend.lod + 1u, local_position);
 
         let height2 = height_vertex(lookup2.atlas_index, lookup2.atlas_coords);
         height = mix(height2, height, blend.ratio);
