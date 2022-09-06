@@ -257,6 +257,14 @@ impl render_graph::Node for TerrainComputeNode {
         let terrain_view_data = world.resource::<TerrainViewComponents<TerrainViewData>>();
         let culling_bind_groups = world.resource::<TerrainViewComponents<CullingBindGroup>>();
 
+        let debug = world.get_resource::<DebugTerrain>();
+
+        if let Some(debug) = debug {
+            if debug.freeze {
+                return Ok(());
+            }
+        }
+
         let pipelines = &match TerrainComputePipelineId::iter()
             .map(|key| pipeline_cache.get_compute_pipeline(self.pipelines[key as usize]))
             .collect::<Option<Vec<_>>>()
