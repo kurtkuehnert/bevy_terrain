@@ -39,6 +39,8 @@ pub struct DebugTerrain {
     pub test1: bool,
     pub test2: bool,
     pub test3: bool,
+
+    pub freeze: bool,
 }
 
 impl Default for DebugTerrain {
@@ -58,6 +60,7 @@ impl Default for DebugTerrain {
             test1: false,
             test2: false,
             test3: false,
+            freeze: false,
         }
     }
 }
@@ -108,6 +111,10 @@ pub fn toggle_debug(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTerrain>)
     }
     if input.just_pressed(KeyCode::Key3) {
         debug.test3 = !debug.test3;
+    }
+
+    if input.just_pressed(KeyCode::F) {
+        debug.freeze = !debug.freeze;
     }
 }
 
