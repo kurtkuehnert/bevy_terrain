@@ -13,8 +13,8 @@ fn node_size(lod: u32) -> f32 {
 
 // Looks up the best availale node in the node atlas from the viewers point of view.
 // This is done by sampling the viewers quadtree at the caluclated location.
-fn atlas_lookup(log_distance: f32, local_position: vec2<f32>) -> AtlasLookup {
-    let lod = min(u32(log_distance), config.lod_count - 1u);
+fn atlas_lookup(lod: u32, local_position: vec2<f32>) -> AtlasLookup {
+    let lod = min(lod, config.lod_count - 1u);
 
 #ifndef CIRCULAR_LOD
     for (var lod = 0u; lod < config.lod_count; lod = lod + 1u) {

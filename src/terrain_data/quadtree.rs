@@ -205,7 +205,7 @@ impl Quadtree {
                 let mut demanded = distance < self.load_distance * node_size as f32;
                 demanded |= lod == self.lod_count - 1; // always request highest lod
 
-                // demand or release node based on their distance to the viewer
+                // request or release node based on their distance to the viewer
                 match (node.state, demanded) {
                     (RequestState::Released, true) => {
                         self.requested_nodes.push(node.node_id);

@@ -31,16 +31,16 @@ struct FragmentOutput {
 }
 
 struct Blend {
+    lod: u32,
     ratio: f32,
-    log_distance: f32,
 }
 
 fn calculate_blend(world_position: vec3<f32>, blend_range: f32) -> Blend {
     let viewer_distance = distance(world_position, view.world_position.xyz);
-    let log_distance = log2(2.0 * viewer_distance / view_config.view_distance);
+    let log_distance = max(log2(2.0 * viewer_distance / view_config.view_distance), 0.0);
     let ratio = (1.0 - log_distance % 1.0) / blend_range;
 
-    return Blend(ratio, log_distance);
+    return Blend(u32(log_distance), ratio);
 }
 
 fn calculate_morph(local_position: vec2<f32>, tile: Tile) -> f32 {
@@ -138,7 +138,7 @@ fn calculate_normal(uv: vec2<f32>, atlas_index: i32, lod: u32) -> vec3<f32> {
 }
 
 fn minmax(local_position: vec2<f32>, size: f32) -> vec2<f32> {
-    let lod = ceil(log2(size));
+    let lod = u32(ceil(log2(size)));
     let lookup = atlas_lookup(lod, local_position);
     let coords = lookup.atlas_coords * config.minmax_scale + config.minmax_offset;
 
