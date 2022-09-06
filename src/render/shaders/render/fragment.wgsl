@@ -26,11 +26,11 @@ fn fragment(fragment: FragmentInput) -> FragmentOutput {
 
     let blend = calculate_blend(fragment.world_position.xyz, view_config.fragment_blend);
 
-    let lookup = atlas_lookup(blend.log_distance, fragment.local_position);
+    let lookup = atlas_lookup(blend.lod, fragment.local_position);
     var fragment_data = lookup_fragment_data(fragment, lookup);
 
     if (blend.ratio < 1.0) {
-        let lookup2 = atlas_lookup(blend.log_distance + 1.0, fragment.local_position);
+        let lookup2 = atlas_lookup(blend.lod + 1u, fragment.local_position);
         let fragment_data2 = lookup_fragment_data(fragment, lookup2);
 
         fragment_data = blend_fragment_data(fragment_data, fragment_data2, blend.ratio);
