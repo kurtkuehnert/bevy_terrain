@@ -70,7 +70,7 @@ pub fn calc_node_id(lod: u32, x: u32, y: u32) -> NodeId {
 }
 
 /// The data format of an attachment.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum AttachmentFormat {
     /// Three channels  8 bit
     Rgb8,
