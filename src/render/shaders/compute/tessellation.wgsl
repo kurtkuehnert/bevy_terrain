@@ -83,7 +83,7 @@ fn frustum_cull(tile: TileInfo) -> bool {
     let local_position = (vec2<f32>(tile.coords) + 0.5) * size;
 
     let minmax = minmax(local_position, size);
-    let minmax = vec2<f32>(0.0, 1000.0); // Todo: fix this
+    // let minmax = vec2<f32>(0.0, config.height); // Todo: fix this
 
     // frustum culling optimized
     let aabb_min = vec3<f32>(local_position.x - size / 2.0, minmax.x, local_position.y - size / 2.0);
