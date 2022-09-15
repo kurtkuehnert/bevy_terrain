@@ -1,6 +1,5 @@
 use crate::{
     preprocess::{
-        convert_nodes,
         down_sample::{down_sample_layer, linear, minmax},
         format_directory, format_node_path, iterate_directory, load_node, reset_directory,
         save_node,
@@ -40,7 +39,7 @@ fn height_to_minmax(
             },
         ));
 
-        save_node(&minmax_path, &minmax_image);
+        save_node(&minmax_path, &minmax_image, AttachmentFormat::Rg16);
     }
 }
 
@@ -102,9 +101,6 @@ pub(crate) fn preprocess_base(config: &TerrainConfig, tile: &TileConfig, base: &
         );
         stitch_layer(&minmax_directory, &minmax_attachment, lod, first, last);
     }
-
-    convert_nodes(&height_directory, &height_attachment);
-    convert_nodes(&minmax_directory, &minmax_attachment);
 }
 
 pub(crate) fn preprocess_attachment(
@@ -125,6 +121,4 @@ pub(crate) fn preprocess_attachment(
         down_sample_layer(linear, &directory, attachment, lod, first, last);
         stitch_layer(&directory, attachment, lod, first, last);
     }
-
-    convert_nodes(&directory, attachment);
 }

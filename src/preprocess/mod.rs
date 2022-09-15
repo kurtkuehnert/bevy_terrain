@@ -11,7 +11,8 @@ use crate::{
     TerrainConfig,
 };
 use bevy::prelude::*;
-use bytemuck::cast_slice;
+use bytemuck::{cast_slice, cast_vec};
+use dtm::DTM;
 use image::{io::Reader, DynamicImage, ImageBuffer, ImageResult, Luma, LumaA, Rgb, Rgba};
 use itertools::{Itertools, Product};
 use std::fs::remove_file;
@@ -108,7 +109,7 @@ pub(crate) fn format_directory(path: &str, name: &str) -> String {
 pub(crate) fn format_node_path(directory: &str, lod: u32, x: u32, y: u32) -> String {
     let node_id = calc_node_id(lod, x, y);
 
-    format!("{directory}/{node_id}.bin")
+    format!("{directory}/{node_id}.dtm")
 }
 
 pub(crate) fn load_image(file_path: &str) -> ImageResult<DynamicImage> {
@@ -117,7 +118,25 @@ pub(crate) fn load_image(file_path: &str) -> ImageResult<DynamicImage> {
     reader.decode()
 }
 
-pub(crate) fn load_node(node_path: &str, attachment: &AttachmentConfig) -> Option<DynamicImage> {
+fn load_dtm(node_path: &str, attachment: &AttachmentConfig) -> Option<DynamicImage> {
+    let size = attachment.texture_size();
+
+    let (descriptor, pixels) = DTM::decode_file(node_path).ok()?;
+
+    match descriptor.channel_count {
+        1 => {
+            let image = R16Image::from_raw(size, size, pixels).unwrap();
+            Some(DynamicImage::from(image))
+        }
+        2 => {
+            let image = Rg16Image::from_raw(size, size, pixels).unwrap();
+            Some(DynamicImage::from(image))
+        }
+        _ => None,
+    }
+}
+
+fn load_bin(node_path: &str, attachment: &AttachmentConfig) -> Option<DynamicImage> {
     let size = attachment.texture_size();
 
     if let Ok(buffer) = fs::read(node_path) {
@@ -148,6 +167,12 @@ pub(crate) fn load_node(node_path: &str, attachment: &AttachmentConfig) -> Optio
     }
 }
 
+pub(crate) fn load_node(node_path: &str, attachment: &AttachmentConfig) -> Option<DynamicImage> {
+    // load_bin(node_path, attachment)
+    // image::open(node_path).ok()
+    load_dtm(node_path, attachment)
+}
+
 pub(crate) fn load_or_create_node(node_path: &str, attachment: &AttachmentConfig) -> DynamicImage {
     if let Some(node_image) = load_node(node_path, attachment) {
         node_image
@@ -163,19 +188,28 @@ pub(crate) fn load_or_create_node(node_path: &str, attachment: &AttachmentConfig
     }
 }
 
-pub(crate) fn save_node(node_path: &str, node_image: &DynamicImage) {
-    fs::write(node_path, node_image.as_bytes()).expect("Could not save node.");
+fn save_dtm(node_path: &str, node_image: &DynamicImage, format: AttachmentFormat) {
+    let descriptor = DTM {
+        pixel_size: 2,
+        channel_count: match format {
+            AttachmentFormat::Rgb8 => todo!(),
+            AttachmentFormat::Rgba8 => todo!(),
+            AttachmentFormat::R16 => 1,
+            AttachmentFormat::Rg16 => 2,
+        },
+        width: node_image.width() as usize,
+        height: node_image.height() as usize,
+    };
+
+    descriptor
+        .encode_file(node_path, cast_slice(node_image.as_bytes()))
+        .unwrap();
 }
 
-pub(crate) fn convert_nodes(directory: &str, attachment: &AttachmentConfig) {
-    for (_, node_path) in iterate_directory(directory).collect::<Vec<_>>() {
-        let node_image = load_node(&node_path, attachment).unwrap();
-
-        remove_file(&node_path).unwrap();
-
-        let final_path = PathBuf::from(&node_path).with_extension("png");
-        node_image.save(final_path).unwrap();
-    }
+pub(crate) fn save_node(node_path: &str, node_image: &DynamicImage, format: AttachmentFormat) {
+    // fs::write(node_path, node_image.as_bytes()).expect("Could not save node.");
+    // node_image.save(node_path).unwrap();
+    save_dtm(node_path, node_image, format);
 }
 
 pub(crate) fn iterate_directory(
