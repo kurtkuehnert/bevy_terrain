@@ -42,7 +42,7 @@ pub(crate) fn start_loading_attachment_from_disk(
             let node = loading_nodes.get_mut(&node_id).unwrap();
 
             for (attachment_index, AttachmentFromDisk { ref path, .. }) in attachments.iter() {
-                let handle: Handle<Image> = asset_server.load(&format!("{path}/{node_id}.png"));
+                let handle: Handle<Image> = asset_server.load(&format!("{path}/{node_id}.dtm"));
 
                 if asset_server.get_load_state(handle.clone()) == LoadState::Loaded {
                     node.loaded(*attachment_index);

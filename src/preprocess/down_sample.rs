@@ -154,6 +154,6 @@ pub(crate) fn down_sample_layer(
             );
         }
 
-        save_node(&node_path, &node_image);
+        save_node(&node_path, &node_image, attachment.format);
     }
 }
