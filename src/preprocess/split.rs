@@ -72,7 +72,7 @@ fn split_tile(directory: &str, tile: &TileConfig, attachment: &AttachmentConfig)
             UVec2::new(x, y),
         );
 
-        save_node(&node_path, &node_image);
+        save_node(&node_path, &node_image, attachment.format);
     }
 }
 
