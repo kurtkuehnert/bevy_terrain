@@ -13,7 +13,7 @@ use crate::{
 };
 use bevy::prelude::*;
 use image::{ImageBuffer, Luma, LumaA, Rgb, Rgba};
-use itertools::{Itertools, Product};
+use itertools::{izip, Itertools, Product};
 use std::ops::Range;
 
 #[macro_export]
@@ -110,3 +110,47 @@ pub(crate) type Rgb8Image = ImageBuffer<Rgb<u8>, Vec<u8>>;
 pub(crate) type Rgba8Image = ImageBuffer<Rgba<u8>, Vec<u8>>;
 pub(crate) type R16Image = ImageBuffer<Luma<u16>, Vec<u16>>;
 pub(crate) type Rg16Image = ImageBuffer<LumaA<u16>, Vec<u16>>;
+
+pub(crate) trait AveragePixel: Copy + Clone {
+    fn average(a: Self, b: Self, c: Self, d: Self) -> Self;
+}
+
+impl AveragePixel for [u8; 3] {
+    fn average(a: Self, b: Self, c: Self, d: Self) -> Self {
+        let mut value = Self::default();
+        izip!(&mut value, &a, &b, &c, &d).for_each(|(out, &a, &b, &c, &d)| {
+            *out = ((a as f32 + b as f32 + c as f32 + d as f32) / 4.0) as u8
+        });
+        value
+    }
+}
+
+impl AveragePixel for [u8; 4] {
+    fn average(a: Self, b: Self, c: Self, d: Self) -> Self {
+        let mut value = Self::default();
+        izip!(&mut value, &a, &b, &c, &d).for_each(|(out, &a, &b, &c, &d)| {
+            *out = ((a as f32 + b as f32 + c as f32 + d as f32) / 4.0) as u8
+        });
+        value
+    }
+}
+
+impl AveragePixel for [u16; 1] {
+    fn average(a: Self, b: Self, c: Self, d: Self) -> Self {
+        let mut value = Self::default();
+        izip!(&mut value, &a, &b, &c, &d).for_each(|(out, &a, &b, &c, &d)| {
+            *out = ((a as f32 + b as f32 + c as f32 + d as f32) / 4.0) as u16
+        });
+        value
+    }
+}
+
+impl AveragePixel for [u16; 2] {
+    fn average(a: Self, b: Self, c: Self, d: Self) -> Self {
+        let mut value = Self::default();
+        izip!(&mut value, &a, &b, &c, &d).for_each(|(out, &a, &b, &c, &d)| {
+            *out = ((a as f32 + b as f32 + c as f32 + d as f32) / 4.0) as u16
+        });
+        value
+    }
+}
