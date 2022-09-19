@@ -77,6 +77,8 @@ use bevy::{
         render_graph::RenderGraph, render_resource::*, RenderApp, RenderStage,
     },
 };
+use bevy_dtm::DTMPlugin;
+use bevy_qoi::QOIPlugin;
 
 pub mod attachment_loader;
 pub mod debug;
@@ -92,11 +94,12 @@ pub mod prelude {
     pub use crate::{
         attachment_loader::AttachmentFromDiskLoader,
         debug::TerrainDebugPlugin,
-        preprocess::{Preprocessor, TileConfig},
+        preprocess::{BaseConfig, Preprocessor, TileConfig},
         render::render_pipeline::{TerrainMaterialPlugin, TerrainPipelineConfig},
         terrain::{Terrain, TerrainConfig},
         terrain_data::{
             node_atlas::NodeAtlas, quadtree::Quadtree, AttachmentConfig, AttachmentFormat,
+            FileFormat,
         },
         terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
         TerrainBundle, TerrainPlugin,
@@ -165,6 +168,8 @@ impl Plugin for TerrainPlugin {
             .unwrap_or(default());
 
         let render_app = app
+            .add_plugin(DTMPlugin)
+            .add_plugin(QOIPlugin)
             .sub_app_mut(RenderApp)
             .insert_resource(config)
             .init_resource::<TerrainComputePipelines>()

@@ -9,12 +9,12 @@ struct TerrainConfig {
     terrain_size: u32,
 
     height_scale: f32,
-    density_scale: f32,
-    _empty: u32,
+    minmax_scale: f32,
+    albedo_scale: f32,
     _empty: u32,
     height_offset: f32,
-    density_offset: f32,
-    _empty: u32,
+    minmax_offset: f32,
+    albedo_offset: f32,
     _empty: u32,
 }
 
@@ -38,7 +38,11 @@ var terrain_sampler: sampler;
 @group(2) @binding(2)
 var height_atlas: texture_2d_array<f32>;
 @group(2) @binding(3)
-var density_atlas: texture_2d_array<f32>;
+var minmax_atlas: texture_2d_array<f32>;
+#ifdef ALBEDO
+@group(2) @binding(4)
+var albedo_atlas: texture_2d_array<f32>;
+#endif
 
 // Customize your material data here.
 @group(3) @binding(0)
@@ -63,6 +67,7 @@ var array_sampler: sampler;
 // To smoothen the transition between different lods the fragment data will be blended at the fringe between them.
 struct FragmentData {
     world_normal: vec3<f32>,
+    color: vec4<f32>,
 }
 
 // Lookup the terrain data required by your `fragment_color` function.
@@ -74,24 +79,33 @@ fn lookup_fragment_data(in: FragmentInput, lookup: AtlasLookup) -> FragmentData 
 
     // Adjust the uvs for your attachments.
     let height_coords = atlas_coords * config.height_scale + config.height_offset;
+    let albedo_coords = atlas_coords * config.albedo_scale + config.albedo_offset;
 
     // Calculate the normal from the heightmap.
     let world_normal = calculate_normal(height_coords, atlas_index, lod);
 
-    return FragmentData(world_normal);
+#ifdef ALBEDO
+    let color = textureSample(albedo_atlas, terrain_sampler, albedo_coords, atlas_index);
+#else
+    let color = vec4<f32>(0.5);
+#endif
+
+    return FragmentData(world_normal, color);
 }
 
 // Blend the terrain data at the fringe between two lods.
 fn blend_fragment_data(data1: FragmentData, data2: FragmentData, blend_ratio: f32) -> FragmentData {
     let world_normal =  mix(data2.world_normal, data1.world_normal, blend_ratio);
+    let color = mix(data2.color, data1.color, blend_ratio);
 
-    return FragmentData(world_normal);
+    return FragmentData(world_normal, color);
 }
 
 // The function that evaluates the color of the fragment.
 // It will be called once in the fragment shader with the blended fragment data.
 fn fragment_color(in: FragmentInput, data: FragmentData) -> vec4<f32> {
     let world_normal = data.world_normal;
+    var color = data.color;
 
     let slope = 1.0 - world_normal.y;
     let height = in.world_position.y / config.height;
@@ -108,11 +122,9 @@ fn fragment_color(in: FragmentInput, data: FragmentData) -> vec4<f32> {
     // Sample your custom material based on the layer.
     let uv = in.local_position / 100.0f;
 
-    #ifndef ALBEDO
-    let color = textureSample(array_texture, array_sampler, uv, i32(layer));
-    #else
-    let color = vec4<f32>(0.5);
-    #endif
+#ifndef ALBEDO
+    color = textureSample(array_texture, array_sampler, uv, i32(layer));
+#endif
 
     // Finally assemble the pbr input and calculate the lighting.
     var pbr_input: PbrInput = pbr_input_new();

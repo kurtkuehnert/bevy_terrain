@@ -35,9 +35,10 @@ fn main() {
         })
         .add_plugins(DefaultPlugins)
         .insert_resource(TerrainPipelineConfig {
-            attachment_count: 2, // has to match the attachments of the terrain
+            attachment_count: 3, // has to match the attachments of the terrain
         })
         .add_plugin(TerrainPlugin)
+        .add_plugin(TerrainDebugPlugin)
         .add_plugin(TerrainMaterialPlugin::<TerrainMaterial>::default())
         .add_startup_system(setup)
         .add_system(create_array_texture)
@@ -73,12 +74,33 @@ fn setup(
     config.add_base_attachment(
         &mut preprocessor,
         &mut from_disk_loader,
-        CHUNK_SIZE,
+        BaseConfig {
+            center_size: CHUNK_SIZE,
+            file_format: FileFormat::DTM,
+        },
         TileConfig {
             path: "assets/terrain/source/height".to_string(),
             lod: 0,
             offset: Default::default(),
             size: TERRAIN_SIZE,
+        },
+    );
+
+    config.add_attachment_from_disk(
+        &mut preprocessor,
+        &mut from_disk_loader,
+        AttachmentConfig {
+            name: "albedo".to_string(),
+            center_size: 2 * CHUNK_SIZE,
+            border_size: 1,
+            format: AttachmentFormat::Rgb8,
+            file_format: FileFormat::QOI,
+        },
+        TileConfig {
+            path: "assets/terrain/source/albedo.png".to_string(),
+            lod: 0,
+            offset: Default::default(),
+            size: 2 * TERRAIN_SIZE,
         },
     );
 
@@ -129,6 +151,7 @@ fn setup(
     preprocessor.preprocess(&config);
 }
 
+#[derive(Resource)]
 struct LoadingTexture {
     is_loaded: bool,
     handle: Handle<Image>,
