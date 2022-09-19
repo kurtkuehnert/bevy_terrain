@@ -9,6 +9,25 @@ use std::{
     iter::Map,
 };
 
+pub(crate) fn iterate_directory(
+    directory: &str,
+) -> Map<ReadDir, fn(std::io::Result<DirEntry>) -> (String, String)> {
+    fs::read_dir(directory).unwrap().map(|path| {
+        let path = path.unwrap().path();
+        let name = path
+            .with_extension("")
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
+
+        let path = path.into_os_string().into_string().unwrap();
+
+        (name, path)
+    })
+}
+
 pub(crate) fn reset_directory(directory: &str) {
     let _ = fs::remove_dir_all(directory);
     fs::create_dir_all(directory).unwrap();
@@ -70,25 +89,6 @@ pub(crate) fn save_node(node_path: &str, node_image: &DynamicImage, attachment: 
         FileFormat::QOI => save_qoi(node_path, node_image, attachment),
         FileFormat::DTM => save_dtm(node_path, node_image, attachment),
     }
-}
-
-pub(crate) fn iterate_directory(
-    directory: &str,
-) -> Map<ReadDir, fn(std::io::Result<DirEntry>) -> (String, String)> {
-    fs::read_dir(directory).unwrap().map(|path| {
-        let path = path.unwrap().path();
-        let name = path
-            .with_extension("")
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_string();
-
-        let path = path.into_os_string().into_string().unwrap();
-
-        (name, path)
-    })
 }
 
 fn load_bin(node_path: &str, attachment: &AttachmentConfig) -> Option<DynamicImage> {
