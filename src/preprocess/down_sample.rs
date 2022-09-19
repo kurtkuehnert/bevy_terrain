@@ -1,4 +1,3 @@
-use crate::preprocess::AveragePixel;
 use crate::{
     preprocess::{
         file_io::{format_node_path, load_node, load_or_create_node, save_node},
@@ -8,10 +7,81 @@ use crate::{
     terrain_data::{AttachmentConfig, AttachmentFormat},
 };
 use bevy::prelude::*;
-use image::{DynamicImage, Luma, LumaA, Rgb, Rgba};
-use itertools::iproduct;
+use image::{DynamicImage, GenericImage, GenericImageView, Luma, LumaA, Pixel, Rgb, Rgba};
+use itertools::{iproduct, izip};
+
+pub(crate) trait AveragePixel: Copy + Clone + Pixel {
+    fn average(a: Self, b: Self, c: Self, d: Self) -> Self;
+}
+
+impl AveragePixel for Rgb<u8> {
+    fn average(a: Self, b: Self, c: Self, d: Self) -> Self {
+        let mut value = Rgb([0; 3]);
+        izip!(&mut value.0, &a.0, &b.0, &c.0, &d.0).for_each(|(out, &a, &b, &c, &d)| {
+            *out = ((a as f32 + b as f32 + c as f32 + d as f32) / 4.0) as u8
+        });
+        value
+    }
+}
+
+impl AveragePixel for Rgba<u8> {
+    fn average(a: Self, b: Self, c: Self, d: Self) -> Self {
+        let mut value = Rgba([0; 4]);
+        izip!(&mut value.0, &a.0, &b.0, &c.0, &d.0).for_each(|(out, &a, &b, &c, &d)| {
+            *out = ((a as f32 + b as f32 + c as f32 + d as f32) / 4.0) as u8
+        });
+        value
+    }
+}
+
+impl AveragePixel for Luma<u16> {
+    fn average(a: Self, b: Self, c: Self, d: Self) -> Self {
+        let mut value = Luma([0; 1]);
+        izip!(&mut value.0, &a.0, &b.0, &c.0, &d.0).for_each(|(out, &a, &b, &c, &d)| {
+            *out = ((a as f32 + b as f32 + c as f32 + d as f32) / 4.0) as u16
+        });
+        value
+    }
+}
+
+impl AveragePixel for LumaA<u16> {
+    fn average(a: Self, b: Self, c: Self, d: Self) -> Self {
+        let mut value = LumaA([0; 2]);
+        izip!(&mut value.0, &a.0, &b.0, &c.0, &d.0).for_each(|(out, &a, &b, &c, &d)| {
+            *out = ((a as f32 + b as f32 + c as f32 + d as f32) / 4.0) as u16
+        });
+        value
+    }
+}
 
 type Filter = fn(&mut DynamicImage, &DynamicImage, &AttachmentConfig, UVec2);
+
+pub(crate) fn imageops_linear<I, J>(
+    node_image: &mut I,
+    child_image: &J,
+    child_size: u32,
+    node_x: u32,
+    node_y: u32,
+    border_size: u32,
+) where
+    I: GenericImage,
+    J: GenericImageView<Pixel = I::Pixel>,
+    <I as GenericImageView>::Pixel: AveragePixel,
+{
+    for (x, y) in iproduct!(0..child_size, 0..child_size) {
+        let mut values = [child_image.get_pixel(0, 0); 4];
+        for (i, value) in values.iter_mut().enumerate() {
+            *value = child_image.get_pixel(
+                (x << 1) + border_size + (i as u32 >> 1),
+                (y << 1) + border_size + (i as u32 & 1),
+            )
+        }
+
+        let value = AveragePixel::average(values[0], values[1], values[2], values[3]);
+
+        node_image.put_pixel(node_x + x, node_y + y, value);
+    }
+}
 
 pub(crate) fn linear(
     node_image: &mut DynamicImage,
@@ -25,84 +95,44 @@ pub(crate) fn linear(
 
     match attachment.format {
         AttachmentFormat::Rgb8 => {
-            let node_image = node_image.as_mut_rgb8().unwrap();
-            let child_image = child_image.as_rgb8().unwrap();
-
-            for (x, y) in iproduct!(0..child_size, 0..child_size) {
-                let mut values = [[0; 3]; 4];
-                for (i, value) in values.iter_mut().enumerate() {
-                    *value = child_image
-                        .get_pixel(
-                            (x << 1) + attachment.border_size + (i as u32 >> 1),
-                            (y << 1) + attachment.border_size + (i as u32 & 1),
-                        )
-                        .0
-                }
-
-                let value = AveragePixel::average(values[0], values[1], values[2], values[3]);
-
-                node_image.put_pixel(node_x + x, node_y + y, Rgb(value));
-            }
+            imageops_linear(
+                node_image.as_mut_rgb8().unwrap(),
+                child_image.as_rgb8().unwrap(),
+                child_size,
+                node_x,
+                node_y,
+                attachment.border_size,
+            );
         }
         AttachmentFormat::Rgba8 => {
-            let node_image = node_image.as_mut_rgba8().unwrap();
-            let child_image = child_image.as_rgba8().unwrap();
-
-            for (x, y) in iproduct!(0..child_size, 0..child_size) {
-                let mut values = [[0; 4]; 4];
-                for (i, value) in values.iter_mut().enumerate() {
-                    *value = child_image
-                        .get_pixel(
-                            (x << 1) + attachment.border_size + (i as u32 >> 1),
-                            (y << 1) + attachment.border_size + (i as u32 & 1),
-                        )
-                        .0
-                }
-
-                let value = AveragePixel::average(values[0], values[1], values[2], values[3]);
-
-                node_image.put_pixel(node_x + x, node_y + y, Rgba(value));
-            }
+            imageops_linear(
+                node_image.as_mut_rgba8().unwrap(),
+                child_image.as_rgba8().unwrap(),
+                child_size,
+                node_x,
+                node_y,
+                attachment.border_size,
+            );
         }
         AttachmentFormat::R16 => {
-            let node_image = node_image.as_mut_luma16().unwrap();
-            let child_image = child_image.as_luma16().unwrap();
-
-            for (x, y) in iproduct!(0..child_size, 0..child_size) {
-                let mut values = [[0; 1]; 4];
-                for (i, value) in values.iter_mut().enumerate() {
-                    *value = child_image
-                        .get_pixel(
-                            (x << 1) + attachment.border_size + (i as u32 >> 1),
-                            (y << 1) + attachment.border_size + (i as u32 & 1),
-                        )
-                        .0
-                }
-
-                let value = AveragePixel::average(values[0], values[1], values[2], values[3]);
-
-                node_image.put_pixel(node_x + x, node_y + y, Luma(value));
-            }
+            imageops_linear(
+                node_image.as_mut_luma16().unwrap(),
+                child_image.as_luma16().unwrap(),
+                child_size,
+                node_x,
+                node_y,
+                attachment.border_size,
+            );
         }
         AttachmentFormat::Rg16 => {
-            let node_image = node_image.as_mut_luma_alpha16().unwrap();
-            let child_image = child_image.as_luma_alpha16().unwrap();
-
-            for (x, y) in iproduct!(0..child_size, 0..child_size) {
-                let mut values = [[0; 2]; 4];
-                for (i, value) in values.iter_mut().enumerate() {
-                    *value = child_image
-                        .get_pixel(
-                            (x << 1) + attachment.border_size + (i as u32 >> 1),
-                            (y << 1) + attachment.border_size + (i as u32 & 1),
-                        )
-                        .0
-                }
-
-                let value = AveragePixel::average(values[0], values[1], values[2], values[3]);
-
-                node_image.put_pixel(node_x + x, node_y + y, LumaA(value));
-            }
+            imageops_linear(
+                node_image.as_mut_luma_alpha16().unwrap(),
+                child_image.as_luma_alpha16().unwrap(),
+                child_size,
+                node_x,
+                node_y,
+                attachment.border_size,
+            );
         }
     }
 }
