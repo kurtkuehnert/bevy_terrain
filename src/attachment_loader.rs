@@ -1,6 +1,8 @@
 //! The default attachment loader, which loads node data from disk.
 
-use crate::terrain_data::{node_atlas::NodeAtlas, AttachmentIndex, NodeId};
+use crate::terrain_data::{
+    node_atlas::NodeAtlas, AttachmentConfig, AttachmentIndex, FileFormat, NodeId,
+};
 use bevy::{
     asset::{AssetServer, HandleId, LoadState},
     prelude::*,
@@ -11,6 +13,17 @@ use bevy::{
 pub(crate) struct AttachmentFromDisk {
     pub(crate) path: String,
     pub(crate) format: TextureFormat,
+    pub(crate) file_format: FileFormat,
+}
+
+impl AttachmentFromDisk {
+    pub(crate) fn new(attachment: &AttachmentConfig, path: &str) -> Self {
+        Self {
+            path: format!("{}/data/{}", path, attachment.name),
+            format: attachment.format.into(),
+            file_format: attachment.file_format,
+        }
+    }
 }
 
 /// This component is used to load attachments from disk memory into the corresponding
@@ -41,8 +54,17 @@ pub(crate) fn start_loading_attachment_from_disk(
         for &node_id in load_events.iter() {
             let node = loading_nodes.get_mut(&node_id).unwrap();
 
-            for (attachment_index, AttachmentFromDisk { ref path, .. }) in attachments.iter() {
-                let handle: Handle<Image> = asset_server.load(&format!("{path}/{node_id}.dtm"));
+            for (
+                attachment_index,
+                AttachmentFromDisk {
+                    ref path,
+                    ref file_format,
+                    ..
+                },
+            ) in attachments.iter()
+            {
+                let handle: Handle<Image> =
+                    asset_server.load(&format!("{path}/{node_id}.{}", file_format.extension()));
 
                 if asset_server.get_load_state(handle.clone()) == LoadState::Loaded {
                     node.loaded(*attachment_index);

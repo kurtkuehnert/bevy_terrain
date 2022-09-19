@@ -1,6 +1,8 @@
 use crate::{
     preprocess::{
-        format_node_path, iterate_directory, load_image, load_or_create_node, save_node,
+        file_io::{
+            format_node_path, iterate_directory, load_image, load_or_create_node, save_node,
+        },
         TileConfig, UVec2Utils,
     },
     terrain_data::{AttachmentConfig, AttachmentFormat},
@@ -60,7 +62,7 @@ fn split_tile(directory: &str, tile: &TileConfig, attachment: &AttachmentConfig)
     let last = (tile.offset + tile.size + attachment.border_size).div_ceil(attachment.center_size);
 
     for (x, y) in first.product(last) {
-        let node_path = format_node_path(directory, tile.lod, x, y);
+        let node_path = format_node_path(directory, attachment, tile.lod, x, y);
 
         let mut node_image = load_or_create_node(&node_path, attachment);
 
@@ -72,7 +74,7 @@ fn split_tile(directory: &str, tile: &TileConfig, attachment: &AttachmentConfig)
             UVec2::new(x, y),
         );
 
-        save_node(&node_path, &node_image, attachment.format);
+        save_node(&node_path, &node_image, attachment);
     }
 }
 

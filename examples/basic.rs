@@ -49,7 +49,10 @@ fn setup(
     config.add_base_attachment(
         &mut preprocessor,
         &mut from_disk_loader,
-        CHUNK_SIZE,
+        BaseConfig {
+            center_size: CHUNK_SIZE,
+            file_format: FileFormat::DTM,
+        },
         TileConfig {
             path: "assets/terrain/source/height".to_string(),
             lod: 0,

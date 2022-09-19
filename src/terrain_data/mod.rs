@@ -93,6 +93,32 @@ impl From<AttachmentFormat> for TextureFormat {
     }
 }
 
+/// The file format used to store the terrain data.
+#[derive(Clone, Copy, Debug)]
+pub enum FileFormat {
+    BIN,
+    PNG,
+    QOI,
+    DTM,
+}
+
+impl Default for FileFormat {
+    fn default() -> Self {
+        Self::BIN
+    }
+}
+
+impl FileFormat {
+    pub(crate) fn extension(&self) -> &str {
+        match self {
+            Self::BIN => "bin",
+            Self::PNG => "png",
+            Self::QOI => "qoi",
+            Self::DTM => "dtm",
+        }
+    }
+}
+
 /// Configures an attachment.
 #[derive(Clone)]
 pub struct AttachmentConfig {
@@ -104,6 +130,8 @@ pub struct AttachmentConfig {
     pub border_size: u32,
     /// The format of the attachment.
     pub format: AttachmentFormat,
+    /// The file
+    pub file_format: FileFormat,
 }
 
 impl AttachmentConfig {

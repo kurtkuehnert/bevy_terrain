@@ -3,7 +3,7 @@
 use crate::{
     attachment_loader::{AttachmentFromDisk, AttachmentFromDiskLoader},
     preprocess::{BaseConfig, Preprocessor, TileConfig},
-    terrain_data::{AtlasAttachment, AttachmentConfig, AttachmentFormat, AttachmentIndex},
+    terrain_data::{AtlasAttachment, AttachmentConfig, AttachmentIndex},
 };
 use bevy::{
     ecs::{query::QueryItem, system::lifetimeless::Read},
@@ -114,10 +114,7 @@ impl TerrainConfig {
 
         from_disk_loader.attachments.insert(
             attachment_index,
-            AttachmentFromDisk {
-                path: format!("{}/data/{}", self.path, attachment.name),
-                format: attachment.format.into(),
-            },
+            AttachmentFromDisk::new(&attachment, &self.path),
         );
 
         preprocessor.attachments.push((tile, attachment));
@@ -130,48 +127,24 @@ impl TerrainConfig {
         &mut self,
         preprocessor: &mut Preprocessor,
         from_disk_loader: &mut AttachmentFromDiskLoader,
-        center_size: u32,
+        base: BaseConfig,
         tile: TileConfig,
     ) {
-        let border_size = 2;
+        let height_attachment = base.height_attachment();
+        let minmax_attachment = base.minmax_attachment();
 
-        let height_attachment = AttachmentConfig {
-            name: "height".to_string(),
-            center_size,
-            border_size,
-            format: AttachmentFormat::R16,
-        };
-        let minmax_attachment = AttachmentConfig {
-            name: "minmax".to_string(),
-            center_size,
-            border_size,
-            format: AttachmentFormat::Rg16,
-        };
-
-        preprocessor.base = (
-            tile,
-            BaseConfig {
-                center_size,
-                border_size,
-            },
-        );
+        preprocessor.base = (tile, base);
 
         from_disk_loader.attachments.insert(
             self.attachments.len(),
-            AttachmentFromDisk {
-                path: format!("{}/data/{}", self.path, height_attachment.name),
-                format: height_attachment.format.into(),
-            },
+            AttachmentFromDisk::new(&height_attachment, &self.path),
         );
 
         self.attachments.push(height_attachment.into());
 
         from_disk_loader.attachments.insert(
             self.attachments.len(),
-            AttachmentFromDisk {
-                path: format!("{}/data/{}", self.path, minmax_attachment.name),
-                format: minmax_attachment.format.into(),
-            },
+            AttachmentFromDisk::new(&minmax_attachment, &self.path),
         );
 
         self.attachments.push(minmax_attachment.into());

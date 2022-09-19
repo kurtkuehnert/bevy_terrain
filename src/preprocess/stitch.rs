@@ -1,5 +1,8 @@
 use crate::{
-    preprocess::{format_node_path, load_image, load_node, save_node, UVec2Utils},
+    preprocess::{
+        file_io::{format_node_path, load_node, save_node},
+        UVec2Utils,
+    },
     skip_none,
     terrain_data::{AttachmentConfig, AttachmentFormat},
 };
@@ -134,7 +137,7 @@ pub(crate) fn stitch_layer(
     }
 
     for (x, y) in first.product(last) {
-        let node_path = format_node_path(directory, lod, x, y);
+        let node_path = format_node_path(directory, attachment, lod, x, y);
         let mut node_image = skip_none!(load_node(&node_path, attachment));
 
         for direction in iproduct!(-1..=1, -1..=1) {
@@ -145,15 +148,15 @@ pub(crate) fn stitch_layer(
             let x = x as i32 + direction.0;
             let y = y as i32 + direction.1;
 
-            let adjacent_path = format_node_path(directory, lod, x as u32, y as u32);
+            let adjacent_path = format_node_path(directory, attachment, lod, x as u32, y as u32);
 
-            if let Ok(adjacent_image) = load_image(&adjacent_path) {
+            if let Some(adjacent_image) = load_node(&adjacent_path, attachment) {
                 stitch(&mut node_image, &adjacent_image, attachment, direction);
             } else {
                 extend(&mut node_image, attachment, direction);
             }
         }
 
-        save_node(&node_path, &node_image, attachment.format);
+        save_node(&node_path, &node_image, attachment);
     }
 }

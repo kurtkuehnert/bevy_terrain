@@ -10,7 +10,7 @@ fn normal_vertex(atlas_index: i32, atlas_coords: vec2<f32>, lod: u32) -> vec3<f3
     return calculate_normal(height_coords, atlas_index, lod);
 }
 
-#ifdef TEST2
+#ifndef TEST2
 @vertex
 fn vertex(vertex: VertexInput) -> VertexOutput {
 #ifdef ADAPTIVE
