@@ -19,34 +19,36 @@ Currently there are two examples.
 
 The basic one showcases the different debug views of the terrain. See controls down below.
 
-The advanced one showcases how to use the Bevy material system for texturing.
+The advanced one showcases how to use the Bevy material system for texturing, 
+as well as how to add additional terrain attachments.
+Use the `A` Key to toggle between the custom material and the albedo attachment.
 
 Before running the examples you have to preprocess the terrain data this may take a while.
 Once the data is preprocessed you can disable it by commenting out the preprocess line.
 
-
-
 ## Debug Controls
 
-- W - toggle wireframe
-- M - toggle mesh morph
-- A - toggle alpha
-- N - toggle full nodes (or circular lod)
-- S - toggle lighting
-- D - toggle density based mesh
-- P - show patches
-- L - show LOD
-- U - show UVs
-- X - decrease patch scale
-- Q - increase patch scale
-- I - decrease view distance
-- O - increase view distance
+- `W` - toggle wireframe
+- `M` - toggle mesh morph
+- `A` - toggle alpha
+- `N` - toggle full nodes (or circular lod)
+- `S` - toggle lighting
+- `D` - toggle density based mesh
+- `P` - show patches
+- `L` - show LOD
+- `U` - show UVs
+- `X` - decrease patch scale
+- `Q` - increase patch scale
+- `I` - decrease view distance
+- `O` - increase view distance
 
+<!---
 ## Supported Bevy Versions
 
 | `bevy_terrain` | `bevy` |
 |----------------|--------|
 | 0.1.0          | 0.8    |
+--->
  
 
 ## License

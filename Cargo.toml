@@ -16,7 +16,10 @@ default = []
 
 [dependencies]
 bevy = { git="https://github.com/bevyengine/bevy" }
+bevy_dtm = { git="https://github.com/Ku95/bevy_dtm" }
+bevy_qoi = { git="https://github.com/Ku95/bevy_qoi" }
 dtm = { git="https://github.com/Ku95/dtm" }
+rapid-qoi = "0.6"
 ndarray = "0.15"
 itertools = "0.10"
 image = "0.24"

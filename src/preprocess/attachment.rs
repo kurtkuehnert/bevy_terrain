@@ -1,13 +1,15 @@
 use crate::{
     preprocess::{
         down_sample::{down_sample_layer, linear, minmax},
-        format_directory, format_node_path, iterate_directory, load_node, reset_directory,
-        save_node,
+        file_io::{
+            format_directory, format_node_path, iterate_directory, load_node, reset_directory,
+            save_node,
+        },
         split::split_tiles,
         stitch::stitch_layer,
         BaseConfig, TileConfig, UVec2Utils,
     },
-    terrain_data::{AttachmentConfig, AttachmentFormat, NodeCoordinate, NodeId},
+    terrain_data::{AttachmentConfig, NodeCoordinate, NodeId},
     TerrainConfig,
 };
 use image::{DynamicImage, ImageBuffer, LumaA};
@@ -16,6 +18,7 @@ fn height_to_minmax(
     height_directory: &str,
     minmax_directory: &str,
     height_attachment: &AttachmentConfig,
+    minmax_attachment: &AttachmentConfig,
 ) {
     for (height_name, height_path) in iterate_directory(height_directory) {
         let coord = NodeCoordinate::from(height_name.parse::<NodeId>().unwrap());
@@ -24,7 +27,13 @@ fn height_to_minmax(
             continue;
         }
 
-        let minmax_path = format_node_path(minmax_directory, coord.lod, coord.x, coord.y);
+        let minmax_path = format_node_path(
+            minmax_directory,
+            minmax_attachment,
+            coord.lod,
+            coord.x,
+            coord.y,
+        );
 
         let height_image = load_node(&height_path, height_attachment).unwrap();
         let height_image = height_image.as_luma16().unwrap();
@@ -39,27 +48,16 @@ fn height_to_minmax(
             },
         ));
 
-        save_node(&minmax_path, &minmax_image, AttachmentFormat::Rg16);
+        save_node(&minmax_path, &minmax_image, minmax_attachment);
     }
 }
 
 pub(crate) fn preprocess_base(config: &TerrainConfig, tile: &TileConfig, base: &BaseConfig) {
+    let height_attachment = base.height_attachment();
+    let minmax_attachment = base.minmax_attachment();
+
     let height_directory = format_directory(&config.path, "height");
     let minmax_directory = format_directory(&config.path, "minmax");
-
-    let height_attachment = AttachmentConfig {
-        name: "height".to_string(),
-        center_size: base.center_size,
-        border_size: base.border_size,
-        format: AttachmentFormat::R16,
-    };
-
-    let minmax_attachment = AttachmentConfig {
-        name: "minmax".to_string(),
-        center_size: base.center_size,
-        border_size: base.border_size,
-        format: AttachmentFormat::Rg16,
-    };
 
     reset_directory(&height_directory);
     reset_directory(&minmax_directory);
@@ -83,7 +81,12 @@ pub(crate) fn preprocess_base(config: &TerrainConfig, tile: &TileConfig, base: &
         stitch_layer(&height_directory, &height_attachment, lod, first, last);
     }
 
-    height_to_minmax(&height_directory, &minmax_directory, &height_attachment);
+    height_to_minmax(
+        &height_directory,
+        &minmax_directory,
+        &height_attachment,
+        &minmax_attachment,
+    );
 
     let (mut first, mut last) = temp;
 
