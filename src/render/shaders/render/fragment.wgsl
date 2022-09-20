@@ -24,6 +24,10 @@ fn fragment(fragment: FragmentInput) -> FragmentOutput {
         discard;
     }
 
+    if (fragment.world_position.y == 0.0) {
+        discard;
+    }
+
     let blend = calculate_blend(fragment.world_position.xyz, view_config.fragment_blend);
 
     let lookup = atlas_lookup(blend.lod, fragment.local_position);
