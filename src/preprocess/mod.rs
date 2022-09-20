@@ -26,6 +26,16 @@ macro_rules! skip_none {
     };
 }
 
+#[macro_export]
+macro_rules! return_none {
+    ($res:expr) => {
+        match $res {
+            Some(val) => val,
+            None => return,
+        }
+    };
+}
+
 #[derive(Default)]
 pub struct BaseConfig {
     pub center_size: u32,
@@ -54,16 +64,14 @@ impl BaseConfig {
 }
 
 /// The configuration of the source tile(s) of an attachment.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct TileConfig {
     /// The path to the tile/directory of tiles.
     pub path: String,
-    /// The lod of the tile.
-    pub lod: u32,
-    /// The offset of the tile.
-    pub offset: UVec2,
     /// The size of the tile in pixels.
     pub size: u32,
+    /// The file format of the tile.
+    pub file_format: FileFormat,
 }
 
 /// The preprocessor converts attachments from source data to streamable nodes.
@@ -102,11 +110,11 @@ impl UVec2Utils for UVec2 {
     }
 
     fn product(self, other: Self) -> Product<Range<u32>, Range<u32>> {
-        Itertools::cartesian_product(self.x..other.y, self.y..other.y)
+        Itertools::cartesian_product(self.x..other.x, self.y..other.y)
     }
 }
 
-pub(crate) type Rgb8Image = ImageBuffer<Rgb<u8>, Vec<u8>>;
-pub(crate) type Rgba8Image = ImageBuffer<Rgba<u8>, Vec<u8>>;
-pub(crate) type R16Image = ImageBuffer<Luma<u16>, Vec<u16>>;
-pub(crate) type Rg16Image = ImageBuffer<LumaA<u16>, Vec<u16>>;
+pub type Rgb8Image = ImageBuffer<Rgb<u8>, Vec<u8>>;
+pub type Rgba8Image = ImageBuffer<Rgba<u8>, Vec<u8>>;
+pub type R16Image = ImageBuffer<Luma<u16>, Vec<u16>>;
+pub type Rg16Image = ImageBuffer<LumaA<u16>, Vec<u16>>;

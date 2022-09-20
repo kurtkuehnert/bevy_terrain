@@ -80,9 +80,8 @@ fn setup(
         },
         TileConfig {
             path: "assets/terrain/source/height".to_string(),
-            lod: 0,
-            offset: Default::default(),
             size: TERRAIN_SIZE,
+            file_format: FileFormat::PNG,
         },
     );
 
@@ -98,9 +97,8 @@ fn setup(
         },
         TileConfig {
             path: "assets/terrain/source/albedo.png".to_string(),
-            lod: 0,
-            offset: Default::default(),
             size: 2 * TERRAIN_SIZE,
+            file_format: FileFormat::PNG,
         },
     );
 

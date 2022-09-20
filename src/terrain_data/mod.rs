@@ -98,6 +98,7 @@ impl From<AttachmentFormat> for TextureFormat {
 pub enum FileFormat {
     BIN,
     PNG,
+    TIF,
     QOI,
     DTM,
 }
@@ -113,6 +114,7 @@ impl FileFormat {
         match self {
             Self::BIN => "bin",
             Self::PNG => "png",
+            Self::TIF => "tif",
             Self::QOI => "qoi",
             Self::DTM => "dtm",
         }
@@ -130,7 +132,7 @@ pub struct AttachmentConfig {
     pub border_size: u32,
     /// The format of the attachment.
     pub format: AttachmentFormat,
-    /// The file
+    /// The file format of the attachment.
     pub file_format: FileFormat,
 }
 

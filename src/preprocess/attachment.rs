@@ -2,8 +2,8 @@ use crate::{
     preprocess::{
         down_sample::{down_sample_layer, linear, minmax},
         file_io::{
-            format_directory, format_node_path, iterate_directory, load_node, reset_directory,
-            save_node,
+            format_directory, format_node_path, iterate_directory, load_image, reset_directory,
+            save_image,
         },
         split::split_tiles,
         stitch::stitch_layer,
@@ -27,15 +27,9 @@ fn height_to_minmax(
             continue;
         }
 
-        let minmax_path = format_node_path(
-            minmax_directory,
-            minmax_attachment,
-            coord.lod,
-            coord.x,
-            coord.y,
-        );
+        let minmax_path = format_node_path(minmax_directory, coord.lod, coord.x, coord.y);
 
-        let height_image = load_node(&height_path, height_attachment).unwrap();
+        let height_image = load_image(&height_path, height_attachment.file_format).unwrap();
         let height_image = height_image.as_luma16().unwrap();
 
         let minmax_image = DynamicImage::from(ImageBuffer::from_fn(
@@ -48,7 +42,7 @@ fn height_to_minmax(
             },
         ));
 
-        save_node(&minmax_path, &minmax_image, minmax_attachment);
+        save_image(&minmax_path, &minmax_image, minmax_attachment);
     }
 }
 
@@ -117,7 +111,7 @@ pub(crate) fn preprocess_attachment(
 
     let (mut first, mut last) = split_tiles(&directory, tile, attachment);
 
-    for lod in (tile.lod + 1)..config.lod_count {
+    for lod in 1..config.lod_count {
         first = first.div_floor(2);
         last = last.div_ceil(2);
 
