@@ -1,6 +1,6 @@
 use crate::{
     preprocess::{
-        file_io::{format_node_path, load_node, load_or_create_node, save_node},
+        file_io::{format_node_path, load_image, load_or_create_node, save_image},
         UVec2Utils,
     },
     skip_none,
@@ -179,14 +179,13 @@ pub(crate) fn down_sample_layer(
     first: UVec2,
     last: UVec2,
 ) {
-    for (x, y) in first.product(last) {
-        let node_path = format_node_path(directory, attachment, lod, x, y);
+    first.product(last).into_iter().for_each(|(x, y)| {
+        let node_path = format_node_path(directory, lod, x, y);
         let mut node_image = load_or_create_node(&node_path, attachment);
 
         for (cx, cy) in iproduct!(0..2, 0..2) {
-            let child_path =
-                format_node_path(directory, attachment, lod - 1, (x << 1) + cx, (y << 1) + cy);
-            let child_image = skip_none!(load_node(&child_path, attachment));
+            let child_path = format_node_path(directory, lod - 1, (x << 1) + cx, (y << 1) + cy);
+            let child_image = skip_none!(load_image(&child_path, attachment.file_format));
             // Todo: if a child node is not available, we should fill the gap in the parent one
             // maybe this should not even be possible
 
@@ -198,6 +197,6 @@ pub(crate) fn down_sample_layer(
             );
         }
 
-        save_node(&node_path, &node_image, attachment);
-    }
+        save_image(&node_path, &node_image, attachment);
+    });
 }

@@ -55,9 +55,8 @@ fn setup(
         },
         TileConfig {
             path: "assets/terrain/source/height".to_string(),
-            lod: 0,
-            offset: Default::default(),
             size: TERRAIN_SIZE,
+            file_format: FileFormat::PNG,
         },
     );
 

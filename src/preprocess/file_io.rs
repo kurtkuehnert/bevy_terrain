@@ -2,8 +2,9 @@ use crate::preprocess::{R16Image, Rg16Image, Rgb8Image, Rgba8Image};
 use crate::terrain_data::{calc_node_id, AttachmentConfig, AttachmentFormat, FileFormat};
 use bytemuck::cast_slice;
 use dtm::DTM;
-use image::{io::Reader, DynamicImage, ImageResult};
+use image::{io::Reader, DynamicImage};
 use rapid_qoi::{Colors, Qoi};
+use std::path::Path;
 use std::{
     fs::{self, DirEntry, ReadDir},
     iter::Map,
@@ -28,47 +29,40 @@ pub(crate) fn iterate_directory(
     })
 }
 
-pub(crate) fn reset_directory(directory: &str) {
+pub fn reset_directory(directory: &str) {
     let _ = fs::remove_dir_all(directory);
     fs::create_dir_all(directory).unwrap();
 }
 
 pub(crate) fn format_directory(path: &str, name: &str) -> String {
-    format!("assets/{path}/data/{name}")
-}
-
-pub(crate) fn format_node_path(
-    directory: &str,
-    attachment: &AttachmentConfig,
-    lod: u32,
-    x: u32,
-    y: u32,
-) -> String {
-    let node_id = calc_node_id(lod, x, y);
-
-    format!(
-        "{directory}/{node_id}.{}",
-        attachment.file_format.extension()
-    )
-}
-
-pub(crate) fn load_image(file_path: &str) -> ImageResult<DynamicImage> {
-    let mut reader = Reader::open(file_path)?;
-    reader.no_limits();
-    reader.decode()
-}
-
-pub(crate) fn load_node(node_path: &str, attachment: &AttachmentConfig) -> Option<DynamicImage> {
-    match attachment.file_format {
-        FileFormat::BIN => load_bin(node_path, attachment),
-        FileFormat::PNG => load_png(node_path, attachment),
-        FileFormat::QOI => load_qoi(node_path, attachment),
-        FileFormat::DTM => load_dtm(node_path, attachment),
+    if path.starts_with("/") {
+        format!("{path}/data/{name}")
+    } else {
+        format!("assets/{path}/data/{name}")
     }
 }
 
-pub(crate) fn load_or_create_node(node_path: &str, attachment: &AttachmentConfig) -> DynamicImage {
-    if let Some(node_image) = load_node(node_path, attachment) {
+pub(crate) fn format_node_path(directory: &str, lod: u32, x: u32, y: u32) -> String {
+    let node_id = calc_node_id(lod, x, y);
+
+    format!("{directory}/{node_id}",)
+}
+
+pub fn load_image(path: &str, file_format: FileFormat) -> Option<DynamicImage> {
+    let path = Path::new(path);
+    let path = path.with_extension(file_format.extension());
+    let path = path.to_str().unwrap();
+
+    match file_format {
+        FileFormat::BIN => unimplemented!(), //load_bin(node_path, attachment),
+        FileFormat::PNG | FileFormat::TIF => load_image_rs(path),
+        FileFormat::QOI => load_qoi(path),
+        FileFormat::DTM => load_dtm(path),
+    }
+}
+
+pub(crate) fn load_or_create_node(path: &str, attachment: &AttachmentConfig) -> DynamicImage {
+    if let Some(node_image) = load_image(path, attachment.file_format) {
         node_image
     } else {
         let size = attachment.texture_size();
@@ -82,19 +76,23 @@ pub(crate) fn load_or_create_node(node_path: &str, attachment: &AttachmentConfig
     }
 }
 
-pub(crate) fn save_node(node_path: &str, node_image: &DynamicImage, attachment: &AttachmentConfig) {
+pub fn save_image(path: &str, node_image: &DynamicImage, attachment: &AttachmentConfig) {
+    let path = Path::new(path);
+    let path = path.with_extension(attachment.file_format.extension());
+    let path = path.to_str().unwrap();
+
     match attachment.file_format {
-        FileFormat::BIN => save_bin(node_path, node_image, attachment),
-        FileFormat::PNG => save_png(node_path, node_image, attachment),
-        FileFormat::QOI => save_qoi(node_path, node_image, attachment),
-        FileFormat::DTM => save_dtm(node_path, node_image, attachment),
+        FileFormat::BIN => save_bin(&path, node_image, attachment),
+        FileFormat::PNG | FileFormat::TIF => save_image_rs(&path, node_image, attachment),
+        FileFormat::QOI => save_qoi(&path, node_image, attachment),
+        FileFormat::DTM => save_dtm(&path, node_image, attachment),
     }
 }
 
-fn load_bin(node_path: &str, attachment: &AttachmentConfig) -> Option<DynamicImage> {
+fn _load_bin(path: &str, attachment: &AttachmentConfig) -> Option<DynamicImage> {
     let size = attachment.texture_size();
 
-    if let Ok(buffer) = fs::read(node_path) {
+    if let Ok(buffer) = fs::read(path) {
         let node_image = match attachment.format {
             AttachmentFormat::Rgb8 => {
                 let image = Rgb8Image::from_raw(size, size, buffer).unwrap();
@@ -122,56 +120,58 @@ fn load_bin(node_path: &str, attachment: &AttachmentConfig) -> Option<DynamicIma
     }
 }
 
-fn load_png(node_path: &str, _attachment: &AttachmentConfig) -> Option<DynamicImage> {
-    image::open(node_path).ok()
+fn load_image_rs(path: &str) -> Option<DynamicImage> {
+    let mut reader = Reader::open(path).ok()?;
+    reader.no_limits();
+    reader.decode().ok()
 }
 
-fn load_dtm(node_path: &str, attachment: &AttachmentConfig) -> Option<DynamicImage> {
-    let size = attachment.texture_size();
-
-    let (descriptor, pixels) = DTM::decode_file(node_path).ok()?;
+fn load_dtm(path: &str) -> Option<DynamicImage> {
+    let (descriptor, pixels) = DTM::decode_file(path).ok()?;
 
     match descriptor.channel_count {
         1 => {
-            let image = R16Image::from_raw(size, size, pixels).unwrap();
+            let image =
+                R16Image::from_raw(descriptor.width as u32, descriptor.height as u32, pixels)
+                    .unwrap();
             Some(DynamicImage::from(image))
         }
         2 => {
-            let image = Rg16Image::from_raw(size, size, pixels).unwrap();
+            let image =
+                Rg16Image::from_raw(descriptor.width as u32, descriptor.height as u32, pixels)
+                    .unwrap();
             Some(DynamicImage::from(image))
         }
         _ => None,
     }
 }
 
-fn load_qoi(node_path: &str, attachment: &AttachmentConfig) -> Option<DynamicImage> {
-    let size = attachment.texture_size();
-
-    let bytes = fs::read(node_path).ok()?;
+fn load_qoi(path: &str) -> Option<DynamicImage> {
+    let bytes = fs::read(path).ok()?;
     let (descriptor, pixels) = Qoi::decode_alloc(&bytes).unwrap();
 
     match descriptor.colors {
         Colors::Rgb => {
-            let image = Rgb8Image::from_raw(size, size, pixels).unwrap();
+            let image = Rgb8Image::from_raw(descriptor.width, descriptor.height, pixels).unwrap();
             Some(DynamicImage::from(image))
         }
         Colors::Rgba => {
-            let image = Rgba8Image::from_raw(size, size, pixels).unwrap();
+            let image = Rgba8Image::from_raw(descriptor.width, descriptor.height, pixels).unwrap();
             Some(DynamicImage::from(image))
         }
         _ => None,
     }
 }
 
-fn save_bin(node_path: &str, node_image: &DynamicImage, _attachment: &AttachmentConfig) {
-    fs::write(node_path, node_image.as_bytes()).expect("Could not save node.");
+fn save_bin(path: &str, node_image: &DynamicImage, _attachment: &AttachmentConfig) {
+    fs::write(path, node_image.as_bytes()).expect("Could not save node.");
 }
 
-fn save_png(node_path: &str, node_image: &DynamicImage, _attachment: &AttachmentConfig) {
-    node_image.save(node_path).expect("Could not save node.");
+fn save_image_rs(path: &str, node_image: &DynamicImage, _attachment: &AttachmentConfig) {
+    node_image.save(path).expect("Could not save node.");
 }
 
-fn save_dtm(node_path: &str, node_image: &DynamicImage, attachment: &AttachmentConfig) {
+fn save_dtm(path: &str, node_image: &DynamicImage, attachment: &AttachmentConfig) {
     let descriptor = DTM {
         pixel_size: 2,
         channel_count: match attachment.format {
@@ -185,11 +185,11 @@ fn save_dtm(node_path: &str, node_image: &DynamicImage, attachment: &AttachmentC
     };
 
     descriptor
-        .encode_file(node_path, cast_slice(node_image.as_bytes()))
+        .encode_file(path, cast_slice(node_image.as_bytes()))
         .expect("Could not save node.");
 }
 
-fn save_qoi(node_path: &str, node_image: &DynamicImage, attachment: &AttachmentConfig) {
+fn save_qoi(path: &str, node_image: &DynamicImage, attachment: &AttachmentConfig) {
     let descriptor = Qoi {
         width: node_image.width(),
         height: node_image.height(),
@@ -205,5 +205,5 @@ fn save_qoi(node_path: &str, node_image: &DynamicImage, attachment: &AttachmentC
         .encode_alloc(cast_slice(node_image.as_bytes()))
         .unwrap();
 
-    fs::write(node_path, &bytes).expect("Could not save node.");
+    fs::write(path, &bytes).expect("Could not save node.");
 }

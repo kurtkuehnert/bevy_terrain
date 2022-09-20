@@ -1,6 +1,6 @@
 use crate::{
     preprocess::{
-        file_io::{format_node_path, load_node, save_node},
+        file_io::{format_node_path, load_image, save_image},
         UVec2Utils,
     },
     skip_none,
@@ -137,8 +137,8 @@ pub(crate) fn stitch_layer(
     }
 
     for (x, y) in first.product(last) {
-        let node_path = format_node_path(directory, attachment, lod, x, y);
-        let mut node_image = skip_none!(load_node(&node_path, attachment));
+        let node_path = format_node_path(directory, lod, x, y);
+        let mut node_image = skip_none!(load_image(&node_path, attachment.file_format));
 
         for direction in iproduct!(-1..=1, -1..=1) {
             if direction == (0, 0) {
@@ -148,15 +148,15 @@ pub(crate) fn stitch_layer(
             let x = x as i32 + direction.0;
             let y = y as i32 + direction.1;
 
-            let adjacent_path = format_node_path(directory, attachment, lod, x as u32, y as u32);
+            let adjacent_path = format_node_path(directory, lod, x as u32, y as u32);
 
-            if let Some(adjacent_image) = load_node(&adjacent_path, attachment) {
+            if let Some(adjacent_image) = load_image(&adjacent_path, attachment.file_format) {
                 stitch(&mut node_image, &adjacent_image, attachment, direction);
             } else {
                 extend(&mut node_image, attachment, direction);
             }
         }
 
-        save_node(&node_path, &node_image, attachment);
+        save_image(&node_path, &node_image, attachment);
     }
 }

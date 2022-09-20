@@ -101,7 +101,7 @@ impl TerrainViewConfig {
         // let refinement_count = (config.terrain_size as f32 / tile_scale).log2().ceil() as u32;
         // Todo: make these configurable ?
         let refinement_count = 20;
-        let refinement_lod = 3;
+        let refinement_lod = 5; //3;
         let tile_count = 1000000;
         let height_under_viewer = 0.0;
 
