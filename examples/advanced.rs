@@ -7,10 +7,10 @@ use bevy::{
 use bevy_terrain::prelude::*;
 
 const TERRAIN_SIZE: u32 = 1024;
-const LOD_COUNT: u32 = 5;
+const LOD_COUNT: u32 = 10;
 const CHUNK_SIZE: u32 = 128;
 const HEIGHT: f32 = 200.0;
-const NODE_ATLAS_SIZE: u32 = 300;
+const NODE_ATLAS_SIZE: u32 = 500;
 const PATH: &str = "terrain";
 
 #[derive(AsBindGroup, TypeUuid, Clone)]
@@ -41,6 +41,7 @@ fn main() {
         .add_plugin(TerrainDebugPlugin)
         .add_plugin(TerrainMaterialPlugin::<TerrainMaterial>::default())
         .add_startup_system(setup)
+        .add_system(toggle_camera)
         .add_system(create_array_texture)
         .run();
 }
@@ -112,15 +113,12 @@ fn setup(
         .id();
 
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
-    let view_config = TerrainViewConfig::new(&config, 10, 5.0, 3.0, 10.0, 0.2, 0.2, 0.2);
-
+    let view_config = TerrainViewConfig::new(&config, 10, 5.0, 3.0, 1.0, 0.2, 0.2, 0.2);
     // Create the view.
     let view = commands
-        .spawn_bundle(Camera3dBundle {
-            transform: Transform::from_xyz(-200.0, 500.0, -200.0)
-                .looking_at(Vec3::new(500.0, 0.0, 500.0), Vec3::Y),
-            ..default()
-        })
+        .spawn()
+        .insert(DebugCamera::default())
+        .insert_bundle(Camera3dBundle::default())
         .insert(TerrainView)
         .id();
 
@@ -133,14 +131,10 @@ fn setup(
     // Create a sunlight for the physical based lighting.
     commands.spawn_bundle(DirectionalLightBundle {
         directional_light: DirectionalLight {
-            illuminance: 10000.0,
+            illuminance: 20000.0,
             ..default()
         },
-        transform: Transform {
-            translation: Vec3::new(0.0, 1.0, 0.0),
-            rotation: Quat::from_rotation_x(-std::f32::consts::FRAC_PI_4),
-            ..default()
-        },
+        transform: Transform::from_xyz(1.0, 1.0, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
         ..default()
     });
 
@@ -182,4 +176,11 @@ fn create_array_texture(
     // Create a new array texture asset from the loaded texture.
     let array_layers = 4;
     image.reinterpret_stacked_2d_as_array(array_layers);
+}
+
+fn toggle_camera(input: Res<Input<KeyCode>>, mut camera_query: Query<&mut DebugCamera>) {
+    let mut camera = camera_query.single_mut();
+    if input.just_pressed(KeyCode::T) {
+        camera.active = !camera.active;
+    }
 }

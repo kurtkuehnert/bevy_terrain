@@ -93,7 +93,7 @@ pub mod prelude {
     // #[doc(hidden)]
     pub use crate::{
         attachment_loader::AttachmentFromDiskLoader,
-        debug::TerrainDebugPlugin,
+        debug::{camera::DebugCamera, TerrainDebugPlugin},
         preprocess::{BaseConfig, Preprocessor, TileConfig},
         render::render_pipeline::{TerrainMaterialPlugin, TerrainPipelineConfig},
         terrain::{Terrain, TerrainConfig},
@@ -138,9 +138,10 @@ impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
         add_shader(app);
 
-        app.add_plugin(ExtractComponentPlugin::<Terrain>::default())
+        app.add_plugin(DTMPlugin)
+            .add_plugin(QOIPlugin)
+            .add_plugin(ExtractComponentPlugin::<Terrain>::default())
             .add_plugin(ExtractComponentPlugin::<TerrainView>::default())
-            .init_resource::<DebugTerrain>()
             .init_resource::<TerrainViewComponents<Quadtree>>()
             .init_resource::<TerrainViewComponents<TerrainViewConfig>>()
             .add_system_to_stage(
@@ -168,8 +169,6 @@ impl Plugin for TerrainPlugin {
             .unwrap_or(default());
 
         let render_app = app
-            .add_plugin(DTMPlugin)
-            .add_plugin(QOIPlugin)
             .sub_app_mut(RenderApp)
             .insert_resource(config)
             .init_resource::<TerrainComputePipelines>()
