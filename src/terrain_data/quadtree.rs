@@ -26,7 +26,7 @@ enum RequestState {
 /// The internal representation of a node in a [`Quadtree`].
 struct TreeNode {
     /// The current node id at the quadtree position.
-    node_id: u32,
+    node_id: NodeId,
     /// Indicates, whether the node is currently demanded or released.
     state: RequestState,
 }

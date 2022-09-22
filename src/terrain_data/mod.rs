@@ -56,9 +56,9 @@ impl From<NodeId> for NodeCoordinate {
     #[inline]
     fn from(id: NodeId) -> Self {
         Self {
-            lod: (id >> 28) & 0xF,
-            x: (id >> 14) & 0x3FFF,
-            y: id & 0x3FFF,
+            lod: ((id >> 28) & 0xF) as u32,
+            x: ((id >> 14) & 0x3FFF) as u32,
+            y: (id & 0x3FFF) as u32,
         }
     }
 }
@@ -66,7 +66,7 @@ impl From<NodeId> for NodeCoordinate {
 /// Calculates the node identifier from the node coordinate.
 #[inline]
 pub fn calc_node_id(lod: u32, x: u32, y: u32) -> NodeId {
-    (lod & 0xF) << 28 | (x & 0x3FFF) << 14 | y & 0x3FFF
+    (lod as NodeId & 0xF) << 28 | (x as NodeId & 0x3FFF) << 14 | y as NodeId & 0x3FFF
 }
 
 /// The data format of an attachment.
