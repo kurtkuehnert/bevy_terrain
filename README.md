@@ -28,7 +28,7 @@ Once the data is preprocessed you can disable it by commenting out the preproces
 
 ## Debug Controls
 
-- `T` toggle camera active
+- `T` - toggle camera active
 - move mouse to look around
 - arrow keys to move the camera horizontally
 - use `PageUp` and `PageDown` to move the camera vertically 
