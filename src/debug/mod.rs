@@ -1,17 +1,21 @@
 //! Contains a debug resource and systems controlling it to visualize different internal
 //! data of the plugin.
-use crate::{TerrainViewComponents, TerrainViewConfig};
+use crate::{debug::camera::debug_camera_control, TerrainViewComponents, TerrainViewConfig};
 use bevy::{
     prelude::*,
     render::{Extract, RenderApp, RenderStage},
 };
+
+pub mod camera;
 
 /// Adds a terrain debug config and debug control systems.
 pub struct TerrainDebugPlugin;
 
 impl Plugin for TerrainDebugPlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(toggle_debug)
+        app.init_resource::<DebugTerrain>()
+            .add_system(debug_camera_control)
+            .add_system(toggle_debug)
             .add_system(change_config)
             .sub_app_mut(RenderApp)
             .init_resource::<DebugTerrain>()
@@ -65,6 +69,10 @@ impl Default for DebugTerrain {
     }
 }
 
+pub fn extract_debug(mut debug: ResMut<DebugTerrain>, extracted_debug: Extract<Res<DebugTerrain>>) {
+    *debug = extracted_debug.clone();
+}
+
 pub fn toggle_debug(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTerrain>) {
     if input.just_pressed(KeyCode::W) {
         debug.wireframe = !debug.wireframe;
@@ -116,10 +124,6 @@ pub fn toggle_debug(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTerrain>)
     if input.just_pressed(KeyCode::F) {
         debug.freeze = !debug.freeze;
     }
-}
-
-pub fn extract_debug(mut debug: ResMut<DebugTerrain>, extracted_debug: Extract<Res<DebugTerrain>>) {
-    *debug = extracted_debug.clone();
 }
 
 pub fn change_config(

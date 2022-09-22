@@ -235,8 +235,6 @@ impl render_graph::Node for TerrainComputeNode {
 
         if let Some(debug) = &debug {
             flags |= TerrainComputePipelineFlags::from_debug(debug);
-        } else {
-            flags |= TerrainComputePipelineFlags::ADAPTIVE
         }
 
         for id in TerrainComputePipelineId::iter() {
