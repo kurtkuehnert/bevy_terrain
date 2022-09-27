@@ -109,5 +109,10 @@ fn fragment_color(in: FragmentInput, data: FragmentData) -> vec4<f32> {
     return color;
 }
 
+#ifndef MINMAX
 #import bevy_terrain::vertex
+#else
+#import bevy_terrain::minmax
+#endif
+
 #import bevy_terrain::fragment

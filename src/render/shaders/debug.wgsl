@@ -47,7 +47,7 @@ fn show_tiles(tile: Tile, local_position: vec2<f32>, tile_lod: u32) -> vec4<f32>
     color = color + vec4<f32>(1.0, 1.0, 1.0, 1.0) * morph;
 #endif
 
-    return color;
+    return vec4<f32>(color.xyz, 0.5);
 }
 
 fn show_lod(lod: u32, world_position: vec3<f32>) -> vec4<f32> {

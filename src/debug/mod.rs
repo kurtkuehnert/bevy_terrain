@@ -45,6 +45,8 @@ pub struct DebugTerrain {
     pub test3: bool,
 
     pub freeze: bool,
+    pub minmax: bool,
+    pub minmax_error: bool,
 }
 
 impl Default for DebugTerrain {
@@ -65,6 +67,8 @@ impl Default for DebugTerrain {
             test2: false,
             test3: false,
             freeze: false,
+            minmax: false,
+            minmax_error: false,
         }
     }
 }
@@ -91,7 +95,7 @@ pub fn toggle_debug(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTerrain>)
     if input.just_pressed(KeyCode::N) {
         debug.circular_lod = !debug.circular_lod;
     }
-    if input.just_pressed(KeyCode::M) {
+    if input.just_pressed(KeyCode::Z) {
         debug.mesh_morph = !debug.mesh_morph;
     }
     if input.just_pressed(KeyCode::D) {
@@ -123,6 +127,12 @@ pub fn toggle_debug(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTerrain>)
 
     if input.just_pressed(KeyCode::F) {
         debug.freeze = !debug.freeze;
+    }
+    if input.just_pressed(KeyCode::M) {
+        debug.minmax = !debug.minmax;
+    }
+    if input.just_pressed(KeyCode::E) {
+        debug.minmax_error = !debug.minmax_error;
     }
 }
 

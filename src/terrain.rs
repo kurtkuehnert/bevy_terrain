@@ -133,7 +133,7 @@ impl TerrainConfig {
         let height_attachment = base.height_attachment();
         let minmax_attachment = base.minmax_attachment();
 
-        preprocessor.base = (tile, base);
+        preprocessor.base = Some((tile, base));
 
         from_disk_loader.attachments.insert(
             self.attachments.len(),

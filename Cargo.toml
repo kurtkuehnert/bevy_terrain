@@ -15,9 +15,12 @@ repository = "https://github.com/ku95/bevy_terrain"
 default = []
 
 [dependencies]
-bevy = { git="https://github.com/bevyengine/bevy" }
-bevy_dtm = { git="https://github.com/Ku95/bevy_dtm" }
-bevy_qoi = { git="https://github.com/Ku95/bevy_qoi" }
+bevy = { workspace = true }
+bevy_dtm = { path="../bevy_dtm" }
+bevy_qoi = { path="../bevy_qoi" }
+# bevy = { git="https://github.com/bevyengine/bevy" }
+# bevy_dtm = { git="https://github.com/Ku95/bevy_dtm" }
+# bevy_qoi = { git="https://github.com/Ku95/bevy_qoi" }
 dtm = { git="https://github.com/Ku95/dtm" }
 rapid-qoi = "0.6"
 ndarray = "0.15"

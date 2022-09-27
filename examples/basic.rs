@@ -63,9 +63,11 @@ fn setup(
 
     // Create the terrain.
     let terrain = commands
-        .spawn_bundle(TerrainBundle::new(config.clone()))
-        .insert(from_disk_loader)
-        .insert(materials.add(TerrainMaterial {}))
+        .spawn((
+            TerrainBundle::new(config.clone()),
+            from_disk_loader,
+            materials.add(TerrainMaterial {}),
+        ))
         .id();
 
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
@@ -73,10 +75,11 @@ fn setup(
 
     // Create the view.
     let view = commands
-        .spawn()
-        .insert(DebugCamera::default())
-        .insert_bundle(Camera3dBundle::default())
-        .insert(TerrainView)
+        .spawn((
+            TerrainView,
+            DebugCamera::default(),
+            Camera3dBundle::default(),
+        ))
         .id();
 
     // Store the quadtree and the view config for the terrain and view.
@@ -86,7 +89,7 @@ fn setup(
     quadtrees.insert((terrain, view), quadtree);
 
     // Create a sunlight for the physical based lighting.
-    commands.spawn_bundle(DirectionalLightBundle {
+    commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
             illuminance: 20000.0,
             ..default()

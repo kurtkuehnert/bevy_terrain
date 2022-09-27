@@ -27,7 +27,7 @@ pub mod quadtree;
 // Todo: consider 3 bit face data, for cube sphere
 /// A globally unique identifier of a node.
 /// lod |  x |  y
-///   4 | 14 | 14
+///   6 | 13 | 13
 pub type NodeId = u32;
 pub const INVALID_NODE_ID: NodeId = NodeId::MAX;
 
@@ -56,9 +56,9 @@ impl From<NodeId> for NodeCoordinate {
     #[inline]
     fn from(id: NodeId) -> Self {
         Self {
-            lod: ((id >> 28) & 0xF) as u32,
-            x: ((id >> 14) & 0x3FFF) as u32,
-            y: (id & 0x3FFF) as u32,
+            lod: ((id >> 26) & 0x3F) as u32,
+            x: ((id >> 13) & 0x1FFF) as u32,
+            y: (id & 0x1FFF) as u32,
         }
     }
 }
@@ -66,7 +66,7 @@ impl From<NodeId> for NodeCoordinate {
 /// Calculates the node identifier from the node coordinate.
 #[inline]
 pub fn calc_node_id(lod: u32, x: u32, y: u32) -> NodeId {
-    (lod as NodeId & 0xF) << 28 | (x as NodeId & 0x3FFF) << 14 | y as NodeId & 0x3FFF
+    (lod as NodeId & 0x3F) << 26 | (x as NodeId & 0x1FFF) << 13 | y as NodeId & 0x1FFF
 }
 
 /// The data format of an attachment.

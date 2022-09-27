@@ -70,11 +70,11 @@ fn map_position(tile: Tile, grid_position: vec2<u32>, count: u32, true_count: u3
      return (vec2<f32>(tile.coords) + vec2<f32>(position) / f32(count)) * f32(tile.size) * view_config.tile_scale;
  }
 
-fn calculate_position(vertex_index: u32, tile: Tile, vertices_per_row: u32, true_count: u32) -> vec2<f32> {
+fn calculate_position(grid_index: u32, tile: Tile, vertices_per_row: u32, true_count: u32) -> vec2<f32> {
     // use first and last index twice, to form degenerate triangles
     // Todo: documentation
-    let row_index    = clamp(vertex_index % vertices_per_row, 1u, vertices_per_row - 2u) - 1u;
-    let column_index = vertex_index / vertices_per_row;
+    let row_index    = clamp(grid_index % vertices_per_row, 1u, vertices_per_row - 2u) - 1u;
+    let column_index = grid_index / vertices_per_row;
     var grid_position = vec2<u32>(column_index + (row_index & 1u), row_index >> 1u);
 
     let size = f32(tile.size) * view_config.tile_scale;
@@ -138,34 +138,27 @@ fn calculate_normal(uv: vec2<f32>, atlas_index: i32, lod: u32) -> vec3<f32> {
 }
 
 fn minmax(local_position: vec2<f32>, size: f32) -> vec2<f32> {
-    let lod = u32(ceil(log2(size)));
+    let lod = u32(ceil(log2(size))) + 1u;
 
     if (lod >= config.lod_count) {
         return vec2<f32>(0.0, config.height);
     }
 
     let lookup = atlas_lookup(lod, local_position);
-    let coords = lookup.atlas_coords * config.minmax_scale + config.minmax_offset;
+    let atlas_index = lookup.atlas_index;
+    let minmax_coords = lookup.atlas_coords * config.minmax_scale + config.minmax_offset;
 
-    var min_height = 1.0;
-    var max_height = 0.0;
+    let min_gather = textureGather(0, minmax_atlas, terrain_sampler, minmax_coords, atlas_index);
+    let max_gather = textureGather(1, minmax_atlas, terrain_sampler, minmax_coords, atlas_index);
 
-    for (var i: u32 = 0u; i < 4u; i = i + 1u) {
-        let offset = vec2<f32>(vec2<u32>((i & 1u), (i >> 1u & 1u))) - 0.5;
-
-        let corner = vec2<i32>((coords + offset * size / node_size(lookup.lod)) * 516.0);
-
-        let minmax = textureLoad(minmax_atlas, corner, lookup.atlas_index, 0).xy;
-
-        min_height = min(min_height, minmax.x);
-        max_height = max(max_height, minmax.y);
-    }
+    var min_height = min(min(min_gather.x, min_gather.y), min(min_gather.z, min_gather.w));
+    var max_height = max(max(max_gather.x, max_gather.y), max(max_gather.z, max_gather.w));
 
     return vec2(min_height, max_height) * config.height;
 }
 
 fn vertex_output(local_position: vec2<f32>, height: f32) -> VertexOutput {
-    let world_position = vec4<f32>(local_position.x, height, local_position.y, 1.0);
+    var world_position = vec4<f32>(local_position.x, height, local_position.y, 1.0);
 
     var output: VertexOutput;
     output.frag_coord = view.view_proj * world_position;
