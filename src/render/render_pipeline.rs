@@ -93,6 +93,8 @@ pub struct TerrainPipelineFlags: u32 {
     const TEST1              = (1 << 11);
     const TEST2              = (1 << 12);
     const TEST3              = (1 << 13);
+    const MINMAX             = (1 << 14);
+    const MINMAX_ERROR       = (1 << 15);
     const MSAA_RESERVED_BITS = TerrainPipelineFlags::MSAA_MASK_BITS << TerrainPipelineFlags::MSAA_SHIFT_BITS;
 }
 }
@@ -156,6 +158,13 @@ impl TerrainPipelineFlags {
             key |= TerrainPipelineFlags::TEST3;
         }
 
+        if debug.minmax {
+            key |= TerrainPipelineFlags::MINMAX;
+        }
+        if debug.minmax_error {
+            key |= TerrainPipelineFlags::MINMAX_ERROR;
+        }
+
         key
     }
 
@@ -214,6 +223,13 @@ impl TerrainPipelineFlags {
         }
         if (self.bits & TerrainPipelineFlags::TEST3.bits) != 0 {
             shader_defs.push("TEST3".to_string());
+        }
+
+        if (self.bits & TerrainPipelineFlags::MINMAX.bits) != 0 {
+            shader_defs.push("MINMAX".to_string());
+        }
+        if (self.bits & TerrainPipelineFlags::MINMAX_ERROR.bits) != 0 {
+            shader_defs.push("MINMAX_ERROR".to_string());
         }
 
         shader_defs

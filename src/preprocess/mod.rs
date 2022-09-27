@@ -36,7 +36,6 @@ macro_rules! return_none {
     };
 }
 
-#[derive(Default)]
 pub struct BaseConfig {
     pub center_size: u32,
     pub file_format: FileFormat,
@@ -79,14 +78,16 @@ pub struct TileConfig {
 /// It gathers all configurations of the attachments and then optionally processes them.
 #[derive(Default)]
 pub struct Preprocessor {
-    pub(crate) base: (TileConfig, BaseConfig),
+    pub(crate) base: Option<(TileConfig, BaseConfig)>,
     pub(crate) attachments: Vec<(TileConfig, AttachmentConfig)>,
 }
 
 impl Preprocessor {
     /// Preprocesses all attachments of the terrain.
     pub fn preprocess(self, config: &TerrainConfig) {
-        preprocess_base(config, &self.base.0, &self.base.1);
+        if let Some(base) = self.base {
+            preprocess_base(config, &base.0, &base.1);
+        }
 
         for (tile, attachment) in self.attachments {
             preprocess_attachment(config, &tile, &attachment);
