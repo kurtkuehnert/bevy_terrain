@@ -28,12 +28,18 @@ Once the data is preprocessed you can disable it by commenting out the preproces
 
 ## Debug Controls
 
+- `T` - toggle camera active
+- move mouse to look around
+- arrow keys to move the camera horizontally
+- use `PageUp` and `PageDown` to move the camera vertically 
+- use `Home` and `End` to increase/decrease the movement speed
+
 - `W` - toggle wireframe
 - `M` - toggle mesh morph
-- `A` - toggle alpha
+- `A` - toggle albedo
 - `N` - toggle full nodes (or circular lod)
 - `S` - toggle lighting
-- `D` - toggle density based mesh
+- `V` - toggle vertex normal
 - `P` - show patches
 - `L` - show LOD
 - `U` - show UVs
