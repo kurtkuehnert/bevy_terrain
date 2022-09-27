@@ -2,7 +2,18 @@
 
 fn height_vertex(atlas_index: i32, atlas_coords: vec2<f32>) -> f32 {
     let height_coords = atlas_coords * config.height_scale + config.height_offset;
-    return config.height * textureSampleLevel(height_atlas, terrain_sampler, height_coords, atlas_index, 0.0).x;
+    var height = textureSampleLevel(height_atlas, terrain_sampler, height_coords, atlas_index, 0.0).x;
+
+#ifdef TEST3
+    // still produces bugs for nodes of mip 1 and above (preprocessing)
+    let gather = textureGather(0, height_atlas, terrain_sampler, height_coords, atlas_index);
+
+    if (gather.x == 0.0 || gather.y == 0.0 || gather.z == 0.0 || gather.w == 0.0) {
+        height = height / 0.0;
+    }
+#endif
+
+    return config.height * height;
 }
 
 fn normal_vertex(atlas_index: i32, atlas_coords: vec2<f32>, lod: u32) -> vec3<f32> {
@@ -10,7 +21,6 @@ fn normal_vertex(atlas_index: i32, atlas_coords: vec2<f32>, lod: u32) -> vec3<f3
     return calculate_normal(height_coords, atlas_index, lod);
 }
 
-#ifndef TEST2
 @vertex
 fn vertex(vertex: VertexInput) -> VertexOutput {
 #ifdef ADAPTIVE
@@ -30,11 +40,11 @@ fn vertex(vertex: VertexInput) -> VertexOutput {
     let vertices_per_row = (tile_size + 2u) << 1u;
     let vertices_per_tile = vertices_per_row * tile_size;
 
-    let tile_index  = (vertex.index - tiles.counts[tile_lod].x) / vertices_per_tile + tile_lod * 100000u;
-    let vertex_index = (vertex.index - tiles.counts[tile_lod].x) % vertices_per_tile;
+    let tile_index = (vertex.index - tiles.counts[tile_lod].x) / vertices_per_tile + tile_lod * 100000u;
+    let grid_index = (vertex.index - tiles.counts[tile_lod].x) % vertices_per_tile;
 
     let tile = tiles.data[tile_index];
-    let local_position = calculate_position(vertex_index, tile, vertices_per_row, tile_size);
+    let local_position = calculate_position(grid_index, tile, vertices_per_row, tile_size);
 
     let world_position = approximate_world_position(local_position);
     let blend = calculate_blend(world_position, view_config.vertex_blend);
@@ -68,85 +78,22 @@ fn vertex(vertex: VertexInput) -> VertexOutput {
     output.color = show_tiles(tile, local_position, tile_lod);
 #endif
 
-#ifdef TEST1
+#ifdef MINMAX_ERROR
     let size = f32(tile.size) * view_config.tile_scale;
     let local_position = (vec2<f32>(tile.coords) + 0.5) * size;
-
-    let lod = u32(ceil(log2(size)));
-
+    let lod = u32(ceil(log2(size))) + 1u;
     let minmax = minmax(local_position, size);
 
-    // output.color = vec4<f32>((minmax.y - height) / 20.0, 0.0, (height - minmax.x) / 20.0, 1.0);
-    output.color = vec4<f32>(1.0 - clamp((minmax.y - height) / 20.0, 0.0, 1.0), 0.0,
-                             1.0 - clamp((height - minmax.x) / 20.0, 0.0, 1.0), 1.0);
+    output.color = vec4<f32>(0.0,
+                             clamp((minmax.y - height) / size / 2.0, 0.0, 1.0),
+                             clamp((height - minmax.x) / size / 2.0, 0.0, 1.0),
+                             0.5);
 
-    if (height < minmax.x) {
-        output.color = vec4<f32>(0.0, 1.0, 0.0, 1.0);
-    }
-
-    if (height > minmax.y) {
-        output.color = vec4<f32>(0.0, 1.0, 0.0, 1.0);
-    }
-
-    if (lod >= config.lod_count) {
-        output.color = vec4<f32>(0.0, 1.0, 0.0, 1.0);
+    let tolerance = 0.00001;
+    if (height < minmax.x - tolerance || height > minmax.y + tolerance || lod >= config.lod_count) {
+        output.color = vec4<f32>(1.0, 0.0, 0.0, 0.5);
     }
 #endif
 
     return output;
 }
-#else
-@vertex
-fn vertex(vertex: VertexInput) -> VertexOutput {
-    let tile_lod = 0u;
-    let tile_size = 8u;
-
-    let vertices_per_row = (tile_size + 2u) << 1u;
-    let vertices_per_tile = vertices_per_row * tile_size;
-
-    let tile_index  = (vertex.index - tiles.counts[tile_lod].x) / vertices_per_tile + tile_lod * 100000u;
-    let vertex_index = (vertex.index - tiles.counts[tile_lod].x) % vertices_per_tile;
-
-
-    let tile = tiles.data[tile_index];
-
-    let size = f32(tile.size) * view_config.tile_scale;
-    let local_position = (vec2<f32>(tile.coords) + 0.5) * size;
-
-    let lod = u32(ceil(log2(size)));
-
-    let minmax = minmax(local_position, size);
-
-    var corners = array<vec3<f32>, 14>(
-        vec3<f32>( 0.5, -0.5, minmax.y),
-        vec3<f32>(-0.5, -0.5, minmax.y),
-        vec3<f32>( 0.5, -0.5, minmax.x),
-        vec3<f32>(-0.5, -0.5, minmax.x),
-        vec3<f32>(-0.5,  0.5, minmax.x),
-        vec3<f32>(-0.5, -0.5, minmax.y),
-        vec3<f32>(-0.5,  0.5, minmax.y),
-        vec3<f32>( 0.5, -0.5, minmax.y),
-        vec3<f32>( 0.5,  0.5, minmax.y),
-        vec3<f32>( 0.5, -0.5, minmax.x),
-        vec3<f32>( 0.5,  0.5, minmax.x),
-        vec3<f32>(-0.5,  0.5, minmax.x),
-        vec3<f32>( 0.5,  0.5, minmax.y),
-        vec3<f32>(-0.5,  0.5, minmax.y)
-    );
-
-    let corner = corners[i32(clamp(vertex_index, 1u, 14u)) - 1];
-
-    let local_position = local_position + corner.xy * size;
-    let world_position = vec4<f32>(local_position.x, corner.z, local_position.y, 1.0);
-    let color = show_tiles(tile, local_position, lod);
-
-    var output: VertexOutput;
-    output.frag_coord = view.view_proj * world_position;
-    output.local_position = local_position;
-    output.world_position = world_position;
-    output.color = color;
-
-    return output;
-
-}
-#endif

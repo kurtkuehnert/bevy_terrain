@@ -13,6 +13,41 @@ const HEIGHT: f32 = 200.0;
 const NODE_ATLAS_SIZE: u32 = 500;
 const PATH: &str = "terrain";
 
+#[derive(Resource)]
+struct LoadingTexture {
+    is_loaded: bool,
+    handle: Handle<Image>,
+}
+
+fn create_array_texture(
+    asset_server: Res<AssetServer>,
+    mut loading_texture: ResMut<LoadingTexture>,
+    mut images: ResMut<Assets<Image>>,
+) {
+    if loading_texture.is_loaded
+        || asset_server.get_load_state(loading_texture.handle.clone()) != LoadState::Loaded
+    {
+        return;
+    }
+
+    loading_texture.is_loaded = true;
+    let image = images.get_mut(&loading_texture.handle).unwrap();
+    image.sampler_descriptor = ImageSampler::Descriptor(SamplerDescriptor {
+        label: None,
+        address_mode_u: AddressMode::Repeat,
+        address_mode_v: AddressMode::Repeat,
+        address_mode_w: AddressMode::Repeat,
+        mag_filter: FilterMode::Linear,
+        min_filter: FilterMode::Linear,
+        mipmap_filter: FilterMode::Linear,
+        ..default()
+    });
+
+    // Create a new array texture asset from the loaded texture.
+    let array_layers = 4;
+    image.reinterpret_stacked_2d_as_array(array_layers);
+}
+
 #[derive(AsBindGroup, TypeUuid, Clone)]
 #[uuid = "4ccc53dd-2cfd-48ba-b659-c0e1a9bc0bdb"]
 pub struct TerrainMaterial {
@@ -40,9 +75,9 @@ fn main() {
         .add_plugin(TerrainPlugin)
         .add_plugin(TerrainDebugPlugin)
         .add_plugin(TerrainMaterialPlugin::<TerrainMaterial>::default())
+        .add_system(create_array_texture)
         .add_startup_system(setup)
         .add_system(toggle_camera)
-        .add_system(create_array_texture)
         .run();
 }
 
@@ -105,21 +140,24 @@ fn setup(
 
     // Create the terrain.
     let terrain = commands
-        .spawn_bundle(TerrainBundle::new(config.clone()))
-        .insert(from_disk_loader)
-        .insert(materials.add(TerrainMaterial {
-            array_texture: texture,
-        }))
+        .spawn((
+            TerrainBundle::new(config.clone()),
+            from_disk_loader,
+            materials.add(TerrainMaterial {
+                array_texture: texture,
+            }),
+        ))
         .id();
 
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
     let view_config = TerrainViewConfig::new(&config, 10, 5.0, 3.0, 1.0, 0.2, 0.2, 0.2);
     // Create the view.
     let view = commands
-        .spawn()
-        .insert(DebugCamera::default())
-        .insert_bundle(Camera3dBundle::default())
-        .insert(TerrainView)
+        .spawn((
+            TerrainView,
+            DebugCamera::default(),
+            Camera3dBundle::default(),
+        ))
         .id();
 
     // Store the quadtree and the view config for the terrain and view.
@@ -129,7 +167,7 @@ fn setup(
     quadtrees.insert((terrain, view), quadtree);
 
     // Create a sunlight for the physical based lighting.
-    commands.spawn_bundle(DirectionalLightBundle {
+    commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
             illuminance: 20000.0,
             ..default()
@@ -141,41 +179,6 @@ fn setup(
     // Preprocesses the terrain data.
     // Todo: Should be commented out after the first run.
     preprocessor.preprocess(&config);
-}
-
-#[derive(Resource)]
-struct LoadingTexture {
-    is_loaded: bool,
-    handle: Handle<Image>,
-}
-
-fn create_array_texture(
-    asset_server: Res<AssetServer>,
-    mut loading_texture: ResMut<LoadingTexture>,
-    mut images: ResMut<Assets<Image>>,
-) {
-    if loading_texture.is_loaded
-        || asset_server.get_load_state(loading_texture.handle.clone()) != LoadState::Loaded
-    {
-        return;
-    }
-
-    loading_texture.is_loaded = true;
-    let image = images.get_mut(&loading_texture.handle).unwrap();
-    image.sampler_descriptor = ImageSampler::Descriptor(SamplerDescriptor {
-        label: None,
-        address_mode_u: AddressMode::Repeat,
-        address_mode_v: AddressMode::Repeat,
-        address_mode_w: AddressMode::Repeat,
-        mag_filter: FilterMode::Linear,
-        min_filter: FilterMode::Linear,
-        mipmap_filter: FilterMode::Linear,
-        ..default()
-    });
-
-    // Create a new array texture asset from the loaded texture.
-    let array_layers = 4;
-    image.reinterpret_stacked_2d_as_array(array_layers);
 }
 
 fn toggle_camera(input: Res<Input<KeyCode>>, mut camera_query: Query<&mut DebugCamera>) {
