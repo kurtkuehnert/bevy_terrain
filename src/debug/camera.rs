@@ -3,7 +3,7 @@ use dolly::prelude::*;
 
 #[derive(Component)]
 pub struct DebugCamera {
-    rig: CameraRig<RightHanded>,
+    pub rig: CameraRig<RightHanded>,
     pub active: bool,
     pub translation_speed: f32,
     pub rotation_speed: f32,
