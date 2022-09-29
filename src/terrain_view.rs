@@ -1,6 +1,6 @@
 //! Types for configuring terrain views.
 
-use crate::{terrain::Terrain, TerrainConfig, TerrainViewData};
+use crate::{terrain::Terrain, TerrainViewData};
 use bevy::{
     ecs::{query::QueryItem, system::lifetimeless::Read},
     prelude::*,
@@ -53,7 +53,7 @@ impl ExtractComponent for TerrainView {
 #[derive(Clone, Component)]
 pub struct TerrainViewConfig {
     /// A handle to the quadtree texture.
-    pub(crate) quadtree_handle: Handle<Image>,
+    pub quadtree_handle: Handle<Image>,
     /// The current height under the viewer.
     pub height_under_viewer: f32,
     /// The distance (measured in node sizes) until which to request nodes to be loaded.
@@ -64,60 +64,39 @@ pub struct TerrainViewConfig {
     pub tile_count: u32,
     /// The amount of steps the tile list will be refined.
     pub refinement_count: u32,
-    pub refinement_lod: u32,
-    /// The distance (measured in node sizes) of each lod layer to the viewer.
-    pub view_distance: f32,
-    /// The size of the tiles.
+    /// The amount of steps the tiles will be further refined than there are new LOD layers.
+    pub additional_refinement: u32,
+    /// A factor that scales tiles smaller or larger.
     pub tile_scale: f32,
+    /// The number of rows and columns of the tile grid.
+    pub grid_size: u32,
+    /// The distance (measured in node sizes) at which the LOD changes.
+    pub view_distance: f32,
     /// The morph percentage of the mesh.
-    pub morph_blend: f32,
-    /// The blend percentage in the vertex shader.
-    pub vertex_blend: f32,
-    /// The blend percentage in the fragment shader.
-    pub fragment_blend: f32,
+    pub morph_range: f32,
+    /// The blend percentage in the vertex and fragment shader.
+    pub blend_range: f32,
 }
 
-impl TerrainViewConfig {
-    /// Creates a new terrain view config for the terrain.
-    pub fn new(
-        config: &TerrainConfig,
-        node_count: u32,
-        load_distance: f32,
-        view_distance: f32,
-        tile_scale: f32,
-        morph_blend: f32,
-        vertex_blend: f32,
-        fragment_blend: f32,
-    ) -> Self {
-        // Todo: fix this awful hack
-        let quadtree_handle = HandleUntyped::weak_from_u64(
-            Uuid::from_str("6ea26da6-6cf8-4ea2-9986-1d7bf6c17d6f").unwrap(),
-            fastrand::u64(..),
-        )
-        .typed();
-
-        let view_distance = view_distance * config.chunk_size as f32; // same scale as load distance
-
-        // let refinement_count = (config.terrain_size as f32 / tile_scale).log2().ceil() as u32;
-        // Todo: make these configurable ?
-        let refinement_count = 20;
-        let refinement_lod = 4; //3;
-        let tile_count = 1000000;
-        let height_under_viewer = 0.0;
-
+impl Default for TerrainViewConfig {
+    fn default() -> Self {
         Self {
-            quadtree_handle,
-            height_under_viewer,
-            load_distance,
-            node_count,
-            tile_count,
-            refinement_count,
-            refinement_lod,
-            view_distance,
-            tile_scale,
-            morph_blend,
-            vertex_blend,
-            fragment_blend,
+            quadtree_handle: HandleUntyped::weak_from_u64(
+                Uuid::from_str("6ea26da6-6cf8-4ea2-9986-1d7bf6c17d6f").unwrap(),
+                fastrand::u64(..),
+            )
+            .typed(), // Todo: fix this awful hack
+            height_under_viewer: 0.0,
+            load_distance: 5.0,
+            node_count: 10,
+            tile_count: 1000000,
+            refinement_count: 20,
+            additional_refinement: 3,
+            tile_scale: 1.0,
+            grid_size: 8,
+            view_distance: 4.0,
+            morph_range: 0.2,
+            blend_range: 0.2,
         }
     }
 }
@@ -126,6 +105,7 @@ pub(crate) fn extract_terrain_view_config(
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
     extracted_view_configs: Extract<Res<TerrainViewComponents<TerrainViewConfig>>>,
 ) {
+    // Todo: scale some parameters by the values in the corresponding config
     *view_configs = extracted_view_configs.clone();
 }
 

@@ -1,10 +1,10 @@
 use crate::{
     render::{
         culling::CullingBindGroup,
-        shaders::{PREPARE_INDIRECT_SHADER, TESSELATION_SHADER},
+        shaders::{PREPARE_INDIRECT_SHADER, REFINE_TILES_SHADER},
         terrain_data::terrain_bind_group_layout,
         terrain_view_data::TerrainViewData,
-        CULL_DATA_LAYOUT, PREPARE_INDIRECT_LAYOUT, TESSELLATION_LAYOUT,
+        CULL_DATA_LAYOUT, PREPARE_INDIRECT_LAYOUT, REFINE_TILES_LAYOUT,
     },
     terrain::Terrain,
     DebugTerrain, TerrainComponents, TerrainData, TerrainPipelineConfig, TerrainView,
@@ -30,8 +30,8 @@ type TerrainComputePipelineKey = (TerrainComputePipelineId, TerrainComputePipeli
 #[derive(Copy, Clone, Hash, PartialEq, Eq, EnumIter, EnumCount)]
 pub enum TerrainComputePipelineId {
     RefineTiles,
-    PrepareTessellation,
-    PrepareRefinement,
+    PrepareRoot,
+    PrepareNext,
     PrepareRender,
 }
 
@@ -39,7 +39,6 @@ bitflags::bitflags! {
 #[repr(transparent)]
 pub struct TerrainComputePipelineFlags: u32 {
     const NONE               = 0;
-    const ADAPTIVE           = (1 << 0);
     const TEST               = (2 << 0);
 }
 }
@@ -48,9 +47,6 @@ impl TerrainComputePipelineFlags {
     pub fn from_debug(debug: &DebugTerrain) -> Self {
         let mut key = TerrainComputePipelineFlags::NONE;
 
-        if debug.adaptive {
-            key |= TerrainComputePipelineFlags::ADAPTIVE;
-        }
         if debug.test1 {
             key |= TerrainComputePipelineFlags::TEST;
         }
@@ -61,9 +57,6 @@ impl TerrainComputePipelineFlags {
     pub fn shader_defs(&self) -> Vec<String> {
         let mut shader_defs = Vec::new();
 
-        if (self.bits & TerrainComputePipelineFlags::ADAPTIVE.bits) != 0 {
-            shader_defs.push("ADAPTIVE".to_string());
-        }
         if (self.bits & TerrainComputePipelineFlags::TEST.bits) != 0 {
             shader_defs.push("TEST".to_string());
         }
@@ -75,11 +68,11 @@ impl TerrainComputePipelineFlags {
 #[derive(Resource)]
 pub struct TerrainComputePipelines {
     pub(crate) prepare_indirect_layout: BindGroupLayout,
-    pub(crate) tessellation_layout: BindGroupLayout,
+    pub(crate) refine_tiles_layout: BindGroupLayout,
     pub(crate) cull_data_layout: BindGroupLayout,
     pub(crate) terrain_layout: BindGroupLayout,
     prepare_indirect_shader: Handle<Shader>,
-    tessellation_shader: Handle<Shader>,
+    refine_tiles_shader: Handle<Shader>,
 }
 
 impl FromWorld for TerrainComputePipelines {
@@ -88,20 +81,20 @@ impl FromWorld for TerrainComputePipelines {
         let config = world.resource::<TerrainPipelineConfig>();
 
         let prepare_indirect_layout = device.create_bind_group_layout(&PREPARE_INDIRECT_LAYOUT);
-        let tessellation_layout = device.create_bind_group_layout(&TESSELLATION_LAYOUT);
+        let refine_tiles_layout = device.create_bind_group_layout(&REFINE_TILES_LAYOUT);
         let cull_data_layout = device.create_bind_group_layout(&CULL_DATA_LAYOUT);
         let terrain_layout = terrain_bind_group_layout(&device, config.attachment_count);
 
         let prepare_indirect_shader = PREPARE_INDIRECT_SHADER.typed();
-        let tessellation_shader = TESSELATION_SHADER.typed();
+        let refine_tiles_shader = REFINE_TILES_SHADER.typed();
 
         TerrainComputePipelines {
             prepare_indirect_layout,
-            tessellation_layout,
+            refine_tiles_layout,
             cull_data_layout,
             terrain_layout,
             prepare_indirect_shader,
-            tessellation_shader,
+            refine_tiles_shader,
         }
     }
 }
@@ -119,36 +112,36 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
         match key.0 {
             TerrainComputePipelineId::RefineTiles => {
                 layout = Some(vec![
-                    self.tessellation_layout.clone(),
+                    self.refine_tiles_layout.clone(),
                     self.cull_data_layout.clone(),
                     self.terrain_layout.clone(),
                 ]);
-                shader = self.tessellation_shader.clone();
+                shader = self.refine_tiles_shader.clone();
                 entry_point = "refine_tiles".into();
             }
-            TerrainComputePipelineId::PrepareTessellation => {
+            TerrainComputePipelineId::PrepareRoot => {
                 layout = Some(vec![
-                    self.tessellation_layout.clone(),
+                    self.refine_tiles_layout.clone(),
                     self.cull_data_layout.clone(),
                     self.terrain_layout.clone(),
                     self.prepare_indirect_layout.clone(),
                 ]);
                 shader = self.prepare_indirect_shader.clone();
-                entry_point = "prepare_tessellation".into();
+                entry_point = "prepare_root".into();
             }
-            TerrainComputePipelineId::PrepareRefinement => {
+            TerrainComputePipelineId::PrepareNext => {
                 layout = Some(vec![
-                    self.tessellation_layout.clone(),
+                    self.refine_tiles_layout.clone(),
                     self.cull_data_layout.clone(),
                     self.terrain_layout.clone(),
                     self.prepare_indirect_layout.clone(),
                 ]);
                 shader = self.prepare_indirect_shader.clone();
-                entry_point = "prepare_refinement".into();
+                entry_point = "prepare_next".into();
             }
             TerrainComputePipelineId::PrepareRender => {
                 layout = Some(vec![
-                    self.tessellation_layout.clone(),
+                    self.refine_tiles_layout.clone(),
                     self.cull_data_layout.clone(),
                     self.terrain_layout.clone(),
                     self.prepare_indirect_layout.clone(),
@@ -200,19 +193,19 @@ impl TerrainComputeNode {
         culling_bind_group: &'a BindGroup,
         refinement_count: u32,
     ) {
-        pass.set_bind_group(0, &view_data.tessellation_bind_group, &[]);
+        pass.set_bind_group(0, &view_data.refine_tiles_bind_group, &[]);
         pass.set_bind_group(1, culling_bind_group, &[]);
         pass.set_bind_group(2, &terrain_data.terrain_bind_group, &[]);
         pass.set_bind_group(3, &view_data.prepare_indirect_bind_group, &[]);
 
-        pass.set_pipeline(pipelines[TerrainComputePipelineId::PrepareTessellation as usize]);
+        pass.set_pipeline(pipelines[TerrainComputePipelineId::PrepareRoot as usize]);
         pass.dispatch_workgroups(1, 1, 1);
 
         for _ in 0..refinement_count {
             pass.set_pipeline(pipelines[TerrainComputePipelineId::RefineTiles as usize]);
             pass.dispatch_workgroups_indirect(&view_data.indirect_buffer, 0);
 
-            pass.set_pipeline(pipelines[TerrainComputePipelineId::PrepareRefinement as usize]);
+            pass.set_pipeline(pipelines[TerrainComputePipelineId::PrepareNext as usize]);
             pass.dispatch_workgroups(1, 1, 1);
         }
 

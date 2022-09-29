@@ -38,16 +38,18 @@ fn setup(
     let mut from_disk_loader = AttachmentFromDiskLoader::default();
 
     // Configure all the important properties of the terrain, as well as its attachments.
-    let mut config = TerrainConfig::new(
-        TERRAIN_SIZE,
-        CHUNK_SIZE,
-        LOD_COUNT,
-        HEIGHT,
-        NODE_ATLAS_SIZE,
-        PATH.to_string(),
-    );
+    let mut config = TerrainConfig {
+        lod_count: LOD_COUNT,
+        height: HEIGHT,
+        chunk_size: CHUNK_SIZE,
+        terrain_size: TERRAIN_SIZE,
+        node_atlas_size: NODE_ATLAS_SIZE,
 
-    config.add_base_attachment(
+        path: PATH.to_string(),
+        ..default()
+    };
+
+    config.add_base_attachment_from_disk(
         &mut preprocessor,
         &mut from_disk_loader,
         BaseConfig {
@@ -71,7 +73,14 @@ fn setup(
         .id();
 
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
-    let view_config = TerrainViewConfig::new(&config, 10, 5.0, 3.0, 1.0, 0.2, 0.2, 0.2);
+    let view_config = TerrainViewConfig {
+        tile_scale: 1.0,
+        grid_size: 4,
+        node_count: 10,
+        load_distance: 5.0,
+        view_distance: 4.0 * config.chunk_size as f32,
+        ..default()
+    };
 
     // Create the view.
     let view = commands

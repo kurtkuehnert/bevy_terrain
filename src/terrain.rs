@@ -73,27 +73,21 @@ pub struct TerrainConfig {
     pub attachments: Vec<AtlasAttachment>,
 }
 
-impl TerrainConfig {
-    /// Creates a new terrain config without attachments.
-    pub fn new(
-        terrain_size: u32,
-        chunk_size: u32,
-        lod_count: u32,
-        height: f32,
-        node_atlas_size: u32,
-        path: String,
-    ) -> Self {
+impl Default for TerrainConfig {
+    fn default() -> Self {
         Self {
-            lod_count,
-            height,
-            node_atlas_size,
-            chunk_size,
-            terrain_size,
-            path,
+            lod_count: 8,
+            height: 100.0,
+            chunk_size: 512,
+            terrain_size: 1024,
+            node_atlas_size: 512,
+            path: default(),
             attachments: default(),
         }
     }
+}
 
+impl TerrainConfig {
     /// Adds an attachment to the terrain.
     ///
     /// The attachment will not be loaded automatically, but the caller has to handle the loading instead.
@@ -123,30 +117,29 @@ impl TerrainConfig {
     /// Adds the base attachment, which contains a height and minmax information.
     ///
     /// This is required by terrains, that use the default render pipeline.
-    pub fn add_base_attachment(
+    pub fn add_base_attachment(&mut self, base: BaseConfig) {
+        self.add_attachment(base.height_attachment());
+        self.add_attachment(base.minmax_attachment());
+    }
+
+    pub fn add_base_attachment_from_disk(
         &mut self,
         preprocessor: &mut Preprocessor,
         from_disk_loader: &mut AttachmentFromDiskLoader,
         base: BaseConfig,
         tile: TileConfig,
     ) {
-        let height_attachment = base.height_attachment();
-        let minmax_attachment = base.minmax_attachment();
+        from_disk_loader.attachments.insert(
+            self.attachments.len(),
+            AttachmentFromDisk::new(&base.height_attachment(), &self.path),
+        );
+        from_disk_loader.attachments.insert(
+            self.attachments.len() + 1,
+            AttachmentFromDisk::new(&base.minmax_attachment(), &self.path),
+        );
+
+        self.add_base_attachment(base);
 
         preprocessor.base = Some((tile, base));
-
-        from_disk_loader.attachments.insert(
-            self.attachments.len(),
-            AttachmentFromDisk::new(&height_attachment, &self.path),
-        );
-
-        self.attachments.push(height_attachment.into());
-
-        from_disk_loader.attachments.insert(
-            self.attachments.len(),
-            AttachmentFromDisk::new(&minmax_attachment, &self.path),
-        );
-
-        self.attachments.push(minmax_attachment.into());
     }
 }

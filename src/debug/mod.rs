@@ -26,27 +26,20 @@ impl Plugin for TerrainDebugPlugin {
 #[derive(Clone, Resource)]
 pub struct DebugTerrain {
     pub wireframe: bool,
-
     pub show_tiles: bool,
     pub show_lod: bool,
     pub show_uv: bool,
-
+    pub show_minmax_error: bool,
+    pub minmax: bool,
     pub circular_lod: bool,
     pub mesh_morph: bool,
-    pub adaptive: bool,
-    pub vertex_normal: bool,
-
     pub albedo: bool,
     pub bright: bool,
     pub lighting: bool,
-
+    pub freeze: bool,
     pub test1: bool,
     pub test2: bool,
     pub test3: bool,
-
-    pub freeze: bool,
-    pub minmax: bool,
-    pub minmax_error: bool,
 }
 
 impl Default for DebugTerrain {
@@ -56,19 +49,17 @@ impl Default for DebugTerrain {
             show_tiles: false,
             show_lod: false,
             show_uv: false,
+            show_minmax_error: false,
+            minmax: false,
             circular_lod: true,
             mesh_morph: true,
-            adaptive: false,
-            vertex_normal: false,
             albedo: false,
             bright: false,
             lighting: true,
+            freeze: false,
             test1: false,
             test2: false,
             test3: false,
-            freeze: false,
-            minmax: false,
-            minmax_error: false,
         }
     }
 }
@@ -91,17 +82,18 @@ pub fn toggle_debug(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTerrain>)
     if input.just_pressed(KeyCode::U) {
         debug.show_uv = !debug.show_uv;
     }
-
-    if input.just_pressed(KeyCode::N) {
+    if input.just_pressed(KeyCode::Y) {
+        debug.show_minmax_error = !debug.show_minmax_error;
+    }
+    if input.just_pressed(KeyCode::M) {
+        debug.minmax = !debug.minmax;
+    }
+    if input.just_pressed(KeyCode::C) {
         debug.circular_lod = !debug.circular_lod;
     }
     if input.just_pressed(KeyCode::Z) {
         debug.mesh_morph = !debug.mesh_morph;
     }
-    if input.just_pressed(KeyCode::D) {
-        debug.adaptive = !debug.adaptive;
-    }
-
     if input.just_pressed(KeyCode::A) {
         debug.albedo = !debug.albedo;
     }
@@ -111,10 +103,9 @@ pub fn toggle_debug(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTerrain>)
     if input.just_pressed(KeyCode::S) {
         debug.lighting = !debug.lighting;
     }
-    if input.just_pressed(KeyCode::V) {
-        debug.vertex_normal = !debug.vertex_normal;
+    if input.just_pressed(KeyCode::F) {
+        debug.freeze = !debug.freeze;
     }
-
     if input.just_pressed(KeyCode::Key1) {
         debug.test1 = !debug.test1;
     }
@@ -123,16 +114,6 @@ pub fn toggle_debug(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTerrain>)
     }
     if input.just_pressed(KeyCode::Key3) {
         debug.test3 = !debug.test3;
-    }
-
-    if input.just_pressed(KeyCode::F) {
-        debug.freeze = !debug.freeze;
-    }
-    if input.just_pressed(KeyCode::M) {
-        debug.minmax = !debug.minmax;
-    }
-    if input.just_pressed(KeyCode::E) {
-        debug.minmax_error = !debug.minmax_error;
     }
 }
 
@@ -153,6 +134,13 @@ pub fn change_config(
         }
         if input.just_pressed(KeyCode::O) {
             config.view_distance *= 1.05;
+        }
+
+        if input.just_pressed(KeyCode::N) && config.grid_size > 2 {
+            config.grid_size -= 2;
+        }
+        if input.just_pressed(KeyCode::E) {
+            config.grid_size += 2;
         }
     }
 }
