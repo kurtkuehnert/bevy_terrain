@@ -54,23 +54,26 @@ struct FragmentData {
     debug_color: vec4<f32>,
 }
 
-fn lookup_fragment_data(in: FragmentInput, lookup: AtlasLookup) -> FragmentData {
+fn vertex_height(lookup: AtlasLookup) -> f32 {
+    let height_coords = lookup.atlas_coords * config.height_scale + config.height_offset;
+    let height = textureSampleLevel(height_atlas, terrain_sampler, height_coords, lookup.atlas_index, 0.0).x;
+
+    return height * config.height;
+}
+
+fn lookup_fragment_data(input: FragmentInput, lookup: AtlasLookup) -> FragmentData {
     let lod = lookup.lod;
     let atlas_index = lookup.atlas_index;
     let atlas_coords = lookup.atlas_coords;
 
     let height_coords = atlas_coords * config.height_scale + config.height_offset;
 
-#ifdef VERTEX_NORMAL
-    let world_normal = in.world_normal;
-#else
     let world_normal = calculate_normal(height_coords, atlas_index, lod);
-#endif
 
     var debug_color = vec4<f32>(0.5);
 
 #ifdef SHOW_LOD
-    debug_color = mix(debug_color, show_lod(lod, in.world_position.xyz), 0.4);
+    debug_color = mix(debug_color, show_lod(lod, input.world_position.xyz), 0.4);
 #endif
 
 #ifdef SHOW_UV
@@ -81,32 +84,34 @@ fn lookup_fragment_data(in: FragmentInput, lookup: AtlasLookup) -> FragmentData 
 }
 
 fn blend_fragment_data(data1: FragmentData, data2: FragmentData, blend_ratio: f32) -> FragmentData {
-    let world_normal =  mix(data2.world_normal, data1.world_normal, blend_ratio);
+    let world_normal = mix(data2.world_normal, data1.world_normal, blend_ratio);
     let debug_color = mix(data2.debug_color, data1.debug_color, blend_ratio);
 
     return FragmentData(world_normal, debug_color);
 }
 
-fn fragment_color(in: FragmentInput, data: FragmentData) -> vec4<f32> {
-    let world_normal = data.world_normal;
-    var color = data.debug_color;
+fn process_fragment(input: FragmentInput, data: FragmentData) -> Fragment {
+    let do_discard = input.local_position.x < 2.0 || input.local_position.x > f32(config.terrain_size) - 2.0 ||
+                     input.local_position.y < 2.0 || input.local_position.y > f32(config.terrain_size) - 2.0;
+
+    var color = mix(data.debug_color, vec4<f32>(input.debug_color.xyz, 1.0), input.debug_color.w);
 
 #ifdef LIGHTING
     var pbr_input: PbrInput = pbr_input_new();
     pbr_input.material.base_color = color;
-    pbr_input.material.perceptual_roughness = 0.6;
-    pbr_input.material.reflectance = 0.1;
-    pbr_input.frag_coord = in.frag_coord;
-    pbr_input.world_position = in.world_position;
-    pbr_input.world_normal = world_normal;
+    pbr_input.material.perceptual_roughness = 1.0;
+    pbr_input.material.reflectance = 0.0;
+    pbr_input.frag_coord = input.frag_coord;
+    pbr_input.world_position = input.world_position;
+    pbr_input.world_normal = data.world_normal;
     pbr_input.is_orthographic = view.projection[3].w == 1.0;
-    pbr_input.N = world_normal;
-    pbr_input.V = calculate_view(in.world_position, pbr_input.is_orthographic);
+    pbr_input.N = data.world_normal;
+    pbr_input.V = calculate_view(input.world_position, pbr_input.is_orthographic);
 
-    color = pbr(pbr_input);
+    color = tone_mapping(pbr(pbr_input));
 #endif
 
-    return color;
+    return Fragment(color, do_discard);
 }
 
 #ifndef MINMAX

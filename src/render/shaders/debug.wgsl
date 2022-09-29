@@ -23,7 +23,7 @@ fn lod_color(lod: u32) -> vec4<f32> {
     return vec4<f32>(0.0);
 }
 
-fn show_tiles(tile: Tile, local_position: vec2<f32>, tile_lod: u32) -> vec4<f32> {
+fn show_tiles(tile: Tile, world_position: vec4<f32>) -> vec4<f32> {
     var color: vec4<f32>;
 
     if ((tile.coords.x + tile.coords.y) % 2u == 0u) {
@@ -33,21 +33,35 @@ fn show_tiles(tile: Tile, local_position: vec2<f32>, tile_lod: u32) -> vec4<f32>
         color = vec4<f32>(0.1, 0.1, 0.1, 1.0);
     }
 
-    color = mix(color, lod_color(tile_lod), 0.5);
-
-    if (tile.padding == 1u) {
-        color = color * 10.0;
-    }
-    if (tile.padding == 2u) {
-        color = color * 0.1;
-    }
+    let lod = u32(ceil(log2(f32(tile.size))));
+    color = mix(color, lod_color(lod), 0.5);
 
 #ifdef MESH_MORPH
-    let morph = calculate_morph(local_position, tile);
+    let morph = calculate_morph(tile, world_position);
     color = color + vec4<f32>(1.0, 1.0, 1.0, 1.0) * morph;
 #endif
 
     return vec4<f32>(color.xyz, 0.5);
+}
+
+fn show_minmax_error(tile: Tile, height: f32) -> vec4<f32> {
+    let size = f32(tile.size) * view_config.tile_scale;
+    let local_position = (vec2<f32>(tile.coords) + 0.5) * size;
+    let lod = u32(ceil(log2(size))) + 1u;
+    let minmax = minmax(local_position, size);
+
+    var color = vec4<f32>(0.0,
+                          clamp((minmax.y - height) / size / 2.0, 0.0, 1.0),
+                          clamp((height - minmax.x) / size / 2.0, 0.0, 1.0),
+                          0.5);
+
+    let tolerance = 0.00001;
+
+    if (height < minmax.x - tolerance || height > minmax.y + tolerance || lod >= config.lod_count) {
+        color = vec4<f32>(1.0, 0.0, 0.0, 0.5);
+    }
+
+    return color;
 }
 
 fn show_lod(lod: u32, world_position: vec3<f32>) -> vec4<f32> {
@@ -55,7 +69,7 @@ fn show_lod(lod: u32, world_position: vec3<f32>) -> vec4<f32> {
 
     for (var i = 0u; i < config.lod_count; i = i + 1u) {
         let viewer_distance = distance(view.world_position.xyz, world_position);
-        let circle = f32(1u << i) * view_config.view_distance;
+        let circle = f32(1u << i) * view_config.blend_distance;
 
         if (viewer_distance < circle && circle - f32(2 << i) < viewer_distance) {
             color = lod_color(i) * 10.0;

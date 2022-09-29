@@ -1,7 +1,7 @@
 use crate::{
     render::{
-        INDIRECT_BUFFER_SIZE, PARAMETER_BUFFER_SIZE, PREPARE_INDIRECT_LAYOUT,
-        TERRAIN_VIEW_CONFIG_SIZE, TERRAIN_VIEW_LAYOUT, TESSELLATION_LAYOUT, TILE_SIZE,
+        INDIRECT_BUFFER_SIZE, PARAMETER_BUFFER_SIZE, PREPARE_INDIRECT_LAYOUT, REFINE_TILES_LAYOUT,
+        TERRAIN_VIEW_CONFIG_SIZE, TERRAIN_VIEW_LAYOUT, TILE_SIZE,
     },
     terrain::Terrain,
     terrain_view::{TerrainView, TerrainViewConfig},
@@ -22,33 +22,35 @@ use bevy::{
 #[derive(Clone, Default, ShaderType)]
 pub(crate) struct TerrainViewConfigUniform {
     height_under_viewer: f32,
-
     node_count: u32,
-
     tile_count: u32,
     refinement_count: u32,
-    refinement_distance: f32,
-    view_distance: f32,
     tile_scale: f32,
-
-    morph_blend: f32,
-    vertex_blend: f32,
-    fragment_blend: f32,
+    grid_size: f32,
+    vertices_per_row: u32,
+    vertices_per_tile: u32,
+    morph_distance: f32,
+    blend_distance: f32,
+    morph_range: f32,
+    blend_range: f32,
 }
 
 impl From<&TerrainViewConfig> for TerrainViewConfigUniform {
     fn from(config: &TerrainViewConfig) -> Self {
         TerrainViewConfigUniform {
-            node_count: config.node_count,
             height_under_viewer: config.height_under_viewer,
+            node_count: config.node_count,
             tile_count: config.tile_count,
             refinement_count: config.refinement_count,
-            refinement_distance: config.view_distance / 2.0_f32.powf(config.refinement_lod as f32),
-            view_distance: config.view_distance,
             tile_scale: config.tile_scale,
-            morph_blend: config.morph_blend,
-            vertex_blend: config.vertex_blend,
-            fragment_blend: config.fragment_blend,
+            grid_size: config.grid_size as f32,
+            vertices_per_row: 2 * (config.grid_size + 2),
+            vertices_per_tile: 2 * config.grid_size * (config.grid_size + 2),
+            morph_distance: config.view_distance
+                / 2.0_f32.powf(config.additional_refinement as f32),
+            blend_distance: config.view_distance,
+            morph_range: config.morph_range,
+            blend_range: config.blend_range,
         }
     }
 }
@@ -57,7 +59,7 @@ pub struct TerrainViewData {
     pub(crate) indirect_buffer: Buffer,
     pub(crate) view_config_buffer: Buffer,
     pub(crate) prepare_indirect_bind_group: BindGroup,
-    pub(crate) tessellation_bind_group: BindGroup,
+    pub(crate) refine_tiles_bind_group: BindGroup,
     pub(crate) terrain_view_bind_group: BindGroup,
 }
 
@@ -83,8 +85,8 @@ impl TerrainViewData {
             }],
             layout: &device.create_bind_group_layout(&PREPARE_INDIRECT_LAYOUT),
         });
-        let tessellation_bind_group = device.create_bind_group(&BindGroupDescriptor {
-            label: "tessellation_bind_group".into(),
+        let refine_tiles_bind_group = device.create_bind_group(&BindGroupDescriptor {
+            label: "refine_tiles_bind_group".into(),
             entries: &[
                 BindGroupEntry {
                     binding: 0,
@@ -107,7 +109,7 @@ impl TerrainViewData {
                     resource: parameter_buffer.as_entire_binding(),
                 },
             ],
-            layout: &device.create_bind_group_layout(&TESSELLATION_LAYOUT),
+            layout: &device.create_bind_group_layout(&REFINE_TILES_LAYOUT),
         });
         let terrain_view_bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: "terrain_view_bind_group".into(),
@@ -132,7 +134,7 @@ impl TerrainViewData {
             indirect_buffer,
             view_config_buffer,
             prepare_indirect_bind_group,
-            tessellation_bind_group,
+            refine_tiles_bind_group,
             terrain_view_bind_group,
         }
     }
@@ -168,7 +170,7 @@ impl TerrainViewData {
     ) -> (Buffer, Buffer) {
         let buffer_descriptor = BufferDescriptor {
             label: "tile_buffer".into(),
-            size: 32 + TILE_SIZE * view_config.tile_count as BufferAddress, // Todo: figure out a better tile buffer size limit
+            size: TILE_SIZE * view_config.tile_count as BufferAddress, // Todo: figure out a better tile buffer size limit
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
         };

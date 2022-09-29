@@ -39,6 +39,6 @@ fn atlas_lookup(lod: u32, local_position: vec2<f32>) -> AtlasLookup {
     return AtlasLookup(atlas_lod, atlas_index, atlas_coords);
 }
 
-fn approximate_world_position(local_position: vec2<f32>) -> vec3<f32> {
-    return vec3<f32>(local_position.x, view_config.height_under_viewer, local_position.y);
+fn approximate_world_position(local_position: vec2<f32>) -> vec4<f32> {
+    return vec4<f32>(local_position.x, view_config.height_under_viewer, local_position.y, 1.0);
 }

@@ -19,7 +19,7 @@ const FRAGMENT_SHADER: HandleUntyped =
 
 pub(crate) const PREPARE_INDIRECT_SHADER: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 242384313596767307);
-pub(crate) const TESSELATION_SHADER: HandleUntyped =
+pub(crate) const REFINE_TILES_SHADER: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 938732132468373352);
 
 pub(crate) const DEFAULT_SHADER: HandleUntyped =
@@ -63,7 +63,7 @@ pub(crate) fn add_shader(app: &mut App) {
         Shader::from_wgsl(include_str!("compute/prepare_indirect.wgsl")),
     );
     assets.set_untracked(
-        TESSELATION_SHADER,
-        Shader::from_wgsl(include_str!("compute/tessellation.wgsl")),
+        REFINE_TILES_SHADER,
+        Shader::from_wgsl(include_str!("compute/refine_tiles.wgsl")),
     );
 }
