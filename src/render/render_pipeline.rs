@@ -83,18 +83,17 @@ pub struct TerrainPipelineFlags: u32 {
     const SHOW_TILES         = (1 <<  1);
     const SHOW_LOD           = (1 <<  2);
     const SHOW_UV            = (1 <<  3);
-    const CIRCULAR_LOD       = (1 <<  4);
-    const MESH_MORPH         = (1 <<  5);
-    const ADAPTIVE           = (1 <<  6);
-    const ALBEDO             = (1 <<  7);
-    const BRIGHT             = (1 <<  8);
-    const LIGHTING           = (1 <<  9);
-    const VERTEX_NORMAL      = (1 << 10);
+    const SHOW_MINMAX_ERROR  = (1 <<  4);
+    const MINMAX             = (1 <<  5);
+    const CIRCULAR_LOD       = (1 <<  6);
+    const MESH_MORPH         = (1 <<  7);
+    const ALBEDO             = (1 <<  8);
+    const BRIGHT             = (1 <<  9);
+    const LIGHTING           = (1 << 10);
     const TEST1              = (1 << 11);
     const TEST2              = (1 << 12);
     const TEST3              = (1 << 13);
-    const MINMAX             = (1 << 14);
-    const MINMAX_ERROR       = (1 << 15);
+
     const MSAA_RESERVED_BITS = TerrainPipelineFlags::MSAA_MASK_BITS << TerrainPipelineFlags::MSAA_SHIFT_BITS;
 }
 }
@@ -114,7 +113,6 @@ impl TerrainPipelineFlags {
         if debug.wireframe {
             key |= TerrainPipelineFlags::WIREFRAME;
         }
-
         if debug.show_tiles {
             key |= TerrainPipelineFlags::SHOW_TILES;
         }
@@ -124,17 +122,18 @@ impl TerrainPipelineFlags {
         if debug.show_uv {
             key |= TerrainPipelineFlags::SHOW_UV;
         }
-
+        if debug.show_minmax_error {
+            key |= TerrainPipelineFlags::SHOW_MINMAX_ERROR;
+        }
+        if debug.minmax {
+            key |= TerrainPipelineFlags::MINMAX;
+        }
         if debug.circular_lod {
             key |= TerrainPipelineFlags::CIRCULAR_LOD;
         }
         if debug.mesh_morph {
             key |= TerrainPipelineFlags::MESH_MORPH;
         }
-        if debug.adaptive {
-            key |= TerrainPipelineFlags::ADAPTIVE;
-        }
-
         if debug.albedo {
             key |= TerrainPipelineFlags::ALBEDO;
         }
@@ -144,10 +143,6 @@ impl TerrainPipelineFlags {
         if debug.lighting {
             key |= TerrainPipelineFlags::LIGHTING;
         }
-        if debug.vertex_normal {
-            key |= TerrainPipelineFlags::VERTEX_NORMAL;
-        }
-
         if debug.test1 {
             key |= TerrainPipelineFlags::TEST1;
         }
@@ -156,13 +151,6 @@ impl TerrainPipelineFlags {
         }
         if debug.test3 {
             key |= TerrainPipelineFlags::TEST3;
-        }
-
-        if debug.minmax {
-            key |= TerrainPipelineFlags::MINMAX;
-        }
-        if debug.minmax_error {
-            key |= TerrainPipelineFlags::MINMAX_ERROR;
         }
 
         key
@@ -191,20 +179,18 @@ impl TerrainPipelineFlags {
         if (self.bits & TerrainPipelineFlags::SHOW_UV.bits) != 0 {
             shader_defs.push("SHOW_UV".to_string());
         }
-
+        if (self.bits & TerrainPipelineFlags::SHOW_MINMAX_ERROR.bits) != 0 {
+            shader_defs.push("SHOW_MINMAX_ERROR".to_string());
+        }
+        if (self.bits & TerrainPipelineFlags::MINMAX.bits) != 0 {
+            shader_defs.push("MINMAX".to_string());
+        }
         if (self.bits & TerrainPipelineFlags::CIRCULAR_LOD.bits) != 0 {
             shader_defs.push("CIRCULAR_LOD".to_string());
         }
         if (self.bits & TerrainPipelineFlags::MESH_MORPH.bits) != 0 {
             shader_defs.push("MESH_MORPH".to_string());
         }
-        if (self.bits & TerrainPipelineFlags::ADAPTIVE.bits) != 0 {
-            shader_defs.push("ADAPTIVE".to_string());
-        }
-        if (self.bits & TerrainPipelineFlags::VERTEX_NORMAL.bits) != 0 {
-            shader_defs.push("VERTEX_NORMAL".to_string());
-        }
-
         if (self.bits & TerrainPipelineFlags::ALBEDO.bits) != 0 {
             shader_defs.push("ALBEDO".to_string());
         }
@@ -223,13 +209,6 @@ impl TerrainPipelineFlags {
         }
         if (self.bits & TerrainPipelineFlags::TEST3.bits) != 0 {
             shader_defs.push("TEST3".to_string());
-        }
-
-        if (self.bits & TerrainPipelineFlags::MINMAX.bits) != 0 {
-            shader_defs.push("MINMAX".to_string());
-        }
-        if (self.bits & TerrainPipelineFlags::MINMAX_ERROR.bits) != 0 {
-            shader_defs.push("MINMAX_ERROR".to_string());
         }
 
         shader_defs

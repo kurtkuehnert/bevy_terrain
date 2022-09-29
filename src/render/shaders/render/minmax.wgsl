@@ -1,52 +1,45 @@
 #define_import_path bevy_terrain::minmax
 
+fn calculate_cube_position(grid_index: u32) -> vec3<f32>{
+    var corners = array<vec3<f32>, 14>(
+        vec3<f32>( 0.5, -0.5, 1.0),
+        vec3<f32>(-0.5, -0.5, 1.0),
+        vec3<f32>( 0.5, -0.5, 0.0),
+        vec3<f32>(-0.5, -0.5, 0.0),
+        vec3<f32>(-0.5,  0.5, 0.0),
+        vec3<f32>(-0.5, -0.5, 1.0),
+        vec3<f32>(-0.5,  0.5, 1.0),
+        vec3<f32>( 0.5, -0.5, 1.0),
+        vec3<f32>( 0.5,  0.5, 1.0),
+        vec3<f32>( 0.5, -0.5, 0.0),
+        vec3<f32>( 0.5,  0.5, 0.0),
+        vec3<f32>(-0.5,  0.5, 0.0),
+        vec3<f32>( 0.5,  0.5, 1.0),
+        vec3<f32>(-0.5,  0.5, 1.0)
+    );
+
+    return corners[i32(clamp(grid_index, 1u, 14u)) - 1];
+}
+
 @vertex
-fn vertex(vertex: VertexInput) -> VertexOutput {
-    let tile_lod = 0u;
-    let tile_size = 8u;
-
-    let vertices_per_row = (tile_size + 2u) << 1u;
-    let vertices_per_tile = vertices_per_row * tile_size;
-
-    let tile_index  = (vertex.index - tiles.counts[tile_lod].x) / vertices_per_tile + tile_lod * 100000u;
-    let vertex_index = (vertex.index - tiles.counts[tile_lod].x) % vertices_per_tile;
-
+fn vertex(in: VertexInput) -> VertexOutput {
+    let tile_index = in.vertex_index / view_config.vertices_per_tile;
+    let grid_index = in.vertex_index % view_config.vertices_per_tile;
 
     let tile = tiles.data[tile_index];
 
     let size = f32(tile.size) * view_config.tile_scale;
-    let local_position = (vec2<f32>(tile.coords) + 0.5) * size;
-    let lod = u32(ceil(log2(size))) + 1u;
-    let minmax = minmax(local_position, size);
+    let center_position = (vec2<f32>(tile.coords) + 0.5) * size;
+    let minmax = minmax(center_position, size);
 
-    var corners = array<vec3<f32>, 14>(
-        vec3<f32>( 0.5, -0.5, minmax.y),
-        vec3<f32>(-0.5, -0.5, minmax.y),
-        vec3<f32>( 0.5, -0.5, minmax.x),
-        vec3<f32>(-0.5, -0.5, minmax.x),
-        vec3<f32>(-0.5,  0.5, minmax.x),
-        vec3<f32>(-0.5, -0.5, minmax.y),
-        vec3<f32>(-0.5,  0.5, minmax.y),
-        vec3<f32>( 0.5, -0.5, minmax.y),
-        vec3<f32>( 0.5,  0.5, minmax.y),
-        vec3<f32>( 0.5, -0.5, minmax.x),
-        vec3<f32>( 0.5,  0.5, minmax.x),
-        vec3<f32>(-0.5,  0.5, minmax.x),
-        vec3<f32>( 0.5,  0.5, minmax.y),
-        vec3<f32>(-0.5,  0.5, minmax.y)
-    );
 
-    let corner = corners[i32(clamp(vertex_index, 1u, 14u)) - 1];
+    let cube_position = calculate_cube_position(grid_index);
+    let local_position = center_position + cube_position.xy * size;
+    let height = mix(minmax.x, minmax.y, cube_position.z);
+    let color = show_tiles(tile, local_position);
 
-    let local_position = local_position + corner.xy * size;
-    let world_position = vec4<f32>(local_position.x, corner.z, local_position.y, 1.0);
-    let color = show_tiles(tile, local_position, lod);
-
-    var output: VertexOutput;
-    output.frag_coord = view.view_proj * world_position;
-    output.local_position = local_position;
-    output.world_position = world_position;
-    output.color = color;
+    var output = vertex_output(local_position, height);
+    output.debug_color = color;
 
     return output;
 

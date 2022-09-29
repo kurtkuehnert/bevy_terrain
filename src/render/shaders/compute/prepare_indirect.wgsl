@@ -10,34 +10,15 @@ var<uniform> view_config: TerrainViewConfig;
 @group(0) @binding(2)
 var<storage, read_write> final_tiles: TileList;
 @group(0) @binding(3)
-var<storage, read_write> temporary_tiles: TemporaryTileList;
+var<storage, read_write> temporary_tiles: TileList;
 @group(0) @binding(4)
 var<storage, read_write> parameters: Parameters;
 
 @group(3) @binding(0)
 var<storage, read_write> indirect_buffer: IndirectBuffer;
 
-
-fn final_index(lod: u32) -> i32 {
-    if (lod == 0u) {
-        return atomicExchange(&parameters.final_index1, 0);
-    }
-    if (lod == 1u) {
-        return atomicExchange(&parameters.final_index2, 0);
-    }
-    if (lod == 2u) {
-        return atomicExchange(&parameters.final_index3, 0);
-    }
-    if (lod == 3u) {
-        return atomicExchange(&parameters.final_index4, 0);
-    }
-
-    return 0;
-    // return atomicExchange(&atomics.final_indices[lod], 0);
-}
-
 @compute @workgroup_size(1, 1, 1)
-fn prepare_tessellation() {
+fn prepare_root() {
     indirect_buffer.workgroup_count = vec3<u32>(1u, 1u, 1u);
 
     parameters.counter = 1;
@@ -45,49 +26,26 @@ fn prepare_tessellation() {
 
     let size = 1u << (view_config.refinement_count - 1u);
 
-    temporary_tiles.data[0] = TileInfo(vec2<u32>(0u), size);
+    temporary_tiles.data[0] = Tile(vec2<u32>(0u), size);
 }
 
 @compute @workgroup_size(1, 1, 1)
-fn prepare_refinement() {
-    var patch_count: u32;
-
+fn prepare_next() {
     if (parameters.counter == 1) {
-        parameters.counter = -1;
-        patch_count = u32(atomicExchange(&parameters.child_index, i32(view_config.tile_count - 1u)));
+        parameters.tile_count = u32(atomicExchange(&parameters.child_index, i32(view_config.tile_count - 1u)));
     }
     else {
-        parameters.counter = 1;
-        patch_count =  view_config.tile_count - 1u - u32(atomicExchange(&parameters.child_index, 0));
+        parameters.tile_count =  view_config.tile_count - 1u - u32(atomicExchange(&parameters.child_index, 0));
     }
 
-    parameters.refinement_count = patch_count;
-    indirect_buffer.workgroup_count.x = (patch_count + 63u) / 64u;
+    indirect_buffer.workgroup_count.x = (parameters.tile_count + 63u) / 64u;
+    parameters.counter = -parameters.counter;
 }
 
 @compute @workgroup_size(1, 1, 1)
 fn prepare_render() {
-#ifdef ADAPTIVE
-    var vertex_count = 0u;
-
-    for (var i = 0u; i < 4u; i = i + 1u) {
-        let tile_size = calc_tile_count(i);
-        let vertices_per_row = (tile_size + 2u) << 1u;
-        let vertices_per_tile = vertices_per_row * tile_size;
-
-        let first = vertex_count;
-        vertex_count = vertex_count + vertices_per_tile * u32(final_index(i));
-        let last = vertex_count;
-
-        final_tiles.counts[i] = vec2<u32>(first, last);
-    }
-#else
-    let tile_size = 8u;
-    let vertices_per_row = (tile_size + 2u) << 1u;
-    let vertices_per_tile = vertices_per_row * tile_size;
-
-    let vertex_count = vertices_per_tile * u32(final_index(0u));
-#endif
+    let tile_count = u32(atomicExchange(&parameters.final_index, 0));
+    let vertex_count = view_config.vertices_per_tile * tile_count;
 
     indirect_buffer.workgroup_count = vec3<u32>(vertex_count, 1u, 0u);
 }

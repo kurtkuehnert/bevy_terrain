@@ -36,6 +36,7 @@ macro_rules! return_none {
     };
 }
 
+#[derive(Copy, Clone)]
 pub struct BaseConfig {
     pub center_size: u32,
     pub file_format: FileFormat,

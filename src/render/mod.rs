@@ -56,7 +56,7 @@ pub(crate) const CULL_DATA_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDe
     ],
 };
 
-pub(crate) const TESSELLATION_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
+pub(crate) const REFINE_TILES_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
     label: None,
     entries: &[
         // view config

@@ -13,36 +13,28 @@
 // fn blend_fragment_data(data1: FragmentData, data2: FragmentData, blend_ratio: f32) -> FragmentData;
 
 // The function that evaluates the color of the fragment.
-// It will be called once in the fragment shader with the blended fragment data.
-// fn color_fragment(in: FragmentInput, data: FragmentData) -> vec4<f32>;
+// It will be called once in the fragment shader with the fragment input and the
+// blended fragment data.
+// fn process_fragment(input: FragmentInput, data: FragmentData) -> Fragment;
 
 // The default fragment entry point, which blends the terrain data at the fringe between two lods.
 @fragment
-fn fragment(fragment: FragmentInput) -> FragmentOutput {
-    if (fragment.local_position.x < 2.0 || fragment.local_position.x > f32(config.terrain_size) - 2.0 ||
-        fragment.local_position.y < 2.0 || fragment.local_position.y > f32(config.terrain_size) - 2.0) {
-        discard;
-    }
-
-    if (fragment.world_position.y == 0.0) {
-        discard;
-    }
-
-    let blend = calculate_blend(fragment.world_position.xyz, view_config.fragment_blend);
-
-    let lookup = atlas_lookup(blend.lod, fragment.local_position);
-    var fragment_data = lookup_fragment_data(fragment, lookup);
+fn fragment(input: FragmentInput) -> FragmentOutput {
+    let blend = calculate_blend(input.world_position);
+    let lookup = atlas_lookup(blend.lod, input.local_position);
+    var data = lookup_fragment_data(input, lookup);
 
     if (blend.ratio < 1.0) {
-        let lookup2 = atlas_lookup(blend.lod + 1u, fragment.local_position);
-        let fragment_data2 = lookup_fragment_data(fragment, lookup2);
-
-        fragment_data = blend_fragment_data(fragment_data, fragment_data2, blend.ratio);
+        let lookup2 = atlas_lookup(blend.lod + 1u, input.local_position);
+        let data2 = lookup_fragment_data(input, lookup2);
+        data = blend_fragment_data(data, data2, blend.ratio);
     }
 
-    var color = fragment_color(fragment, fragment_data);
+    let fragment = process_fragment(input, data);
 
-    color = mix(fragment.color, color, 0.8);
+    if (fragment.do_discard) {
+        discard;
+    }
 
-    return FragmentOutput(color);
+    return FragmentOutput(fragment.color);
 }

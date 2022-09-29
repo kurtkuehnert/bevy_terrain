@@ -22,7 +22,7 @@ impl Default for DebugCamera {
                 .with(Smooth::new_position_rotation(1.5, 1.5))
                 .build(),
             active: false,
-            translation_speed: 600.0,
+            translation_speed: 100.0,
             rotation_speed: 8.0,
             acceleration: 1.03,
         }
