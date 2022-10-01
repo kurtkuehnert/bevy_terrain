@@ -6,6 +6,10 @@ struct TerrainConfig {
     chunk_size: u32,
     terrain_size: u32,
 
+    height_size: f32,
+    minmax_size: f32,
+    _empty: u32,
+    _empty: u32,
     height_scale: f32,
     minmax_scale: f32,
     _empty: u32,
@@ -31,7 +35,7 @@ var<storage> tiles: TileList;
 @group(2) @binding(0)
 var<uniform> config: TerrainConfig;
 @group(2) @binding(1)
-var terrain_sampler: sampler;
+var atlas_sampler: sampler;
 @group(2) @binding(2)
 var height_atlas: texture_2d_array<f32>;
 @group(2) @binding(3)
@@ -45,7 +49,7 @@ var minmax_atlas: texture_2d_array<f32>;
 #import bevy_pbr::shadows
 #import bevy_pbr::pbr_functions
 
-#import bevy_terrain::atlas
+#import bevy_terrain::node
 #import bevy_terrain::functions
 #import bevy_terrain::debug
 
@@ -54,26 +58,30 @@ struct FragmentData {
     debug_color: vec4<f32>,
 }
 
-fn vertex_height(lookup: AtlasLookup) -> f32 {
+fn vertex_height(lookup: NodeLookup) -> f32 {
     let height_coords = lookup.atlas_coords * config.height_scale + config.height_offset;
-    let height = textureSampleLevel(height_atlas, terrain_sampler, height_coords, lookup.atlas_index, 0.0).x;
+    let height = textureSampleLevel(height_atlas, atlas_sampler, height_coords, lookup.atlas_index, 0.0).x;
 
     return height * config.height;
 }
 
-fn lookup_fragment_data(input: FragmentInput, lookup: AtlasLookup) -> FragmentData {
-    let lod = lookup.lod;
+fn lookup_fragment_data(input: FragmentInput, lookup: NodeLookup, ddx: vec2<f32>, ddy: vec2<f32>) -> FragmentData {
+    let atlas_lod = lookup.atlas_lod;
     let atlas_index = lookup.atlas_index;
     let atlas_coords = lookup.atlas_coords;
+    let ddx = ddx / f32(1u << atlas_lod);
+    let ddy = ddy / f32(1u << atlas_lod);
 
     let height_coords = atlas_coords * config.height_scale + config.height_offset;
+    let height_ddx = ddx / 512.0;
+    let height_ddy = ddy / 512.0;
 
-    let world_normal = calculate_normal(height_coords, atlas_index, lod);
+    let world_normal = calculate_normal(height_coords, atlas_index, atlas_lod, height_ddx, height_ddy);
 
     var debug_color = vec4<f32>(0.5);
 
 #ifdef SHOW_LOD
-    debug_color = mix(debug_color, show_lod(lod, input.world_position.xyz), 0.4);
+    debug_color = mix(debug_color, show_lod(atlas_lod, input.world_position.xyz), 0.4);
 #endif
 
 #ifdef SHOW_UV

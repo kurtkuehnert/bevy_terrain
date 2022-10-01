@@ -57,7 +57,7 @@ impl AveragePixel for LumaA<u16> {
 type Filter = fn(&mut DynamicImage, &DynamicImage, &AttachmentConfig, UVec2);
 
 pub(crate) fn imageops_linear<I, J>(
-    node_image: &mut I,
+    parent_image: &mut I,
     child_image: &J,
     child_size: u32,
     node_x: u32,
@@ -79,12 +79,12 @@ pub(crate) fn imageops_linear<I, J>(
 
         let value = AveragePixel::average(values[0], values[1], values[2], values[3]);
 
-        node_image.put_pixel(node_x + x, node_y + y, value);
+        parent_image.put_pixel(node_x + x, node_y + y, value);
     }
 }
 
 pub(crate) fn linear(
-    node_image: &mut DynamicImage,
+    parent_image: &mut DynamicImage,
     child_image: &DynamicImage,
     attachment: &AttachmentConfig,
     offset: UVec2,
@@ -96,7 +96,7 @@ pub(crate) fn linear(
     match attachment.format {
         AttachmentFormat::Rgb8 => {
             imageops_linear(
-                node_image.as_mut_rgb8().unwrap(),
+                parent_image.as_mut_rgb8().unwrap(),
                 child_image.as_rgb8().unwrap(),
                 child_size,
                 node_x,
@@ -106,7 +106,7 @@ pub(crate) fn linear(
         }
         AttachmentFormat::Rgba8 => {
             imageops_linear(
-                node_image.as_mut_rgba8().unwrap(),
+                parent_image.as_mut_rgba8().unwrap(),
                 child_image.as_rgba8().unwrap(),
                 child_size,
                 node_x,
@@ -116,7 +116,7 @@ pub(crate) fn linear(
         }
         AttachmentFormat::R16 => {
             imageops_linear(
-                node_image.as_mut_luma16().unwrap(),
+                parent_image.as_mut_luma16().unwrap(),
                 child_image.as_luma16().unwrap(),
                 child_size,
                 node_x,
@@ -126,7 +126,7 @@ pub(crate) fn linear(
         }
         AttachmentFormat::Rg16 => {
             imageops_linear(
-                node_image.as_mut_luma_alpha16().unwrap(),
+                parent_image.as_mut_luma_alpha16().unwrap(),
                 child_image.as_luma_alpha16().unwrap(),
                 child_size,
                 node_x,
@@ -138,12 +138,12 @@ pub(crate) fn linear(
 }
 
 pub(crate) fn minmax(
-    node_image: &mut DynamicImage,
+    parent_image: &mut DynamicImage,
     child_image: &DynamicImage,
     attachment: &AttachmentConfig,
     offset: UVec2,
 ) {
-    let node_image = node_image.as_mut_luma_alpha16().unwrap();
+    let parent_image = parent_image.as_mut_luma_alpha16().unwrap();
     let child_image = child_image.as_luma_alpha16().unwrap();
 
     let child_size = attachment.center_size >> 1;
@@ -167,7 +167,7 @@ pub(crate) fn minmax(
         }
 
         let value = LumaA([min, max]);
-        node_image.put_pixel(node_x + x, node_y + y, value);
+        parent_image.put_pixel(node_x + x, node_y + y, value);
     }
 }
 

@@ -1,3 +1,4 @@
+use crate::loader::tdf::TDF;
 use crate::preprocess::{R16Image, Rg16Image, Rgb8Image, Rgba8Image};
 use crate::terrain_data::{calc_node_id, AttachmentConfig, AttachmentFormat, FileFormat};
 use bytemuck::cast_slice;
@@ -54,7 +55,7 @@ pub fn load_image(path: &str, file_format: FileFormat) -> Option<DynamicImage> {
     let path = path.to_str().unwrap();
 
     match file_format {
-        FileFormat::BIN => unimplemented!(), //load_bin(node_path, attachment),
+        FileFormat::TDF => load_tdf(path),
         FileFormat::PNG | FileFormat::TIF => load_image_rs(path),
         FileFormat::QOI => load_qoi(path),
         FileFormat::DTM => load_dtm(path),
@@ -65,7 +66,7 @@ pub(crate) fn load_or_create_node(path: &str, attachment: &AttachmentConfig) -> 
     if let Some(node_image) = load_image(path, attachment.file_format) {
         node_image
     } else {
-        let size = attachment.texture_size();
+        let size = attachment.texture_size;
 
         match attachment.format {
             AttachmentFormat::Rgb8 => DynamicImage::from(Rgb8Image::new(size, size)),
@@ -82,41 +83,46 @@ pub fn save_image(path: &str, node_image: &DynamicImage, attachment: &Attachment
     let path = path.to_str().unwrap();
 
     match attachment.file_format {
-        FileFormat::BIN => save_bin(&path, node_image, attachment),
+        FileFormat::TDF => save_tdf(&path, node_image, attachment),
         FileFormat::PNG | FileFormat::TIF => save_image_rs(&path, node_image, attachment),
         FileFormat::QOI => save_qoi(&path, node_image, attachment),
         FileFormat::DTM => save_dtm(&path, node_image, attachment),
     }
 }
 
-fn _load_bin(path: &str, attachment: &AttachmentConfig) -> Option<DynamicImage> {
-    let size = attachment.texture_size();
+fn load_tdf(path: &str) -> Option<DynamicImage> {
+    let (descriptor, data) = TDF::load_file(path).ok()?;
 
-    if let Ok(buffer) = fs::read(path) {
-        let node_image = match attachment.format {
-            AttachmentFormat::Rgb8 => {
-                let image = Rgb8Image::from_raw(size, size, buffer).unwrap();
-                DynamicImage::from(image)
-            }
-            AttachmentFormat::Rgba8 => {
-                let image = Rgba8Image::from_raw(size, size, buffer).unwrap();
-                DynamicImage::from(image)
-            }
-            AttachmentFormat::R16 => {
-                let buffer = Vec::from(cast_slice(&buffer)); // Todo: improve this?
-                let image = R16Image::from_raw(size, size, buffer).unwrap();
-                DynamicImage::from(image)
-            }
-            AttachmentFormat::Rg16 => {
-                let buffer = Vec::from(cast_slice(&buffer));
-                let image = Rg16Image::from_raw(size, size, buffer).unwrap();
-                DynamicImage::from(image)
-            }
-        };
+    match (descriptor.pixel_size, descriptor.channel_count) {
+        (1, 3) => {
+            let image = Rgb8Image::from_raw(descriptor.width, descriptor.height, data).unwrap();
+            Some(DynamicImage::from(image))
+        }
+        (1, 4) => {
+            let image = Rgba8Image::from_raw(descriptor.width, descriptor.height, data).unwrap();
+            Some(DynamicImage::from(image))
+        }
+        (2, 1) => {
+            let data: Vec<u16> = data
+                .chunks_exact(2)
+                .into_iter()
+                .map(|a| u16::from_ne_bytes([a[0], a[1]]))
+                .collect();
 
-        Some(node_image)
-    } else {
-        None
+            let image = R16Image::from_raw(descriptor.width, descriptor.height, data).unwrap();
+            Some(DynamicImage::from(image))
+        }
+        (2, 2) => {
+            let data: Vec<u16> = data
+                .chunks_exact(2)
+                .into_iter()
+                .map(|a| u16::from_ne_bytes([a[0], a[1]]))
+                .collect();
+
+            let image = Rg16Image::from_raw(descriptor.width, descriptor.height, data).unwrap();
+            Some(DynamicImage::from(image))
+        }
+        _ => None,
     }
 }
 
@@ -163,8 +169,23 @@ fn load_qoi(path: &str) -> Option<DynamicImage> {
     }
 }
 
-fn save_bin(path: &str, node_image: &DynamicImage, _attachment: &AttachmentConfig) {
-    fs::write(path, node_image.as_bytes()).expect("Could not save node.");
+fn save_tdf(path: &str, node_image: &DynamicImage, attachment: &AttachmentConfig) {
+    let (pixel_size, channel_count) = match attachment.format {
+        AttachmentFormat::Rgb8 => (1, 3),
+        AttachmentFormat::Rgba8 => (1, 4),
+        AttachmentFormat::R16 => (2, 1),
+        AttachmentFormat::Rg16 => (2, 2),
+    };
+
+    let descriptor = TDF {
+        pixel_size,
+        channel_count,
+        width: node_image.width(),
+        height: node_image.height(),
+        mip_count: 1,
+    };
+
+    descriptor.save_file(path, node_image.as_bytes());
 }
 
 fn save_image_rs(path: &str, node_image: &DynamicImage, _attachment: &AttachmentConfig) {

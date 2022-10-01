@@ -6,6 +6,11 @@ struct TerrainConfig {
     height: f32,
     chunk_size: u32,
     terrain_size: u32,
+
+    height_size: f32,
+    minmax_size: f32,
+    _empty: u32,
+    _empty: u32,
     height_scale: f32,
     minmax_scale: f32,
     _empty: u32,
@@ -41,13 +46,13 @@ var<uniform> view: CullingData;
 @group(2) @binding(0)
 var<uniform> config: TerrainConfig;
 @group(2) @binding(1)
-var terrain_sampler: sampler;
+var atlas_sampler: sampler;
 @group(2) @binding(2)
 var height_atlas: texture_2d_array<f32>;
 @group(2) @binding(3)
 var minmax_atlas: texture_2d_array<f32>;
 
-#import bevy_terrain::atlas
+#import bevy_terrain::node
 #import bevy_terrain::functions
 
 fn child_index() -> i32 {

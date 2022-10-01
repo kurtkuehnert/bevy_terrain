@@ -90,9 +90,10 @@ pub struct TerrainPipelineFlags: u32 {
     const ALBEDO             = (1 <<  8);
     const BRIGHT             = (1 <<  9);
     const LIGHTING           = (1 << 10);
-    const TEST1              = (1 << 11);
-    const TEST2              = (1 << 12);
-    const TEST3              = (1 << 13);
+    const SAMPLE_GRAD        = (1 << 11);
+    const TEST1              = (1 << 12);
+    const TEST2              = (1 << 13);
+    const TEST3              = (1 << 14);
 
     const MSAA_RESERVED_BITS = TerrainPipelineFlags::MSAA_MASK_BITS << TerrainPipelineFlags::MSAA_SHIFT_BITS;
 }
@@ -142,6 +143,9 @@ impl TerrainPipelineFlags {
         }
         if debug.lighting {
             key |= TerrainPipelineFlags::LIGHTING;
+        }
+        if debug.sample_grad {
+            key |= TerrainPipelineFlags::SAMPLE_GRAD;
         }
         if debug.test1 {
             key |= TerrainPipelineFlags::TEST1;
@@ -200,7 +204,9 @@ impl TerrainPipelineFlags {
         if (self.bits & TerrainPipelineFlags::LIGHTING.bits) != 0 {
             shader_defs.push("LIGHTING".to_string());
         }
-
+        if (self.bits & TerrainPipelineFlags::SAMPLE_GRAD.bits) != 0 {
+            shader_defs.push("SAMPLE_GRAD".to_string());
+        }
         if (self.bits & TerrainPipelineFlags::TEST1.bits) != 0 {
             shader_defs.push("TEST1".to_string());
         }
@@ -369,7 +375,8 @@ pub(crate) fn queue_terrain<M: Material>(
                 } else {
                     flags |= TerrainPipelineFlags::LIGHTING
                         | TerrainPipelineFlags::CIRCULAR_LOD
-                        | TerrainPipelineFlags::MESH_MORPH;
+                        | TerrainPipelineFlags::MESH_MORPH
+                        | TerrainPipelineFlags::SAMPLE_GRAD;
                 }
 
                 let key = TerrainPipelineKey {

@@ -96,7 +96,7 @@ impl From<AttachmentFormat> for TextureFormat {
 /// The file format used to store the terrain data.
 #[derive(Clone, Copy, Debug)]
 pub enum FileFormat {
-    BIN,
+    TDF,
     PNG,
     TIF,
     QOI,
@@ -105,14 +105,14 @@ pub enum FileFormat {
 
 impl Default for FileFormat {
     fn default() -> Self {
-        Self::BIN
+        Self::TDF
     }
 }
 
 impl FileFormat {
     pub(crate) fn extension(&self) -> &str {
         match self {
-            Self::BIN => "bin",
+            Self::TDF => "tdf",
             Self::PNG => "png",
             Self::TIF => "tif",
             Self::QOI => "qoi",
@@ -126,10 +126,12 @@ impl FileFormat {
 pub struct AttachmentConfig {
     /// The name of the attachment.
     pub name: String,
+    pub texture_size: u32,
     /// The none overlapping center size in pixels.
     pub center_size: u32,
     /// The overlapping border size around the node, used to prevent sampling artifacts.
     pub border_size: u32,
+    pub mip_level_count: u32,
     /// The format of the attachment.
     pub format: AttachmentFormat,
     /// The file format of the attachment.
@@ -137,8 +139,24 @@ pub struct AttachmentConfig {
 }
 
 impl AttachmentConfig {
-    pub fn texture_size(&self) -> u32 {
-        self.center_size + 2 * self.border_size
+    pub fn new(
+        name: String,
+        texture_size: u32,
+        mip_level_count: u32,
+        format: AttachmentFormat,
+    ) -> Self {
+        let border_size = 1 << (mip_level_count - 1);
+        let center_size = texture_size - 2 * border_size;
+
+        Self {
+            name,
+            texture_size,
+            center_size,
+            border_size,
+            mip_level_count,
+            format,
+            file_format: FileFormat::TDF,
+        }
     }
 }
 
@@ -149,10 +167,12 @@ pub struct AtlasAttachment {
     pub(crate) handle: Handle<Image>,
     /// The name of the attachment.
     pub(crate) name: String,
+    pub(crate) texture_size: u32,
     /// The none overlapping center size in pixels.
     pub(crate) center_size: u32,
     /// The overlapping border size around the node, used to prevent sampling artifacts.
     pub(crate) border_size: u32,
+    pub mip_level_count: u32,
     /// The format of the attachment.
     pub(crate) format: TextureFormat,
 }
@@ -169,8 +189,10 @@ impl From<AttachmentConfig> for AtlasAttachment {
         Self {
             handle,
             name: config.name,
+            texture_size: config.texture_size,
             center_size: config.center_size,
             border_size: config.border_size,
+            mip_level_count: config.mip_level_count,
             format: config.format.into(),
         }
     }

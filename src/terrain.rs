@@ -62,7 +62,7 @@ pub struct TerrainConfig {
     /// The maximum height of the terrain. // Todo: reconsider this
     pub height: f32,
     /// The size of the smallest nodes.
-    pub chunk_size: u32, // Todo: reconsider this
+    pub leaf_node_size: u32, // Todo: reconsider this
     /// The size of the terrain.
     pub terrain_size: u32, // Todo: reconsider this
     /// The amount of nodes the can be loaded simultaneously in the node atlas.
@@ -73,16 +73,22 @@ pub struct TerrainConfig {
     pub attachments: Vec<AtlasAttachment>,
 }
 
-impl Default for TerrainConfig {
-    fn default() -> Self {
+impl TerrainConfig {
+    pub fn new(
+        terrain_size: u32,
+        lod_count: u32,
+        height: f32,
+        node_atlas_size: u32,
+        path: String,
+    ) -> Self {
         Self {
-            lod_count: 8,
-            height: 100.0,
-            chunk_size: 512,
-            terrain_size: 1024,
-            node_atlas_size: 512,
-            path: default(),
-            attachments: default(),
+            lod_count,
+            height,
+            leaf_node_size: 0,
+            terrain_size,
+            node_atlas_size,
+            path,
+            attachments: vec![],
         }
     }
 }
@@ -100,13 +106,13 @@ impl TerrainConfig {
     pub fn add_attachment_from_disk(
         &mut self,
         preprocessor: &mut Preprocessor,
-        from_disk_loader: &mut AttachmentFromDiskLoader,
+        loader: &mut AttachmentFromDiskLoader,
         attachment: AttachmentConfig,
         tile: TileConfig,
     ) {
         let attachment_index = self.add_attachment(attachment.clone());
 
-        from_disk_loader.attachments.insert(
+        loader.attachments.insert(
             attachment_index,
             AttachmentFromDisk::new(&attachment, &self.path),
         );
@@ -125,15 +131,17 @@ impl TerrainConfig {
     pub fn add_base_attachment_from_disk(
         &mut self,
         preprocessor: &mut Preprocessor,
-        from_disk_loader: &mut AttachmentFromDiskLoader,
+        loader: &mut AttachmentFromDiskLoader,
         base: BaseConfig,
         tile: TileConfig,
     ) {
-        from_disk_loader.attachments.insert(
+        self.leaf_node_size = base.texture_size - (1 << base.mip_level_count);
+
+        loader.attachments.insert(
             self.attachments.len(),
             AttachmentFromDisk::new(&base.height_attachment(), &self.path),
         );
-        from_disk_loader.attachments.insert(
+        loader.attachments.insert(
             self.attachments.len() + 1,
             AttachmentFromDisk::new(&base.minmax_attachment(), &self.path),
         );

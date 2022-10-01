@@ -4,7 +4,7 @@ const TYPES_SHADER: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 907665645684322571);
 const PARAMETERS_SHADER: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 656456784512075658);
-const ATLAS_SHADER: HandleUntyped =
+const NODE_SHADER: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 124345314345873273);
 const FUNCTIONS_SHADER: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 234313897973543254);
@@ -34,7 +34,7 @@ pub(crate) fn add_shader(app: &mut App) {
         PARAMETERS_SHADER,
         Shader::from_wgsl(include_str!("compute/parameters.wgsl")),
     );
-    assets.set_untracked(ATLAS_SHADER, Shader::from_wgsl(include_str!("atlas.wgsl")));
+    assets.set_untracked(NODE_SHADER, Shader::from_wgsl(include_str!("node.wgsl")));
     assets.set_untracked(
         FUNCTIONS_SHADER,
         Shader::from_wgsl(include_str!("functions.wgsl")),

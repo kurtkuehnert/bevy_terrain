@@ -36,6 +36,7 @@ pub struct DebugTerrain {
     pub albedo: bool,
     pub bright: bool,
     pub lighting: bool,
+    pub sample_grad: bool,
     pub freeze: bool,
     pub test1: bool,
     pub test2: bool,
@@ -56,6 +57,7 @@ impl Default for DebugTerrain {
             albedo: false,
             bright: false,
             lighting: true,
+            sample_grad: true,
             freeze: false,
             test1: false,
             test2: false,
@@ -102,6 +104,9 @@ pub fn toggle_debug(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTerrain>)
     }
     if input.just_pressed(KeyCode::S) {
         debug.lighting = !debug.lighting;
+    }
+    if input.just_pressed(KeyCode::G) {
+        debug.sample_grad = !debug.sample_grad;
     }
     if input.just_pressed(KeyCode::F) {
         debug.freeze = !debug.freeze;

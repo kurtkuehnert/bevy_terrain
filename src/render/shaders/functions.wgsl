@@ -88,13 +88,22 @@ fn calculate_local_position(tile: Tile, grid_position: vec2<u32>) -> vec2<f32> {
     return local_position;
 }
 
-fn calculate_normal(uv: vec2<f32>, atlas_index: i32, lod: u32) -> vec3<f32> {
-    let left  = textureSampleLevel(height_atlas, terrain_sampler, uv, atlas_index, 0.0, vec2<i32>(-1,  0)).x;
-    let up    = textureSampleLevel(height_atlas, terrain_sampler, uv, atlas_index, 0.0, vec2<i32>( 0, -1)).x;
-    let right = textureSampleLevel(height_atlas, terrain_sampler, uv, atlas_index, 0.0, vec2<i32>( 1,  0)).x;
-    let down  = textureSampleLevel(height_atlas, terrain_sampler, uv, atlas_index, 0.0, vec2<i32>( 0,  1)).x;
+fn calculate_normal(coords: vec2<f32>, atlas_index: i32, atlas_lod: u32, ddx: vec2<f32>, ddy: vec2<f32>) -> vec3<f32> {
+#ifdef SAMPLE_GRAD
+    let offset = 1.0 / config.height_size;
+    let left  = textureSampleGrad(height_atlas, atlas_sampler, coords + vec2<f32>(-offset,     0.0), atlas_index, ddx, ddy).x;
+    let up    = textureSampleGrad(height_atlas, atlas_sampler, coords + vec2<f32>(    0.0, -offset), atlas_index, ddx, ddy).x;
+    let right = textureSampleGrad(height_atlas, atlas_sampler, coords + vec2<f32>( offset,     0.0), atlas_index, ddx, ddy).x;
+    let down  = textureSampleGrad(height_atlas, atlas_sampler, coords + vec2<f32>(    0.0,  offset), atlas_index, ddx, ddy).x;
+#else
+    let left  = textureSampleLevel(height_atlas, atlas_sampler, coords, atlas_index, 0.0, vec2<i32>(-1,  0)).x;
+    let up    = textureSampleLevel(height_atlas, atlas_sampler, coords, atlas_index, 0.0, vec2<i32>( 0, -1)).x;
+    let right = textureSampleLevel(height_atlas, atlas_sampler, coords, atlas_index, 0.0, vec2<i32>( 1,  0)).x;
+    let down  = textureSampleLevel(height_atlas, atlas_sampler, coords, atlas_index, 0.0, vec2<i32>( 0,  1)).x;
 
-    return normalize(vec3<f32>(right - left, f32(2u << lod) / config.height, down - up));
+#endif
+
+    return normalize(vec3<f32>(right - left, f32(2u << atlas_lod) / config.height, down - up));
 }
 
 fn minmax(local_position: vec2<f32>, size: f32) -> vec2<f32> {
@@ -104,12 +113,12 @@ fn minmax(local_position: vec2<f32>, size: f32) -> vec2<f32> {
         return vec2<f32>(0.0, config.height);
     }
 
-    let lookup = atlas_lookup(lod, local_position);
+    let lookup = lookup_node(lod, local_position);
     let atlas_index = lookup.atlas_index;
     let minmax_coords = lookup.atlas_coords * config.minmax_scale + config.minmax_offset;
 
-    let min_gather = textureGather(0, minmax_atlas, terrain_sampler, minmax_coords, atlas_index);
-    let max_gather = textureGather(1, minmax_atlas, terrain_sampler, minmax_coords, atlas_index);
+    let min_gather = textureGather(0, minmax_atlas, atlas_sampler, minmax_coords, atlas_index);
+    let max_gather = textureGather(1, minmax_atlas, atlas_sampler, minmax_coords, atlas_index);
 
     var min_height = min(min(min_gather.x, min_gather.y), min(min_gather.z, min_gather.w));
     var max_height = max(max(max_gather.x, max_gather.y), max(max_gather.z, max_gather.w));
