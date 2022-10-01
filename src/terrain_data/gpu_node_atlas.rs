@@ -25,16 +25,14 @@ impl AtlasAttachment {
         images: &mut RenderAssets<Image>,
         node_atlas_size: AtlasIndex,
     ) -> Handle<Image> {
-        let texture_size = self.center_size + 2 * self.border_size;
-
         let texture = device.create_texture(&TextureDescriptor {
             label: Some(&(self.name.to_string() + "_attachment")),
             size: Extent3d {
-                width: texture_size,
-                height: texture_size,
+                width: self.texture_size,
+                height: self.texture_size,
                 depth_or_array_layers: node_atlas_size as u32,
             },
-            mip_level_count: 1,
+            mip_level_count: self.mip_level_count,
             sample_count: 1,
             dimension: TextureDimension::D2,
             format: self.format,
@@ -48,7 +46,7 @@ impl AtlasAttachment {
                 texture,
                 texture_format: self.format,
                 sampler: device.create_sampler(&SamplerDescriptor::default()),
-                size: Vec2::splat(texture_size as f32),
+                size: Vec2::splat(self.texture_size as f32),
             },
         );
 
@@ -63,7 +61,7 @@ impl AtlasAttachment {
 #[derive(Component)]
 pub struct GpuNodeAtlas {
     /// Stores the atlas attachments of the terrain.
-    pub(crate) attachments: Vec<Handle<Image>>,
+    pub(crate) attachments: Vec<(AtlasAttachment, Handle<Image>)>,
     /// Stores the nodes, that have finished loading this frame.
     pub(crate) loaded_nodes: Vec<LoadingNode>,
 }
@@ -78,7 +76,12 @@ impl GpuNodeAtlas {
         let attachments = node_atlas
             .attachments
             .iter()
-            .map(|attachment| attachment.create(device, images, node_atlas.size))
+            .map(|attachment| {
+                (
+                    attachment.clone(),
+                    attachment.create(device, images, node_atlas.size),
+                )
+            })
             .collect();
 
         Self {
@@ -91,43 +94,45 @@ impl GpuNodeAtlas {
     /// finished loading this frame.
     fn update(&mut self, command_encoder: &mut CommandEncoder, images: &RenderAssets<Image>) {
         for node in self.loaded_nodes.drain(..) {
-            for (node_handle, atlas_handle) in
+            for (attachment, node_handle, atlas_handle) in
                 self.attachments
                     .iter()
                     .enumerate()
-                    .map(|(index, atlas_handle)| {
+                    .map(|(index, (attachment, atlas_handle))| {
                         let node_handle = node.attachments.get(&index).unwrap();
 
-                        (node_handle, atlas_handle)
+                        (attachment, node_handle, atlas_handle)
                     })
             {
                 if let (Some(node_attachment), Some(atlas_attachment)) =
                     (images.get(node_handle), images.get(atlas_handle))
                 {
-                    // Todo: change to queue.write_texture
-                    command_encoder.copy_texture_to_texture(
-                        ImageCopyTexture {
-                            texture: &node_attachment.texture,
-                            mip_level: 0,
-                            origin: Origin3d { x: 0, y: 0, z: 0 },
-                            aspect: TextureAspect::All,
-                        },
-                        ImageCopyTexture {
-                            texture: &atlas_attachment.texture,
-                            mip_level: 0,
-                            origin: Origin3d {
-                                x: 0,
-                                y: 0,
-                                z: node.atlas_index as u32,
+                    for mip_level in 0..attachment.mip_level_count {
+                        // Todo: change to queue.write_texture
+                        command_encoder.copy_texture_to_texture(
+                            ImageCopyTexture {
+                                texture: &node_attachment.texture,
+                                mip_level,
+                                origin: Origin3d { x: 0, y: 0, z: 0 },
+                                aspect: TextureAspect::All,
                             },
-                            aspect: TextureAspect::All,
-                        },
-                        Extent3d {
-                            width: atlas_attachment.size.x as u32,
-                            height: atlas_attachment.size.y as u32,
-                            depth_or_array_layers: 1,
-                        },
-                    );
+                            ImageCopyTexture {
+                                texture: &atlas_attachment.texture,
+                                mip_level,
+                                origin: Origin3d {
+                                    x: 0,
+                                    y: 0,
+                                    z: node.atlas_index as u32,
+                                },
+                                aspect: TextureAspect::All,
+                            },
+                            Extent3d {
+                                width: attachment.texture_size >> mip_level,
+                                height: attachment.texture_size >> mip_level,
+                                depth_or_array_layers: 1,
+                            },
+                        );
+                    }
                 } else {
                     error!("Something went wrong, attachment is not available!")
                 }

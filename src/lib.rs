@@ -41,6 +41,7 @@
 //!
 //! [^note]: Some of these claims are not yet fully implemented.
 
+use crate::loader::TDFPlugin;
 use crate::{
     attachment_loader::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk},
     debug::DebugTerrain,
@@ -82,6 +83,7 @@ use bevy_qoi::QOIPlugin;
 
 pub mod attachment_loader;
 pub mod debug;
+pub mod loader;
 pub mod preprocess;
 pub mod render;
 pub mod terrain;
@@ -140,6 +142,7 @@ impl Plugin for TerrainPlugin {
 
         app.add_plugin(DTMPlugin)
             .add_plugin(QOIPlugin)
+            .add_plugin(TDFPlugin)
             .add_plugin(ExtractComponentPlugin::<Terrain>::default())
             .add_plugin(ExtractComponentPlugin::<TerrainView>::default())
             .init_resource::<TerrainViewComponents<Quadtree>>()

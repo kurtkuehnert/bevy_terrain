@@ -14,6 +14,7 @@ use bevy::{
         Extract,
     },
 };
+use std::num::NonZeroU8;
 
 /// The terrain config data that is available in shaders.
 #[derive(Clone, Default, ShaderType)]
@@ -22,6 +23,7 @@ pub(crate) struct TerrainConfigUniform {
     height: f32,
     chunk_size: u32,
     terrain_size: u32,
+    attachment_sizes: Vec4,
     attachment_scales: Vec4,
     attachment_offsets: Vec4,
 }
@@ -29,10 +31,12 @@ pub(crate) struct TerrainConfigUniform {
 impl From<&TerrainConfig> for TerrainConfigUniform {
     fn from(config: &TerrainConfig) -> Self {
         // Todo: figure out a better way to store data for more than four attachments
+        let mut sizes = [0.0; 4];
         let mut scales = [1.0; 4];
         let mut offsets = [0.0; 4];
 
         for (i, attachment) in config.attachments.iter().enumerate() {
+            sizes[i] = attachment.texture_size as f32;
             scales[i] = attachment.center_size as f32
                 / (attachment.center_size + 2 * attachment.border_size) as f32;
             offsets[i] = attachment.border_size as f32
@@ -42,8 +46,9 @@ impl From<&TerrainConfig> for TerrainConfigUniform {
         Self {
             lod_count: config.lod_count,
             height: config.height,
-            chunk_size: config.chunk_size,
+            chunk_size: config.leaf_node_size,
             terrain_size: config.terrain_size,
+            attachment_sizes: Vec4::from_array(sizes),
             attachment_scales: Vec4::from_array(scales),
             attachment_offsets: Vec4::from_array(offsets),
         }
@@ -112,9 +117,13 @@ impl TerrainData {
         });
 
         let sampler_descriptor = SamplerDescriptor {
-            label: None,
+            address_mode_u: Default::default(),
+            address_mode_v: Default::default(),
+            address_mode_w: Default::default(),
             mag_filter: FilterMode::Linear,
             min_filter: FilterMode::Linear,
+            mipmap_filter: FilterMode::Linear,
+            anisotropy_clamp: NonZeroU8::new(16),
             ..default()
         };
 

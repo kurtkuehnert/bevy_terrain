@@ -3,7 +3,7 @@
 struct Mesh { flags: u32 }; let mesh = Mesh(0u); // hack for the pbr shaders
 
 struct TerrainViewConfig {
-    height_under_viewer: f32,
+    approximate_height: f32,
     node_count: u32,
 
     tile_count: u32,

@@ -17,22 +17,23 @@ fn vertex(in: VertexInput) -> VertexOutput {
     let world_position = approximate_world_position(local_position);
 
     let blend = calculate_blend(world_position);
-    let lookup = atlas_lookup(blend.lod, local_position);
+
+    let lookup = lookup_node(blend.lod, local_position);
     var height = vertex_height(lookup);
 
     if (blend.ratio < 1.0) {
-        let lookup2 = atlas_lookup(blend.lod + 1u, local_position);
+        let lookup2 = lookup_node(blend.lod + 1u, local_position);
         let height2 = vertex_height(lookup2);
-        height = mix(height2, height, blend.ratio);
+        height      = mix(height2, height, blend.ratio);
     }
 
     var output = vertex_output(local_position, height);
 
 #ifdef SHOW_TILES
-    output.debug_color = show_tiles(tile, world_position);
+    output.debug_color = show_tiles(tile, output.world_position);
 #endif
 
-#ifdef MINMAX_ERROR
+#ifdef SHOW_MINMAX_ERROR
     output.debug_color = show_minmax_error(tile, height);
 #endif
 

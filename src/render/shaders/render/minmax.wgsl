@@ -36,9 +36,11 @@ fn vertex(in: VertexInput) -> VertexOutput {
     let cube_position = calculate_cube_position(grid_index);
     let local_position = center_position + cube_position.xy * size;
     let height = mix(minmax.x, minmax.y, cube_position.z);
-    let color = show_tiles(tile, local_position);
+
 
     var output = vertex_output(local_position, height);
+
+    let color = show_tiles(tile, output.world_position);
     output.debug_color = color;
 
     return output;
