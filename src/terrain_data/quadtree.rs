@@ -146,7 +146,7 @@ impl Quadtree {
             view_config.quadtree_handle.clone(),
             config.lod_count,
             view_config.node_count,
-            config.chunk_size,
+            config.leaf_node_size,
             view_config.load_distance,
             config.height,
         )

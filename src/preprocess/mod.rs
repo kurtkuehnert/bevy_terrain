@@ -3,6 +3,7 @@
 pub mod attachment;
 pub mod down_sample;
 pub mod file_io;
+pub mod mip_maps;
 pub mod split;
 pub mod stitch;
 
@@ -38,28 +39,41 @@ macro_rules! return_none {
 
 #[derive(Copy, Clone)]
 pub struct BaseConfig {
-    pub center_size: u32,
+    pub texture_size: u32,
+    pub mip_level_count: u32,
     pub file_format: FileFormat,
 }
 
 impl BaseConfig {
-    pub(crate) fn height_attachment(&self) -> AttachmentConfig {
-        AttachmentConfig {
-            name: "height".to_string(),
-            center_size: self.center_size,
-            border_size: 2,
-            format: AttachmentFormat::R16,
-            file_format: self.file_format,
+    pub fn new(texture_size: u32, mip_level_count: u32) -> Self {
+        Self {
+            texture_size,
+            mip_level_count,
+            file_format: FileFormat::TDF,
         }
     }
+
+    pub(crate) fn height_attachment(&self) -> AttachmentConfig {
+        let mut attachment = AttachmentConfig::new(
+            "height".to_string(),
+            self.texture_size,
+            self.mip_level_count,
+            AttachmentFormat::R16,
+        );
+
+        attachment.file_format = self.file_format;
+        attachment
+    }
     pub(crate) fn minmax_attachment(&self) -> AttachmentConfig {
-        AttachmentConfig {
-            name: "minmax".to_string(),
-            center_size: self.center_size,
-            border_size: 2,
-            format: AttachmentFormat::Rg16,
-            file_format: self.file_format,
-        }
+        let mut attachment = AttachmentConfig::new(
+            "minmax".to_string(),
+            self.texture_size,
+            self.mip_level_count,
+            AttachmentFormat::Rg16,
+        );
+
+        attachment.file_format = self.file_format;
+        attachment
     }
 }
 

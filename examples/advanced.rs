@@ -7,8 +7,9 @@ use bevy::{
 use bevy_terrain::prelude::*;
 
 const TERRAIN_SIZE: u32 = 1024;
+const TEXTURE_SIZE: u32 = 128;
+const MIP_LEVEL_COUNT: u32 = 3;
 const LOD_COUNT: u32 = 10;
-const CHUNK_SIZE: u32 = 128;
 const HEIGHT: f32 = 200.0;
 const NODE_ATLAS_SIZE: u32 = 500;
 const PATH: &str = "terrain";
@@ -95,25 +96,21 @@ fn setup(
     });
 
     let mut preprocessor = Preprocessor::default();
-    let mut from_disk_loader = AttachmentFromDiskLoader::default();
+    let mut loader = AttachmentFromDiskLoader::default();
 
     // Configure all the important properties of the terrain, as well as its attachments.
     let mut config = TerrainConfig::new(
         TERRAIN_SIZE,
-        CHUNK_SIZE,
         LOD_COUNT,
         HEIGHT,
         NODE_ATLAS_SIZE,
         PATH.to_string(),
     );
 
-    config.add_base_attachment(
+    config.add_base_attachment_from_disk(
         &mut preprocessor,
-        &mut from_disk_loader,
-        BaseConfig {
-            center_size: CHUNK_SIZE,
-            file_format: FileFormat::DTM,
-        },
+        &mut loader,
+        BaseConfig::new(TEXTURE_SIZE, MIP_LEVEL_COUNT),
         TileConfig {
             path: "assets/terrain/source/height".to_string(),
             size: TERRAIN_SIZE,
@@ -123,17 +120,16 @@ fn setup(
 
     config.add_attachment_from_disk(
         &mut preprocessor,
-        &mut from_disk_loader,
-        AttachmentConfig {
-            name: "albedo".to_string(),
-            center_size: 2 * CHUNK_SIZE,
-            border_size: 1,
-            format: AttachmentFormat::Rgb8,
-            file_format: FileFormat::QOI,
-        },
+        &mut loader,
+        AttachmentConfig::new(
+            "albedo".to_string(),
+            TEXTURE_SIZE,
+            MIP_LEVEL_COUNT,
+            AttachmentFormat::Rgb8,
+        ),
         TileConfig {
             path: "assets/terrain/source/albedo.png".to_string(),
-            size: 2 * TERRAIN_SIZE,
+            size: TERRAIN_SIZE,
             file_format: FileFormat::PNG,
         },
     );
@@ -142,7 +138,7 @@ fn setup(
     let terrain = commands
         .spawn((
             TerrainBundle::new(config.clone()),
-            from_disk_loader,
+            loader,
             materials.add(TerrainMaterial {
                 array_texture: texture,
             }),
@@ -150,7 +146,15 @@ fn setup(
         .id();
 
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
-    let view_config = TerrainViewConfig::new(&config, 10, 5.0, 3.0, 1.0, 0.2, 0.2, 0.2);
+    let view_config = TerrainViewConfig {
+        tile_scale: 4.0,
+        grid_size: 4,
+        node_count: 10,
+        load_distance: 5.0,
+        view_distance: 4.0 * config.leaf_node_size as f32,
+        ..default()
+    };
+
     // Create the view.
     let view = commands
         .spawn((

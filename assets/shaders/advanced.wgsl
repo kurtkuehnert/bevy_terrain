@@ -8,14 +8,18 @@ struct TerrainConfig {
     chunk_size: u32,
     terrain_size: u32,
 
+    height_size: f32,
+    minmax_size: f32,
+    albedo_size: f32,
+    _empty: f32,
     height_scale: f32,
     minmax_scale: f32,
     albedo_scale: f32,
-    _empty: u32,
+    _empty: f32,
     height_offset: f32,
     minmax_offset: f32,
     albedo_offset: f32,
-    _empty: u32,
+    _empty: f32,
 }
 
 // view bindings
@@ -33,7 +37,7 @@ var<storage> tiles: TileList;
 @group(2) @binding(0)
 var<uniform> config: TerrainConfig;
 @group(2) @binding(1)
-var terrain_sampler: sampler;
+var atlas_sampler: sampler;
 // Customize your attachments here.
 @group(2) @binding(2)
 var height_atlas: texture_2d_array<f32>;
@@ -58,7 +62,7 @@ var array_sampler: sampler;
 #import bevy_pbr::shadows
 #import bevy_pbr::pbr_functions
 
-#import bevy_terrain::atlas
+#import bevy_terrain::node
 #import bevy_terrain::functions
 #import bevy_terrain::debug
 
@@ -72,22 +76,33 @@ struct FragmentData {
 
 // Lookup the terrain data required by your `fragment_color` function.
 // This will happen once or twice (lod fringe).
-fn lookup_fragment_data(in: FragmentInput, lookup: AtlasLookup) -> FragmentData {
-    let lod = lookup.lod;
+fn lookup_fragment_data(input: FragmentInput, lookup: NodeLookup, ddx: vec2<f32>, ddy: vec2<f32>) -> FragmentData {
+    let atlas_lod = lookup.atlas_lod;
     let atlas_index = lookup.atlas_index;
     let atlas_coords = lookup.atlas_coords;
+    let ddx = ddx / f32(1u << atlas_lod);
+    let ddy = ddy / f32(1u << atlas_lod);
 
-    // Adjust the uvs for your attachments.
+    // Adjust the uvs and deltas for your attachments.
     let height_coords = atlas_coords * config.height_scale + config.height_offset;
+    let height_ddx = ddx / config.height_size;
+    let height_ddy = ddy / config.height_size;
     let albedo_coords = atlas_coords * config.albedo_scale + config.albedo_offset;
+    let albedo_ddx = ddx / config.albedo_size;
+    let albedo_ddy = ddy / config.albedo_size;
 
     // Calculate the normal from the heightmap.
-    let world_normal = calculate_normal(height_coords, atlas_index, lod);
+    let world_normal = calculate_normal(height_coords, atlas_index, atlas_lod, height_ddx, height_ddy);
 
 #ifdef ALBEDO
-    let color = textureSample(albedo_atlas, terrain_sampler, albedo_coords, atlas_index);
+#ifdef SAMPLE_GRAD
+    var color = textureSampleGrad(albedo_atlas, atlas_sampler, albedo_coords, atlas_index, albedo_ddx, albedo_ddy);
 #else
-    let color = vec4<f32>(0.5);
+    var color = textureSampleLevel(albedo_atlas, atlas_sampler, albedo_coords, atlas_index, 0.0);
+#endif
+
+#else
+    var color = vec4<f32>(0.5);
 #endif
 
     return FragmentData(world_normal, color);
@@ -103,7 +118,7 @@ fn blend_fragment_data(data1: FragmentData, data2: FragmentData, blend_ratio: f3
 
 // The function that evaluates the color of the fragment.
 // It will be called once in the fragment shader with the blended fragment data.
-fn fragment_color(in: FragmentInput, data: FragmentData) -> vec4<f32> {
+fn process_fragment(in: FragmentInput, data: FragmentData) -> Fragment {
     let world_normal = data.world_normal;
     var color = data.color;
 
@@ -126,6 +141,7 @@ fn fragment_color(in: FragmentInput, data: FragmentData) -> vec4<f32> {
     color = textureSample(array_texture, array_sampler, uv, i32(layer));
 #endif
 
+#ifdef LIGHTING
     // Finally assemble the pbr input and calculate the lighting.
     var pbr_input: PbrInput = pbr_input_new();
     pbr_input.material.base_color = color;
@@ -138,8 +154,10 @@ fn fragment_color(in: FragmentInput, data: FragmentData) -> vec4<f32> {
     pbr_input.N = world_normal;
     pbr_input.V = calculate_view(in.world_position, pbr_input.is_orthographic);
 
-    return pbr(pbr_input);
+    color = pbr(pbr_input);
+#endif
+
+    return Fragment(color, false);
 }
 
-// The default fragment entry point, which blends the terrain data at the fringe between two lods.
 #import bevy_terrain::fragment

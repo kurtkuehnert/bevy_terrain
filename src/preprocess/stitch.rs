@@ -19,13 +19,13 @@ fn stitch(
     let w = match direction.0 {
         -1 => 0..attachment.border_size,
         0 => attachment.border_size..attachment.center_size + attachment.border_size,
-        1 => attachment.center_size + attachment.border_size..attachment.texture_size(),
+        1 => attachment.center_size + attachment.border_size..attachment.texture_size,
         _ => unreachable!(),
     };
     let h = match direction.1 {
         -1 => 0..attachment.border_size,
         0 => attachment.border_size..attachment.center_size + attachment.border_size,
-        1 => attachment.center_size + attachment.border_size..attachment.texture_size(),
+        1 => attachment.center_size + attachment.border_size..attachment.texture_size,
         _ => unreachable!(),
     };
 
@@ -76,13 +76,13 @@ fn extend(node_image: &mut DynamicImage, attachment: &AttachmentConfig, directio
     let w = match direction.0 {
         -1 => 0..attachment.border_size,
         0 => attachment.border_size..attachment.center_size + attachment.border_size,
-        1 => attachment.center_size + attachment.border_size..attachment.texture_size(),
+        1 => attachment.center_size + attachment.border_size..attachment.texture_size,
         _ => unreachable!(),
     };
     let h = match direction.1 {
         -1 => 0..attachment.border_size,
         0 => attachment.border_size..attachment.center_size + attachment.border_size,
-        1 => attachment.center_size + attachment.border_size..attachment.texture_size(),
+        1 => attachment.center_size + attachment.border_size..attachment.texture_size,
         _ => unreachable!(),
     };
 
