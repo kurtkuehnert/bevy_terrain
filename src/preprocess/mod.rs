@@ -3,7 +3,6 @@
 pub mod attachment;
 pub mod down_sample;
 pub mod file_io;
-pub mod mip_maps;
 pub mod split;
 pub mod stitch;
 

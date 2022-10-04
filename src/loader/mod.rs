@@ -17,7 +17,7 @@ impl AssetLoader for TDFAssetLoader {
         load_context: &'a mut bevy::asset::LoadContext,
     ) -> bevy::utils::BoxedFuture<'a, Result<(), Error>> {
         Box::pin(async move {
-            let (descriptor, mut data) = TDF::decode(bytes);
+            let (descriptor, mut data) = TDF::decode_alloc(bytes, true).unwrap();
 
             // extend alpha channel
             if descriptor.channel_count == 3 && descriptor.pixel_size == 1 {
@@ -32,11 +32,11 @@ impl AssetLoader for TDFAssetLoader {
                 texture_descriptor: TextureDescriptor {
                     label: None,
                     size: Extent3d {
-                        width: descriptor.width,
-                        height: descriptor.height,
+                        width: descriptor.size,
+                        height: descriptor.size,
                         ..default()
                     },
-                    mip_level_count: descriptor.mip_count,
+                    mip_level_count: descriptor.mip_level_count,
                     sample_count: 1,
                     dimension: TextureDimension::D2,
                     format: TextureFormat::R8Unorm,
