@@ -1,4 +1,3 @@
-use crate::preprocess::mip_maps::generate_mip_maps;
 use crate::{
     preprocess::{
         down_sample::{down_sample_layer, linear, minmax},
@@ -83,8 +82,6 @@ pub(crate) fn preprocess_base(config: &TerrainConfig, tile: &TileConfig, base: &
         &minmax_attachment,
     );
 
-    generate_mip_maps(&height_directory, &height_attachment);
-
     let (mut first, mut last) = temp;
 
     for lod in 1..config.lod_count {
@@ -101,8 +98,6 @@ pub(crate) fn preprocess_base(config: &TerrainConfig, tile: &TileConfig, base: &
         );
         stitch_layer(&minmax_directory, &minmax_attachment, lod, first, last);
     }
-
-    generate_mip_maps(&minmax_directory, &minmax_attachment);
 }
 
 pub(crate) fn preprocess_attachment(
@@ -123,6 +118,4 @@ pub(crate) fn preprocess_attachment(
         down_sample_layer(linear, &directory, attachment, lod, first, last);
         stitch_layer(&directory, attachment, lod, first, last);
     }
-
-    generate_mip_maps(&directory, attachment);
 }

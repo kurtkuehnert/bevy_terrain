@@ -92,34 +92,35 @@ pub fn save_image(path: &str, node_image: &DynamicImage, attachment: &Attachment
 
 fn load_tdf(path: &str) -> Option<DynamicImage> {
     let (descriptor, data) = TDF::load_file(path).ok()?;
+    let size = descriptor.size;
 
     match (descriptor.pixel_size, descriptor.channel_count) {
         (1, 3) => {
-            let image = Rgb8Image::from_raw(descriptor.width, descriptor.height, data).unwrap();
+            let image = Rgb8Image::from_raw(size, size, data).unwrap();
             Some(DynamicImage::from(image))
         }
         (1, 4) => {
-            let image = Rgba8Image::from_raw(descriptor.width, descriptor.height, data).unwrap();
+            let image = Rgba8Image::from_raw(size, size, data).unwrap();
             Some(DynamicImage::from(image))
         }
         (2, 1) => {
             let data: Vec<u16> = data
                 .chunks_exact(2)
                 .into_iter()
-                .map(|a| u16::from_ne_bytes([a[0], a[1]]))
+                .map(|pixel| u16::from_ne_bytes(pixel.try_into().unwrap()))
                 .collect();
 
-            let image = R16Image::from_raw(descriptor.width, descriptor.height, data).unwrap();
+            let image = R16Image::from_raw(size, size, data).unwrap();
             Some(DynamicImage::from(image))
         }
         (2, 2) => {
             let data: Vec<u16> = data
                 .chunks_exact(2)
                 .into_iter()
-                .map(|a| u16::from_ne_bytes([a[0], a[1]]))
+                .map(|pixel| u16::from_le_bytes(pixel.try_into().unwrap()))
                 .collect();
 
-            let image = Rg16Image::from_raw(descriptor.width, descriptor.height, data).unwrap();
+            let image = Rg16Image::from_raw(size, size, data).unwrap();
             Some(DynamicImage::from(image))
         }
         _ => None,
@@ -133,18 +134,29 @@ fn load_image_rs(path: &str) -> Option<DynamicImage> {
 }
 
 fn load_dtm(path: &str) -> Option<DynamicImage> {
-    let (descriptor, pixels) = DTM::decode_file(path).ok()?;
+    let (descriptor, data) = DTM::decode_file(path).ok()?;
 
     match descriptor.channel_count {
         1 => {
-            let image =
-                R16Image::from_raw(descriptor.width as u32, descriptor.height as u32, pixels)
-                    .unwrap();
+            let data: Vec<u16> = data
+                .chunks_exact(2)
+                .into_iter()
+                .map(|pixel| u16::from_le_bytes(pixel.try_into().unwrap()))
+                .collect();
+
+            let image = R16Image::from_raw(descriptor.width as u32, descriptor.height as u32, data)
+                .unwrap();
             Some(DynamicImage::from(image))
         }
         2 => {
+            let data: Vec<u16> = data
+                .chunks_exact(2)
+                .into_iter()
+                .map(|pixel| u16::from_le_bytes(pixel.try_into().unwrap()))
+                .collect();
+
             let image =
-                Rg16Image::from_raw(descriptor.width as u32, descriptor.height as u32, pixels)
+                Rg16Image::from_raw(descriptor.width as u32, descriptor.height as u32, data)
                     .unwrap();
             Some(DynamicImage::from(image))
         }
@@ -180,12 +192,11 @@ fn save_tdf(path: &str, node_image: &DynamicImage, attachment: &AttachmentConfig
     let descriptor = TDF {
         pixel_size,
         channel_count,
-        width: node_image.width(),
-        height: node_image.height(),
-        mip_count: 1,
+        size: attachment.texture_size,
+        mip_level_count: attachment.mip_level_count,
     };
 
-    descriptor.save_file(path, node_image.as_bytes());
+    descriptor.save_file(path, node_image.as_bytes()).unwrap();
 }
 
 fn save_image_rs(path: &str, node_image: &DynamicImage, _attachment: &AttachmentConfig) {
@@ -201,8 +212,8 @@ fn save_dtm(path: &str, node_image: &DynamicImage, attachment: &AttachmentConfig
             AttachmentFormat::R16 => 1,
             AttachmentFormat::Rg16 => 2,
         },
-        width: node_image.width() as usize,
-        height: node_image.height() as usize,
+        width: node_image.width(),
+        height: node_image.height(),
     };
 
     descriptor
