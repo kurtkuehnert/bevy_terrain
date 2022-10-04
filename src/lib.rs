@@ -41,6 +41,8 @@
 //!
 //! [^note]: Some of these claims are not yet fully implemented.
 
+extern crate core;
+
 use crate::loader::TDFPlugin;
 use crate::{
     attachment_loader::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk},
