@@ -12,7 +12,7 @@ fn approximate_world_position(local_position: vec2<f32>) -> vec4<f32> {
 }
 
 fn node_size(lod: u32) -> f32 {
-    return f32(config.chunk_size * (1u << lod));
+    return f32(config.chunk_size * (1u << lod)); // Todo: rename chunk size
 }
 
 // Looks up the best availale node in the node atlas from the viewers point of view.

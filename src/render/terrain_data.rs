@@ -37,10 +37,8 @@ impl From<&TerrainConfig> for TerrainConfigUniform {
 
         for (i, attachment) in config.attachments.iter().enumerate() {
             sizes[i] = attachment.texture_size as f32;
-            scales[i] = attachment.center_size as f32
-                / (attachment.center_size + 2 * attachment.border_size) as f32;
-            offsets[i] = attachment.border_size as f32
-                / (attachment.center_size + 2 * attachment.border_size) as f32;
+            scales[i] = attachment.center_size as f32 / attachment.texture_size as f32;
+            offsets[i] = attachment.border_size as f32 / attachment.texture_size as f32;
         }
 
         Self {

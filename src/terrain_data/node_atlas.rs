@@ -105,6 +105,7 @@ pub struct NodeAtlas {
     pub(crate) size: u16,
     /// Stores the states of all present nodes.
     pub(crate) nodes: HashMap<NodeId, AtlasNode>,
+    pub(crate) existing_nodes: HashSet<NodeId>,
     /// Lists the unused nodes in least recently used order.
     unused_nodes: VecDeque<UnusedNode>,
 }
@@ -114,7 +115,11 @@ impl NodeAtlas {
     ///
     /// * `size` - The amount of nodes the can be loaded simultaneously in the node atlas.
     /// * `attachments` - The atlas attachments of the terrain.
-    pub fn new(size: u16, attachments: Vec<AtlasAttachment>) -> Self {
+    pub fn new(
+        size: u16,
+        attachments: Vec<AtlasAttachment>,
+        existing_nodes: HashSet<NodeId>,
+    ) -> Self {
         let unused_nodes = (0..size)
             .map(|atlas_index| UnusedNode {
                 node_id: INVALID_NODE_ID,
@@ -131,12 +136,17 @@ impl NodeAtlas {
             attachments,
             size,
             unused_nodes,
+            existing_nodes,
         }
     }
 
     /// Creates a new quadtree from a terrain config.
     pub fn from_config(config: &TerrainConfig) -> Self {
-        Self::new(config.node_atlas_size as u16, config.attachments.clone())
+        Self::new(
+            config.node_atlas_size as u16,
+            config.attachments.clone(),
+            config.nodes.clone(),
+        )
     }
 
     /// Adjusts the node atlas according to the requested and released nodes of the [`Quadtree`]
@@ -148,11 +158,16 @@ impl NodeAtlas {
             nodes,
             loading_nodes,
             load_events,
+            existing_nodes,
             ..
         } = self;
 
         // release nodes that are on longer required
         for node_id in quadtree.released_nodes.drain(..) {
+            if !existing_nodes.contains(&node_id) {
+                continue;
+            }
+
             let node = nodes
                 .get_mut(&node_id)
                 .expect("Tried releasing a node, which is not present.");
@@ -169,6 +184,10 @@ impl NodeAtlas {
 
         // load nodes that are requested
         for node_id in quadtree.requested_nodes.drain(..) {
+            if !existing_nodes.contains(&node_id) {
+                continue;
+            }
+
             // check if the node is already present else start loading it
             if let Some(node) = nodes.get_mut(&node_id) {
                 if node.requests == 0 {
@@ -204,6 +223,11 @@ impl NodeAtlas {
                 );
             }
         }
+
+        // println!(
+        //     "Currently there are {} nodes in use.",
+        //     self.size as usize - self.unused_nodes.len()
+        // );
     }
 
     /// Checks all nodes that have finished loading, marks them accordingly and prepares the data

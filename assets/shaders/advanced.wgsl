@@ -98,11 +98,16 @@ fn lookup_fragment_data(input: FragmentInput, lookup: NodeLookup, ddx: vec2<f32>
 #ifdef SAMPLE_GRAD
     var color = textureSampleGrad(albedo_atlas, atlas_sampler, albedo_coords, atlas_index, albedo_ddx, albedo_ddy);
 #else
-    var color = textureSampleLevel(albedo_atlas, atlas_sampler, albedo_coords, atlas_index, 0.0);
+    var color = textureSample(albedo_atlas, atlas_sampler, albedo_coords, atlas_index);
+    // var color = textureSampleLevel(albedo_atlas, atlas_sampler, albedo_coords, atlas_index, 0.0);
 #endif
 
 #else
     var color = vec4<f32>(0.5);
+#endif
+
+#ifdef SHOW_LOD
+    color = mix(color, show_lod(atlas_lod, input.world_position.xyz), 0.4);
 #endif
 
     return FragmentData(world_normal, color);
