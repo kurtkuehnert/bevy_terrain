@@ -57,6 +57,12 @@ fn setup(
         },
     );
 
+    // Preprocesses the terrain data.
+    // Todo: Should be commented out after the first run.
+    preprocessor.preprocess(&config);
+
+    load_node_config(&mut config);
+
     // Create the terrain.
     let terrain = commands
         .spawn((
@@ -100,10 +106,6 @@ fn setup(
         transform: Transform::from_xyz(1.0, 1.0, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
         ..default()
     });
-
-    // Preprocesses the terrain data.
-    // Todo: Should be commented out after the first run.
-    preprocessor.preprocess(&config);
 }
 
 fn toggle_camera(input: Res<Input<KeyCode>>, mut camera_query: Query<&mut DebugCamera>) {

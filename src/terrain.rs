@@ -1,10 +1,12 @@
 //! Types for configuring terrains.
 
+use crate::terrain_data::NodeId;
 use crate::{
     attachment_loader::{AttachmentFromDisk, AttachmentFromDiskLoader},
     preprocess::{BaseConfig, Preprocessor, TileConfig},
     terrain_data::{AtlasAttachment, AttachmentConfig, AttachmentIndex},
 };
+use bevy::utils::HashSet;
 use bevy::{
     ecs::{query::QueryItem, system::lifetimeless::Read},
     prelude::*,
@@ -71,6 +73,7 @@ pub struct TerrainConfig {
     pub path: String,
     /// The attachments of the terrain.
     pub attachments: Vec<AtlasAttachment>,
+    pub nodes: HashSet<NodeId>,
 }
 
 impl TerrainConfig {
@@ -89,6 +92,7 @@ impl TerrainConfig {
             node_atlas_size,
             path,
             attachments: vec![],
+            nodes: HashSet::new(),
         }
     }
 }

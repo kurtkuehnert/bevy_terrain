@@ -19,14 +19,14 @@ var<storage, read_write> indirect_buffer: IndirectBuffer;
 
 @compute @workgroup_size(1, 1, 1)
 fn prepare_root() {
-    indirect_buffer.workgroup_count = vec3<u32>(1u, 1u, 1u);
-
     parameters.counter = 1;
     atomicStore(&parameters.child_index, 1);
 
     let size = 1u << (view_config.refinement_count - 1u);
 
     temporary_tiles.data[0] = Tile(vec2<u32>(0u), size);
+
+    indirect_buffer.workgroup_count = vec3<u32>(1u, 1u, 1u);
 }
 
 @compute @workgroup_size(1, 1, 1)
@@ -38,8 +38,8 @@ fn prepare_next() {
         parameters.tile_count =  view_config.tile_count - 1u - u32(atomicExchange(&parameters.child_index, 0));
     }
 
-    indirect_buffer.workgroup_count.x = (parameters.tile_count + 63u) / 64u;
     parameters.counter = -parameters.counter;
+    indirect_buffer.workgroup_count.x = (parameters.tile_count + 63u) / 64u;
 }
 
 @compute @workgroup_size(1, 1, 1)

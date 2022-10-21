@@ -37,5 +37,9 @@ fn vertex(in: VertexInput) -> VertexOutput {
     output.debug_color = show_minmax_error(tile, height);
 #endif
 
+#ifdef TEST2
+    output.debug_color = mix(output.debug_color, vec4<f32>(f32(tile_index) / 1000.0, 0.0, 0.0, 1.0), 0.4);
+#endif
+
     return output;
 }

@@ -88,7 +88,7 @@ fn frustum_cull(tile: Tile) -> bool {
         if (plane.z >= 0.0) { p_corner.z = aabb_max.z; n_corner.z = aabb_min.z; }
 
     	if (dot(plane, p_corner) < 0.0) {
-    	    // the clostest corner is outside the plane -> cull
+    	    // the closest corner is outside the plane -> cull
     	    return true;
     	}
     	if (dot(plane, n_corner) < 0.0) {

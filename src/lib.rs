@@ -43,7 +43,7 @@
 
 extern crate core;
 
-use crate::loader::TDFPlugin;
+use crate::formats::TDFPlugin;
 use crate::{
     attachment_loader::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk},
     debug::DebugTerrain,
@@ -85,7 +85,7 @@ use bevy_qoi::QOIPlugin;
 
 pub mod attachment_loader;
 pub mod debug;
-pub mod loader;
+pub mod formats;
 pub mod preprocess;
 pub mod render;
 pub mod terrain;
@@ -98,7 +98,7 @@ pub mod prelude {
     pub use crate::{
         attachment_loader::AttachmentFromDiskLoader,
         debug::{camera::DebugCamera, TerrainDebugPlugin},
-        preprocess::{BaseConfig, Preprocessor, TileConfig},
+        preprocess::{config::load_node_config, BaseConfig, Preprocessor, TileConfig},
         render::render_pipeline::{TerrainMaterialPlugin, TerrainPipelineConfig},
         terrain::{Terrain, TerrainConfig},
         terrain_data::{
