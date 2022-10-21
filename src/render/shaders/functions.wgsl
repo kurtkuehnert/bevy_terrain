@@ -63,7 +63,7 @@ fn calculate_morph(tile: Tile, world_position: vec4<f32>) -> f32 {
 }
 
 fn calculate_grid_position(grid_index: u32) -> vec2<u32>{
-    // use first indices of the rows twice, to form degenerate triangles
+    // use first and last indices of the rows twice, to form degenerate triangles
     let row_index    = clamp(grid_index % view_config.vertices_per_row, 1u, view_config.vertices_per_row - 2u) - 1u;
     let column_index = grid_index / view_config.vertices_per_row;
 

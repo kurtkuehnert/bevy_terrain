@@ -1,6 +1,7 @@
+pub mod tc;
 pub mod tdf;
 
-use crate::loader::tdf::TDF;
+use crate::formats::tdf::TDF;
 use bevy::render::render_resource::*;
 use bevy::{
     asset::{AssetLoader, Error, LoadedAsset},

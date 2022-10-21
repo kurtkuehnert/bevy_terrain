@@ -16,6 +16,7 @@
 //! which can be used to access the terrain data in shaders.
 
 use bevy::{prelude::*, render::render_resource::*, utils::Uuid};
+use bincode::{Decode, Encode};
 use std::str::FromStr;
 
 pub mod gpu_node_atlas;
@@ -70,7 +71,7 @@ pub fn calc_node_id(lod: u32, x: u32, y: u32) -> NodeId {
 }
 
 /// The data format of an attachment.
-#[derive(Clone, Copy, Debug)]
+#[derive(Encode, Decode, Clone, Copy, Debug)]
 pub enum AttachmentFormat {
     /// Three channels  8 bit
     Rgb8,
@@ -94,7 +95,7 @@ impl From<AttachmentFormat> for TextureFormat {
 }
 
 /// The file format used to store the terrain data.
-#[derive(Clone, Copy, Debug)]
+#[derive(Encode, Decode, Clone, Copy, Debug)]
 pub enum FileFormat {
     TDF,
     PNG,
@@ -122,7 +123,7 @@ impl FileFormat {
 }
 
 /// Configures an attachment.
-#[derive(Clone)]
+#[derive(Encode, Decode, Clone, Debug)]
 pub struct AttachmentConfig {
     /// The name of the attachment.
     pub name: String,

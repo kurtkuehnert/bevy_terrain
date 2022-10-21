@@ -1,11 +1,13 @@
 //! Functions for preprocessing source tiles into streamable nodes.
 
 pub mod attachment;
+pub mod config;
 pub mod down_sample;
 pub mod file_io;
 pub mod split;
 pub mod stitch;
 
+use crate::preprocess::config::save_config;
 use crate::{
     preprocess::attachment::{preprocess_attachment, preprocess_base},
     terrain_data::{AttachmentConfig, AttachmentFormat, FileFormat},
@@ -106,6 +108,8 @@ impl Preprocessor {
         for (tile, attachment) in self.attachments {
             preprocess_attachment(config, &tile, &attachment);
         }
+
+        save_config(config);
     }
 }
 
