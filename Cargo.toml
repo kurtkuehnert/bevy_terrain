@@ -11,9 +11,6 @@ readme = "README.md"
 authors = ["Kurt Kühnert <kurt@kuehnert.dev"]
 repository = "https://github.com/ku95/bevy_terrain"
 
-[features]
-default = []
-
 [dependencies]
 bevy = { git="https://github.com/Ku95/bevy", branch="max_directional_lights" }
 # bevy = { git="https://github.com/bevyengine/bevy" }
