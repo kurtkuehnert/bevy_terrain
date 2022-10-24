@@ -85,7 +85,7 @@ pub struct TerrainPipelineFlags: u32 {
     const SHOW_UV            = (1 <<  3);
     const SHOW_MINMAX_ERROR  = (1 <<  4);
     const MINMAX             = (1 <<  5);
-    const CIRCULAR_LOD       = (1 <<  6);
+    const SPHERICAL_LOD      = (1 <<  6);
     const MESH_MORPH         = (1 <<  7);
     const ALBEDO             = (1 <<  8);
     const BRIGHT             = (1 <<  9);
@@ -129,8 +129,8 @@ impl TerrainPipelineFlags {
         if debug.minmax {
             key |= TerrainPipelineFlags::MINMAX;
         }
-        if debug.circular_lod {
-            key |= TerrainPipelineFlags::CIRCULAR_LOD;
+        if debug.spherical_lod {
+            key |= TerrainPipelineFlags::SPHERICAL_LOD;
         }
         if debug.mesh_morph {
             key |= TerrainPipelineFlags::MESH_MORPH;
@@ -189,8 +189,8 @@ impl TerrainPipelineFlags {
         if (self.bits & TerrainPipelineFlags::MINMAX.bits) != 0 {
             shader_defs.push("MINMAX".to_string());
         }
-        if (self.bits & TerrainPipelineFlags::CIRCULAR_LOD.bits) != 0 {
-            shader_defs.push("CIRCULAR_LOD".to_string());
+        if (self.bits & TerrainPipelineFlags::SPHERICAL_LOD.bits) != 0 {
+            shader_defs.push("SPHERICAL_LOD".to_string());
         }
         if (self.bits & TerrainPipelineFlags::MESH_MORPH.bits) != 0 {
             shader_defs.push("MESH_MORPH".to_string());
@@ -374,7 +374,7 @@ pub(crate) fn queue_terrain<M: Material>(
                     flags |= TerrainPipelineFlags::from_debug(debug);
                 } else {
                     flags |= TerrainPipelineFlags::LIGHTING
-                        | TerrainPipelineFlags::CIRCULAR_LOD
+                        | TerrainPipelineFlags::SPHERICAL_LOD
                         | TerrainPipelineFlags::MESH_MORPH
                         | TerrainPipelineFlags::SAMPLE_GRAD;
                 }
