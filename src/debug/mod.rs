@@ -93,7 +93,7 @@ pub fn toggle_debug(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTerrain>)
     if input.just_pressed(KeyCode::C) {
         debug.spherical_lod = !debug.spherical_lod;
     }
-    if input.just_pressed(KeyCode::Z) {
+    if input.just_pressed(KeyCode::M) {
         debug.mesh_morph = !debug.mesh_morph;
     }
     if input.just_pressed(KeyCode::A) {
@@ -127,10 +127,10 @@ pub fn change_config(
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
 ) {
     for config in view_configs.0.values_mut() {
-        if input.just_pressed(KeyCode::X) && config.tile_scale > 0.25 {
+        if input.just_pressed(KeyCode::H) && config.tile_scale > 0.25 {
             config.tile_scale *= 0.95;
         }
-        if input.just_pressed(KeyCode::Q) {
+        if input.just_pressed(KeyCode::J) {
             config.tile_scale *= 1.05;
         }
 
