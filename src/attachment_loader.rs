@@ -69,7 +69,7 @@ pub(crate) fn start_loading_attachment_from_disk(
                 if asset_server.get_load_state(handle.clone()) == LoadState::Loaded {
                     node.loaded(*attachment_index);
                 } else {
-                    handle_mapping.insert(handle.id, (node_id, *attachment_index));
+                    handle_mapping.insert(handle.id(), (node_id, *attachment_index));
                 };
 
                 node.set_attachment(*attachment_index, handle);
@@ -86,7 +86,8 @@ pub(crate) fn finish_loading_attachment_from_disk(
     for event in asset_events.iter() {
         if let AssetEvent::Created { handle } = event {
             for (mut node_atlas, mut config) in terrain_query.iter_mut() {
-                if let Some((node_id, attachment_index)) = config.handle_mapping.remove(&handle.id)
+                if let Some((node_id, attachment_index)) =
+                    config.handle_mapping.remove(&handle.id())
                 {
                     let image = images.get_mut(handle).unwrap();
                     let attachment = config.attachments.get(&attachment_index).unwrap();

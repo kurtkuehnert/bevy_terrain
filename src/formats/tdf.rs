@@ -186,7 +186,6 @@ fn generate_mipmap<const C: usize, const P: usize>(
         }
 
         value /= 4;
-        // value = u64::MAX;
 
         let index = c_start + P * (C * (c_y * c_size + c_x) + c);
 

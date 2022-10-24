@@ -31,7 +31,7 @@ pub struct DebugTerrain {
     pub show_uv: bool,
     pub show_minmax_error: bool,
     pub minmax: bool,
-    pub circular_lod: bool,
+    pub spherical_lod: bool,
     pub mesh_morph: bool,
     pub albedo: bool,
     pub bright: bool,
@@ -52,7 +52,7 @@ impl Default for DebugTerrain {
             show_uv: false,
             show_minmax_error: false,
             minmax: false,
-            circular_lod: true,
+            spherical_lod: true,
             mesh_morph: true,
             albedo: false,
             bright: false,
@@ -91,7 +91,7 @@ pub fn toggle_debug(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTerrain>)
         debug.minmax = !debug.minmax;
     }
     if input.just_pressed(KeyCode::C) {
-        debug.circular_lod = !debug.circular_lod;
+        debug.spherical_lod = !debug.spherical_lod;
     }
     if input.just_pressed(KeyCode::Z) {
         debug.mesh_morph = !debug.mesh_morph;
