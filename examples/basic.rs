@@ -17,10 +17,9 @@ impl Material for TerrainMaterial {}
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .insert_resource(TerrainPipelineConfig {
+        .add_plugin(TerrainPlugin {
             attachment_count: 2, // has to match the attachments of the terrain
         })
-        .add_plugin(TerrainPlugin)
         .add_plugin(TerrainDebugPlugin) // enable debug settings and controls
         .add_plugin(TerrainMaterialPlugin::<TerrainMaterial>::default())
         .add_startup_system(setup)
@@ -100,7 +99,7 @@ fn setup(
     // Create a sunlight for the physical based lighting.
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
-            illuminance: 20000.0,
+            illuminance: 15000.0,
             ..default()
         },
         transform: Transform::from_xyz(1.0, 1.0, 0.0).looking_at(Vec3::ZERO, Vec3::Y),

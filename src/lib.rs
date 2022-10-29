@@ -44,13 +44,13 @@
 extern crate core;
 
 use crate::formats::TDFPlugin;
+use crate::render::render_pipeline::TerrainPipelineConfig;
 use crate::{
     attachment_loader::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk},
     debug::DebugTerrain,
     render::{
         compute_pipelines::{TerrainComputeNode, TerrainComputePipelines},
         culling::{queue_terrain_culling_bind_group, CullingBindGroup},
-        render_pipeline::TerrainPipelineConfig,
         shaders::add_shader,
         terrain_data::{initialize_terrain_data, TerrainData},
         terrain_view_data::{initialize_terrain_view_data, TerrainViewData},
@@ -99,7 +99,7 @@ pub mod prelude {
         attachment_loader::AttachmentFromDiskLoader,
         debug::{camera::DebugCamera, TerrainDebugPlugin},
         preprocess::{config::load_node_config, BaseConfig, Preprocessor, TileConfig},
-        render::render_pipeline::{TerrainMaterialPlugin, TerrainPipelineConfig},
+        render::render_pipeline::TerrainMaterialPlugin,
         terrain::{Terrain, TerrainConfig},
         terrain_data::{
             node_atlas::NodeAtlas, quadtree::Quadtree, AttachmentConfig, AttachmentFormat,
@@ -136,7 +136,18 @@ impl TerrainBundle {
 }
 
 /// The plugin for the terrain renderer.
-pub struct TerrainPlugin;
+pub struct TerrainPlugin {
+    /// The number of terrain attachments.
+    pub attachment_count: usize,
+}
+
+impl Default for TerrainPlugin {
+    fn default() -> Self {
+        Self {
+            attachment_count: 2,
+        }
+    }
+}
 
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
@@ -168,10 +179,9 @@ impl Plugin for TerrainPlugin {
                 update_height_under_viewer.after(adjust_quadtree),
             );
 
-        let config = app
-            .world
-            .remove_resource::<TerrainPipelineConfig>()
-            .unwrap_or(default());
+        let config = TerrainPipelineConfig {
+            attachment_count: self.attachment_count,
+        };
 
         let render_app = app
             .sub_app_mut(RenderApp)
