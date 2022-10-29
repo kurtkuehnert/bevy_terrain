@@ -29,14 +29,6 @@ pub struct TerrainPipelineConfig {
     pub attachment_count: usize,
 }
 
-impl Default for TerrainPipelineConfig {
-    fn default() -> Self {
-        Self {
-            attachment_count: 2,
-        }
-    }
-}
-
 pub struct TerrainPipelineKey<M: Material> {
     pub flags: TerrainPipelineFlags,
     pub bind_group_data: M::Data,

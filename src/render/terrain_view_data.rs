@@ -47,7 +47,7 @@ impl From<&TerrainViewConfig> for TerrainViewConfigUniform {
             vertices_per_row: 2 * (config.grid_size + 2),
             vertices_per_tile: 2 * config.grid_size * (config.grid_size + 2),
             morph_distance: config.view_distance
-                / 2.0_f32.powf(config.additional_refinement as f32),
+                / 2.0_f32.powf(config.additional_refinement as f32 + 1.0),
             blend_distance: config.view_distance,
             morph_range: config.morph_range,
             blend_range: config.blend_range,
