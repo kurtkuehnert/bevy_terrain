@@ -1,3 +1,4 @@
+use crate::render::render_pipeline::TerrainPipelineConfig;
 use crate::{
     render::{
         culling::CullingBindGroup,
@@ -7,8 +8,8 @@ use crate::{
         CULL_DATA_LAYOUT, PREPARE_INDIRECT_LAYOUT, REFINE_TILES_LAYOUT,
     },
     terrain::Terrain,
-    DebugTerrain, TerrainComponents, TerrainData, TerrainPipelineConfig, TerrainView,
-    TerrainViewComponents, TerrainViewConfig,
+    DebugTerrain, TerrainComponents, TerrainData, TerrainView, TerrainViewComponents,
+    TerrainViewConfig,
 };
 use bevy::{
     ecs::system::{
