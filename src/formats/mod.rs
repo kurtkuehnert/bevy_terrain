@@ -1,12 +1,15 @@
+//! The custom Terrain Data Format (TDF) that losslessly compresses the terrain data.
+//!
+//! It is based on the DTM and QOI format internally.
+
 pub mod tc;
 pub mod tdf;
 
 use crate::formats::tdf::TDF;
-use bevy::render::render_resource::*;
 use bevy::{
     asset::{AssetLoader, Error, LoadedAsset},
     prelude::*,
-    render::render_resource::{Extent3d, TextureDimension, TextureFormat},
+    render::render_resource::*,
 };
 
 struct TDFAssetLoader;

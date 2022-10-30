@@ -1,14 +1,16 @@
-use crate::formats::tdf::TDF;
-use crate::preprocess::{R16Image, Rg16Image, Rgb8Image, Rgba8Image};
-use crate::terrain_data::{calc_node_id, AttachmentConfig, AttachmentFormat, FileFormat};
+use crate::{
+    formats::tdf::TDF,
+    preprocess::{R16Image, Rg16Image, Rgb8Image, Rgba8Image},
+    terrain_data::{calc_node_id, AttachmentConfig, AttachmentFormat, FileFormat},
+};
 use bytemuck::cast_slice;
 use dtm::DTM;
 use image::{io::Reader, DynamicImage};
 use rapid_qoi::{Colors, Qoi};
-use std::path::Path;
 use std::{
     fs::{self, DirEntry, ReadDir},
     iter::Map,
+    path::Path,
 };
 
 pub(crate) fn iterate_directory(
