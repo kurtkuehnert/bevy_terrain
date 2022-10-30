@@ -10,7 +10,7 @@
 //! [`Quadtree`](quadtree::Quadtree) views that correspond to one node atlas.
 //! These quadtrees request and release nodes from the node atlas based on their quality
 //! setting (`load_distance`).
-//! Additionally they are also used to access the best loaded data at any position.
+//! Additionally they are then used to access the best loaded data at any position.
 //!
 //! Both the node atlas and the quadtrees also have a corresponding GPU representation,
 //! which can be used to access the terrain data in shaders.

@@ -1,6 +1,8 @@
 use crate::{
     preprocess::{
-        file_io::{format_node_path, load_image, load_or_create_node, save_image},
+        file_io::{
+            format_node_path, iterate_directory, load_image, load_or_create_node, save_image,
+        },
         TileConfig, UVec2Utils,
     },
     terrain_data::{AttachmentConfig, AttachmentFormat},
@@ -10,7 +12,6 @@ use image::{
     imageops::{self},
     DynamicImage,
 };
-use scan_dir::ScanDir;
 use std::fs;
 
 fn tile_to_node(
@@ -84,30 +85,25 @@ pub(crate) fn split_tiles(
         let mut min_pos = UVec2::splat(u32::MAX);
         let mut max_pos = UVec2::splat(u32::MIN);
 
-        ScanDir::files()
-            .read(&tile.path, |iter| {
-                for (entry, tile_name) in iter {
-                    let mut parts = tile_name.split('.');
-                    let mut parts = parts.next().unwrap().split('_');
-                    parts.next();
+        for (tile_name, tile_path) in iterate_directory(&tile.path) {
+            let mut parts = tile_name.split('_');
+            parts.next();
 
-                    let coord = UVec2::new(
-                        parts.next().unwrap().parse::<u32>().unwrap(),
-                        parts.next().unwrap().parse::<u32>().unwrap(),
-                    );
+            let coord = UVec2::new(
+                parts.next().unwrap().parse::<u32>().unwrap(),
+                parts.next().unwrap().parse::<u32>().unwrap(),
+            );
 
-                    let tile = TileConfig {
-                        path: entry.path().to_str().unwrap().to_string(),
-                        ..*tile
-                    };
+            let tile = TileConfig {
+                path: tile_path,
+                ..*tile
+            };
 
-                    split_tile(directory, &tile, attachment, coord * tile.size);
+            split_tile(directory, &tile, attachment, coord * tile.size);
 
-                    min_pos = min_pos.min(coord);
-                    max_pos = max_pos.max(coord);
-                }
-            })
-            .unwrap();
+            min_pos = min_pos.min(coord);
+            max_pos = max_pos.max(coord);
+        }
 
         let offset = min_pos * tile.size;
         let size = (1 + max_pos - min_pos) * tile.size;

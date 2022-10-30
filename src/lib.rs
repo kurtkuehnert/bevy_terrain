@@ -14,6 +14,7 @@
 //! viewers (cameras, lights, etc.).
 //! Therefore the terrain is subdivided into a giant quadtree, whose nodes store their
 //! section of these attachments.
+//! This crate uses the chunked clipmap data structure, which consist of two pieces working together.
 //! The wrapping [`Quadtree`](terrain_data::quadtree::Quadtree) views together with
 //! the [`NodeAtlas`](terrain_data::node_atlas::NodeAtlas) (the data structure
 //! that stores all of the currently loaded data) can be used to efficiently retrieve
@@ -24,8 +25,9 @@
 //! Even a small terrain with a height map of 1000x1000 pixels would require 1 million vertices
 //! to be rendered each frame per view, with an naive approach without an lod strategy.
 //! To better distribute the vertices over the screen there exist many different algorithms.
-//! This crate comes with its own default terrain geometry algorithm which was developed with
-//! performance and quality scalability in mind.
+//! This crate comes with its own default terrain geometry algorithm, called the
+//! Uniform Distance-Dependent Level of Detail (UDLOD), which was developed with performance and
+//! quality scalability in mind.
 //! See the [`render`] module for more information.
 //! You can also implement a different algorithm yourself and only use the terrain
 //! data structures to solve the first question.
@@ -33,7 +35,7 @@
 //! ## How to shade the terrain?
 //! The third and most important challenge of terrain rendering is the shading. This is a very
 //! project specific problem and thus there does not exist a one-size-fits-all solution.
-//! You can define your own terrain [Material](bevy::pbr::Material) and shader with all the the
+//! You can define your own terrain [Material](bevy::pbr::Material) and shader with all the
 //! detail textures tailored to your application.
 //! In the future this plugin will provide modular shader functions to make techniques like splat
 //! mapping, triplane mapping, etc. easier.
@@ -43,14 +45,14 @@
 
 extern crate core;
 
-use crate::formats::TDFPlugin;
-use crate::render::render_pipeline::TerrainPipelineConfig;
 use crate::{
     attachment_loader::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk},
     debug::DebugTerrain,
+    formats::TDFPlugin,
     render::{
         compute_pipelines::{TerrainComputeNode, TerrainComputePipelines},
         culling::{queue_terrain_culling_bind_group, CullingBindGroup},
+        render_pipeline::TerrainPipelineConfig,
         shaders::add_shader,
         terrain_data::{initialize_terrain_data, TerrainData},
         terrain_view_data::{initialize_terrain_view_data, TerrainViewData},
@@ -80,8 +82,6 @@ use bevy::{
         render_graph::RenderGraph, render_resource::*, RenderApp, RenderStage,
     },
 };
-use bevy_dtm::DTMPlugin;
-use bevy_qoi::QOIPlugin;
 
 pub mod attachment_loader;
 pub mod debug;
@@ -153,9 +153,7 @@ impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
         add_shader(app);
 
-        app.add_plugin(DTMPlugin)
-            .add_plugin(QOIPlugin)
-            .add_plugin(TDFPlugin)
+        app.add_plugin(TDFPlugin)
             .add_plugin(ExtractComponentPlugin::<Terrain>::default())
             .add_plugin(ExtractComponentPlugin::<TerrainView>::default())
             .init_resource::<TerrainViewComponents<Quadtree>>()
@@ -179,13 +177,11 @@ impl Plugin for TerrainPlugin {
                 update_height_under_viewer.after(adjust_quadtree),
             );
 
-        let config = TerrainPipelineConfig {
-            attachment_count: self.attachment_count,
-        };
-
         let render_app = app
             .sub_app_mut(RenderApp)
-            .insert_resource(config)
+            .insert_resource(TerrainPipelineConfig {
+                attachment_count: self.attachment_count,
+            })
             .init_resource::<TerrainComputePipelines>()
             .init_resource::<SpecializedComputePipelines<TerrainComputePipelines>>()
             .init_resource::<TerrainComponents<GpuNodeAtlas>>()

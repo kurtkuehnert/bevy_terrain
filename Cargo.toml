@@ -4,19 +4,16 @@ description = "Terrain Rendering for the Bevy Engine."
 version = "0.1.0-dev"
 license = "MIT OR Apache-2.0"
 edition = "2021"
-categories = ["game-engines", "rendering"]
+categories = ["game-engines", "rendering", "graphics"]
 keywords = ["gamedev", "graphics", "bevy", "3d", "terrain"]
 exclude = ["assets/*"]
 readme = "README.md"
-authors = ["Kurt Kühnert <kurt@kuehnert.dev"]
+authors = ["Kurt Kühnert <kurt@kuehnert.dev>"]
 repository = "https://github.com/ku95/bevy_terrain"
 
 [dependencies]
-# bevy = { git="https://github.com/Ku95/bevy", branch="max_directional_lights" }
 bevy = { git="https://github.com/bevyengine/bevy" }
-bevy_dtm = { git="https://github.com/Ku95/bevy_dtm" }
-bevy_qoi = { git="https://github.com/Ku95/bevy_qoi" }
-dtm = { git="https://github.com/Ku95/dtm" }
+dtm = "0.1"
 rapid-qoi = "0.6"
 ndarray = "0.15"
 itertools = "0.10"
@@ -27,9 +24,6 @@ strum = "0.24"
 strum_macros = "0.24"
 fastrand = "1.7"
 bytemuck = "1.10"
-rayon = "1.5"
-scan_dir = "0.3"
-dolly = "0.3"
-walkdir = "2.3"
 anyhow = "1.0"
 bincode = "2.0.0-rc.1"
+dolly = "0.4"

@@ -26,8 +26,7 @@ impl AttachmentFromDisk {
     }
 }
 
-/// This component is used to load attachments from disk memory into the corresponding
-/// [`NodeAtlas`].
+/// This component is used to load attachments from disk memory into the corresponding [`NodeAtlas`].
 #[derive(Default, Component)]
 pub struct AttachmentFromDiskLoader {
     pub(crate) attachments: HashMap<AttachmentIndex, AttachmentFromDisk>,

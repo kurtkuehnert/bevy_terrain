@@ -1,6 +1,9 @@
 use bevy::{input::mouse::MouseMotion, prelude::*};
 use dolly::prelude::*;
 
+/// A fly camera used to navigate and debug the terrain.
+///
+/// It is controlled using the arrow keys, and the mouse.
 #[derive(Component)]
 pub struct DebugCamera {
     pub rig: CameraRig<RightHanded>,
