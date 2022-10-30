@@ -8,46 +8,11 @@ use bevy_terrain::prelude::*;
 
 const TERRAIN_SIZE: u32 = 1024;
 const TEXTURE_SIZE: u32 = 512;
-const MIP_LEVEL_COUNT: u32 = 3;
-const LOD_COUNT: u32 = 10;
+const MIP_LEVEL_COUNT: u32 = 4;
+const LOD_COUNT: u32 = 4;
 const HEIGHT: f32 = 200.0;
-const NODE_ATLAS_SIZE: u32 = 500;
+const NODE_ATLAS_SIZE: u32 = 100;
 const PATH: &str = "terrain";
-
-#[derive(Resource)]
-struct LoadingTexture {
-    is_loaded: bool,
-    handle: Handle<Image>,
-}
-
-fn create_array_texture(
-    asset_server: Res<AssetServer>,
-    mut loading_texture: ResMut<LoadingTexture>,
-    mut images: ResMut<Assets<Image>>,
-) {
-    if loading_texture.is_loaded
-        || asset_server.get_load_state(loading_texture.handle.clone()) != LoadState::Loaded
-    {
-        return;
-    }
-
-    loading_texture.is_loaded = true;
-    let image = images.get_mut(&loading_texture.handle).unwrap();
-    image.sampler_descriptor = ImageSampler::Descriptor(SamplerDescriptor {
-        label: None,
-        address_mode_u: AddressMode::Repeat,
-        address_mode_v: AddressMode::Repeat,
-        address_mode_w: AddressMode::Repeat,
-        mag_filter: FilterMode::Linear,
-        min_filter: FilterMode::Linear,
-        mipmap_filter: FilterMode::Linear,
-        ..default()
-    });
-
-    // Create a new array texture asset from the loaded texture.
-    let array_layers = 4;
-    image.reinterpret_stacked_2d_as_array(array_layers);
-}
 
 #[derive(AsBindGroup, TypeUuid, Clone)]
 #[uuid = "4ccc53dd-2cfd-48ba-b659-c0e1a9bc0bdb"]
@@ -177,10 +142,14 @@ fn setup(
     // Create a sunlight for the physical based lighting.
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
-            illuminance: 20000.0,
+            illuminance: 15000.0,
             ..default()
         },
-        transform: Transform::from_xyz(1.0, 1.0, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
+        transform: Transform::from_xyz(-1.0, 1.0, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
+        ..default()
+    });
+    commands.insert_resource(AmbientLight {
+        brightness: 0.1,
         ..default()
     });
 }
@@ -190,4 +159,39 @@ fn toggle_camera(input: Res<Input<KeyCode>>, mut camera_query: Query<&mut DebugC
     if input.just_pressed(KeyCode::T) {
         camera.active = !camera.active;
     }
+}
+
+#[derive(Resource)]
+struct LoadingTexture {
+    is_loaded: bool,
+    handle: Handle<Image>,
+}
+
+fn create_array_texture(
+    asset_server: Res<AssetServer>,
+    mut loading_texture: ResMut<LoadingTexture>,
+    mut images: ResMut<Assets<Image>>,
+) {
+    if loading_texture.is_loaded
+        || asset_server.get_load_state(loading_texture.handle.clone()) != LoadState::Loaded
+    {
+        return;
+    }
+
+    loading_texture.is_loaded = true;
+    let image = images.get_mut(&loading_texture.handle).unwrap();
+    image.sampler_descriptor = ImageSampler::Descriptor(SamplerDescriptor {
+        label: None,
+        address_mode_u: AddressMode::Repeat,
+        address_mode_v: AddressMode::Repeat,
+        address_mode_w: AddressMode::Repeat,
+        mag_filter: FilterMode::Linear,
+        min_filter: FilterMode::Linear,
+        mipmap_filter: FilterMode::Linear,
+        ..default()
+    });
+
+    // Create a new array texture asset from the loaded texture.
+    let array_layers = 4;
+    image.reinterpret_stacked_2d_as_array(array_layers);
 }
