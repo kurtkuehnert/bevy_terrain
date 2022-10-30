@@ -1,4 +1,4 @@
-//! Functions for preprocessing source tiles into streamable nodes.
+//! Contains the implementation for preprocessing source tiles into streamable nodes.
 
 pub mod attachment;
 pub mod config;
@@ -7,9 +7,11 @@ pub mod file_io;
 pub mod split;
 pub mod stitch;
 
-use crate::preprocess::config::save_config;
 use crate::{
-    preprocess::attachment::{preprocess_attachment, preprocess_base},
+    preprocess::{
+        attachment::{preprocess_attachment, preprocess_base},
+        config::save_config,
+    },
     terrain_data::{AttachmentConfig, AttachmentFormat, FileFormat},
     TerrainConfig,
 };
@@ -28,16 +30,9 @@ macro_rules! skip_none {
     };
 }
 
-#[macro_export]
-macro_rules! return_none {
-    ($res:expr) => {
-        match $res {
-            Some(val) => val,
-            None => return,
-        }
-    };
-}
-
+/// The configuration of the base attachment of the terrain.
+/// The base attachment consists of the height data and the corresponding minmax
+/// information of the terrain.
 #[derive(Copy, Clone)]
 pub struct BaseConfig {
     pub texture_size: u32,

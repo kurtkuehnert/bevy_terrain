@@ -389,6 +389,9 @@ pub(crate) fn queue_terrain<M: Material>(
     }
 }
 
+/// This plugin adds a custom material for a terrain.
+///
+/// It can be used to render the terrain using a custom vertex and fragment shader.
 pub struct TerrainMaterialPlugin<M: Material>(PhantomData<M>);
 
 impl<M: Material> Default for TerrainMaterialPlugin<M> {
