@@ -127,23 +127,26 @@ fn process_fragment(in: FragmentInput, data: FragmentData) -> Fragment {
     let world_normal = data.world_normal;
     var color = data.color;
 
-    let slope = 1.0 - world_normal.y;
-    let height = in.world_position.y / config.height;
-
-    var layer = 0.0;
-
-    if (slope > 0.05) {
-        layer = 1.0;
-    }
-    if (height > 0.6 && slope < 0.2) {
-        layer = 2.0;
-    }
-
-    // Sample your custom material based on the layer.
-    let uv = in.local_position / 100.0f;
-
 #ifndef ALBEDO
-    color = textureSample(array_texture, array_sampler, uv, i32(layer));
+    let height = in.world_position.y / config.height;
+    let slope = world_normal.y;
+
+    let min_slope = 0.6;
+    let max_slope = 1.0;
+    let slope_weight = (max(min(slope, max_slope), min_slope) - min_slope) / (max_slope - min_slope);
+
+    let min_height = 0.7;
+    let max_height = 0.9;
+    let height_weight = (max(min(height, max_height), min_height) - min_height) / (max_height - min_height);
+
+    // Sample your custom material.
+    let uv = in.local_position / 10.0f;
+    let grass = textureSample(array_texture, array_sampler, uv, 0);
+    let rock = textureSample(array_texture, array_sampler, uv, 1);
+    let snow = textureSample(array_texture, array_sampler, uv, 2);
+    let sand = textureSample(array_texture, array_sampler, uv, 3);
+
+    color = mix(mix(sand, rock, slope_weight), snow, height_weight);
 #endif
 
 #ifdef LIGHTING

@@ -2,12 +2,13 @@ use bevy::{prelude::*, reflect::TypeUuid, render::render_resource::*};
 use bevy_terrain::prelude::*;
 
 const TERRAIN_SIZE: u32 = 1024;
-const TEXTURE_SIZE: u32 = 128;
-const MIP_LEVEL_COUNT: u32 = 3;
-const LOD_COUNT: u32 = 10;
+const TEXTURE_SIZE: u32 = 512;
+const MIP_LEVEL_COUNT: u32 = 4;
+const LOD_COUNT: u32 = 4;
 const HEIGHT: f32 = 200.0;
-const NODE_ATLAS_SIZE: u32 = 500;
+const NODE_ATLAS_SIZE: u32 = 100;
 const PATH: &str = "terrain";
+
 #[derive(AsBindGroup, TypeUuid, Clone)]
 #[uuid = "003e1d5d-241c-45a6-8c25-731dee22d820"]
 pub struct TerrainMaterial {}
@@ -99,10 +100,14 @@ fn setup(
     // Create a sunlight for the physical based lighting.
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
-            illuminance: 15000.0,
+            illuminance: 10000.0,
             ..default()
         },
         transform: Transform::from_xyz(1.0, 1.0, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
+        ..default()
+    });
+    commands.insert_resource(AmbientLight {
+        brightness: 0.1,
         ..default()
     });
 }
