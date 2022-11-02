@@ -162,7 +162,7 @@ fn process_fragment(in: FragmentInput, data: FragmentData) -> Fragment {
     pbr_input.N = world_normal;
     pbr_input.V = calculate_view(in.world_position, pbr_input.is_orthographic);
 
-    color = pbr(pbr_input);
+    color = tone_mapping(pbr(pbr_input));
 #endif
 
     return Fragment(color, false);

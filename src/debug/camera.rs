@@ -22,7 +22,26 @@ impl Default for DebugCamera {
                     yaw_degrees: -135.0,
                     pitch_degrees: 0.0,
                 })
-                .with(Smooth::new_position_rotation(1.5, 1.5))
+                .with(Smooth::new_position_rotation(3.0, 1.5))
+                .build(),
+            active: false,
+            translation_speed: 100.0,
+            rotation_speed: 8.0,
+            acceleration: 1.03,
+        }
+    }
+}
+
+impl DebugCamera {
+    pub fn new(position: Vec3, yaw_degrees: f32, pitch_degrees: f32) -> Self {
+        Self {
+            rig: CameraRig::builder()
+                .with(Position::new(position))
+                .with(YawPitch {
+                    yaw_degrees,
+                    pitch_degrees,
+                })
+                .with(Smooth::new_position_rotation(3.0, 1.5))
                 .build(),
             active: false,
             translation_speed: 100.0,
@@ -97,6 +116,8 @@ pub(crate) fn debug_camera_control(
             .rig
             .driver_mut::<Position>()
             .translate(translation_delta);
+    } else {
+        for _ in motion_events.iter() {}
     }
 
     for (mut transform, mut camera) in &mut camera_rig_query {
