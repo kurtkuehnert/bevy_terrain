@@ -268,7 +268,9 @@ where
     type Key = TerrainPipelineKey<M>;
 
     fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
-        let shader_defs = key.flags.shader_defs();
+        let mut shader_defs = key.flags.shader_defs();
+
+        shader_defs.push("TONEMAP_IN_SHADER".to_string());
 
         RenderPipelineDescriptor {
             label: None,

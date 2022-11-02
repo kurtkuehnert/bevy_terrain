@@ -100,14 +100,14 @@ fn setup(
     // Create a sunlight for the physical based lighting.
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
-            illuminance: 10000.0,
+            illuminance: 20000.0,
             ..default()
         },
         transform: Transform::from_xyz(1.0, 1.0, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
         ..default()
     });
     commands.insert_resource(AmbientLight {
-        brightness: 0.1,
+        brightness: 0.2,
         ..default()
     });
 }
