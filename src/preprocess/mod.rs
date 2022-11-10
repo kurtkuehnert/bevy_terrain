@@ -36,6 +36,7 @@ macro_rules! skip_none {
 #[derive(Copy, Clone)]
 pub struct BaseConfig {
     pub texture_size: u32,
+    pub border_size: u32,
     pub mip_level_count: u32,
     pub file_format: FileFormat,
 }
@@ -44,6 +45,7 @@ impl BaseConfig {
     pub fn new(texture_size: u32, mip_level_count: u32) -> Self {
         Self {
             texture_size,
+            border_size: 1,
             mip_level_count,
             file_format: FileFormat::TDF,
         }
@@ -53,6 +55,7 @@ impl BaseConfig {
         let mut attachment = AttachmentConfig::new(
             "height".to_string(),
             self.texture_size,
+            self.border_size,
             self.mip_level_count,
             AttachmentFormat::R16,
         );
@@ -64,6 +67,7 @@ impl BaseConfig {
         let mut attachment = AttachmentConfig::new(
             "minmax".to_string(),
             self.texture_size,
+            1,
             self.mip_level_count,
             AttachmentFormat::Rg16,
         );

@@ -3,7 +3,7 @@ use crate::{
         INDIRECT_BUFFER_SIZE, PARAMETER_BUFFER_SIZE, PREPARE_INDIRECT_LAYOUT, REFINE_TILES_LAYOUT,
         TERRAIN_VIEW_CONFIG_SIZE, TERRAIN_VIEW_LAYOUT, TILE_SIZE,
     },
-    terrain::Terrain,
+    terrain::{Terrain, TerrainConfig},
     terrain_view::{TerrainView, TerrainViewConfig},
     TerrainViewComponents,
 };
@@ -24,7 +24,7 @@ pub(crate) struct TerrainViewConfigUniform {
     height_under_viewer: f32,
     node_count: u32,
     tile_count: u32,
-    refinement_count: u32,
+    pub(crate) refinement_count: u32,
     tile_scale: f32,
     grid_size: f32,
     vertices_per_row: u32,
@@ -35,22 +35,24 @@ pub(crate) struct TerrainViewConfigUniform {
     blend_range: f32,
 }
 
-impl From<&TerrainViewConfig> for TerrainViewConfigUniform {
-    fn from(config: &TerrainViewConfig) -> Self {
+impl TerrainViewConfigUniform {
+    fn new(config: &TerrainConfig, view_config: &TerrainViewConfig) -> Self {
+        let view_distance = view_config.view_distance * config.leaf_node_size as f32;
+
         TerrainViewConfigUniform {
-            height_under_viewer: config.height_under_viewer,
-            node_count: config.node_count,
-            tile_count: config.tile_count,
-            refinement_count: config.refinement_count,
-            tile_scale: config.tile_scale,
-            grid_size: config.grid_size as f32,
-            vertices_per_row: 2 * (config.grid_size + 2),
-            vertices_per_tile: 2 * config.grid_size * (config.grid_size + 2),
-            morph_distance: config.view_distance
-                / 2.0_f32.powf(config.additional_refinement as f32 + 1.0),
-            blend_distance: config.view_distance,
-            morph_range: config.morph_range,
-            blend_range: config.blend_range,
+            height_under_viewer: view_config.height_under_viewer,
+            node_count: view_config.node_count,
+            tile_count: view_config.tile_count,
+            refinement_count: view_config.refinement_count,
+            tile_scale: view_config.tile_scale,
+            grid_size: view_config.grid_size as f32,
+            vertices_per_row: 2 * (view_config.grid_size + 2),
+            vertices_per_tile: 2 * view_config.grid_size * (view_config.grid_size + 2),
+            morph_distance: view_distance
+                / 2.0_f32.powf(view_config.additional_refinement as f32 + 1.0),
+            blend_distance: view_distance,
+            morph_range: view_config.morph_range,
+            blend_range: view_config.blend_range,
         }
     }
 }
@@ -181,11 +183,13 @@ impl TerrainViewData {
         )
     }
 
-    pub(crate) fn update(&self, queue: &RenderQueue, view_config: &TerrainViewConfig) {
+    pub(crate) fn update(
+        &self,
+        queue: &RenderQueue,
+        view_config_uniform: &TerrainViewConfigUniform,
+    ) {
         let mut buffer = encase::UniformBuffer::new(Vec::new());
-        buffer
-            .write(&TerrainViewConfigUniform::from(view_config))
-            .unwrap();
+        buffer.write(view_config_uniform).unwrap();
         queue.write_buffer(&self.view_config_buffer, 0, &buffer.into_inner());
     }
 }
@@ -207,6 +211,31 @@ pub(crate) fn initialize_terrain_view_data(
                 TerrainViewData::new(&device, &images, view_config),
             );
         }
+    }
+}
+
+pub(crate) fn extract_terrain_view_config(
+    mut view_config_uniforms: ResMut<TerrainViewComponents<TerrainViewConfigUniform>>,
+    configs: Extract<Query<&TerrainConfig>>,
+    view_configs: Extract<Res<TerrainViewComponents<TerrainViewConfig>>>,
+) {
+    for (&(terrain, view), view_config) in &view_configs.0 {
+        let config = configs.get(terrain).unwrap();
+        view_config_uniforms.insert(
+            (terrain, view),
+            TerrainViewConfigUniform::new(config, view_config),
+        )
+    }
+}
+
+pub(crate) fn queue_terrain_view_config(
+    queue: Res<RenderQueue>,
+    mut terrain_view_data: ResMut<TerrainViewComponents<TerrainViewData>>,
+    view_config_uniforms: Res<TerrainViewComponents<TerrainViewConfigUniform>>,
+) {
+    for (&(terrain, view), data) in &mut terrain_view_data.0 {
+        let view_config_uniform = view_config_uniforms.get(&(terrain, view)).unwrap();
+        data.update(&queue, view_config_uniform)
     }
 }
 

@@ -1,10 +1,9 @@
 //! Types for configuring terrain views.
 
-use crate::{terrain::Terrain, TerrainViewData};
 use bevy::{
     ecs::{query::QueryItem, system::lifetimeless::Read},
     prelude::*,
-    render::{extract_component::ExtractComponent, renderer::RenderQueue, Extract},
+    render::extract_component::ExtractComponent,
     utils::{HashMap, Uuid},
 };
 use std::str::FromStr;
@@ -56,7 +55,7 @@ pub struct TerrainViewConfig {
     pub quadtree_handle: Handle<Image>,
     /// The current height under the viewer.
     pub height_under_viewer: f32,
-    /// The distance (measured in node sizes) until which to request nodes to be loaded.
+    /// The distance (measured in multiples of the node size) until which to request nodes to be loaded.
     pub load_distance: f32,
     /// The count of nodes in x and y direction per quadtree layer.
     pub node_count: u32,
@@ -70,7 +69,7 @@ pub struct TerrainViewConfig {
     pub tile_scale: f32,
     /// The number of rows and columns of the tile grid.
     pub grid_size: u32,
-    /// The distance (measured in node sizes) at which the LOD changes.
+    /// The distance (measured in multiples of the node size) at which the LOD changes.
     pub view_distance: f32,
     /// The morph percentage of the mesh.
     pub morph_range: f32,
@@ -91,36 +90,12 @@ impl Default for TerrainViewConfig {
             node_count: 10,
             tile_count: 1000000,
             refinement_count: 20,
-            additional_refinement: 3,
-            tile_scale: 1.0,
+            additional_refinement: 0,
+            tile_scale: 32.0,
             grid_size: 8,
             view_distance: 4.0,
             morph_range: 0.2,
             blend_range: 0.2,
-        }
-    }
-}
-
-pub(crate) fn extract_terrain_view_config(
-    mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
-    extracted_view_configs: Extract<Res<TerrainViewComponents<TerrainViewConfig>>>,
-) {
-    // Todo: scale some parameters by the values in the corresponding config
-    *view_configs = extracted_view_configs.clone();
-}
-
-pub(crate) fn queue_terrain_view_config(
-    queue: Res<RenderQueue>,
-    mut terrain_view_data: ResMut<TerrainViewComponents<TerrainViewData>>,
-    view_configs: Res<TerrainViewComponents<TerrainViewConfig>>,
-    view_query: Query<Entity, With<TerrainView>>,
-    terrain_query: Query<Entity, With<Terrain>>,
-) {
-    for terrain in terrain_query.iter() {
-        for view in view_query.iter() {
-            let view_config = view_configs.get(&(terrain, view)).unwrap();
-            let data = terrain_view_data.get_mut(&(terrain, view)).unwrap();
-            data.update(&queue, view_config);
         }
     }
 }
