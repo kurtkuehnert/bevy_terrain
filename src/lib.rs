@@ -55,7 +55,11 @@ use crate::{
         render_pipeline::TerrainPipelineConfig,
         shaders::add_shader,
         terrain_data::{initialize_terrain_data, TerrainData},
-        terrain_view_data::{initialize_terrain_view_data, TerrainViewData},
+        terrain_view_data::TerrainViewConfigUniform,
+        terrain_view_data::{
+            extract_terrain_view_config, initialize_terrain_view_data, queue_terrain_view_config,
+            TerrainViewData,
+        },
     },
     terrain::{Terrain, TerrainComponents, TerrainConfig},
     terrain_data::{
@@ -70,10 +74,7 @@ use crate::{
             adjust_quadtree, compute_quadtree_request, update_height_under_viewer, Quadtree,
         },
     },
-    terrain_view::{
-        extract_terrain_view_config, queue_terrain_view_config, TerrainView, TerrainViewComponents,
-        TerrainViewConfig,
-    },
+    terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
 };
 use bevy::{
     prelude::*,
@@ -188,7 +189,7 @@ impl Plugin for TerrainPlugin {
             .init_resource::<TerrainComponents<TerrainData>>()
             .init_resource::<TerrainViewComponents<GpuQuadtree>>()
             .init_resource::<TerrainViewComponents<TerrainViewData>>()
-            .init_resource::<TerrainViewComponents<TerrainViewConfig>>()
+            .init_resource::<TerrainViewComponents<TerrainViewConfigUniform>>()
             .init_resource::<TerrainViewComponents<CullingBindGroup>>()
             .add_system_to_stage(RenderStage::Extract, extract_terrain_view_config)
             .add_system_to_stage(RenderStage::Extract, initialize_gpu_node_atlas)

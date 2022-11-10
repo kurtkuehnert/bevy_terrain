@@ -1,15 +1,15 @@
-use crate::render::render_pipeline::TerrainPipelineConfig;
 use crate::{
     render::{
         culling::CullingBindGroup,
+        render_pipeline::TerrainPipelineConfig,
         shaders::{PREPARE_INDIRECT_SHADER, REFINE_TILES_SHADER},
         terrain_data::terrain_bind_group_layout,
+        terrain_view_data::TerrainViewConfigUniform,
         terrain_view_data::TerrainViewData,
         CULL_DATA_LAYOUT, PREPARE_INDIRECT_LAYOUT, REFINE_TILES_LAYOUT,
     },
     terrain::Terrain,
     DebugTerrain, TerrainComponents, TerrainData, TerrainView, TerrainViewComponents,
-    TerrainViewConfig,
 };
 use bevy::{
     ecs::system::{
@@ -246,7 +246,8 @@ impl render_graph::Node for TerrainComputeNode {
         world: &World,
     ) -> Result<(), render_graph::NodeRunError> {
         let pipeline_cache = world.resource::<PipelineCache>();
-        let view_configs = world.resource::<TerrainViewComponents<TerrainViewConfig>>();
+        let view_config_uniforms =
+            world.resource::<TerrainViewComponents<TerrainViewConfigUniform>>();
         let terrain_data = world.resource::<TerrainComponents<TerrainData>>();
         let terrain_view_data = world.resource::<TerrainViewComponents<TerrainViewData>>();
         let culling_bind_groups = world.resource::<TerrainViewComponents<CullingBindGroup>>();
@@ -274,7 +275,7 @@ impl render_graph::Node for TerrainComputeNode {
         for terrain in self.terrain_query.iter_manual(world) {
             let terrain_data = terrain_data.get(&terrain).unwrap();
             for view in self.view_query.iter_manual(world) {
-                let view_config = view_configs.get(&(terrain, view)).unwrap();
+                let view_config = view_config_uniforms.get(&(terrain, view)).unwrap();
                 let view_data = terrain_view_data.get(&(terrain, view)).unwrap();
                 let culling_bind_group = culling_bind_groups.get(&(terrain, view)).unwrap();
 

@@ -139,7 +139,7 @@ impl TerrainConfig {
         base: BaseConfig,
         tile: TileConfig,
     ) {
-        self.leaf_node_size = base.texture_size - (1 << base.mip_level_count);
+        self.leaf_node_size = base.texture_size - 2 * base.border_size;
 
         loader.attachments.insert(
             self.attachments.len(),
