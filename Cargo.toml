@@ -9,7 +9,7 @@ keywords = ["gamedev", "graphics", "bevy", "3d", "terrain"]
 exclude = ["assets/*"]
 readme = "README.md"
 authors = ["Kurt Kühnert <kurt@kuehnert.dev>"]
-repository = "https://github.com/ku95/bevy_terrain"
+repository = "https://github.com/kurtkuehnert/bevy_terrain"
 
 [dependencies]
 bevy = { git="https://github.com/bevyengine/bevy" }
