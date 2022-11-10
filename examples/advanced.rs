@@ -8,7 +8,7 @@ use bevy_terrain::prelude::*;
 
 const TERRAIN_SIZE: u32 = 1024;
 const TEXTURE_SIZE: u32 = 512;
-const MIP_LEVEL_COUNT: u32 = 4;
+const MIP_LEVEL_COUNT: u32 = 1;
 const LOD_COUNT: u32 = 4;
 const HEIGHT: f32 = 200.0;
 const NODE_ATLAS_SIZE: u32 = 100;
@@ -87,6 +87,7 @@ fn setup(
         AttachmentConfig::new(
             "albedo".to_string(),
             TEXTURE_SIZE,
+            1,
             MIP_LEVEL_COUNT,
             AttachmentFormat::Rgb8,
         ),
@@ -120,7 +121,7 @@ fn setup(
         grid_size: 4,
         node_count: 10,
         load_distance: 5.0,
-        view_distance: 4.0 * config.leaf_node_size as f32,
+        view_distance: 4.0,
         ..default()
     };
 

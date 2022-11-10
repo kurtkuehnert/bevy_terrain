@@ -1,9 +1,6 @@
 //! Contains a debug resource and systems controlling it to visualize different internal
 //! data of the plugin.
-use crate::{
-    debug::camera::debug_camera_control, prelude::TerrainConfig, TerrainViewComponents,
-    TerrainViewConfig,
-};
+use crate::{debug::camera::debug_camera_control, TerrainViewComponents, TerrainViewConfig};
 use bevy::{
     prelude::*,
     render::{Extract, RenderApp, RenderStage},
@@ -190,12 +187,9 @@ pub fn toggle_debug(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTerrain>)
 
 pub fn change_config(
     input: Res<Input<KeyCode>>,
-    configs: Query<&TerrainConfig>,
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
 ) {
-    for ((terrain, _), mut view_config) in &mut view_configs.0 {
-        let config = configs.get(*terrain).unwrap();
-
+    for mut view_config in &mut view_configs.0.values_mut() {
         if input.just_pressed(KeyCode::H) && view_config.tile_scale > 0.25 {
             view_config.tile_scale /= 2.0;
             println!("Decreased the tile scale to {}.", view_config.tile_scale);
@@ -206,17 +200,17 @@ pub fn change_config(
         }
 
         if input.just_pressed(KeyCode::I) {
-            view_config.view_distance -= 0.25 * config.leaf_node_size as f32;
+            view_config.view_distance -= 0.25;
             println!(
                 "Decreased the view distance to {}.",
-                view_config.view_distance / config.leaf_node_size as f32
+                view_config.view_distance
             );
         }
         if input.just_pressed(KeyCode::O) {
-            view_config.view_distance += 0.25 * config.leaf_node_size as f32;
+            view_config.view_distance += 0.25;
             println!(
                 "Increased the view distance to {}.",
-                view_config.view_distance / config.leaf_node_size as f32
+                view_config.view_distance
             );
         }
 

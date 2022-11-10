@@ -143,10 +143,10 @@ impl AttachmentConfig {
     pub fn new(
         name: String,
         texture_size: u32,
+        border_size: u32,
         mip_level_count: u32,
         format: AttachmentFormat,
     ) -> Self {
-        let border_size = 1 << (mip_level_count - 1);
         let center_size = texture_size - 2 * border_size;
 
         Self {
