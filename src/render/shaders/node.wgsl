@@ -12,15 +12,13 @@ fn approximate_world_position(local_position: vec2<f32>) -> vec4<f32> {
 }
 
 fn node_size(lod: u32) -> f32 {
-    return f32(config.chunk_size * (1u << lod)); // Todo: rename chunk size
+    return f32(config.leaf_node_size * (1u << lod));
 }
 
 // Looks up the best availale node in the node atlas from the viewers point of view.
 // This is done by sampling the viewers quadtree at the caluclated coordinate.
 fn lookup_node(lod: u32, local_position: vec2<f32>) -> NodeLookup {
-#ifdef SPHERICAL_LOD
-    let quadtree_lod = min(lod, config.lod_count - 1u);
-#else
+#ifdef SHOW_NODES
     var quadtree_lod = 0u;
     for (; quadtree_lod < config.lod_count; quadtree_lod = quadtree_lod + 1u) {
         let coordinate = local_position / node_size(quadtree_lod);
@@ -32,6 +30,8 @@ fn lookup_node(lod: u32, local_position: vec2<f32>) -> NodeLookup {
             break;
         }
     }
+#else
+    let quadtree_lod = min(lod, config.lod_count - 1u);
 #endif
 
     let quadtree_coords = vec2<i32>((local_position / node_size(quadtree_lod)) % f32(view_config.node_count));

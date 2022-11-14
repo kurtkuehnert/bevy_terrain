@@ -75,7 +75,7 @@ fn show_lod(lod: u32, world_position: vec3<f32>) -> vec4<f32> {
             color = lod_color(i) * 10.0;
         }
 
-#ifndef SPHERICAL_LOD
+#ifdef SHOW_NODES
         let node_size = node_size(i);
         let grid_position = floor(view.world_position.xz / node_size + 0.5 - f32(view_config.node_count >> 1u)) * node_size;
         let grid_size = node_size * f32(view_config.node_count);

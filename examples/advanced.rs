@@ -10,7 +10,7 @@ const TERRAIN_SIZE: u32 = 1024;
 const TEXTURE_SIZE: u32 = 512;
 const MIP_LEVEL_COUNT: u32 = 1;
 const LOD_COUNT: u32 = 4;
-const HEIGHT: f32 = 200.0;
+const HEIGHT: f32 = 0.0;
 const NODE_ATLAS_SIZE: u32 = 100;
 const PATH: &str = "terrain";
 

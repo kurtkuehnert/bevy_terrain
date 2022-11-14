@@ -4,7 +4,7 @@
 struct TerrainConfig {
     lod_count: u32,
     height: f32,
-    chunk_size: u32,
+    leaf_node_size: u32,
     terrain_size: u32,
 
     height_size: f32,
@@ -71,8 +71,9 @@ fn frustum_cull(tile: Tile) -> bool {
     let size = f32(tile.size) * view_config.tile_scale;
     let local_position = (vec2<f32>(tile.coords) + 0.5) * size;
 
-    // let minmax = minmax(local_position, size);
-    let minmax = vec2<f32>(0.0, config.height); // Todo: fix this
+    let minmax = vec2<f32>(0.0, config.height); // 2D frustum culling
+    // Todo: enable this
+    // let minmax = minmax(local_position, size); // 3D frustum culling
 
     // frustum culling optimized
     let aabb_min = vec3<f32>(local_position.x - size / 2.0, minmax.x, local_position.y - size / 2.0);
@@ -91,66 +92,13 @@ fn frustum_cull(tile: Tile) -> bool {
     	    // the closest corner is outside the plane -> cull
     	    return true;
     	}
-    	if (dot(plane, n_corner) < 0.0) {
+    	else if (dot(plane, n_corner) < 0.0) {
     	    // the furthest corner is inside the plane -> don't cull
     	    return false;
     	}
     }
 
     return false;
-
-    // frustum culling bevy
-    // let center_position = vec4<f32>(local_position.x, (minmax.y + minmax.x) / 2.0, local_position.y, 1.0);
-    // let half_extents    = vec3<f32>(size,              minmax.y - minmax.x,        size) / 2.0;
-    //
-    // // let size = f32(tile.size) * view_config.tile_scale;
-    // // let local_position = (vec2<f32>(tile.coords) + 0.5) * size;
-    // // let center_position = vec4<f32>(local_position.x, 500.0, local_position.y, 1.0);
-    // // let half_extends = vec3<f32>(size / 2.0, 500.0, size / 2.0);
-    //
-    // for (var i = 0; i < 6; i = i + 1) {
-    //     let p_normal_d = view.planes[i];
-    //     let relative_radius = dot(abs(p_normal_d.xyz), half_extents);
-    //
-    //     if (dot(p_normal_d, center_position) + relative_radius <= 0.0) {
-    //         // no intersection -> cull
-    //         return true;
-    //     }
-    // }
-    //
-    // return false;
-
-    // frustum culling naive
-    // let aabb_min = vec3<f32>(local_position.x - size / 2.0, minmax.x, local_position.y - size / 2.0);
-    // let aabb_max = vec3<f32>(local_position.x + size / 2.0, minmax.y, local_position.y + size / 2.0);
-    //
-    // var corners = array<vec4<f32>, 8>(
-    //     vec4<f32>(aabb_min.x, aabb_min.y, aabb_min.z, 1.0),
-    //     vec4<f32>(aabb_min.x, aabb_min.y, aabb_max.z, 1.0),
-    //     vec4<f32>(aabb_min.x, aabb_max.y, aabb_min.z, 1.0),
-    //     vec4<f32>(aabb_min.x, aabb_max.y, aabb_max.z, 1.0),
-    //     vec4<f32>(aabb_max.x, aabb_min.y, aabb_min.z, 1.0),
-    //     vec4<f32>(aabb_max.x, aabb_min.y, aabb_max.z, 1.0),
-    //     vec4<f32>(aabb_max.x, aabb_max.y, aabb_min.z, 1.0),
-    //     vec4<f32>(aabb_max.x, aabb_max.y, aabb_max.z, 1.0)
-    // );
-    //
-    // for (var i = 0; i < 6; i = i + 1) {
-    //     var out = 0u;
-    //
-    //     for (var j = 0; j < 8; j = j + 1) {
-    //         if (dot(view.planes[i], corners[j]) < 0.0) {
-    //             out = out + 1u;
-    //         }
-    //     }
-    //
-    //     if (out == 8u) {
-    //         // all points are outside the frustum -> cull
-    //         return true;
-    //     }
-    // }
-    //
-    // return false;
 }
 
 fn outside_cull(tile: Tile) -> bool {
