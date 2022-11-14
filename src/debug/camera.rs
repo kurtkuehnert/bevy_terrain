@@ -1,6 +1,8 @@
 use bevy::{input::mouse::MouseMotion, prelude::*};
 use dolly::prelude::*;
 
+// Todo: unify dolly glam and bevy glam
+
 /// A fly camera used to navigate and debug the terrain.
 ///
 /// It is controlled using the arrow keys, and the mouse.
@@ -17,7 +19,7 @@ impl Default for DebugCamera {
     fn default() -> Self {
         Self {
             rig: CameraRig::builder()
-                .with(Position::new(Vec3::new(0.0, 100.0, 0.0)))
+                .with(Position::new(dolly::glam::Vec3::new(0.0, 100.0, 0.0)))
                 .with(YawPitch {
                     yaw_degrees: -135.0,
                     pitch_degrees: 0.0,
@@ -36,7 +38,9 @@ impl DebugCamera {
     pub fn new(position: Vec3, yaw_degrees: f32, pitch_degrees: f32) -> Self {
         Self {
             rig: CameraRig::builder()
-                .with(Position::new(position))
+                .with(Position::new(dolly::glam::Vec3::new(
+                    position.x, position.y, position.z,
+                )))
                 .with(YawPitch {
                     yaw_degrees,
                     pitch_degrees,
@@ -65,7 +69,7 @@ pub(crate) fn debug_camera_control(
     {
         let mut speed_factor = 1.0;
         let mut rotation_delta = Vec2::ZERO;
-        let mut translation_delta = Vec3::ZERO;
+        let mut translation_delta = dolly::glam::Vec3::ZERO;
 
         for motion in motion_events.iter() {
             rotation_delta += -motion.delta;
@@ -98,12 +102,18 @@ pub(crate) fn debug_camera_control(
 
         camera.translation_speed *= speed_factor;
 
-        if translation_delta != Vec3::ZERO {
+        if translation_delta != dolly::glam::Vec3::ZERO {
             translation_delta = translation_delta.normalize();
         }
 
-        let euler = camera.rig.final_transform.rotation.to_euler(EulerRot::YXZ);
-        translation_delta = Quat::from_euler(EulerRot::YXZ, euler.0, 0.0, 0.0) * translation_delta;
+        let euler = camera
+            .rig
+            .final_transform
+            .rotation
+            .to_euler(dolly::glam::EulerRot::YXZ);
+        translation_delta =
+            dolly::glam::Quat::from_euler(dolly::glam::EulerRot::YXZ, euler.0, 0.0, 0.0)
+                * translation_delta;
 
         translation_delta = translation_delta * camera.translation_speed * delta_time;
         rotation_delta = rotation_delta * camera.rotation_speed * delta_time;
@@ -122,7 +132,7 @@ pub(crate) fn debug_camera_control(
 
     for (mut transform, mut camera) in &mut camera_rig_query {
         let (translation, rotation) = camera.rig.update(delta_time).into_position_rotation();
-        transform.translation = translation;
-        transform.rotation = rotation;
+        transform.translation = Vec3::new(translation.x, translation.y, translation.z);
+        transform.rotation = Quat::from_array(rotation.to_array());
     }
 }

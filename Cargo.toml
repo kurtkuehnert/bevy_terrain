@@ -12,7 +12,7 @@ authors = ["Kurt Kühnert <kurt@kuehnert.dev>"]
 repository = "https://github.com/kurtkuehnert/bevy_terrain"
 
 [dependencies]
-bevy = { git="https://github.com/bevyengine/bevy" }
+bevy = "0.9"
 dtm = "0.1"
 rapid-qoi = "0.6"
 ndarray = "0.15"

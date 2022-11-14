@@ -108,9 +108,7 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
         let shader;
         let entry_point;
 
-        let mut shader_defs = key.1.shader_defs();
-
-        shader_defs.push("SPHERICAL_LOD".to_string()); // Todo: remove this
+        let shader_defs = key.1.shader_defs();
 
         match key.0 {
             TerrainComputePipelineId::RefineTiles => {

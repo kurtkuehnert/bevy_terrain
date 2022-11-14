@@ -98,11 +98,11 @@ pub struct Quadtree {
     pub(crate) lod_count: u32,
     /// The count of nodes in x and y direction per layer.
     pub(crate) node_count: u32,
-    /// The size of a chunk (node with lod 0).
-    chunk_size: u32,
+    /// The size of the smallest nodes (with lod 0).
+    leaf_node_size: u32,
     /// The distance (measured in node sizes) until which to request nodes to be loaded.
     load_distance: f32,
-    height: f32, // Todo: reconsider where to store this
+    height: f32,
     height_under_viewer: f32,
     /// The internal node states of the quadtree.
     nodes: Array3<TreeNode>,
@@ -114,14 +114,14 @@ impl Quadtree {
     /// * `handle` - The handle of the quadtree texture.
     /// * `lod_count` - The count of level of detail layers.
     /// * `node_count` - The count of nodes in x and y direction per layer.
-    /// * `chunk_size` - The size of a chunk (node with lod 0).
+    /// * `leaf_node_size` - The size of the smallest nodes (with lod 0).
     /// * `load_distance` - The distance (measured in node sizes) until which to request nodes to be loaded.
     /// * `height` - The height of the terrain.
     pub fn new(
         handle: Handle<Image>,
         lod_count: u32,
         node_count: u32,
-        chunk_size: u32,
+        leaf_node_size: u32,
         load_distance: f32,
         height: f32,
     ) -> Self {
@@ -129,7 +129,7 @@ impl Quadtree {
             handle,
             lod_count,
             node_count,
-            chunk_size,
+            leaf_node_size,
             load_distance,
             height,
             height_under_viewer: height / 2.0,
@@ -155,7 +155,7 @@ impl Quadtree {
     /// Calculates the size of a node.
     #[inline]
     fn node_size(&self, lod: u32) -> u32 {
-        self.chunk_size * (1 << lod)
+        self.leaf_node_size * (1 << lod)
     }
 
     /// Traverses the quadtree and updates the node states,
@@ -322,10 +322,10 @@ fn height_under_viewer(
     viewer_position: Vec2,
 ) -> f32 {
     let coordinate =
-        (viewer_position / quadtree.chunk_size as f32).as_uvec2() % quadtree.node_count;
+        (viewer_position / quadtree.leaf_node_size as f32).as_uvec2() % quadtree.node_count;
 
     let node = &quadtree.data[[0, coordinate.y as usize, coordinate.x as usize]];
-    let atlas_coords = (viewer_position / quadtree.chunk_size as f32) % 1.0;
+    let atlas_coords = (viewer_position / quadtree.leaf_node_size as f32) % 1.0;
 
     if node.atlas_index == INVALID_ATLAS_INDEX {
         return 0.0;

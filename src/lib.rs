@@ -116,6 +116,8 @@ pub mod prelude {
 /// Does not include loader(s) and a material.
 #[derive(Bundle)]
 pub struct TerrainBundle {
+    #[bundle]
+    visibility: VisibilityBundle,
     terrain: Terrain,
     node_atlas: NodeAtlas,
     config: TerrainConfig,
@@ -127,6 +129,7 @@ impl TerrainBundle {
     /// Creates a new terrain bundle from the config.
     pub fn new(config: TerrainConfig) -> Self {
         Self {
+            visibility: default(),
             terrain: Terrain,
             node_atlas: NodeAtlas::from_config(&config),
             config,
