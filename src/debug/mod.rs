@@ -29,9 +29,9 @@ pub struct DebugTerrain {
     pub show_tiles: bool,
     pub show_lod: bool,
     pub show_uv: bool,
+    pub show_nodes: bool,
     pub show_minmax_error: bool,
     pub minmax: bool,
-    pub spherical_lod: bool,
     pub mesh_morph: bool,
     pub albedo: bool,
     pub bright: bool,
@@ -50,9 +50,9 @@ impl Default for DebugTerrain {
             show_tiles: false,
             show_lod: false,
             show_uv: false,
+            show_nodes: false,
             show_minmax_error: false,
             minmax: false,
-            spherical_lod: true,
             mesh_morph: true,
             albedo: false,
             bright: false,
@@ -99,6 +99,13 @@ pub fn toggle_debug(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTerrain>)
             if debug.show_uv { "on" } else { "off" }
         )
     }
+    if input.just_pressed(KeyCode::C) {
+        debug.show_nodes = !debug.show_nodes;
+        println!(
+            "Toggled the node view {}.",
+            if debug.show_nodes { "on" } else { "off" }
+        )
+    }
     if input.just_pressed(KeyCode::Y) {
         debug.show_minmax_error = !debug.show_minmax_error;
         println!(
@@ -111,13 +118,6 @@ pub fn toggle_debug(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTerrain>)
         println!(
             "Toggled the minmax view {}.",
             if debug.minmax { "on" } else { "off" }
-        )
-    }
-    if input.just_pressed(KeyCode::C) {
-        debug.spherical_lod = !debug.spherical_lod;
-        println!(
-            "Toggled the spherical_lod {}.",
-            if debug.spherical_lod { "on" } else { "off" }
         )
     }
     if input.just_pressed(KeyCode::D) {

@@ -45,7 +45,7 @@ impl BaseConfig {
     pub fn new(texture_size: u32, mip_level_count: u32) -> Self {
         Self {
             texture_size,
-            border_size: 1,
+            border_size: 2,
             mip_level_count,
             file_format: FileFormat::TDF,
         }

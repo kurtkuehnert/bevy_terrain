@@ -1,5 +1,6 @@
 .idea
-/target
-/assets/terrain/data/*
-/assets/terrain/config.tc
+target
+assets/terrain/data/*
+assets/terrain/config.tc
+examples/test.rs
 Cargo.lock

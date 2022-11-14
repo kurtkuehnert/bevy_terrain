@@ -7,12 +7,12 @@ use crate::{
     },
     DebugTerrain, Terrain,
 };
+use bevy::render::view::VisibilitySystems;
 use bevy::{
     core_pipeline::core_3d::Opaque3d,
     pbr::{MeshPipeline, RenderMaterials, SetMaterialBindGroup, SetMeshViewBindGroup},
     prelude::*,
     render::{
-        extract_component::ExtractComponentPlugin,
         render_phase::{AddRenderCommand, DrawFunctions, RenderPhase, SetItemPipeline},
         render_resource::*,
         renderer::RenderDevice,
@@ -75,9 +75,9 @@ pub struct TerrainPipelineFlags: u32 {
     const SHOW_TILES         = (1 <<  1);
     const SHOW_LOD           = (1 <<  2);
     const SHOW_UV            = (1 <<  3);
-    const SHOW_MINMAX_ERROR  = (1 <<  4);
-    const MINMAX             = (1 <<  5);
-    const SPHERICAL_LOD      = (1 <<  6);
+    const SHOW_NODES         = (1 <<  4);
+    const SHOW_MINMAX_ERROR  = (1 <<  5);
+    const MINMAX             = (1 <<  6);
     const MESH_MORPH         = (1 <<  7);
     const ALBEDO             = (1 <<  8);
     const BRIGHT             = (1 <<  9);
@@ -121,8 +121,8 @@ impl TerrainPipelineFlags {
         if debug.minmax {
             key |= TerrainPipelineFlags::MINMAX;
         }
-        if debug.spherical_lod {
-            key |= TerrainPipelineFlags::SPHERICAL_LOD;
+        if debug.show_nodes {
+            key |= TerrainPipelineFlags::SHOW_NODES;
         }
         if debug.mesh_morph {
             key |= TerrainPipelineFlags::MESH_MORPH;
@@ -175,14 +175,14 @@ impl TerrainPipelineFlags {
         if (self.bits & TerrainPipelineFlags::SHOW_UV.bits) != 0 {
             shader_defs.push("SHOW_UV".to_string());
         }
+        if (self.bits & TerrainPipelineFlags::SHOW_NODES.bits) != 0 {
+            shader_defs.push("SHOW_NODES".to_string());
+        }
         if (self.bits & TerrainPipelineFlags::SHOW_MINMAX_ERROR.bits) != 0 {
             shader_defs.push("SHOW_MINMAX_ERROR".to_string());
         }
         if (self.bits & TerrainPipelineFlags::MINMAX.bits) != 0 {
             shader_defs.push("MINMAX".to_string());
-        }
-        if (self.bits & TerrainPipelineFlags::SPHERICAL_LOD.bits) != 0 {
-            shader_defs.push("SPHERICAL_LOD".to_string());
         }
         if (self.bits & TerrainPipelineFlags::MESH_MORPH.bits) != 0 {
             shader_defs.push("MESH_MORPH".to_string());
@@ -277,7 +277,7 @@ where
             layout: Some(vec![
                 self.view_layout.clone(),
                 self.terrain_view_layout.clone(),
-                self.terrain_layout.clone(), // Todo: do this properly for multiple maps
+                self.terrain_layout.clone(), // Todo: do this properly for multiple terrains
                 self.material_layout.clone(),
             ]),
             vertex: VertexState {
@@ -327,8 +327,6 @@ where
                 alpha_to_coverage_enabled: false,
             },
         }
-
-        // Todo: specialize material
     }
 }
 
@@ -368,7 +366,7 @@ pub(crate) fn queue_terrain<M: Material>(
                     flags |= TerrainPipelineFlags::from_debug(debug);
                 } else {
                     flags |= TerrainPipelineFlags::LIGHTING
-                        | TerrainPipelineFlags::SPHERICAL_LOD
+                        | TerrainPipelineFlags::SHOW_NODES
                         | TerrainPipelineFlags::MESH_MORPH
                         | TerrainPipelineFlags::SAMPLE_GRAD;
                 }
@@ -407,10 +405,12 @@ where
     M::Data: PartialEq + Eq + Hash + Clone,
 {
     fn build(&self, app: &mut App) {
-        app.add_asset::<M>()
-            .add_plugin(ExtractComponentPlugin::<Handle<M>>::default());
-
-        app.add_plugin(MaterialPlugin::<M>::default());
+        // Todo: don't use MaterialPlugin, but do the configuration here
+        app.add_plugin(MaterialPlugin::<M>::default())
+            .add_system_to_stage(
+                CoreStage::PostUpdate,
+                mark_terrain_visible.after(VisibilitySystems::CheckVisibility),
+            );
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
@@ -426,5 +426,12 @@ where
                 .init_resource::<SpecializedRenderPipelines<TerrainRenderPipeline<M>>>()
                 .add_system_to_stage(RenderStage::Queue, queue_terrain::<M>);
         }
+    }
+}
+
+// Todo: fix this hack
+pub fn mark_terrain_visible(mut visibility_query: Query<&mut ComputedVisibility, With<Terrain>>) {
+    for mut visibility in &mut visibility_query {
+        visibility.set_visible_in_view();
     }
 }
