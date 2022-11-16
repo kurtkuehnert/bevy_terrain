@@ -7,7 +7,6 @@ use crate::{
     },
     DebugTerrain, Terrain,
 };
-use bevy::render::view::VisibilitySystems;
 use bevy::{
     core_pipeline::core_3d::Opaque3d,
     pbr::{MeshPipeline, RenderMaterials, SetMaterialBindGroup, SetMeshViewBindGroup},
@@ -406,11 +405,7 @@ where
 {
     fn build(&self, app: &mut App) {
         // Todo: don't use MaterialPlugin, but do the configuration here
-        app.add_plugin(MaterialPlugin::<M>::default())
-            .add_system_to_stage(
-                CoreStage::PostUpdate,
-                mark_terrain_visible.after(VisibilitySystems::CheckVisibility),
-            );
+        app.add_plugin(MaterialPlugin::<M>::default());
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
@@ -426,12 +421,5 @@ where
                 .init_resource::<SpecializedRenderPipelines<TerrainRenderPipeline<M>>>()
                 .add_system_to_stage(RenderStage::Queue, queue_terrain::<M>);
         }
-    }
-}
-
-// Todo: fix this hack
-pub fn mark_terrain_visible(mut visibility_query: Query<&mut ComputedVisibility, With<Terrain>>) {
-    for mut visibility in &mut visibility_query {
-        visibility.set_visible_in_view();
     }
 }

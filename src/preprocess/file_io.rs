@@ -9,15 +9,16 @@ use image::{io::Reader, DynamicImage};
 use rapid_qoi::{Colors, Qoi};
 use std::{
     fs::{self, DirEntry, ReadDir},
-    iter::Map,
+    iter::FilterMap,
     path::Path,
 };
 
 pub(crate) fn iterate_directory(
     directory: &str,
-) -> Map<ReadDir, fn(std::io::Result<DirEntry>) -> (String, String)> {
-    fs::read_dir(directory).unwrap().map(|path| {
+) -> FilterMap<ReadDir, fn(std::io::Result<DirEntry>) -> Option<(String, String)>> {
+    fs::read_dir(directory).unwrap().filter_map(|path| {
         let path = path.unwrap().path();
+
         let name = path
             .with_extension("")
             .file_name()
@@ -28,7 +29,11 @@ pub(crate) fn iterate_directory(
 
         let path = path.into_os_string().into_string().unwrap();
 
-        (name, path)
+        if name.starts_with(".") {
+            None
+        } else {
+            Some((name, path))
+        }
     })
 }
 
@@ -132,7 +137,7 @@ fn load_tdf(path: &str) -> Option<DynamicImage> {
 fn load_image_rs(path: &str) -> Option<DynamicImage> {
     let mut reader = Reader::open(path).ok()?;
     reader.no_limits();
-    reader.decode().ok()
+    Some(reader.decode().unwrap())
 }
 
 fn load_dtm(path: &str) -> Option<DynamicImage> {
