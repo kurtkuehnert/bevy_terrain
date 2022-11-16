@@ -76,6 +76,7 @@ use crate::{
     },
     terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
 };
+use bevy::render::view::NoFrustumCulling;
 use bevy::{
     prelude::*,
     render::{
@@ -116,25 +117,27 @@ pub mod prelude {
 /// Does not include loader(s) and a material.
 #[derive(Bundle)]
 pub struct TerrainBundle {
-    #[bundle]
-    visibility: VisibilityBundle,
     terrain: Terrain,
     node_atlas: NodeAtlas,
     config: TerrainConfig,
     transform: Transform,
     global_transform: GlobalTransform,
+    #[bundle]
+    visibility_bundle: VisibilityBundle,
+    no_frustum_culling: NoFrustumCulling,
 }
 
 impl TerrainBundle {
     /// Creates a new terrain bundle from the config.
     pub fn new(config: TerrainConfig) -> Self {
         Self {
-            visibility: default(),
             terrain: Terrain,
             node_atlas: NodeAtlas::from_config(&config),
             config,
             transform: default(),
             global_transform: default(),
+            visibility_bundle: default(),
+            no_frustum_culling: NoFrustumCulling,
         }
     }
 }
