@@ -10,7 +10,7 @@ I came up with the Chunked Clipmap data structure used to represent the terrain 
 Both are implemented as part of bevy terrain and work quite well for rendering large-scale terrains.
 
 Now that I have finished my thesis I would like to continue working on this project and extend its capabilities. 
-The topic of terrain rendering is vast and thus I can not work on all the stuff at once.
+The topic of terrain rendering is vast, and thus I can not work on all the stuff at once.
 In the following, I will list a couple of features that I would like to integrate into this crate in the future. 
 I will probably not have the time to implement all of them by myself, so if you are interested please get in touch, and let us work on them together. 
 Additionally, there are still plenty of improvements, bug fixes, and optimizations to be completed on the already existing implementation.
@@ -27,7 +27,7 @@ Additionally, there are still plenty of improvements, bug fixes, and optimizatio
 ### Procedural Texturing
 
 Probably the biggest missing puzzle piece of this plugin is support for procedural texturing using splat maps or something similar. 
-Currently texturing has to be implemented manually in the terrain shader (see the advanced example for reference). 
+Currently, texturing has to be implemented manually in the terrain shader (see the advanced example for reference). 
 I would like to support this use case in a more integrated manner in the future. Unfortunately, 
 I am not familiar with the terrain texturing systems of other engines (e.g. Unity, Unreal, Godot) 
 or have any experience texturing and building my own terrains. 

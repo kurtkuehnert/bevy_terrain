@@ -6,13 +6,13 @@ Currently, this crate provides two fundamental capabilities.
 For one, the UDLOD algorithm approximates the terrain geometry, and for another, the Chunked Clipmap stores the terrain data in a convenient and randomly accessible data structure. 
 
 Both are described in detail in my [bachelor thesis]([https://github.com/kurtkuehnert/terrain_renderer/blob/main/Thesis.pdf](https://github.com/kurtkuehnert/terrain_renderer/blob/main/Thesis.pdf)). 
-To understand the implementation of this crate and the reasons behind some of the design decisions, I recommend that you read at least the entire chapter 4. 
+To understand the implementation of this crate and the reasons behind some design decisions, I recommend that you read at least the entire chapter 4. 
 If you are unfamiliar with terrain rendering in general, taking a look at chapter 2 will prove beneficial as well.  
 
 In the following, I will now explain how both of these systems are currently implemented, what limitations they possess, and how they should work in the future.
 Furthermore, I have listed a couple of todos outlining the essence of these issues. 
-If any of them sound interesting to you and you would like to work on them, please get in touch with me, so we can discuss solutions. 
-These are certainly not all problems of the current implementation, so if you notice anything else, please let me know so I can add it here.
+If any of them sound interesting to you, and you would like to work on them, please get in touch with me, so we can discuss solutions. 
+These are certainly not all problems of the current implementation, so if you notice anything else, please let me know, so I can add it here.
 
 ## Terrain Geometry
 
@@ -107,7 +107,7 @@ As mentioned above the terrain data has to be loaded depending on our current vi
 Currently, I load all nodes inside the `load_distance` around the viewer. 
 There is no prioritization or load balancing. I would like to explore different loading strategies (e.g. distance only, view frustum based, etc.) to enable use cases like streaming data from a web server. 
 For that, the strategy would have to minimize the loading requests while maximizing the visual quality. 
-When streaming from disk this wasn’t a problem yet.
+When streaming from disk this wasn't a problem yet.
 
 Additionally, the plugin panics if the node atlas is out of indices (i.e. the maximum amount of nodes is loaded). 
 This is unacceptable in production use. 
