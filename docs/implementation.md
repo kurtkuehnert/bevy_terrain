@@ -117,6 +117,17 @@ The node loading code itself is currently pretty inefficient.
 Due to the nature of the bevy image abstraction, all textures are duplicated multiple times. 
 Hopefully in the near future, once the asset processing has been reworked, it will be easier to express loading parts of an array texture directly.
 
+To divide the terrain into the numerous node textures I use a 3-step preprocessing algorithm. 
+This is implemented pretty inefficiently. 
+If you are interested in optimizing data transformation code, this should be the task for you :D.
+
+To save space the terrain data is compressed using common image formats, when it is stored on the hard-drive. 
+To unfortunately the encoding of PNGs is quite slow. 
+That is why I came up with the [DTM image format](https://github.com/kurtkuehnert/dtm). 
+It uses a sequential compression technique similar to the QOI format.
+DTM works quite well for the shallow terrain I used for testing, but is not ideal for the steep and hilly terrains used in most games.
+There are probably significant gains to be had in this area.
+
 Another huge challenge regarding the terrain data is its modification in real-time. 
 Workflows like sculpting, texturing, etc. do require the ability to update the terrain data in a visual manner. 
 This topic is vast and will require extensive investigation before we can settle on a final design. 
@@ -130,4 +141,6 @@ If you have experience/ideas please let me know.
 - [ ]  different loading strategies
 - [ ]  handle node atlas out of indices
 - [ ]  improve loading to node atlas (i.e. loading layers of an array texture), remove excessive duplication/copying
+- [ ]  improve the preprocessing with caching, GPU acceleration, etc.
+- [ ]  explore the usage of more efficient image formats
 - [ ]  investigate real-time modification
