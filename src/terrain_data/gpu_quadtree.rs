@@ -54,6 +54,7 @@ impl GpuQuadtree {
             dimension: TextureDimension::D2,
             format: Self::FORMAT,
             usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+            view_formats: &[],
         });
 
         images.insert(
@@ -64,6 +65,7 @@ impl GpuQuadtree {
                 texture_format: Self::FORMAT,
                 sampler: device.create_sampler(&SamplerDescriptor::default()),
                 size: Vec2::splat(quadtree.node_count as f32),
+                mip_level_count: quadtree.lod_count,
             },
         );
 
@@ -86,7 +88,7 @@ impl GpuQuadtree {
                 origin: Origin3d { x: 0, y: 0, z: 0 },
                 aspect: TextureAspect::All,
             },
-            cast_slice(&self.data.as_slice().unwrap()),
+            cast_slice(self.data.as_slice().unwrap()),
             ImageDataLayout {
                 offset: 0,
                 bytes_per_row: NonZeroU32::new(self.node_count * 4),
@@ -116,7 +118,7 @@ pub(crate) fn initialize_gpu_quadtree(
 
             gpu_quadtrees.insert(
                 (terrain, view),
-                GpuQuadtree::new(&device, &mut images, &quadtree),
+                GpuQuadtree::new(&device, &mut images, quadtree),
             );
         }
     }
@@ -141,8 +143,8 @@ pub(crate) fn extract_quadtree(
     }
 }
 
-/// Queues the quadtree data to be copied into the quadtree texture.
-pub(crate) fn queue_quadtree_update(
+/// Prepares the quadtree data to be copied into the quadtree texture.
+pub(crate) fn prepare_quadtree(
     queue: Res<RenderQueue>,
     images: Res<RenderAssets<Image>>,
     mut gpu_quadtrees: ResMut<TerrainViewComponents<GpuQuadtree>>,

@@ -13,6 +13,7 @@ use std::{
     path::Path,
 };
 
+#[allow(clippy::type_complexity)]
 pub(crate) fn iterate_directory(
     directory: &str,
 ) -> FilterMap<ReadDir, fn(std::io::Result<DirEntry>) -> Option<(String, String)>> {
@@ -29,7 +30,7 @@ pub(crate) fn iterate_directory(
 
         let path = path.into_os_string().into_string().unwrap();
 
-        if name.starts_with(".") {
+        if name.starts_with('.') {
             None
         } else {
             Some((name, path))
@@ -43,7 +44,7 @@ pub fn reset_directory(directory: &str) {
 }
 
 pub(crate) fn format_directory(path: &str, name: &str) -> String {
-    if path.starts_with("/") {
+    if path.starts_with('/') {
         format!("{path}/data/{name}")
     } else {
         format!("assets/{path}/data/{name}")
@@ -90,10 +91,10 @@ pub fn save_image(path: &str, node_image: &DynamicImage, attachment: &Attachment
     let path = path.to_str().unwrap();
 
     match attachment.file_format {
-        FileFormat::TDF => save_tdf(&path, node_image, attachment),
-        FileFormat::PNG | FileFormat::TIF => save_image_rs(&path, node_image, attachment),
-        FileFormat::QOI => save_qoi(&path, node_image, attachment),
-        FileFormat::DTM => save_dtm(&path, node_image, attachment),
+        FileFormat::TDF => save_tdf(path, node_image, attachment),
+        FileFormat::PNG | FileFormat::TIF => save_image_rs(path, node_image, attachment),
+        FileFormat::QOI => save_qoi(path, node_image, attachment),
+        FileFormat::DTM => save_dtm(path, node_image, attachment),
     }
 }
 
@@ -113,7 +114,6 @@ fn load_tdf(path: &str) -> Option<DynamicImage> {
         (2, 1) => {
             let data: Vec<u16> = data
                 .chunks_exact(2)
-                .into_iter()
                 .map(|pixel| u16::from_ne_bytes(pixel.try_into().unwrap()))
                 .collect();
 
@@ -123,7 +123,6 @@ fn load_tdf(path: &str) -> Option<DynamicImage> {
         (2, 2) => {
             let data: Vec<u16> = data
                 .chunks_exact(2)
-                .into_iter()
                 .map(|pixel| u16::from_le_bytes(pixel.try_into().unwrap()))
                 .collect();
 
@@ -147,24 +146,19 @@ fn load_dtm(path: &str) -> Option<DynamicImage> {
         1 => {
             let data: Vec<u16> = data
                 .chunks_exact(2)
-                .into_iter()
                 .map(|pixel| u16::from_le_bytes(pixel.try_into().unwrap()))
                 .collect();
 
-            let image = R16Image::from_raw(descriptor.width as u32, descriptor.height as u32, data)
-                .unwrap();
+            let image = R16Image::from_raw(descriptor.width, descriptor.height, data).unwrap();
             Some(DynamicImage::from(image))
         }
         2 => {
             let data: Vec<u16> = data
                 .chunks_exact(2)
-                .into_iter()
                 .map(|pixel| u16::from_le_bytes(pixel.try_into().unwrap()))
                 .collect();
 
-            let image =
-                Rg16Image::from_raw(descriptor.width as u32, descriptor.height as u32, data)
-                    .unwrap();
+            let image = Rg16Image::from_raw(descriptor.width, descriptor.height, data).unwrap();
             Some(DynamicImage::from(image))
         }
         _ => None,
@@ -244,5 +238,5 @@ fn save_qoi(path: &str, node_image: &DynamicImage, attachment: &AttachmentConfig
         .encode_alloc(cast_slice(node_image.as_bytes()))
         .unwrap();
 
-    fs::write(path, &bytes).expect("Could not save node.");
+    fs::write(path, bytes).expect("Could not save node.");
 }
