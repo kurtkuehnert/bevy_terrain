@@ -34,7 +34,7 @@ pub fn planes(view_projection: &Mat4) -> [Vec4; 5] {
     planes
 }
 
-pub(crate) fn queue_terrain_culling_bind_group(
+pub(crate) fn prepare_and_queue_terrain_culling_bind_group(
     device: Res<RenderDevice>,
     compute_pipelines: Res<TerrainComputePipelines>,
     mut culling_bind_groups: ResMut<TerrainViewComponents<CullingBindGroup>>,

@@ -280,11 +280,11 @@ pub(crate) fn adjust_quadtree(
     view_query: Query<Entity, With<TerrainView>>,
     mut terrain_query: Query<(Entity, &NodeAtlas), With<Terrain>>,
 ) {
-    for (terrain, mut node_atlas) in terrain_query.iter_mut() {
+    for (terrain, node_atlas) in terrain_query.iter_mut() {
         for view in view_query.iter() {
             let quadtree = quadtrees.get_mut(&(terrain, view)).unwrap();
 
-            quadtree.adjust(&mut node_atlas);
+            quadtree.adjust(node_atlas);
         }
     }
 }
@@ -301,7 +301,7 @@ pub(crate) fn update_height_under_viewer(
             if let Some(quadtree) = quadtrees.get_mut(&(terrain, view)) {
                 quadtree.height_under_viewer = height_under_viewer(
                     quadtree,
-                    &node_atlas,
+                    node_atlas,
                     &images,
                     view_transform.translation().xz(),
                 );
@@ -345,5 +345,5 @@ fn height_under_viewer(
         }
     }
 
-    return quadtree.height_under_viewer;
+    quadtree.height_under_viewer
 }

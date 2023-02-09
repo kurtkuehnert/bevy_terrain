@@ -52,12 +52,10 @@ impl TDF {
 
             if encoded_size == decoded_size {
                 decoded.copy_from_slice(encoded);
-            } else {
-                if descriptor.pixel_size == 1 {
-                    Qoi::decode(encoded, decoded)?;
-                } else if descriptor.pixel_size == 2 {
-                    DTM::decode(encoded, decoded)?;
-                }
+            } else if descriptor.pixel_size == 1 {
+                Qoi::decode(encoded, decoded)?;
+            } else if descriptor.pixel_size == 2 {
+                DTM::decode(encoded, decoded)?;
             }
         }
 

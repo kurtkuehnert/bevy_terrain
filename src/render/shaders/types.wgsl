@@ -1,7 +1,5 @@
 #define_import_path bevy_terrain::types
 
-struct Mesh { flags: u32 }; let mesh = Mesh(0u); // hack for the pbr shaders
-
 struct TerrainViewConfig {
     approximate_height: f32,
     node_count: u32,

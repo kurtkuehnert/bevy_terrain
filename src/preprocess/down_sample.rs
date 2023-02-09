@@ -179,7 +179,7 @@ pub(crate) fn down_sample_layer(
     first: UVec2,
     last: UVec2,
 ) {
-    first.product(last).into_iter().for_each(|(x, y)| {
+    first.product(last).for_each(|(x, y)| {
         let node_path = format_node_path(directory, lod, x, y);
         let mut node_image = load_or_create_node(&node_path, attachment);
 
