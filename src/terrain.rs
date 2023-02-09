@@ -1,17 +1,14 @@
 //! Types for configuring terrains.
 
-use crate::terrain_data::NodeId;
 use crate::{
     attachment_loader::{AttachmentFromDisk, AttachmentFromDiskLoader},
     preprocess::{BaseConfig, Preprocessor, TileConfig},
-    terrain_data::{AtlasAttachment, AttachmentConfig, AttachmentIndex},
+    terrain_data::{AtlasAttachment, AttachmentConfig, AttachmentIndex, NodeId},
 };
-use bevy::utils::HashSet;
 use bevy::{
-    ecs::{query::QueryItem, system::lifetimeless::Read},
     prelude::*,
     render::extract_component::ExtractComponent,
-    utils::HashMap,
+    utils::{HashMap, HashSet},
 };
 
 /// Resource that stores components that are associated to a terrain entity.
@@ -41,18 +38,8 @@ impl<C> FromWorld for TerrainComponents<C> {
 }
 
 /// A marker component used to identify a terrain entity.
-#[derive(Clone, Copy, Component)]
+#[derive(Clone, Copy, Component, ExtractComponent)]
 pub struct Terrain;
-
-impl ExtractComponent for Terrain {
-    type Query = Read<Self>;
-    type Filter = ();
-
-    #[inline]
-    fn extract_component(_item: QueryItem<Self::Query>) -> Self {
-        Self
-    }
-}
 
 /// The configuration of a terrain.
 ///

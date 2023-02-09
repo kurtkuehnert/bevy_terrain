@@ -12,10 +12,6 @@ use crate::{
     DebugTerrain, TerrainComponents, TerrainData, TerrainView, TerrainViewComponents,
 };
 use bevy::{
-    ecs::system::{
-        lifetimeless::{SRes, SResMut},
-        SystemState,
-    },
     prelude::*,
     render::{
         render_graph::{self},
@@ -40,7 +36,7 @@ bitflags::bitflags! {
 #[repr(transparent)]
 pub struct TerrainComputePipelineFlags: u32 {
     const NONE               = 0;
-    const TEST               = (2 << 0);
+    const TEST               = (1 << 0);
 }
 }
 
@@ -55,11 +51,11 @@ impl TerrainComputePipelineFlags {
         key
     }
 
-    pub fn shader_defs(&self) -> Vec<String> {
+    pub fn shader_defs(&self) -> Vec<ShaderDefVal> {
         let mut shader_defs = Vec::new();
 
         if (self.bits & TerrainComputePipelineFlags::TEST.bits) != 0 {
-            shader_defs.push("TEST".to_string());
+            shader_defs.push("TEST".into());
         }
 
         shader_defs
@@ -74,6 +70,7 @@ pub struct TerrainComputePipelines {
     pub(crate) terrain_layout: BindGroupLayout,
     prepare_indirect_shader: Handle<Shader>,
     refine_tiles_shader: Handle<Shader>,
+    pipelines: [Option<CachedComputePipelineId>; TerrainComputePipelineId::COUNT],
 }
 
 impl FromWorld for TerrainComputePipelines {
@@ -84,7 +81,7 @@ impl FromWorld for TerrainComputePipelines {
         let prepare_indirect_layout = device.create_bind_group_layout(&PREPARE_INDIRECT_LAYOUT);
         let refine_tiles_layout = device.create_bind_group_layout(&REFINE_TILES_LAYOUT);
         let cull_data_layout = device.create_bind_group_layout(&CULL_DATA_LAYOUT);
-        let terrain_layout = terrain_bind_group_layout(&device, config.attachment_count);
+        let terrain_layout = terrain_bind_group_layout(device, config.attachment_count);
 
         let prepare_indirect_shader = PREPARE_INDIRECT_SHADER.typed();
         let refine_tiles_shader = REFINE_TILES_SHADER.typed();
@@ -96,6 +93,7 @@ impl FromWorld for TerrainComputePipelines {
             terrain_layout,
             prepare_indirect_shader,
             refine_tiles_shader,
+            pipelines: [None; TerrainComputePipelineId::COUNT],
         }
     }
 }
@@ -112,41 +110,41 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
 
         match key.0 {
             TerrainComputePipelineId::RefineTiles => {
-                layout = Some(vec![
+                layout = vec![
                     self.refine_tiles_layout.clone(),
                     self.cull_data_layout.clone(),
                     self.terrain_layout.clone(),
-                ]);
+                ];
                 shader = self.refine_tiles_shader.clone();
                 entry_point = "refine_tiles".into();
             }
             TerrainComputePipelineId::PrepareRoot => {
-                layout = Some(vec![
+                layout = vec![
                     self.refine_tiles_layout.clone(),
                     self.cull_data_layout.clone(),
                     self.terrain_layout.clone(),
                     self.prepare_indirect_layout.clone(),
-                ]);
+                ];
                 shader = self.prepare_indirect_shader.clone();
                 entry_point = "prepare_root".into();
             }
             TerrainComputePipelineId::PrepareNext => {
-                layout = Some(vec![
+                layout = vec![
                     self.refine_tiles_layout.clone(),
                     self.cull_data_layout.clone(),
                     self.terrain_layout.clone(),
                     self.prepare_indirect_layout.clone(),
-                ]);
+                ];
                 shader = self.prepare_indirect_shader.clone();
                 entry_point = "prepare_next".into();
             }
             TerrainComputePipelineId::PrepareRender => {
-                layout = Some(vec![
+                layout = vec![
                     self.refine_tiles_layout.clone(),
                     self.cull_data_layout.clone(),
                     self.terrain_layout.clone(),
                     self.prepare_indirect_layout.clone(),
-                ]);
+                ];
                 shader = self.prepare_indirect_shader.clone();
                 entry_point = "prepare_render".into();
             }
@@ -155,6 +153,7 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
         ComputePipelineDescriptor {
             label: Some("terrain_compute_pipeline".into()),
             layout,
+            push_constant_ranges: default(),
             shader,
             shader_defs,
             entry_point,
@@ -165,13 +164,6 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
 pub struct TerrainComputeNode {
     terrain_query: QueryState<Entity, With<Terrain>>,
     view_query: QueryState<Entity, With<TerrainView>>,
-    system_state: SystemState<(
-        SResMut<PipelineCache>,
-        SResMut<SpecializedComputePipelines<TerrainComputePipelines>>,
-        SRes<TerrainComputePipelines>,
-        Option<SRes<DebugTerrain>>,
-    )>,
-    pipelines: [CachedComputePipelineId; TerrainComputePipelineId::COUNT],
 }
 
 impl FromWorld for TerrainComputeNode {
@@ -179,8 +171,6 @@ impl FromWorld for TerrainComputeNode {
         Self {
             terrain_query: world.query_filtered(),
             view_query: world.query_filtered(),
-            system_state: SystemState::new(world),
-            pipelines: [CachedComputePipelineId::INVALID; TerrainComputePipelineId::COUNT],
         }
     }
 }
@@ -188,7 +178,7 @@ impl FromWorld for TerrainComputeNode {
 impl TerrainComputeNode {
     fn tessellate_terrain<'a>(
         pass: &mut ComputePass<'a>,
-        pipelines: &'a Vec<&'a ComputePipeline>,
+        pipelines: &'a [&'a ComputePipeline],
         view_data: &'a TerrainViewData,
         terrain_data: &'a TerrainData,
         culling_bind_group: &'a BindGroup,
@@ -222,19 +212,6 @@ impl render_graph::Node for TerrainComputeNode {
     fn update(&mut self, world: &mut World) {
         self.terrain_query.update_archetypes(world);
         self.view_query.update_archetypes(world);
-
-        let (mut pipeline_cache, mut pipelines, pipeline, debug) = self.system_state.get_mut(world);
-
-        let mut flags = TerrainComputePipelineFlags::NONE;
-
-        if let Some(debug) = &debug {
-            flags |= TerrainComputePipelineFlags::from_debug(debug);
-        }
-
-        for id in TerrainComputePipelineId::iter() {
-            self.pipelines[id as usize] =
-                pipelines.specialize(&mut pipeline_cache, &pipeline, (id, flags));
-        }
     }
 
     fn run(
@@ -243,6 +220,7 @@ impl render_graph::Node for TerrainComputeNode {
         context: &mut RenderContext,
         world: &World,
     ) -> Result<(), render_graph::NodeRunError> {
+        let compute_pipelines = world.resource::<TerrainComputePipelines>();
         let pipeline_cache = world.resource::<PipelineCache>();
         let view_config_uniforms =
             world.resource::<TerrainViewComponents<TerrainViewConfigUniform>>();
@@ -259,7 +237,10 @@ impl render_graph::Node for TerrainComputeNode {
         }
 
         let pipelines = &match TerrainComputePipelineId::iter()
-            .map(|key| pipeline_cache.get_compute_pipeline(self.pipelines[key as usize]))
+            .map(|key| {
+                pipeline_cache
+                    .get_compute_pipeline(compute_pipelines.pipelines[key as usize].unwrap())
+            })
             .collect::<Option<Vec<_>>>()
         {
             None => return Ok(()), // some pipelines are not loaded yet
@@ -267,7 +248,7 @@ impl render_graph::Node for TerrainComputeNode {
         };
 
         let pass = &mut context
-            .command_encoder
+            .command_encoder()
             .begin_compute_pass(&ComputePassDescriptor::default());
 
         for terrain in self.terrain_query.iter_manual(world) {
@@ -289,5 +270,23 @@ impl render_graph::Node for TerrainComputeNode {
         }
 
         Ok(())
+    }
+}
+
+pub(crate) fn queue_terrain_compute_pipelines(
+    debug: Option<Res<DebugTerrain>>,
+    pipeline_cache: Res<PipelineCache>,
+    mut compute_pipelines: ResMut<TerrainComputePipelines>,
+    mut pipelines: ResMut<SpecializedComputePipelines<TerrainComputePipelines>>,
+) {
+    let mut flags = TerrainComputePipelineFlags::NONE;
+
+    if let Some(debug) = &debug {
+        flags |= TerrainComputePipelineFlags::from_debug(debug);
+    }
+
+    for id in TerrainComputePipelineId::iter() {
+        compute_pipelines.pipelines[id as usize] =
+            Some(pipelines.specialize(&pipeline_cache, &compute_pipelines, (id, flags)));
     }
 }

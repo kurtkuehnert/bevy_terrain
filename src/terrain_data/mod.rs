@@ -57,9 +57,9 @@ impl From<NodeId> for NodeCoordinate {
     #[inline]
     fn from(id: NodeId) -> Self {
         Self {
-            lod: ((id >> 26) & 0x3F) as u32,
-            x: ((id >> 13) & 0x1FFF) as u32,
-            y: (id & 0x1FFF) as u32,
+            lod: ((id >> 26) & 0x3F),
+            x: ((id >> 13) & 0x1FFF),
+            y: (id & 0x1FFF),
         }
     }
 }
