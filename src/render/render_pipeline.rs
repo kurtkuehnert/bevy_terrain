@@ -16,10 +16,11 @@ use bevy::{
         render_resource::*,
         renderer::RenderDevice,
         texture::BevyDefault,
-        RenderApp, RenderStage,
+        RenderApp, RenderSet,
     },
 };
 use std::{hash::Hash, marker::PhantomData};
+use bevy::pbr::{MAX_CASCADES_PER_LIGHT, MAX_DIRECTIONAL_LIGHTS};
 
 /// Configures the default terrain pipeline.
 #[derive(Resource)]
@@ -162,50 +163,50 @@ impl TerrainPipelineFlags {
         }
     }
 
-    pub fn shader_defs(&self) -> Vec<String> {
+    pub fn shader_defs(&self) -> Vec<ShaderDefVal> {
         let mut shader_defs = Vec::new();
 
         if (self.bits & TerrainPipelineFlags::SHOW_TILES.bits) != 0 {
-            shader_defs.push("SHOW_TILES".to_string());
+            shader_defs.push("SHOW_TILES".into());
         }
         if (self.bits & TerrainPipelineFlags::SHOW_LOD.bits) != 0 {
-            shader_defs.push("SHOW_LOD".to_string());
+            shader_defs.push("SHOW_LOD".into());
         }
         if (self.bits & TerrainPipelineFlags::SHOW_UV.bits) != 0 {
-            shader_defs.push("SHOW_UV".to_string());
+            shader_defs.push("SHOW_UV".into());
         }
         if (self.bits & TerrainPipelineFlags::SHOW_NODES.bits) != 0 {
-            shader_defs.push("SHOW_NODES".to_string());
+            shader_defs.push("SHOW_NODES".into());
         }
         if (self.bits & TerrainPipelineFlags::SHOW_MINMAX_ERROR.bits) != 0 {
-            shader_defs.push("SHOW_MINMAX_ERROR".to_string());
+            shader_defs.push("SHOW_MINMAX_ERROR".into());
         }
         if (self.bits & TerrainPipelineFlags::MINMAX.bits) != 0 {
-            shader_defs.push("MINMAX".to_string());
+            shader_defs.push("MINMAX".into());
         }
         if (self.bits & TerrainPipelineFlags::MESH_MORPH.bits) != 0 {
-            shader_defs.push("MESH_MORPH".to_string());
+            shader_defs.push("MESH_MORPH".into());
         }
         if (self.bits & TerrainPipelineFlags::ALBEDO.bits) != 0 {
-            shader_defs.push("ALBEDO".to_string());
+            shader_defs.push("ALBEDO".into());
         }
         if (self.bits & TerrainPipelineFlags::BRIGHT.bits) != 0 {
-            shader_defs.push("BRIGHT".to_string());
+            shader_defs.push("BRIGHT".into());
         }
         if (self.bits & TerrainPipelineFlags::LIGHTING.bits) != 0 {
-            shader_defs.push("LIGHTING".to_string());
+            shader_defs.push("LIGHTING".into());
         }
         if (self.bits & TerrainPipelineFlags::SAMPLE_GRAD.bits) != 0 {
-            shader_defs.push("SAMPLE_GRAD".to_string());
+            shader_defs.push("SAMPLE_GRAD".into());
         }
         if (self.bits & TerrainPipelineFlags::TEST1.bits) != 0 {
-            shader_defs.push("TEST1".to_string());
+            shader_defs.push("TEST1".into());
         }
         if (self.bits & TerrainPipelineFlags::TEST2.bits) != 0 {
-            shader_defs.push("TEST2".to_string());
+            shader_defs.push("TEST2".into());
         }
         if (self.bits & TerrainPipelineFlags::TEST3.bits) != 0 {
-            shader_defs.push("TEST3".to_string());
+            shader_defs.push("TEST3".into());
         }
 
         shader_defs
@@ -216,6 +217,7 @@ impl TerrainPipelineFlags {
 #[derive(Resource)]
 pub struct TerrainRenderPipeline<M: Material> {
     pub(crate) view_layout: BindGroupLayout,
+    pub(crate) view_layout_multisampled: BindGroupLayout,
     pub(crate) terrain_layout: BindGroupLayout,
     pub(crate) terrain_view_layout: BindGroupLayout,
     pub(crate) material_layout: BindGroupLayout,
@@ -232,7 +234,8 @@ impl<M: Material> FromWorld for TerrainRenderPipeline<M> {
         let config = world.resource::<TerrainPipelineConfig>();
 
         let view_layout = mesh_pipeline.view_layout.clone();
-        let terrain_layout = terrain_bind_group_layout(&device, config.attachment_count);
+        let view_layout_multisampled = mesh_pipeline.view_layout_multisampled.clone();
+        let terrain_layout = terrain_bind_group_layout(device, config.attachment_count);
         let terrain_view_layout = device.create_bind_group_layout(&TERRAIN_VIEW_LAYOUT);
         let material_layout = M::bind_group_layout(device);
 
@@ -250,6 +253,7 @@ impl<M: Material> FromWorld for TerrainRenderPipeline<M> {
 
         Self {
             view_layout,
+            view_layout_multisampled,
             terrain_layout,
             terrain_view_layout,
             material_layout,
@@ -269,16 +273,25 @@ where
     fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
         let mut shader_defs = key.flags.shader_defs();
 
-        shader_defs.push("TONEMAP_IN_SHADER".to_string());
+        shader_defs.push(ShaderDefVal::UInt("MAX_DIRECTIONAL_LIGHTS".to_string(), MAX_DIRECTIONAL_LIGHTS as u32));
+        shader_defs.push(ShaderDefVal::UInt("MAX_CASCADES_PER_LIGHT".to_string(), MAX_CASCADES_PER_LIGHT as u32));
+
+        let mut bind_group_layout = match key.flags.msaa_samples() {
+            1 => vec![self.view_layout.clone()],
+            _ => {
+                shader_defs.push("MULTISAMPLED".into());
+                vec![self.view_layout_multisampled.clone()]
+            }
+        };
+
+        bind_group_layout.push(self.terrain_view_layout.clone());
+        bind_group_layout.push(self.terrain_layout.clone()); // Todo: do this properly for multiple terrains
+        bind_group_layout.push(self.material_layout.clone());
 
         RenderPipelineDescriptor {
             label: None,
-            layout: Some(vec![
-                self.view_layout.clone(),
-                self.terrain_view_layout.clone(),
-                self.terrain_layout.clone(), // Todo: do this properly for multiple terrains
-                self.material_layout.clone(),
-            ]),
+            layout: bind_group_layout,
+            push_constant_ranges: default(),
             vertex: VertexState {
                 shader: self.vertex_shader.clone(),
                 entry_point: "vertex".into(),
@@ -341,14 +354,15 @@ pub(crate) type DrawTerrain<M> = (
 );
 
 /// Queses all terrain entities for rendering via the terrain pipeline.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn queue_terrain<M: Material>(
-    terrain_pipeline: Res<TerrainRenderPipeline<M>>,
     draw_functions: Res<DrawFunctions<Opaque3d>>,
     msaa: Res<Msaa>,
     debug: Option<Res<DebugTerrain>>,
     render_materials: Res<RenderMaterials<M>>,
+    terrain_pipeline: Res<TerrainRenderPipeline<M>>,
+    pipeline_cache: Res<PipelineCache>,
     mut pipelines: ResMut<SpecializedRenderPipelines<TerrainRenderPipeline<M>>>,
-    mut pipeline_cache: ResMut<PipelineCache>,
     mut view_query: Query<&mut RenderPhase<Opaque3d>>,
     terrain_query: Query<(Entity, &Handle<M>), With<Terrain>>,
 ) where
@@ -359,7 +373,7 @@ pub(crate) fn queue_terrain<M: Material>(
     for mut opaque_phase in view_query.iter_mut() {
         for (entity, material) in terrain_query.iter() {
             if let Some(material) = render_materials.get(material) {
-                let mut flags = TerrainPipelineFlags::from_msaa_samples(msaa.samples);
+                let mut flags = TerrainPipelineFlags::from_msaa_samples(msaa.samples());
 
                 if let Some(debug) = &debug {
                     flags |= TerrainPipelineFlags::from_debug(debug);
@@ -375,11 +389,11 @@ pub(crate) fn queue_terrain<M: Material>(
                     bind_group_data: material.key.clone(),
                 };
 
-                let pipeline = pipelines.specialize(&mut pipeline_cache, &terrain_pipeline, key);
+                let pipeline_id = pipelines.specialize(&pipeline_cache, &terrain_pipeline, key);
 
                 opaque_phase.add(Opaque3d {
                     entity,
-                    pipeline,
+                    pipeline: pipeline_id,
                     draw_function,
                     distance: f32::MIN, // draw terrain first
                 });
@@ -419,7 +433,7 @@ where
                 .add_render_command::<Opaque3d, DrawTerrain<M>>()
                 .init_resource::<TerrainRenderPipeline<M>>()
                 .init_resource::<SpecializedRenderPipelines<TerrainRenderPipeline<M>>>()
-                .add_system_to_stage(RenderStage::Queue, queue_terrain::<M>);
+                .add_system(queue_terrain::<M>.in_set(RenderSet::Queue));
         }
     }
 }

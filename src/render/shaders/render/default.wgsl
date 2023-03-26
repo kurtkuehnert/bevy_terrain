@@ -43,10 +43,13 @@ var minmax_atlas: texture_2d_array<f32>;
 
 #import bevy_pbr::mesh_types
 #import bevy_pbr::pbr_types
+
 #import bevy_pbr::utils
 #import bevy_pbr::clustered_forward
 #import bevy_pbr::lighting
+#import bevy_pbr::pbr_ambient
 #import bevy_pbr::shadows
+#import bevy_pbr::fog
 #import bevy_pbr::pbr_functions
 
 #import bevy_terrain::node
@@ -115,8 +118,7 @@ fn process_fragment(input: FragmentInput, data: FragmentData) -> Fragment {
     pbr_input.is_orthographic = view.projection[3].w == 1.0;
     pbr_input.N = data.world_normal;
     pbr_input.V = calculate_view(input.world_position, pbr_input.is_orthographic);
-
-    color = tone_mapping(pbr(pbr_input));
+    color = pbr(pbr_input);
 #endif
 
     return Fragment(color, do_discard);

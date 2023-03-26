@@ -1,7 +1,6 @@
 //! Types for configuring terrain views.
 
 use bevy::{
-    ecs::{query::QueryItem, system::lifetimeless::Read},
     prelude::*,
     render::extract_component::ExtractComponent,
     utils::{HashMap, Uuid},
@@ -33,18 +32,8 @@ impl<C> FromWorld for TerrainViewComponents<C> {
 }
 
 /// A marker component used to identify a terrain view entity.
-#[derive(Clone, Copy, Component)]
+#[derive(Clone, Copy, Component, ExtractComponent)]
 pub struct TerrainView;
-
-impl ExtractComponent for TerrainView {
-    type Query = Read<Self>;
-    type Filter = ();
-
-    #[inline]
-    fn extract_component(_item: QueryItem<Self::Query>) -> Self {
-        Self
-    }
-}
 
 /// The configuration of a terrain view.
 ///
