@@ -3,7 +3,7 @@
 use crate::{debug::camera::debug_camera_control, TerrainViewComponents, TerrainViewConfig};
 use bevy::{
     prelude::*,
-    render::{Extract, RenderApp, RenderStage},
+    render::{Extract, RenderApp},
 };
 
 pub mod camera;
@@ -16,10 +16,11 @@ impl Plugin for TerrainDebugPlugin {
         app.init_resource::<DebugTerrain>()
             .add_system(debug_camera_control)
             .add_system(toggle_debug)
-            .add_system(change_config)
-            .sub_app_mut(RenderApp)
+            .add_system(change_config);
+
+        app.sub_app_mut(RenderApp)
             .init_resource::<DebugTerrain>()
-            .add_system_to_stage(RenderStage::Extract, extract_debug);
+            .add_system(extract_debug.in_schedule(ExtractSchedule));
     }
 }
 

@@ -45,6 +45,7 @@ impl AssetLoader for TDFAssetLoader {
                     dimension: TextureDimension::D2,
                     format: TextureFormat::R8Unorm,
                     usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
+                    view_formats: &[],
                 },
                 sampler_descriptor: Default::default(),
                 texture_view_descriptor: None,
