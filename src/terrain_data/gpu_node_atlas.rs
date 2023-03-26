@@ -37,6 +37,7 @@ impl AtlasAttachment {
             dimension: TextureDimension::D2,
             format: self.format,
             usage: TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
         });
 
         images.insert(
@@ -47,6 +48,7 @@ impl AtlasAttachment {
                 texture_format: self.format,
                 sampler: device.create_sampler(&SamplerDescriptor::default()),
                 size: Vec2::splat(self.texture_size as f32),
+                mip_level_count: self.mip_level_count,
             },
         );
 
@@ -61,7 +63,7 @@ impl AtlasAttachment {
 #[derive(Component)]
 pub struct GpuNodeAtlas {
     /// Stores the atlas attachments of the terrain.
-    pub(crate) attachments: Vec<(AtlasAttachment, Handle<Image>)>,
+    pub(crate) attachments: Vec<Handle<Image>>,
     /// Stores the nodes, that have finished loading this frame.
     pub(crate) loaded_nodes: Vec<LoadingNode>,
 }
@@ -76,12 +78,7 @@ impl GpuNodeAtlas {
         let attachments = node_atlas
             .attachments
             .iter()
-            .map(|attachment| {
-                (
-                    attachment.clone(),
-                    attachment.create(device, images, node_atlas.size),
-                )
-            })
+            .map(|attachment| attachment.create(device, images, node_atlas.size))
             .collect();
 
         Self {
@@ -94,20 +91,20 @@ impl GpuNodeAtlas {
     /// finished loading this frame.
     fn update(&mut self, command_encoder: &mut CommandEncoder, images: &RenderAssets<Image>) {
         for node in self.loaded_nodes.drain(..) {
-            for (attachment, node_handle, atlas_handle) in
+            for (node_handle, atlas_handle) in
                 self.attachments
                     .iter()
                     .enumerate()
-                    .map(|(index, (attachment, atlas_handle))| {
+                    .map(|(index, atlas_handle)| {
                         let node_handle = node.attachments.get(&index).unwrap();
 
-                        (attachment, node_handle, atlas_handle)
+                        (node_handle, atlas_handle)
                     })
             {
                 if let (Some(node_attachment), Some(atlas_attachment)) =
                     (images.get(node_handle), images.get(atlas_handle))
                 {
-                    for mip_level in 0..attachment.mip_level_count {
+                    for mip_level in 0..node_attachment.mip_level_count {
                         // Todo: change to queue.write_texture
                         command_encoder.copy_texture_to_texture(
                             ImageCopyTexture {
@@ -127,8 +124,8 @@ impl GpuNodeAtlas {
                                 aspect: TextureAspect::All,
                             },
                             Extent3d {
-                                width: attachment.texture_size >> mip_level,
-                                height: attachment.texture_size >> mip_level,
+                                width: (node_attachment.size.x as u32) >> mip_level,
+                                height: (node_attachment.size.y as u32) >> mip_level,
                                 depth_or_array_layers: 1,
                             },
                         );
@@ -149,10 +146,7 @@ pub(crate) fn initialize_gpu_node_atlas(
     mut terrain_query: Extract<Query<(Entity, &NodeAtlas), Added<Terrain>>>,
 ) {
     for (terrain, node_atlas) in terrain_query.iter_mut() {
-        gpu_node_atlases.insert(
-            terrain,
-            GpuNodeAtlas::new(&device, &mut images, &node_atlas),
-        );
+        gpu_node_atlases.insert(terrain, GpuNodeAtlas::new(&device, &mut images, node_atlas));
     }
 }
 
@@ -175,7 +169,7 @@ pub(crate) fn extract_node_atlas(
 
 /// Queues the attachments of the nodes that have finished loading to be copied into the
 /// corresponding atlas attachments.
-pub(crate) fn queue_node_atlas_updates(
+pub(crate) fn prepare_node_atlas(
     device: Res<RenderDevice>,
     queue: Res<RenderQueue>,
     images: Res<RenderAssets<Image>>,

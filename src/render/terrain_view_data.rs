@@ -8,11 +8,14 @@ use crate::{
     TerrainViewComponents,
 };
 use bevy::{
-    ecs::system::{lifetimeless::SRes, SystemParamItem},
+    ecs::{
+        query::ROQueryItem,
+        system::{lifetimeless::SRes, SystemParamItem},
+    },
     prelude::*,
     render::{
         render_asset::RenderAssets,
-        render_phase::{EntityRenderCommand, RenderCommandResult, TrackedRenderPass},
+        render_phase::{PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass},
         render_resource::*,
         renderer::{RenderDevice, RenderQueue},
         Extract,
@@ -228,7 +231,7 @@ pub(crate) fn extract_terrain_view_config(
     }
 }
 
-pub(crate) fn queue_terrain_view_config(
+pub(crate) fn prepare_terrain_view_config(
     queue: Res<RenderQueue>,
     mut terrain_view_data: ResMut<TerrainViewComponents<TerrainViewData>>,
     view_config_uniforms: Res<TerrainViewComponents<TerrainViewConfigUniform>>,
@@ -241,19 +244,22 @@ pub(crate) fn queue_terrain_view_config(
 
 pub struct SetTerrainViewBindGroup<const I: usize>;
 
-impl<const I: usize> EntityRenderCommand for SetTerrainViewBindGroup<I> {
+impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetTerrainViewBindGroup<I> {
     type Param = SRes<TerrainViewComponents<TerrainViewData>>;
+    type ViewWorldQuery = Entity;
+    type ItemWorldQuery = ();
 
     #[inline]
     fn render<'w>(
-        view: Entity,
-        terrain: Entity,
+        item: &P,
+        view: ROQueryItem<'w, Self::ViewWorldQuery>,
+        _: ROQueryItem<'w, Self::ItemWorldQuery>,
         terrain_view_data: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
         let data = terrain_view_data
             .into_inner()
-            .get(&(terrain, view))
+            .get(&(item.entity(), view))
             .unwrap();
 
         pass.set_bind_group(I, &data.terrain_view_bind_group, &[]);
@@ -263,19 +269,22 @@ impl<const I: usize> EntityRenderCommand for SetTerrainViewBindGroup<I> {
 
 pub(crate) struct DrawTerrainCommand;
 
-impl EntityRenderCommand for DrawTerrainCommand {
+impl<P: PhaseItem> RenderCommand<P> for DrawTerrainCommand {
     type Param = SRes<TerrainViewComponents<TerrainViewData>>;
+    type ViewWorldQuery = Entity;
+    type ItemWorldQuery = ();
 
     #[inline]
     fn render<'w>(
-        view: Entity,
-        terrain: Entity,
+        item: &P,
+        view: ROQueryItem<'w, Self::ViewWorldQuery>,
+        _: ROQueryItem<'w, Self::ItemWorldQuery>,
         terrain_view_data: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
         let data = terrain_view_data
             .into_inner()
-            .get(&(terrain, view))
+            .get(&(item.entity(), view))
             .unwrap();
 
         pass.draw_indirect(&data.indirect_buffer, 0);
