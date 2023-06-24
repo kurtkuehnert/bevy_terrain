@@ -283,7 +283,7 @@ impl<P: PhaseItem> RenderCommand<P> for DrawTerrainCommand {
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
         match terrain_view_data.into_inner().get(&(item.entity(), view)) {
-            Some(_) => {
+            Some(data) => {
                 pass.draw_indirect(&data.indirect_buffer, 0);
                 RenderCommandResult::Success
             }
