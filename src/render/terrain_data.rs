@@ -192,8 +192,12 @@ impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetTerrainBindGroup<I> {
         terrain_data: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let data = terrain_data.into_inner().get(&item.entity()).unwrap();
-        pass.set_bind_group(I, &data.terrain_bind_group, &[]);
-        RenderCommandResult::Success
+        match terrain_data.into_inner().get(&item.entity()) {
+            Some(data) => {
+                pass.set_bind_group(I, &data.terrain_bind_group, &[]);
+                RenderCommandResult::Success
+            }
+            None => RenderCommandResult::Failure,
+        }
     }
 }

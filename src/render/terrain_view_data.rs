@@ -257,13 +257,13 @@ impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetTerrainViewBindGroup<
         terrain_view_data: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let data = terrain_view_data
-            .into_inner()
-            .get(&(item.entity(), view))
-            .unwrap();
-
-        pass.set_bind_group(I, &data.terrain_view_bind_group, &[]);
-        RenderCommandResult::Success
+        match terrain_view_data.into_inner().get(&(item.entity(), view)) {
+            Some(data) => {
+                pass.set_bind_group(I, &data.terrain_view_bind_group, &[]);
+                RenderCommandResult::Success
+            }
+            None => RenderCommandResult::Failure,
+        }
     }
 }
 
@@ -282,12 +282,12 @@ impl<P: PhaseItem> RenderCommand<P> for DrawTerrainCommand {
         terrain_view_data: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let data = terrain_view_data
-            .into_inner()
-            .get(&(item.entity(), view))
-            .unwrap();
-
-        pass.draw_indirect(&data.indirect_buffer, 0);
-        RenderCommandResult::Success
+        match terrain_view_data.into_inner().get(&(item.entity(), view)) {
+            Some(_) => {
+                pass.draw_indirect(&data.indirect_buffer, 0);
+                RenderCommandResult::Success
+            }
+            None => RenderCommandResult::Failure,
+        }
     }
 }
