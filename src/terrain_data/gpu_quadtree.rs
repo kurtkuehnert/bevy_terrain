@@ -109,8 +109,8 @@ pub(crate) fn initialize_gpu_quadtree(
     mut images: ResMut<RenderAssets<Image>>,
     mut gpu_quadtrees: ResMut<TerrainViewComponents<GpuQuadtree>>,
     quadtrees: Extract<Res<TerrainViewComponents<Quadtree>>>,
-    view_query: Extract<Query<Entity, With<TerrainView>>>,
-    terrain_query: Extract<Query<Entity, Added<Terrain>>>,
+    view_query: Extract<Query<Entity, Added<TerrainView>>>,
+    terrain_query: Extract<Query<Entity, With<Terrain>>>,
 ) {
     for terrain in terrain_query.iter() {
         for view in view_query.iter() {
@@ -134,11 +134,12 @@ pub(crate) fn extract_quadtree(
     for terrain in terrain_query.iter() {
         for view in view_query.iter() {
             let quadtree = quadtrees.get(&(terrain, view)).unwrap();
-            let gpu_quadtree = gpu_quadtrees.get_mut(&(terrain, view)).unwrap();
 
             // Todo: enable this again once mutable access to the main world in extract is less painful
             // mem::swap(&mut gpu_quadtree.data, &mut gpu_gpu_quadtree.data);
-            gpu_quadtree.data = quadtree.data.clone();
+            if let Some(gpu_quadtree) = gpu_quadtrees.get_mut(&(terrain, view)) {
+                gpu_quadtree.data = quadtree.data.clone();
+            }
         }
     }
 }
@@ -153,8 +154,9 @@ pub(crate) fn prepare_quadtree(
 ) {
     for terrain in terrain_query.iter() {
         for view in view_query.iter() {
-            let gpu_quadtree = gpu_quadtrees.get_mut(&(terrain, view)).unwrap();
-            gpu_quadtree.update(&queue, &images);
+            if let Some(gpu_quadtree) = gpu_quadtrees.get_mut(&(terrain, view)) {
+                gpu_quadtree.update(&queue, &images);
+            }
         }
     }
 }

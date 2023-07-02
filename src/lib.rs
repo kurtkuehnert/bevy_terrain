@@ -83,8 +83,10 @@ use bevy::{
         RenderSet,
     },
 };
+use collider::create_collider;
 
 pub mod attachment_loader;
+pub mod collider;
 pub mod debug;
 pub mod formats;
 pub mod preprocess;
@@ -172,6 +174,7 @@ impl Plugin for TerrainPlugin {
                     adjust_quadtree.after(update_node_atlas),
                     start_loading_attachment_from_disk.after(update_node_atlas),
                     update_height_under_viewer.after(adjust_quadtree),
+                    create_collider,
                 )
                     .in_base_set(CoreSet::Last),
             );

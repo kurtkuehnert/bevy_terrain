@@ -27,3 +27,4 @@ bytemuck = "1.10"
 anyhow = "1.0"
 bincode = "2.0.0-rc.1"
 dolly = "0.4"
+bevy_rapier3d = { version = "0.21", default-features = false, features = ["dim3", "async-collider"] }

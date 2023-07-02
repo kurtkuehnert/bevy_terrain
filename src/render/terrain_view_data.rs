@@ -202,8 +202,8 @@ pub(crate) fn initialize_terrain_view_data(
     images: Res<RenderAssets<Image>>,
     mut terrain_view_data: ResMut<TerrainViewComponents<TerrainViewData>>,
     view_configs: Extract<Res<TerrainViewComponents<TerrainViewConfig>>>,
-    view_query: Extract<Query<Entity, With<TerrainView>>>,
-    terrain_query: Extract<Query<Entity, Added<Terrain>>>,
+    view_query: Extract<Query<Entity, Added<TerrainView>>>,
+    terrain_query: Extract<Query<Entity, With<Terrain>>>,
 ) {
     for terrain in terrain_query.iter() {
         for view in view_query.iter() {
