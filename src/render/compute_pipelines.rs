@@ -255,17 +255,18 @@ impl render_graph::Node for TerrainComputeNode {
             let terrain_data = terrain_data.get(&terrain).unwrap();
             for view in self.view_query.iter_manual(world) {
                 let view_config = view_config_uniforms.get(&(terrain, view)).unwrap();
-                let view_data = terrain_view_data.get(&(terrain, view)).unwrap();
-                let culling_bind_group = culling_bind_groups.get(&(terrain, view)).unwrap();
+                if let Some(view_data) = terrain_view_data.get(&(terrain, view)) {
+                    let culling_bind_group = culling_bind_groups.get(&(terrain, view)).unwrap();
 
-                TerrainComputeNode::tessellate_terrain(
-                    pass,
-                    pipelines,
-                    view_data,
-                    terrain_data,
-                    &culling_bind_group.value,
-                    view_config.refinement_count,
-                );
+                    TerrainComputeNode::tessellate_terrain(
+                        pass,
+                        pipelines,
+                        view_data,
+                        terrain_data,
+                        &culling_bind_group.value,
+                        view_config.refinement_count,
+                    );
+                }
             }
         }
 

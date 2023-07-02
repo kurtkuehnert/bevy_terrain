@@ -202,8 +202,8 @@ pub(crate) fn initialize_terrain_view_data(
     images: Res<RenderAssets<Image>>,
     mut terrain_view_data: ResMut<TerrainViewComponents<TerrainViewData>>,
     view_configs: Extract<Res<TerrainViewComponents<TerrainViewConfig>>>,
-    view_query: Extract<Query<Entity, With<TerrainView>>>,
-    terrain_query: Extract<Query<Entity, Added<Terrain>>>,
+    view_query: Extract<Query<Entity, Added<TerrainView>>>,
+    terrain_query: Extract<Query<Entity, With<Terrain>>>,
 ) {
     for terrain in terrain_query.iter() {
         for view in view_query.iter() {
@@ -257,13 +257,13 @@ impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetTerrainViewBindGroup<
         terrain_view_data: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let data = terrain_view_data
-            .into_inner()
-            .get(&(item.entity(), view))
-            .unwrap();
-
-        pass.set_bind_group(I, &data.terrain_view_bind_group, &[]);
-        RenderCommandResult::Success
+        match terrain_view_data.into_inner().get(&(item.entity(), view)) {
+            Some(data) => {
+                pass.set_bind_group(I, &data.terrain_view_bind_group, &[]);
+                RenderCommandResult::Success
+            }
+            None => RenderCommandResult::Failure,
+        }
     }
 }
 
@@ -282,12 +282,12 @@ impl<P: PhaseItem> RenderCommand<P> for DrawTerrainCommand {
         terrain_view_data: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let data = terrain_view_data
-            .into_inner()
-            .get(&(item.entity(), view))
-            .unwrap();
-
-        pass.draw_indirect(&data.indirect_buffer, 0);
-        RenderCommandResult::Success
+        match terrain_view_data.into_inner().get(&(item.entity(), view)) {
+            Some(data) => {
+                pass.draw_indirect(&data.indirect_buffer, 0);
+                RenderCommandResult::Success
+            }
+            None => RenderCommandResult::Failure,
+        }
     }
 }

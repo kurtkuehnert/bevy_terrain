@@ -41,7 +41,7 @@ impl LoadingNode {
 }
 
 /// Stores all of the cpu accessible attachments of the node, after it has been loaded.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct NodeData {
     // Todo: replace with array or vec of options
     /// Stores all of the cpu accessible attachments of the node.
@@ -108,6 +108,7 @@ pub struct NodeAtlas {
     pub(crate) existing_nodes: HashSet<NodeId>,
     /// Lists the unused nodes in least recently used order.
     unused_nodes: VecDeque<UnusedNode>,
+    pub(crate) colliders: HashMap<NodeId, Entity>,
 }
 
 impl NodeAtlas {
@@ -137,6 +138,7 @@ impl NodeAtlas {
             size,
             unused_nodes,
             existing_nodes,
+            colliders: default(),
         }
     }
 

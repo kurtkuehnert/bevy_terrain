@@ -162,7 +162,7 @@ impl AttachmentConfig {
 }
 
 /// An attachment of a [`NodeAtlas`](node_atlas::NodeAtlas).
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AtlasAttachment {
     /// The handle of the attachment array texture.
     pub(crate) handle: Handle<Image>,
