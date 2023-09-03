@@ -1,4 +1,4 @@
-use bevy::{prelude::*, reflect::TypeUuid};
+use bevy::{asset::load_internal_asset, prelude::*, reflect::TypeUuid};
 
 const TYPES_SHADER: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 907665645684322571);
@@ -26,44 +26,46 @@ pub(crate) const DEFAULT_SHADER: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 556563744564564658);
 
 pub(crate) fn add_shader(app: &mut App) {
-    let mut assets = app.world.resource_mut::<Assets<_>>();
+    // let mut assets = app.world.resource_mut::<Assets<_>>();
+    // let mut shaders = app.world.resource_mut::<Assets<Shader>>();
 
-    assets.set_untracked(TYPES_SHADER, Shader::from_wgsl(include_str!("types.wgsl")));
+    load_internal_asset!(app, TYPES_SHADER, "types.wgsl", Shader::from_wgsl);
 
-    assets.set_untracked(
+    load_internal_asset!(
+        app,
         PARAMETERS_SHADER,
-        Shader::from_wgsl(include_str!("compute/parameters.wgsl")),
+        "compute/parameters.wgsl",
+        Shader::from_wgsl
     );
-    assets.set_untracked(NODE_SHADER, Shader::from_wgsl(include_str!("node.wgsl")));
-    assets.set_untracked(
-        FUNCTIONS_SHADER,
-        Shader::from_wgsl(include_str!("functions.wgsl")),
-    );
-    assets.set_untracked(DEBUG_SHADER, Shader::from_wgsl(include_str!("debug.wgsl")));
+    load_internal_asset!(app, NODE_SHADER, "node.wgsl", Shader::from_wgsl);
+    load_internal_asset!(app, FUNCTIONS_SHADER, "functions.wgsl", Shader::from_wgsl);
+    load_internal_asset!(app, DEBUG_SHADER, "debug.wgsl", Shader::from_wgsl);
 
-    assets.set_untracked(
-        MINMAX_SHADER,
-        Shader::from_wgsl(include_str!("render/minmax.wgsl")),
-    );
-    assets.set_untracked(
-        VERTEX_SHADER,
-        Shader::from_wgsl(include_str!("render/vertex.wgsl")),
-    );
-    assets.set_untracked(
+    load_internal_asset!(app, MINMAX_SHADER, "render/minmax.wgsl", Shader::from_wgsl);
+    load_internal_asset!(app, VERTEX_SHADER, "render/vertex.wgsl", Shader::from_wgsl);
+    load_internal_asset!(
+        app,
         FRAGMENT_SHADER,
-        Shader::from_wgsl(include_str!("render/fragment.wgsl")),
+        "render/fragment.wgsl",
+        Shader::from_wgsl
     );
-    assets.set_untracked(
+    load_internal_asset!(
+        app,
         DEFAULT_SHADER,
-        Shader::from_wgsl(include_str!("render/default.wgsl")),
+        "render/default.wgsl",
+        Shader::from_wgsl
     );
 
-    assets.set_untracked(
+    load_internal_asset!(
+        app,
         PREPARE_INDIRECT_SHADER,
-        Shader::from_wgsl(include_str!("compute/prepare_indirect.wgsl")),
+        "compute/prepare_indirect.wgsl",
+        Shader::from_wgsl
     );
-    assets.set_untracked(
+    load_internal_asset!(
+        app,
         REFINE_TILES_SHADER,
-        Shader::from_wgsl(include_str!("compute/refine_tiles.wgsl")),
+        "compute/refine_tiles.wgsl",
+        Shader::from_wgsl
     );
 }

@@ -16,7 +16,6 @@ use bevy::{
     },
 };
 use ndarray::Array3;
-use std::num::NonZeroU32;
 
 /// Stores the GPU representation of the [`Quadtree`] (array texture)
 /// alongside the data to update it.
@@ -91,8 +90,8 @@ impl GpuQuadtree {
             cast_slice(self.data.as_slice().unwrap()),
             ImageDataLayout {
                 offset: 0,
-                bytes_per_row: NonZeroU32::new(self.node_count * 4),
-                rows_per_image: NonZeroU32::new(self.node_count),
+                bytes_per_row: Some(self.node_count * 4),
+                rows_per_image: Some(self.node_count),
             },
             Extent3d {
                 width: self.node_count,

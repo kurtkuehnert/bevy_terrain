@@ -1,5 +1,5 @@
-#import bevy_terrain::types
-#import bevy_terrain::parameters
+#import bevy_terrain::types TerrainViewConfig, TileList
+#import bevy_terrain::parameters Parameters
 
 struct TerrainConfig {
     lod_count: u32,

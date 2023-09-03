@@ -1,4 +1,4 @@
-#import bevy_terrain::types
+#import bevy_terrain::types TerrainViewConfig, TileList
 
 struct TerrainConfig {
     lod_count: u32,
@@ -47,7 +47,7 @@ var minmax_atlas: texture_2d_array<f32>;
 #import bevy_pbr::utils
 #import bevy_pbr::clustered_forward
 #import bevy_pbr::lighting
-#import bevy_pbr::pbr_ambient
+#import bevy_pbr::ambient
 #import bevy_pbr::shadows
 #import bevy_pbr::fog
 #import bevy_pbr::pbr_functions

@@ -7,6 +7,7 @@ use crate::{
     },
     DebugTerrain, Terrain,
 };
+use bevy::pbr::{MAX_CASCADES_PER_LIGHT, MAX_DIRECTIONAL_LIGHTS};
 use bevy::{
     core_pipeline::core_3d::Opaque3d,
     pbr::{MeshPipeline, RenderMaterials, SetMaterialBindGroup, SetMeshViewBindGroup},
@@ -16,11 +17,10 @@ use bevy::{
         render_resource::*,
         renderer::RenderDevice,
         texture::BevyDefault,
-        RenderApp, RenderSet,
+        Render, RenderApp, RenderSet,
     },
 };
 use std::{hash::Hash, marker::PhantomData};
-use bevy::pbr::{MAX_CASCADES_PER_LIGHT, MAX_DIRECTIONAL_LIGHTS};
 
 /// Configures the default terrain pipeline.
 #[derive(Resource)]
@@ -273,8 +273,14 @@ where
     fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
         let mut shader_defs = key.flags.shader_defs();
 
-        shader_defs.push(ShaderDefVal::UInt("MAX_DIRECTIONAL_LIGHTS".to_string(), MAX_DIRECTIONAL_LIGHTS as u32));
-        shader_defs.push(ShaderDefVal::UInt("MAX_CASCADES_PER_LIGHT".to_string(), MAX_CASCADES_PER_LIGHT as u32));
+        shader_defs.push(ShaderDefVal::UInt(
+            "MAX_DIRECTIONAL_LIGHTS".to_string(),
+            MAX_DIRECTIONAL_LIGHTS as u32,
+        ));
+        shader_defs.push(ShaderDefVal::UInt(
+            "MAX_CASCADES_PER_LIGHT".to_string(),
+            MAX_CASCADES_PER_LIGHT as u32,
+        ));
 
         let mut bind_group_layout = match key.flags.msaa_samples() {
             1 => vec![self.view_layout.clone()],
@@ -419,7 +425,7 @@ where
 {
     fn build(&self, app: &mut App) {
         // Todo: don't use MaterialPlugin, but do the configuration here
-        app.add_plugin(MaterialPlugin::<M>::default());
+        app.add_plugins(MaterialPlugin::<M>::default());
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
@@ -431,9 +437,18 @@ where
                 //     prepare_materials::<M>.after(PrepareAssetLabel::PreAssetPrepare),
                 // )
                 .add_render_command::<Opaque3d, DrawTerrain<M>>()
-                .init_resource::<TerrainRenderPipeline<M>>()
-                .init_resource::<SpecializedRenderPipelines<TerrainRenderPipeline<M>>>()
-                .add_system(queue_terrain::<M>.in_set(RenderSet::Queue));
+                .add_systems(Render, queue_terrain::<M>.in_set(RenderSet::Queue));
         }
+    }
+
+    fn finish(&self, app: &mut App) {
+        let render_app = match app.get_sub_app_mut(RenderApp) {
+            Ok(render_app) => render_app,
+            Err(_) => return,
+        };
+
+        render_app
+            .init_resource::<TerrainRenderPipeline<M>>()
+            .init_resource::<SpecializedRenderPipelines<TerrainRenderPipeline<M>>>();
     }
 }

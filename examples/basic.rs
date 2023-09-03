@@ -1,4 +1,8 @@
-use bevy::{prelude::*, reflect::TypeUuid, render::render_resource::*};
+use bevy::{
+    prelude::*,
+    reflect::{TypePath, TypeUuid},
+    render::render_resource::*,
+};
 use bevy_terrain::prelude::*;
 
 const TERRAIN_SIZE: u32 = 1024;
@@ -9,7 +13,7 @@ const HEIGHT: f32 = 200.0;
 const NODE_ATLAS_SIZE: u32 = 100;
 const PATH: &str = "terrain";
 
-#[derive(AsBindGroup, TypeUuid, Clone)]
+#[derive(AsBindGroup, TypePath, TypeUuid, Clone)]
 #[uuid = "003e1d5d-241c-45a6-8c25-731dee22d820"]
 pub struct TerrainMaterial {}
 
@@ -17,14 +21,16 @@ impl Material for TerrainMaterial {}
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
-        .add_plugin(TerrainPlugin {
-            attachment_count: 2, // has to match the attachments of the terrain
-        })
-        .add_plugin(TerrainDebugPlugin) // enable debug settings and controls
-        .add_plugin(TerrainMaterialPlugin::<TerrainMaterial>::default())
-        .add_startup_system(setup)
-        .add_system(toggle_camera)
+        .add_plugins((
+            DefaultPlugins,
+            TerrainPlugin {
+                attachment_count: 2, // has to match the attachments of the terrain
+            },
+            TerrainDebugPlugin, // enable debug settings and controls
+            TerrainMaterialPlugin::<TerrainMaterial>::default(),
+        ))
+        .add_systems(Startup, setup)
+        .add_systems(Update, toggle_camera)
         .run();
 }
 

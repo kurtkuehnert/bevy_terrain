@@ -12,7 +12,7 @@ authors = ["Kurt Kühnert <kurt@kuehnert.dev>"]
 repository = "https://github.com/kurtkuehnert/bevy_terrain"
 
 [dependencies]
-bevy = "0.10"
+bevy = "0.11"
 dtm = "0.1"
 rapid-qoi = "0.6"
 ndarray = "0.15"

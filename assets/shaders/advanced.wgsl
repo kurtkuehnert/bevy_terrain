@@ -1,4 +1,4 @@
-#import bevy_terrain::types
+#import bevy_terrain::types TerrainViewConfig TileList
 
 // Customize your attachment offsets and scales here.
 // They are used to line up the uvs of adjacent nodes with a border size different from 0.
@@ -60,7 +60,7 @@ var array_sampler: sampler;
 #import bevy_pbr::utils
 #import bevy_pbr::clustered_forward
 #import bevy_pbr::lighting
-#import bevy_pbr::pbr_ambient
+#import bevy_pbr::ambient
 #import bevy_pbr::shadows
 #import bevy_pbr::fog
 #import bevy_pbr::pbr_functions

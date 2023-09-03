@@ -1,4 +1,5 @@
 #define_import_path bevy_terrain::debug
+#import bevy_terrain::types Tile
 
 fn lod_color(lod: u32) -> vec4<f32> {
     if (lod % 6u == 0u) {
