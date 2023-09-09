@@ -22,6 +22,8 @@ use bevy::{
 };
 use std::{hash::Hash, marker::PhantomData};
 
+use super::shaders::{VERTEX_SHADER, FRAGMENT_SHADER};
+
 /// Configures the default terrain pipeline.
 #[derive(Resource)]
 pub struct TerrainPipelineConfig {
@@ -240,13 +242,13 @@ impl<M: Material> FromWorld for TerrainRenderPipeline<M> {
         let material_layout = M::bind_group_layout(device);
 
         let vertex_shader = match M::vertex_shader() {
-            ShaderRef::Default => DEFAULT_SHADER.typed(),
+            ShaderRef::Default => VERTEX_SHADER.typed(),
             ShaderRef::Handle(handle) => handle,
             ShaderRef::Path(path) => asset_server.load(path),
         };
 
         let fragment_shader = match M::fragment_shader() {
-            ShaderRef::Default => DEFAULT_SHADER.typed(),
+            ShaderRef::Default => FRAGMENT_SHADER.typed(),
             ShaderRef::Handle(handle) => handle,
             ShaderRef::Path(path) => asset_server.load(path),
         };

@@ -1,5 +1,6 @@
-#import bevy_terrain::types TerrainViewConfig, TileList
+#import bevy_terrain::node approximate_world_position
 #import bevy_terrain::parameters Parameters
+#import bevy_terrain::types TerrainViewConfig, Tile, TileList
 
 struct TerrainConfig {
     lod_count: u32,
@@ -9,16 +10,16 @@ struct TerrainConfig {
 
     height_size: f32,
     minmax_size: f32,
-    _empty: u32,
-    _empty: u32,
+    _emptya: u32,
+    _emptyb: u32,
     height_scale: f32,
     minmax_scale: f32,
-    _empty: u32,
-    _empty: u32,
+    _emptyc: u32,
+    _emptyd: u32,
     height_offset: f32,
     minmax_offset: f32,
-    _empty: u32,
-    _empty: u32,
+    _emptye: u32,
+    _emptyf: u32,
 }
 
 struct CullingData {
@@ -52,8 +53,8 @@ var height_atlas: texture_2d_array<f32>;
 @group(2) @binding(3)
 var minmax_atlas: texture_2d_array<f32>;
 
-#import bevy_terrain::node
-#import bevy_terrain::functions
+// #import bevy_terrain::node
+// #import bevy_terrain::functions
 
 fn child_index() -> i32 {
     return atomicAdd(&parameters.child_index, parameters.counter);
@@ -84,18 +85,17 @@ fn frustum_cull(tile: Tile) -> bool {
 
         var p_corner = vec4<f32>(aabb_min.x, aabb_min.y, aabb_min.z, 1.0);
         var n_corner = vec4<f32>(aabb_max.x, aabb_max.y, aabb_max.z, 1.0);
-        if (plane.x >= 0.0) { p_corner.x = aabb_max.x; n_corner.x = aabb_min.x; }
-        if (plane.y >= 0.0) { p_corner.y = aabb_max.y; n_corner.y = aabb_min.y; }
-        if (plane.z >= 0.0) { p_corner.z = aabb_max.z; n_corner.z = aabb_min.z; }
+        if plane.x >= 0.0 { p_corner.x = aabb_max.x; n_corner.x = aabb_min.x; }
+        if plane.y >= 0.0 { p_corner.y = aabb_max.y; n_corner.y = aabb_min.y; }
+        if plane.z >= 0.0 { p_corner.z = aabb_max.z; n_corner.z = aabb_min.z; }
 
-    	if (dot(plane, p_corner) < 0.0) {
+        if dot(plane, p_corner) < 0.0 {
     	    // the closest corner is outside the plane -> cull
-    	    return true;
-    	}
-    	else if (dot(plane, n_corner) < 0.0) {
+            return true;
+        } else if dot(plane, n_corner) < 0.0 {
     	    // the furthest corner is inside the plane -> don't cull
-    	    return false;
-    	}
+            return false;
+        }
     }
 
     return false;
@@ -103,7 +103,7 @@ fn frustum_cull(tile: Tile) -> bool {
 
 fn outside_cull(tile: Tile) -> bool {
     // cull tiles outside of the terrain
-    let local_position = vec2<f32>(tile.coords * tile.size) * view_config.tile_scale ;
+    let local_position = vec2<f32>(tile.coords * tile.size) * view_config.tile_scale;
 
     return local_position.x > f32(config.terrain_size) || local_position.y > f32(config.terrain_size);
 }
@@ -113,18 +113,17 @@ fn cull(tile: Tile) -> bool {
 }
 
 fn should_be_divided(tile: Tile) -> bool {
-    if (tile.size == 1u) {
+    if tile.size == 1u {
         return false;
     }
 
     var dist = 1000000000.0;
 
     for (var i: u32 = 0u; i < 4u; i = i + 1u) {
-        let corner_coords = vec2<u32>(tile.coords.x + (i       & 1u),
-                                      tile.coords.y + (i >> 1u & 1u));
+        let corner_coords = vec2<u32>(tile.coords.x + (i & 1u), tile.coords.y + (i >> 1u & 1u));
 
         let local_position = vec2<f32>(corner_coords * tile.size) * view_config.tile_scale;
-        let world_position = approximate_world_position(local_position);
+        let world_position = approximate_world_position(local_position, view_config.approximate_height);
         dist = min(dist, distance(world_position.xyz, view.world_position.xyz));
     }
 
@@ -135,12 +134,11 @@ fn subdivide(tile: Tile) {
     let size = tile.size >> 1u;
 
     for (var i: u32 = 0u; i < 4u; i = i + 1u) {
-        let coords = vec2<u32>((tile.coords.x << 1u) + (i       & 1u),
-                               (tile.coords.y << 1u) + (i >> 1u & 1u));
+        let coords = vec2<u32>((tile.coords.x << 1u) + (i & 1u), (tile.coords.y << 1u) + (i >> 1u & 1u));
 
         let tile = Tile(coords, size);
 
-        if (!cull(tile)) {
+        if !cull(tile) {
             temporary_tiles.data[child_index()] = tile;
         }
     }
@@ -148,16 +146,15 @@ fn subdivide(tile: Tile) {
 
 @compute @workgroup_size(64, 1, 1)
 fn refine_tiles(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
-    if (invocation_id.x >= parameters.tile_count) {
+    if invocation_id.x >= parameters.tile_count {
         return;
     }
 
     let tile = temporary_tiles.data[parent_index(invocation_id.x)];
 
-    if (should_be_divided(tile)) {
+    if should_be_divided(tile) {
         subdivide(tile);
-    }
-    else {
+    } else {
         final_tiles.data[final_index()] = tile;
     }
 }

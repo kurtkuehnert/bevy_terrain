@@ -1,4 +1,5 @@
 #import bevy_terrain::types TerrainViewConfig TileList
+#import bevy_pbr::pbr_functions PbrInput,pbr_input_new,calculate_view,pbr
 
 // Customize your attachment offsets and scales here.
 // They are used to line up the uvs of adjacent nodes with a border size different from 0.
@@ -11,15 +12,15 @@ struct TerrainConfig {
     height_size: f32,
     minmax_size: f32,
     albedo_size: f32,
-    _empty: f32,
+    _emptya: f32,
     height_scale: f32,
     minmax_scale: f32,
     albedo_scale: f32,
-    _empty: f32,
+    _emptyb: f32,
     height_offset: f32,
     minmax_offset: f32,
     albedo_offset: f32,
-    _empty: f32,
+    _emptyc: f32,
 }
 
 // view bindings
@@ -95,7 +96,7 @@ fn lookup_fragment_data(input: FragmentInput, lookup: NodeLookup, ddx: vec2<f32>
     let albedo_ddy = ddy / config.albedo_size;
 
     // Calculate the normal from the heightmap.
-    let world_normal = calculate_normal(height_coords, atlas_index, atlas_lod, height_ddx, height_ddy);
+    let world_normal = calculate_normal(height_atlas, atlas_sampler, height_coords, atlas_index, atlas_lod, height_ddx, height_ddy, config.height_size, config.height);
 
 #ifdef ALBEDO
 #ifdef SAMPLE_GRAD

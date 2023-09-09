@@ -1,4 +1,5 @@
 #define_import_path bevy_terrain::minmax
+#import bevy_terrain::functions VertexInput,VertexOutput,vertex_output
 
 fn calculate_cube_position(grid_index: u32) -> vec3<f32>{
     var corners = array<vec3<f32>, 14>(
@@ -30,6 +31,7 @@ fn vertex(in: VertexInput) -> VertexOutput {
 
     let size = f32(tile.size) * view_config.tile_scale;
     let center_position = (vec2<f32>(tile.coords) + 0.5) * size;
+    // minmax_atlas: texture_2d_array<f32>, atlas_sampler: sampler, local_position: vec2<f32>, size: f32, lod_count: u32, height: f32, minmax_scale: f32, minmax_offset: f32, node_count: u32, quadtree: texture_2d_array<u32>, leaf_node_size: u32
     let minmax = minmax(center_position, size);
 
 

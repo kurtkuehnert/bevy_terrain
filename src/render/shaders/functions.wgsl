@@ -1,4 +1,9 @@
 #define_import_path bevy_terrain::functions
+#import bevy_terrain::types Tile
+#import bevy_terrain::node approximate_world_position,lookup_node
+#import bevy_terrain::uniforms view_config
+#import bevy_pbr::mesh_view_bindings view
+
 
 struct VertexInput {
     @builtin(instance_index) instance: u32,
@@ -62,60 +67,75 @@ fn calculate_morph(tile: Tile, world_position: vec4<f32>) -> f32 {
     return clamp(1.0 - (1.0 - viewer_distance / morph_distance) / view_config.morph_range, 0.0, 1.0);
 }
 
-fn calculate_grid_position(grid_index: u32) -> vec2<u32>{
+fn calculate_grid_position(grid_index: u32) -> vec2<u32> {
     // use first and last indices of the rows twice, to form degenerate triangles
-    let row_index    = clamp(grid_index % view_config.vertices_per_row, 1u, view_config.vertices_per_row - 2u) - 1u;
+    let row_index = clamp(grid_index % view_config.vertices_per_row, 1u, view_config.vertices_per_row - 2u) - 1u;
     let column_index = grid_index / view_config.vertices_per_row;
 
     return vec2<u32>(column_index + (row_index & 1u), row_index >> 1u);
 }
+// struct TerrainViewConfig {
+//     approximate_height: f32,
+//     node_count: u32,
 
-fn calculate_local_position(tile: Tile, grid_position: vec2<u32>) -> vec2<f32> {
+//     tile_count: u32,
+//     refinement_count: u32,
+//     tile_scale: f32,
+//     grid_size: f32,
+//     vertices_per_row: u32,
+//     vertices_per_tile: u32,
+//     morph_distance: f32,
+//     blend_distance: f32,
+//     morph_range: f32,
+//     blend_range: f32,
+// }
+
+fn calculate_local_position(tile: Tile, grid_position: vec2<u32>, terrain_size: u32) -> vec2<f32> {
     let size = f32(tile.size) * view_config.tile_scale;
 
     var local_position = (vec2<f32>(tile.coords) + vec2<f32>(grid_position) / view_config.grid_size) * size;
 
 #ifdef MESH_MORPH
-    let world_position = approximate_world_position(local_position);
+    let world_position = approximate_world_position(local_position, view_config.approximate_height);
+    // view_world_position: vec4<f32>, morph_distance: f32, morph_range: f32
     let morph = calculate_morph(tile, world_position);
     let even_grid_position = vec2<f32>(grid_position & vec2<u32>(1u));
     local_position = local_position - morph * even_grid_position / view_config.grid_size * size;
 #endif
 
-    local_position.x = clamp(local_position.x, 0.0, f32(config.terrain_size));
-    local_position.y = clamp(local_position.y, 0.0, f32(config.terrain_size));
+    local_position.x = clamp(local_position.x, 0.0, f32(terrain_size));
+    local_position.y = clamp(local_position.y, 0.0, f32(terrain_size));
 
     return local_position;
 }
 
-fn calculate_normal(coords: vec2<f32>, atlas_index: i32, atlas_lod: u32, ddx: vec2<f32>, ddy: vec2<f32>) -> vec3<f32> {
+fn calculate_normal(height_atlas: texture_2d_array<f32>, atlas_sampler: sampler, coords: vec2<f32>, atlas_index: i32, atlas_lod: u32, ddx: vec2<f32>, ddy: vec2<f32>, height_size: f32, height: f32) -> vec3<f32> {
 #ifdef SAMPLE_GRAD
-    let offset = 1.0 / config.height_size;
-    let left  = textureSampleGrad(height_atlas, atlas_sampler, coords + vec2<f32>(-offset,     0.0), atlas_index, ddx, ddy).x;
-    let up    = textureSampleGrad(height_atlas, atlas_sampler, coords + vec2<f32>(    0.0, -offset), atlas_index, ddx, ddy).x;
-    let right = textureSampleGrad(height_atlas, atlas_sampler, coords + vec2<f32>( offset,     0.0), atlas_index, ddx, ddy).x;
-    let down  = textureSampleGrad(height_atlas, atlas_sampler, coords + vec2<f32>(    0.0,  offset), atlas_index, ddx, ddy).x;
+    let offset = 1.0 / height_size;
+    let left = textureSampleGrad(height_atlas, atlas_sampler, coords + vec2<f32>(-offset, 0.0), atlas_index, ddx, ddy).x;
+    let up = textureSampleGrad(height_atlas, atlas_sampler, coords + vec2<f32>(0.0, -offset), atlas_index, ddx, ddy).x;
+    let right = textureSampleGrad(height_atlas, atlas_sampler, coords + vec2<f32>(offset, 0.0), atlas_index, ddx, ddy).x;
+    let down = textureSampleGrad(height_atlas, atlas_sampler, coords + vec2<f32>(0.0, offset), atlas_index, ddx, ddy).x;
 #else
-    let left  = textureSampleLevel(height_atlas, atlas_sampler, coords, atlas_index, 0.0, vec2<i32>(-1,  0)).x;
-    let up    = textureSampleLevel(height_atlas, atlas_sampler, coords, atlas_index, 0.0, vec2<i32>( 0, -1)).x;
-    let right = textureSampleLevel(height_atlas, atlas_sampler, coords, atlas_index, 0.0, vec2<i32>( 1,  0)).x;
-    let down  = textureSampleLevel(height_atlas, atlas_sampler, coords, atlas_index, 0.0, vec2<i32>( 0,  1)).x;
+    let left = textureSampleLevel(height_atlas, atlas_sampler, coords, atlas_index, 0.0, vec2<i32>(-1, 0)).x;
+    let up = textureSampleLevel(height_atlas, atlas_sampler, coords, atlas_index, 0.0, vec2<i32>(0, -1)).x;
+    let right = textureSampleLevel(height_atlas, atlas_sampler, coords, atlas_index, 0.0, vec2<i32>(1, 0)).x;
+    let down = textureSampleLevel(height_atlas, atlas_sampler, coords, atlas_index, 0.0, vec2<i32>(0, 1)).x;
 
 #endif
 
-    return normalize(vec3<f32>(right - left, f32(2u << atlas_lod) / config.height, down - up));
+    return normalize(vec3<f32>(right - left, f32(2u << atlas_lod) / height, down - up));
 }
 
-fn minmax(local_position: vec2<f32>, size: f32) -> vec2<f32> {
+fn minmax(minmax_atlas: texture_2d_array<f32>, atlas_sampler: sampler, local_position: vec2<f32>, size: f32, lod_count: u32, height: f32, minmax_scale: f32, minmax_offset: f32, node_count: u32, quadtree: texture_2d_array<u32>, leaf_node_size: u32) -> vec2<f32> {
     let lod = u32(ceil(log2(size))) + 1u;
 
-    if (lod >= config.lod_count) {
-        return vec2<f32>(0.0, config.height);
+    if lod >= lod_count {
+        return vec2<f32>(0.0, height);
     }
-
-    let lookup = lookup_node(lod, local_position);
+    let lookup = lookup_node(lod, local_position, lod_count, node_count, quadtree, leaf_node_size);
     let atlas_index = lookup.atlas_index;
-    let minmax_coords = lookup.atlas_coords * config.minmax_scale + config.minmax_offset;
+    let minmax_coords = lookup.atlas_coords * minmax_scale + minmax_offset;
 
     let min_gather = textureGather(0, minmax_atlas, atlas_sampler, minmax_coords, atlas_index);
     let max_gather = textureGather(1, minmax_atlas, atlas_sampler, minmax_coords, atlas_index);
@@ -123,5 +143,5 @@ fn minmax(local_position: vec2<f32>, size: f32) -> vec2<f32> {
     var min_height = min(min(min_gather.x, min_gather.y), min(min_gather.z, min_gather.w));
     var max_height = max(max(max_gather.x, max_gather.y), max(max_gather.z, max_gather.w));
 
-    return vec2(min_height, max_height) * config.height;
+    return vec2(min_height, max_height) * height;
 }
