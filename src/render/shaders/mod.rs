@@ -6,6 +6,8 @@ const PARAMETERS_SHADER: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 656456784512075658);
 const NODE_SHADER: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 124345314345873273);
+const UNIFORMS_SHADER: HandleUntyped =
+    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 623345314345873272);
 const FUNCTIONS_SHADER: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 234313897973543254);
 const DEBUG_SHADER: HandleUntyped =
@@ -26,44 +28,49 @@ pub(crate) const DEFAULT_SHADER: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 556563744564564658);
 
 pub(crate) fn add_shader(app: &mut App) {
+    let shader_path:String = "/".to_string();
     let mut assets = app.world.resource_mut::<Assets<_>>();
 
-    assets.set_untracked(TYPES_SHADER, Shader::from_wgsl(include_str!("types.wgsl")));
+    assets.set_untracked(TYPES_SHADER, Shader::from_wgsl(include_str!("types.wgsl"),shader_path.clone()));
 
     assets.set_untracked(
         PARAMETERS_SHADER,
-        Shader::from_wgsl(include_str!("compute/parameters.wgsl")),
+        Shader::from_wgsl(include_str!("compute/parameters.wgsl"),shader_path.clone()),
     );
-    assets.set_untracked(NODE_SHADER, Shader::from_wgsl(include_str!("node.wgsl")));
+    assets.set_untracked(NODE_SHADER, Shader::from_wgsl(include_str!("node.wgsl"),shader_path.clone()));
+    assets.set_untracked(
+        UNIFORMS_SHADER,
+        Shader::from_wgsl(include_str!("uniforms.wgsl"),shader_path.clone()),
+    );
     assets.set_untracked(
         FUNCTIONS_SHADER,
-        Shader::from_wgsl(include_str!("functions.wgsl")),
+        Shader::from_wgsl(include_str!("functions.wgsl"),shader_path.clone()),
     );
-    assets.set_untracked(DEBUG_SHADER, Shader::from_wgsl(include_str!("debug.wgsl")));
+    assets.set_untracked(DEBUG_SHADER, Shader::from_wgsl(include_str!("debug.wgsl"),shader_path.clone()));
 
     assets.set_untracked(
         MINMAX_SHADER,
-        Shader::from_wgsl(include_str!("render/minmax.wgsl")),
+        Shader::from_wgsl(include_str!("render/minmax.wgsl"),shader_path.clone()),
     );
     assets.set_untracked(
         VERTEX_SHADER,
-        Shader::from_wgsl(include_str!("render/vertex.wgsl")),
+        Shader::from_wgsl(include_str!("render/vertex.wgsl"),shader_path.clone()),
     );
     assets.set_untracked(
         FRAGMENT_SHADER,
-        Shader::from_wgsl(include_str!("render/fragment.wgsl")),
+        Shader::from_wgsl(include_str!("render/fragment.wgsl"),shader_path.clone()),
     );
     assets.set_untracked(
         DEFAULT_SHADER,
-        Shader::from_wgsl(include_str!("render/default.wgsl")),
+        Shader::from_wgsl(include_str!("render/default.wgsl"),shader_path.clone()),
     );
 
     assets.set_untracked(
         PREPARE_INDIRECT_SHADER,
-        Shader::from_wgsl(include_str!("compute/prepare_indirect.wgsl")),
+        Shader::from_wgsl(include_str!("compute/prepare_indirect.wgsl"),shader_path.clone()),
     );
     assets.set_untracked(
         REFINE_TILES_SHADER,
-        Shader::from_wgsl(include_str!("compute/refine_tiles.wgsl")),
+        Shader::from_wgsl(include_str!("compute/refine_tiles.wgsl"),shader_path.clone()),
     );
 }

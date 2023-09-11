@@ -244,8 +244,8 @@ impl NodeAtlas {
 
         load_events.clear();
 
-        // update all nodes that have finished loading
-        for (node_id, loading_node) in loading_nodes.drain_filter(|_, node| node.finished_loading())
+        // update all nodes that have finished loading 
+        for (node_id, loading_node) in loading_nodes.extract_if(|_, node| node.finished_loading())
         {
             if let Some(node) = nodes.get_mut(&node_id) {
                 node.state = LoadingState::Loaded;

@@ -251,6 +251,9 @@ impl render_graph::Node for TerrainComputeNode {
             .command_encoder()
             .begin_compute_pass(&ComputePassDescriptor::default());
 
+
+        //consider removing these unwraps !! 
+
         for terrain in self.terrain_query.iter_manual(world) {
             let terrain_data = terrain_data.get(&terrain).unwrap();
             for view in self.view_query.iter_manual(world) {

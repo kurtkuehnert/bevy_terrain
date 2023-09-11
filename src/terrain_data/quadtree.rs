@@ -273,6 +273,9 @@ pub(crate) fn compute_quadtree_request(
     }
 }
 
+
+
+
 /// Adjusts all quadtrees to their corresponding node atlas
 /// by updating the entries with the best available nodes.
 pub(crate) fn adjust_quadtree(
@@ -280,11 +283,24 @@ pub(crate) fn adjust_quadtree(
     view_query: Query<Entity, With<TerrainView>>,
     mut terrain_query: Query<(Entity, &NodeAtlas), With<Terrain>>,
 ) {
+
+    //consider removing this unwrap! 
+
     for (terrain, node_atlas) in terrain_query.iter_mut() {
         for view in view_query.iter() {
-            let quadtree = quadtrees.get_mut(&(terrain, view)).unwrap();
+           // let quadtree = quadtrees.get_mut(&(terrain, view)).unwrap();
 
-            quadtree.adjust(node_atlas);
+            match quadtrees.get_mut(&(terrain, view)) {
+
+                Some(tree) => {
+                    tree.adjust(node_atlas);
+                },
+                None => {
+                    println!("WARN: Not adjusting based on quadtree");
+                }
+
+            }
+           
         }
     }
 }

@@ -121,7 +121,7 @@ pub struct TerrainBundle {
     config: TerrainConfig,
     transform: Transform,
     global_transform: GlobalTransform,
-    #[bundle]
+    
     visibility_bundle: VisibilityBundle,
     no_frustum_culling: NoFrustumCulling,
 }
@@ -157,14 +157,16 @@ impl Default for TerrainPlugin {
 
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
-        add_shader(app);
+       
+       
 
-        app.add_plugin(TDFPlugin)
-            .add_plugin(ExtractComponentPlugin::<Terrain>::default())
-            .add_plugin(ExtractComponentPlugin::<TerrainView>::default())
+        app.add_plugins(TDFPlugin)
+            .add_plugins(ExtractComponentPlugin::<Terrain>::default())
+            .add_plugins(ExtractComponentPlugin::<TerrainView>::default())
             .init_resource::<TerrainViewComponents<Quadtree>>()
             .init_resource::<TerrainViewComponents<TerrainViewConfig>>()
             .add_systems(
+                 Last,//was CoreSet::Last
                 (
                     finish_loading_attachment_from_disk.before(update_node_atlas),
                     compute_quadtree_request.before(update_node_atlas),
@@ -173,15 +175,21 @@ impl Plugin for TerrainPlugin {
                     start_loading_attachment_from_disk.after(update_node_atlas),
                     update_height_under_viewer.after(adjust_quadtree),
                 )
-                    .in_base_set(CoreSet::Last),
+                   
             );
+        
+    }
+    fn finish(&self, app: &mut App) {
+
+      
+        add_shader(app);
 
         let render_app = app
             .sub_app_mut(RenderApp)
             .insert_resource(TerrainPipelineConfig {
                 attachment_count: self.attachment_count,
             })
-            .init_resource::<TerrainComputePipelines>()
+            .init_resource::<TerrainComputePipelines>()  
             .init_resource::<SpecializedComputePipelines<TerrainComputePipelines>>()
             .init_resource::<TerrainComponents<GpuNodeAtlas>>()
             .init_resource::<TerrainComponents<TerrainData>>()
@@ -189,7 +197,7 @@ impl Plugin for TerrainPlugin {
             .init_resource::<TerrainViewComponents<TerrainViewData>>()
             .init_resource::<TerrainViewComponents<TerrainViewConfigUniform>>()
             .init_resource::<TerrainViewComponents<CullingBindGroup>>()
-            .add_systems(
+            .add_systems(ExtractSchedule,
                 (
                     extract_terrain_view_config,
                     initialize_gpu_node_atlas,
@@ -199,10 +207,10 @@ impl Plugin for TerrainPlugin {
                     extract_node_atlas.after(initialize_gpu_node_atlas),
                     extract_quadtree.after(initialize_gpu_quadtree),
                 )
-                    .in_schedule(ExtractSchedule),
+                  
             )
-            .add_system(queue_terrain_compute_pipelines.in_set(RenderSet::Queue))
-            .add_systems(
+            .add_systems(bevy::render::Render,queue_terrain_compute_pipelines.in_set(RenderSet::Queue))
+            .add_systems(bevy::render::Render,
                 (
                     prepare_quadtree,
                     prepare_node_atlas,
@@ -212,10 +220,12 @@ impl Plugin for TerrainPlugin {
                     .in_set(RenderSet::Prepare),
             );
 
+           
         let compute_node = TerrainComputeNode::from_world(&mut render_app.world);
 
         let mut render_graph = render_app.world.resource_mut::<RenderGraph>();
         render_graph.add_node("terrain_compute", compute_node);
         render_graph.add_node_edge("terrain_compute", CAMERA_DRIVER);
+
     }
 }

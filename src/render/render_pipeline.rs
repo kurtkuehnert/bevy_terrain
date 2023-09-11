@@ -418,10 +418,18 @@ where
     M::Data: PartialEq + Eq + Hash + Clone,
 {
     fn build(&self, app: &mut App) {
-        // Todo: don't use MaterialPlugin, but do the configuration here
-        app.add_plugin(MaterialPlugin::<M>::default());
+       
+         // Todo: don't use MaterialPlugin, but do the configuration here
+         app.add_plugins(MaterialPlugin::<M>::default());
+    }
 
-        if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
+    //this may not be correct !! 
+    fn finish(&self, app: &mut App) {
+        
+
+
+        let mut render_app = app.get_sub_app_mut(RenderApp).unwrap();
+       // if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
                 // .init_resource::<ExtractedMaterials<M>>()
                 // .init_resource::<RenderMaterials<M>>()
@@ -433,7 +441,8 @@ where
                 .add_render_command::<Opaque3d, DrawTerrain<M>>()
                 .init_resource::<TerrainRenderPipeline<M>>()
                 .init_resource::<SpecializedRenderPipelines<TerrainRenderPipeline<M>>>()
-                .add_system(queue_terrain::<M>.in_set(RenderSet::Queue));
-        }
+                .add_systems(bevy::render::Render,queue_terrain::<M>.in_set(RenderSet::Queue));
+       // }
     }
+
 }

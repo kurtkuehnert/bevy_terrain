@@ -124,7 +124,7 @@ impl TerrainData {
             mag_filter: FilterMode::Linear,
             min_filter: FilterMode::Linear,
             mipmap_filter: FilterMode::Linear,
-            anisotropy_clamp: NonZeroU8::new(16),
+            anisotropy_clamp: 16,
             ..default()
         };
 

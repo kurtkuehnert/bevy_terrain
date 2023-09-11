@@ -1,25 +1,10 @@
-#import bevy_terrain::types
-#import bevy_terrain::parameters
+#import bevy_terrain::types TerrainConfig, TerrainViewConfig, TileList, Tile 
+ 
+#import bevy_terrain::parameters Parameters
+ 
+#import bevy_terrain::node lookup_node, approximate_world_position
 
-struct TerrainConfig {
-    lod_count: u32,
-    height: f32,
-    leaf_node_size: u32,
-    terrain_size: u32,
-
-    height_size: f32,
-    minmax_size: f32,
-    _empty: u32,
-    _empty: u32,
-    height_scale: f32,
-    minmax_scale: f32,
-    _empty: u32,
-    _empty: u32,
-    height_offset: f32,
-    minmax_offset: f32,
-    _empty: u32,
-    _empty: u32,
-}
+ 
 
 struct CullingData {
     world_position: vec4<f32>,
@@ -27,6 +12,7 @@ struct CullingData {
     model: mat4x4<f32>,
     planes: array<vec4<f32>, 5>,
 }
+
 
 @group(0) @binding(0)
 var<uniform> view_config: TerrainViewConfig;
@@ -52,8 +38,8 @@ var height_atlas: texture_2d_array<f32>;
 @group(2) @binding(3)
 var minmax_atlas: texture_2d_array<f32>;
 
-#import bevy_terrain::node
-#import bevy_terrain::functions
+
+ 
 
 fn child_index() -> i32 {
     return atomicAdd(&parameters.child_index, parameters.counter);
@@ -124,7 +110,7 @@ fn should_be_divided(tile: Tile) -> bool {
                                       tile.coords.y + (i >> 1u & 1u));
 
         let local_position = vec2<f32>(corner_coords * tile.size) * view_config.tile_scale;
-        let world_position = approximate_world_position(local_position);
+        let world_position = approximate_world_position(local_position );
         dist = min(dist, distance(world_position.xyz, view.world_position.xyz));
     }
 

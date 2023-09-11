@@ -1,5 +1,16 @@
 #define_import_path bevy_terrain::fragment
 
+
+#import bevy_terrain::functions FragmentInput,FragmentOutput,process_fragment,calculate_blend,blend_fragment_data,lookup_fragment_data
+
+#import bevy_terrain::node   lookup_node 
+
+#import bevy_terrain::types TerrainViewConfig,TerrainConfig,TileList
+ 
+
+ 
+
+
 // The terrain data required by your `fragment_color` function.
 // This data will be fetched from the atlases by means of the `AtlasLookup`.
 // To smoothen the transition between different lods the fragment data will be blended at the fringe between them.
@@ -22,13 +33,13 @@
 fn fragment(input: FragmentInput) -> FragmentOutput {
     let ddx   = dpdx(input.local_position);
     let ddy   = dpdy(input.local_position);
-    let blend = calculate_blend(input.world_position);
+    let blend = calculate_blend(input.world_position );
 
-    let lookup = lookup_node(blend.lod, input.local_position);
+    let lookup = lookup_node(blend.lod, input.local_position );
     var data   = lookup_fragment_data(input, lookup, ddx, ddy);
 
     if (blend.ratio < 1.0) {
-        let lookup2 = lookup_node(blend.lod + 1u, input.local_position);
+        let lookup2 = lookup_node(blend.lod + 1u, input.local_position );
         let data2   = lookup_fragment_data(input, lookup2, ddx, ddy);
         data        = blend_fragment_data(data, data2, blend.ratio);
     }

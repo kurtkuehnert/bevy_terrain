@@ -1,5 +1,8 @@
 #define_import_path bevy_terrain::minmax
 
+#import bevy_terrain::functions VertexInput,VertexOutput,vertex_output
+
+
 fn calculate_cube_position(grid_index: u32) -> vec3<f32>{
     var corners = array<vec3<f32>, 14>(
         vec3<f32>( 0.5, -0.5, 1.0),

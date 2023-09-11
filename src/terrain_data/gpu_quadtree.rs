@@ -91,8 +91,8 @@ impl GpuQuadtree {
             cast_slice(self.data.as_slice().unwrap()),
             ImageDataLayout {
                 offset: 0,
-                bytes_per_row: NonZeroU32::new(self.node_count * 4),
-                rows_per_image: NonZeroU32::new(self.node_count),
+                bytes_per_row:  Some(self.node_count * 4) ,
+                rows_per_image:  Some(self.node_count) ,
             },
             Extent3d {
                 width: self.node_count,
@@ -114,12 +114,24 @@ pub(crate) fn initialize_gpu_quadtree(
 ) {
     for terrain in terrain_query.iter() {
         for view in view_query.iter() {
-            let quadtree = quadtrees.get(&(terrain, view)).unwrap();
 
-            gpu_quadtrees.insert(
-                (terrain, view),
-                GpuQuadtree::new(&device, &mut images, quadtree),
-            );
+          //  let quadtree = quadtrees.get(&(terrain, view)).unwrap();
+
+            match quadtrees.get(&(terrain, view)){
+                Some(tree) => {
+                    gpu_quadtrees.insert(
+                        (terrain, view),
+                        GpuQuadtree::new(&device, &mut images, tree),
+                    );
+                },
+                None => {
+                    println!("WARN: Could not initialize gpu quadtree");
+                }
+            }
+
+            
+
+
         }
     }
 }
