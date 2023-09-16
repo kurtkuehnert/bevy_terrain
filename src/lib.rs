@@ -80,7 +80,7 @@ use bevy::{
     render::{
         extract_component::ExtractComponentPlugin, main_graph::node::CAMERA_DRIVER,
         render_graph::RenderGraph, render_resource::*, view::NoFrustumCulling, RenderApp,
-        RenderSet,
+        RenderSet, Render,
     },
 };
 
@@ -157,16 +157,14 @@ impl Default for TerrainPlugin {
 
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
-       
-       
+        add_shader(app);
 
-        app.add_plugins(TDFPlugin)
-            .add_plugins(ExtractComponentPlugin::<Terrain>::default())
-            .add_plugins(ExtractComponentPlugin::<TerrainView>::default())
+        app.add_plugin(TDFPlugin)
+            .add_plugin(ExtractComponentPlugin::<Terrain>::default())
+            .add_plugin(ExtractComponentPlugin::<TerrainView>::default())
             .init_resource::<TerrainViewComponents<Quadtree>>()
             .init_resource::<TerrainViewComponents<TerrainViewConfig>>()
-            .add_systems(
-                 Last,//was CoreSet::Last
+            .add_systems(Last,
                 (
                     finish_loading_attachment_from_disk.before(update_node_atlas),
                     compute_quadtree_request.before(update_node_atlas),
@@ -175,29 +173,24 @@ impl Plugin for TerrainPlugin {
                     start_loading_attachment_from_disk.after(update_node_atlas),
                     update_height_under_viewer.after(adjust_quadtree),
                 )
-                   
+                    
             );
-        
-    }
-    fn finish(&self, app: &mut App) {
-
-      
-        add_shader(app);
 
         let render_app = app
             .sub_app_mut(RenderApp)
             .insert_resource(TerrainPipelineConfig {
                 attachment_count: self.attachment_count,
             })
-            .init_resource::<TerrainComputePipelines>()  
-            .init_resource::<SpecializedComputePipelines<TerrainComputePipelines>>()
+           // .init_resource::<TerrainComputePipelines>()
+           // .init_resource::<SpecializedComputePipelines<TerrainComputePipelines>>()
             .init_resource::<TerrainComponents<GpuNodeAtlas>>()
             .init_resource::<TerrainComponents<TerrainData>>()
             .init_resource::<TerrainViewComponents<GpuQuadtree>>()
             .init_resource::<TerrainViewComponents<TerrainViewData>>()
             .init_resource::<TerrainViewComponents<TerrainViewConfigUniform>>()
             .init_resource::<TerrainViewComponents<CullingBindGroup>>()
-            .add_systems(ExtractSchedule,
+            .add_systems(
+                ExtractSchedule,
                 (
                     extract_terrain_view_config,
                     initialize_gpu_node_atlas,
@@ -207,10 +200,10 @@ impl Plugin for TerrainPlugin {
                     extract_node_atlas.after(initialize_gpu_node_atlas),
                     extract_quadtree.after(initialize_gpu_quadtree),
                 )
-                  
+                     
             )
-            .add_systems( Update,queue_terrain_compute_pipelines.in_set(RenderSet::Queue))
-            .add_systems( Update,
+            .add_systems(Render,queue_terrain_compute_pipelines.in_set(RenderSet::Queue))
+            .add_systems(Render,
                 (
                     prepare_quadtree,
                     prepare_node_atlas,
@@ -220,12 +213,23 @@ impl Plugin for TerrainPlugin {
                     .in_set(RenderSet::Prepare),
             );
 
-           
         let compute_node = TerrainComputeNode::from_world(&mut render_app.world);
 
         let mut render_graph = render_app.world.resource_mut::<RenderGraph>();
         render_graph.add_node("terrain_compute", compute_node);
         render_graph.add_node_edge("terrain_compute", CAMERA_DRIVER);
-
     }
+    
+      fn finish(&self, app: &mut App) {
+        let render_app = match app.get_sub_app_mut(RenderApp) {
+            Ok(render_app) => render_app,
+            Err(_) => return,
+        };
+
+        render_app
+            .init_resource::<TerrainComputePipelines>()
+            .init_resource::<SpecializedComputePipelines<TerrainComputePipelines>>();
+    }
+    
+    
 }

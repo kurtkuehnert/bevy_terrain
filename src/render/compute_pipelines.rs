@@ -214,6 +214,8 @@ impl render_graph::Node for TerrainComputeNode {
         self.view_query.update_archetypes(world);
     }
 
+    
+        //consider making this NOT based on world so it can run in parallel 
     fn run(
         &self,
         _graph: &mut render_graph::RenderGraphContext,
