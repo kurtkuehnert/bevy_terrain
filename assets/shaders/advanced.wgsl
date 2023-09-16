@@ -9,7 +9,7 @@
 
 
 
-//#import bevy_terrain::fragment fragment
+//#import bevy_terrain::fragment fragment //this does nothing ?? 
 #import bevy_terrain::vertex vertex
 
 
@@ -113,11 +113,12 @@ struct Fragment {
     color: vec4<f32>,
     do_discard: bool,
 }
-
-
 @fragment
 fn fragment(input: FragmentInput) -> FragmentOutput {
-      let color   = vec4<f32>(1.0, 1.0, 1.0, 1.0);
-      
-  return FragmentOutput(color);
+  
+  let color = vec4<f32>(1.0, 1.0, 1.0, 1.0);
+
+    return FragmentOutput(color);
+    
+    
 }
