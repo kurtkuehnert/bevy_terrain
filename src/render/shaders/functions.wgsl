@@ -17,16 +17,7 @@ struct Blend {
 }
 
 
-
-
-fn vertex_height(lookup: NodeLookup) -> f32 {
-    let height_coords = lookup.atlas_coords * config.height_scale + config.height_offset;
-    let height = textureSampleLevel(height_atlas, atlas_sampler, height_coords, lookup.atlas_index, 0.0).x;
-
-    return height * config.height;
-}
-
-
+ 
 
 
 

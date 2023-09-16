@@ -1,13 +1,17 @@
 #define_import_path bevy_terrain::fragment
 
+#import bevy_pbr::mesh_view_bindings    view 
+#import bevy_terrain::functions   calculate_blend  , calculate_normal
 
-#import bevy_terrain::functions   calculate_blend  
-
-#import bevy_terrain::node   lookup_node 
+#import bevy_terrain::node   lookup_node , NodeLookup
 
 #import bevy_terrain::types TerrainViewConfig,TerrainConfig,TileList
  
+ #import bevy_pbr::pbr_functions as pbr_functions
+ 
 
+#import bevy_terrain::uniforms atlas_sampler,config,height_atlas,minmax_atlas,tiles,view_config,quadtree
+ 
  
 struct FragmentInput {
     @builtin(front_facing)   is_front: bool,
