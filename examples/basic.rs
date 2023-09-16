@@ -22,7 +22,7 @@ fn main() {
         .add_plugins(TerrainPlugin {
             attachment_count: 2, // has to match the attachments of the terrain
         })
-        .add_plugins(TerrainDebugPlugin) // enable debug settings and controls
+      //  .add_plugins(TerrainDebugPlugin) // enable debug settings and controls
         .add_plugins(TerrainMaterialPlugin::<TerrainMaterial>::default())
         .add_systems(Startup, setup)
         .add_systems(Update,toggle_camera)
