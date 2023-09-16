@@ -11,7 +11,7 @@
   
  
 struct VertexInput {
-    @builtin(instance_index) instance: u32,
+    @builtin(instance_index) instance_index: u32,
     @builtin(vertex_index)   vertex_index: u32,
      
     @location(0) position: vec3<f32>,
@@ -31,7 +31,7 @@ struct VertexOutput {
 
 // The default vertex entry point, which blends the height at the fringe between two lods.
 @vertex
-fn vertex(vertex: Vertex) -> VertexOutput {
+fn vertex(vertex: VertexInput) -> VertexOutput {
     let tile_index = vertex.instance_index / view_config.vertices_per_tile;
     let grid_index = vertex.instance_index % view_config.vertices_per_tile;
 
