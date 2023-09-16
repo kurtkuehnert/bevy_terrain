@@ -14,11 +14,12 @@ const DEBUG_SHADER: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 513467378691355413);
 const MINMAX_SHADER: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 705341350987806053);
-const VERTEX_SHADER: HandleUntyped =
+ 
+pub(crate) const VERTEX_SHADER: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 187371091254673438);
-const FRAGMENT_SHADER: HandleUntyped =
+pub(crate) const FRAGMENT_SHADER: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 312347731894135735);
-
+    
 pub(crate) const PREPARE_INDIRECT_SHADER: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 242384313596767307);
 pub(crate) const REFINE_TILES_SHADER: HandleUntyped =

@@ -79,8 +79,8 @@ use bevy::{
     prelude::*,
     render::{
         extract_component::ExtractComponentPlugin, main_graph::node::CAMERA_DRIVER,
-        render_graph::RenderGraph, render_resource::*, view::NoFrustumCulling, RenderApp,
-        RenderSet, Render,
+        render_graph::RenderGraph, render_resource::*, view::NoFrustumCulling, Render, RenderApp,
+        RenderSet,
     },
 };
 
@@ -121,7 +121,6 @@ pub struct TerrainBundle {
     config: TerrainConfig,
     transform: Transform,
     global_transform: GlobalTransform,
-    
     visibility_bundle: VisibilityBundle,
     no_frustum_culling: NoFrustumCulling,
 }
@@ -159,30 +158,30 @@ impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
         add_shader(app);
 
-        app.add_plugin(TDFPlugin)
-            .add_plugin(ExtractComponentPlugin::<Terrain>::default())
-            .add_plugin(ExtractComponentPlugin::<TerrainView>::default())
-            .init_resource::<TerrainViewComponents<Quadtree>>()
-            .init_resource::<TerrainViewComponents<TerrainViewConfig>>()
-            .add_systems(Last,
-                (
-                    finish_loading_attachment_from_disk.before(update_node_atlas),
-                    compute_quadtree_request.before(update_node_atlas),
-                    update_node_atlas,
-                    adjust_quadtree.after(update_node_atlas),
-                    start_loading_attachment_from_disk.after(update_node_atlas),
-                    update_height_under_viewer.after(adjust_quadtree),
-                )
-                    
-            );
+        app.add_plugins((
+            TDFPlugin,
+            ExtractComponentPlugin::<Terrain>::default(),
+            ExtractComponentPlugin::<TerrainView>::default(),
+        ))
+        .init_resource::<TerrainViewComponents<Quadtree>>()
+        .init_resource::<TerrainViewComponents<TerrainViewConfig>>()
+        .add_systems(
+            Last,
+            (
+                finish_loading_attachment_from_disk.before(update_node_atlas),
+                compute_quadtree_request.before(update_node_atlas),
+                update_node_atlas,
+                adjust_quadtree.after(update_node_atlas),
+                start_loading_attachment_from_disk.after(update_node_atlas),
+                update_height_under_viewer.after(adjust_quadtree),
+            ),
+        );
 
         let render_app = app
             .sub_app_mut(RenderApp)
             .insert_resource(TerrainPipelineConfig {
                 attachment_count: self.attachment_count,
             })
-           // .init_resource::<TerrainComputePipelines>()
-           // .init_resource::<SpecializedComputePipelines<TerrainComputePipelines>>()
             .init_resource::<TerrainComponents<GpuNodeAtlas>>()
             .init_resource::<TerrainComponents<TerrainData>>()
             .init_resource::<TerrainViewComponents<GpuQuadtree>>()
@@ -199,11 +198,14 @@ impl Plugin for TerrainPlugin {
                     initialize_terrain_view_data.after(initialize_gpu_quadtree),
                     extract_node_atlas.after(initialize_gpu_node_atlas),
                     extract_quadtree.after(initialize_gpu_quadtree),
-                )
-                     
+                ),
             )
-            .add_systems(Render,queue_terrain_compute_pipelines.in_set(RenderSet::Queue))
-            .add_systems(Render,
+            .add_systems(
+                Render,
+                queue_terrain_compute_pipelines.in_set(RenderSet::Queue),
+            )
+            .add_systems(
+                Render,
                 (
                     prepare_quadtree,
                     prepare_node_atlas,
@@ -219,8 +221,8 @@ impl Plugin for TerrainPlugin {
         render_graph.add_node("terrain_compute", compute_node);
         render_graph.add_node_edge("terrain_compute", CAMERA_DRIVER);
     }
-    
-      fn finish(&self, app: &mut App) {
+
+    fn finish(&self, app: &mut App) {
         let render_app = match app.get_sub_app_mut(RenderApp) {
             Ok(render_app) => render_app,
             Err(_) => return,
@@ -230,6 +232,4 @@ impl Plugin for TerrainPlugin {
             .init_resource::<TerrainComputePipelines>()
             .init_resource::<SpecializedComputePipelines<TerrainComputePipelines>>();
     }
-    
-    
 }
