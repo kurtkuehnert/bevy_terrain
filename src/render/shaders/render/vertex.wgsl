@@ -1,10 +1,14 @@
 #define_import_path bevy_terrain::vertex
 #import bevy_terrain::node lookup_node, approximate_world_position, NodeLookup
 
-#import bevy_terrain::functions  calculate_blend,calculate_grid_position,calculate_local_position
+#import bevy_terrain::functions  calculate_grid_position, Blend 
+ 
+ 
+#import bevy_terrain::types TerrainConfig,TerrainViewConfig,Tile,TileList
  
 
 #import bevy_terrain::uniforms atlas_sampler,config,height_atlas,minmax_atlas,tiles,view_config,quadtree
+
 #import bevy_pbr::mesh_view_bindings view
  
 
@@ -14,8 +18,7 @@ struct VertexInput {
     @builtin(instance_index) instance_index: u32,
     @builtin(vertex_index)   vertex_index: u32,
      
-    @location(0) position: vec3<f32>,
-    @location(1) blend_color: vec4<f32>,
+   
     
     
 }
@@ -26,6 +29,7 @@ struct VertexOutput {
     @location(1)             world_position: vec4<f32>,
     @location(2)             debug_color: vec4<f32>,
 }
+
 
  
 
@@ -96,4 +100,43 @@ fn vertex_height(lookup: NodeLookup) -> f32 {
     let height = textureSampleLevel(height_atlas, atlas_sampler, height_coords, lookup.atlas_index, 0.0).x;
 
     return height * config.height;
+}
+
+
+
+fn calculate_local_position(tile: Tile, grid_position: vec2<u32> ) -> vec2<f32> {
+    let size = f32(tile.size) * view_config.tile_scale;
+
+    var local_position = (vec2<f32>(tile.coords) + vec2<f32>(grid_position) / view_config.grid_size) * size;
+
+#ifdef MESH_MORPH
+    let world_position = approximate_world_position(local_position);
+    let morph = calculate_morph(tile, world_position);
+    let even_grid_position = vec2<f32>(grid_position & vec2<u32>(1u));
+    local_position = local_position - morph * even_grid_position / view_config.grid_size * size;
+#endif
+
+    local_position.x = clamp(local_position.x, 0.0, f32(config.terrain_size));
+    local_position.y = clamp(local_position.y, 0.0, f32(config.terrain_size));
+
+    return local_position;
+}
+
+
+
+
+fn calculate_morph(tile: Tile, world_position: vec4<f32> ) -> f32 {
+    let viewer_distance = distance(world_position.xyz, view.world_position.xyz);
+    let morph_distance = view_config.morph_distance * f32(tile.size << 1u);
+
+    return clamp(1.0 - (1.0 - viewer_distance / morph_distance) / view_config.morph_range, 0.0, 1.0);
+}
+
+
+fn calculate_blend(world_position: vec4<f32> ) -> Blend {
+    let viewer_distance = distance(world_position.xyz, view.world_position.xyz);
+    let log_distance = max(log2(2.0 * viewer_distance / view_config.blend_distance), 0.0);
+    let ratio = (1.0 - log_distance % 1.0) / view_config.blend_range;
+
+    return Blend(u32(log_distance), ratio);
 }

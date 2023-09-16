@@ -1,10 +1,16 @@
 #define_import_path bevy_terrain::debug
 #import bevy_terrain::types TerrainConfig,TerrainViewConfig,Tile,TileList
-#import bevy_terrain::functions calculate_morph, minmax
+#import bevy_terrain::functions  minmax
 #import bevy_terrain::parameters Parameters
 
 // view bindings
 #import bevy_pbr::mesh_view_bindings view
+
+
+#import bevy_terrain::fragment fragment
+#import bevy_terrain::vertex vertex
+
+
 
 //view bindings
 @group(0) @binding(0)
@@ -118,4 +124,14 @@ fn show_lod(lod: u32, world_position: vec3<f32>) -> vec4<f32> {
     }
 
     return color;
+}
+
+
+
+
+fn calculate_morph(tile: Tile, world_position: vec4<f32> ) -> f32 {
+    let viewer_distance = distance(world_position.xyz, view.world_position.xyz);
+    let morph_distance = view_config.morph_distance * f32(tile.size << 1u);
+
+    return clamp(1.0 - (1.0 - viewer_distance / morph_distance) / view_config.morph_range, 0.0, 1.0);
 }
