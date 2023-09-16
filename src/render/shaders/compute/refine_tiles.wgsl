@@ -26,7 +26,7 @@ var<storage, read_write> temporary_tiles: TileList;
 var<storage, read_write> parameters: Parameters;
 
 // why does binding this to group 1 cause a conflict ?? 
-@group(1) @binding(0)
+@group(3) @binding(0)
 var<uniform> view: CullingData;
 
  // terrain bindings
@@ -66,7 +66,25 @@ fn frustum_cull(tile: Tile) -> bool {
     let aabb_min = vec3<f32>(local_position.x - size / 2.0, minmax.x, local_position.y - size / 2.0);
     let aabb_max = vec3<f32>(local_position.x + size / 2.0, minmax.y, local_position.y + size / 2.0);
 
-   
+    for (var i = 0; i < 5; i = i + 1) {
+        let plane = view.planes[i];
+
+        var p_corner = vec4<f32>(aabb_min.x, aabb_min.y, aabb_min.z, 1.0);
+        var n_corner = vec4<f32>(aabb_max.x, aabb_max.y, aabb_max.z, 1.0);
+        if (plane.x >= 0.0) { p_corner.x = aabb_max.x; n_corner.x = aabb_min.x; }
+        if (plane.y >= 0.0) { p_corner.y = aabb_max.y; n_corner.y = aabb_min.y; }
+        if (plane.z >= 0.0) { p_corner.z = aabb_max.z; n_corner.z = aabb_min.z; }
+
+    	if (dot(plane, p_corner) < 0.0) {
+    	    // the closest corner is outside the plane -> cull
+    	    return true;
+    	}
+    	else if (dot(plane, n_corner) < 0.0) {
+    	    // the furthest corner is inside the plane -> don't cull
+    	    return false;
+    	}
+    }
+
     return false;
 }
 
@@ -94,7 +112,7 @@ fn should_be_divided(tile: Tile) -> bool {
 
         let local_position = vec2<f32>(corner_coords * tile.size) * view_config.tile_scale;
         let world_position = approximate_world_position(local_position );
-        //dist = min(dist, distance(world_position.xyz, world_position.xyz));
+        dist = min(dist, distance(world_position.xyz, view.world_position.xyz));
     }
 
     return dist < view_config.morph_distance * f32(tile.size);
