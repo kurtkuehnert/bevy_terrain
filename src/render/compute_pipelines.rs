@@ -236,10 +236,11 @@ impl render_graph::Node for TerrainComputeNode {
             }
         }
 
+        //this is failing !! the pipellines are not ready 
         let pipelines = &match TerrainComputePipelineId::iter()
             .map(|key| {
                 pipeline_cache
-                    .get_compute_pipeline(compute_pipelines.pipelines[key as usize].unwrap())
+                    .get_compute_pipeline(compute_pipelines.pipelines[key as usize].unwrap() )
             })
             .collect::<Option<Vec<_>>>()
         {
