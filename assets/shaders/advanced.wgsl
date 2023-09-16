@@ -9,8 +9,8 @@
 
 
 
-//#import bevy_terrain::fragment fragment //this does nothing ?? 
-#import bevy_terrain::vertex vertex
+#import bevy_terrain::fragment //this does nothing ?? 
+#import bevy_terrain::vertex
 
 
 // Customize your attachment offsets and scales here.
@@ -95,7 +95,9 @@ struct FragmentData {
 
 
 //how can i import this from the frag file ?
-
+ 
+ 
+ 
 struct FragmentInput {
     @builtin(front_facing)   is_front: bool,
     @builtin(position)       frag_coord: vec4<f32>,
