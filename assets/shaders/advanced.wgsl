@@ -7,6 +7,12 @@
 
 #import bevy_pbr::pbr_types as pbr_types
 
+
+
+//#import bevy_terrain::fragment fragment
+#import bevy_terrain::vertex vertex
+
+
 // Customize your attachment offsets and scales here.
 // They are used to line up the uvs of adjacent nodes with a border size different from 0.
 struct TerrainConfig {
@@ -73,10 +79,7 @@ var array_sampler: sampler;
 #import bevy_pbr::pbr_functions
  
 #import bevy_terrain::functions FragmentInput, blend_fragment_data
-#import bevy_terrain::debug
-
-#import bevy_terrain::fragment fragment
-#import bevy_terrain::vertex vertex
+#import bevy_terrain::debug 
 
 // The terrain data required by your `fragment_color` function.
 // This data will be fetched from the atlases by means of the `AtlasLookup`.
@@ -88,3 +91,33 @@ struct FragmentData {
  
  
 
+
+
+
+//how can i import this from the frag file ?
+
+struct FragmentInput {
+    @builtin(front_facing)   is_front: bool,
+    @builtin(position)       frag_coord: vec4<f32>,
+    @location(0)             local_position: vec2<f32>,
+    @location(1)             world_position: vec4<f32>,
+    @location(2)             debug_color: vec4<f32>,
+}
+
+struct FragmentOutput {
+    @location(0)             color: vec4<f32>
+}
+
+// The processed fragment consisting of the color and a flag whether or not to discard this fragment.
+struct Fragment {
+    color: vec4<f32>,
+    do_discard: bool,
+}
+
+
+@fragment
+fn fragment(input: FragmentInput) -> FragmentOutput {
+      let color   = vec4<f32>(1.0, 1.0, 1.0, 1.0);
+      
+  return FragmentOutput(color);
+}

@@ -1,7 +1,7 @@
 #define_import_path bevy_terrain::vertex
 #import bevy_terrain::node lookup_node, approximate_world_position, NodeLookup
 
-#import bevy_terrain::functions  calculate_grid_position, Blend 
+#import bevy_terrain::functions  calculate_grid_position, Blend , minmax
  
  
 #import bevy_terrain::types TerrainConfig,TerrainViewConfig,Tile,TileList
@@ -10,7 +10,7 @@
 #import bevy_terrain::uniforms atlas_sampler,config,height_atlas,minmax_atlas,tiles,view_config,quadtree
 
 #import bevy_pbr::mesh_view_bindings view
- 
+  
 
   
  
@@ -139,4 +139,71 @@ fn calculate_blend(world_position: vec4<f32> ) -> Blend {
     let ratio = (1.0 - log_distance % 1.0) / view_config.blend_range;
 
     return Blend(u32(log_distance), ratio);
+}
+
+fn show_minmax_error(tile: Tile, height: f32) -> vec4<f32> {
+    let size = f32(tile.size) * view_config.tile_scale;
+    let local_position = (vec2<f32>(tile.coords) + 0.5) * size;
+    let lod = u32(ceil(log2(size))) + 1u;
+    let minmax = minmax(local_position, size );
+
+    var color = vec4<f32>(0.0,
+                          clamp((minmax.y - height) / size / 2.0, 0.0, 1.0),
+                          clamp((height - minmax.x) / size / 2.0, 0.0, 1.0),
+                          0.5);
+
+    let tolerance = 0.00001;
+
+    if (height < minmax.x - tolerance || height > minmax.y + tolerance || lod >= config.lod_count) {
+        color = vec4<f32>(1.0, 0.0, 0.0, 0.5);
+    }
+
+    return color;
+}
+
+
+
+
+fn show_tiles(tile: Tile, world_position: vec4<f32>) -> vec4<f32> {
+    var color: vec4<f32>;
+
+    if ((tile.coords.x + tile.coords.y) % 2u == 0u) {
+        color = vec4<f32>(0.5, 0.5, 0.5, 1.0);
+    }
+    else {
+        color = vec4<f32>(0.1, 0.1, 0.1, 1.0);
+    }
+
+    let lod = u32(ceil(log2(f32(tile.size))));
+    color = mix(color, lod_color(lod), 0.5);
+
+#ifdef MESH_MORPH
+    let morph = calculate_morph(tile, world_position );
+    color = color + vec4<f32>(1.0, 1.0, 1.0, 1.0) * morph;
+#endif
+
+    return vec4<f32>(color.xyz, 0.5);
+}
+
+fn lod_color(lod: u32) -> vec4<f32> {
+    if (lod % 6u == 0u) {
+        return vec4<f32>(1.0, 0.0, 0.0, 1.0);
+    }
+    if (lod % 6u == 1u) {
+        return vec4<f32>(0.0, 1.0, 0.0, 1.0);
+    }
+    if (lod % 6u == 2u) {
+        return vec4<f32>(0.0, 0.0, 1.0, 1.0);
+    }
+    if (lod % 6u == 3u) {
+        return vec4<f32>(1.0, 1.0, 0.0, 1.0);
+    }
+    if (lod % 6u == 4u) {
+        return vec4<f32>(1.0, 0.0, 1.0, 1.0);
+    }
+    if (lod % 6u == 5u) {
+        return vec4<f32>(0.0, 1.0, 1.0, 1.0);
+    }
+
+    return vec4<f32>(0.0);
 }

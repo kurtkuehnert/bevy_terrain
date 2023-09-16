@@ -4,7 +4,7 @@
  
  #import bevy_terrain::uniforms view_config, quadtree , tiles, config 
  
- 
+ #import bevy_pbr::mesh_view_bindings view
  
 
 // A lookup of a node inside the node atlas based on the view of a quadtree.

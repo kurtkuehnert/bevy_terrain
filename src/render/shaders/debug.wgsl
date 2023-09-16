@@ -1,6 +1,9 @@
 #define_import_path bevy_terrain::debug
 #import bevy_terrain::types TerrainConfig,TerrainViewConfig,Tile,TileList
 #import bevy_terrain::functions  minmax
+
+#import bevy_terrain::node  node_size
+
 #import bevy_terrain::parameters Parameters
 
 // view bindings
