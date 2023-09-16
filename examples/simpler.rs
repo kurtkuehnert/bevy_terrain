@@ -160,6 +160,8 @@ fn setup(
         brightness: 0.2,
         ..default()
     });
+    
+    println!("finished setup ! ");
 }
 
 fn toggle_camera(input: Res<Input<KeyCode>>, mut camera_query: Query<&mut DebugCamera>) {
@@ -183,6 +185,7 @@ fn create_array_texture(
     if loading_texture.is_loaded
         || asset_server.get_load_state(loading_texture.handle.clone()) != LoadState::Loaded
     {
+        println!("Warn: tex not loaded");
         return;
     }
 
