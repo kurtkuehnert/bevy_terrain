@@ -26,7 +26,7 @@ var<storage, read_write> temporary_tiles: TileList;
 var<storage, read_write> parameters: Parameters;
 
 // why does binding this to group 1 cause a conflict ?? 
-@group(3) @binding(0)
+@group(1) @binding(0)
 var<uniform> view: CullingData;
 
  // terrain bindings

@@ -441,7 +441,7 @@ where
                 .add_render_command::<Opaque3d, DrawTerrain<M>>()
                 .init_resource::<TerrainRenderPipeline<M>>()
                 .init_resource::<SpecializedRenderPipelines<TerrainRenderPipeline<M>>>()
-                .add_systems(bevy::render::Render,queue_terrain::<M>.in_set(RenderSet::Queue));
+                .add_systems(Update,queue_terrain::<M>.in_set(RenderSet::Queue));
        // }
     }
 
