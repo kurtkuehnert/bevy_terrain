@@ -34,6 +34,11 @@ dolly = "0.4"
 name = "basic"
 path = "examples/basic.rs"
  
+ [[example]]
+name = "basic2"
+path = "examples/basic2.rs"
+ 
+ 
 
 [[example]]
 name = "advanced"

@@ -31,7 +31,7 @@ fn main() {
 
 fn setup(
     mut commands: Commands,
-    mut materials: ResMut<Assets<TerrainMaterial>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
     mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
 ) {
@@ -63,13 +63,18 @@ fn setup(
     preprocessor.preprocess(&config);
 
     load_node_config(&mut config);
+    
+    
+    let default_material = materials.add(StandardMaterial ::default() ) ;
+
+        
 
     // Create the terrain.
     let terrain = commands
         .spawn((
             TerrainBundle::new(config.clone()),
             loader,
-            materials.add(TerrainMaterial {}),
+            default_material // materials.add(TerrainMaterial {}),
         ))
         .id();
 
