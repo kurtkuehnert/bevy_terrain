@@ -1,20 +1,23 @@
-#define_import_path bevy_terrain::fragment
+#define_import_path bevy_terrain::fragment_full
 
+#import bevy_pbr::mesh_view_bindings  view
+#import bevy_pbr::mesh_vertex_output  MeshVertexOutput
+#import bevy_pbr::utils               coords_to_viewport_uv
  
-#import bevy_terrain::functions  calculate_normal, Blend 
-
-#import bevy_terrain::node   lookup_node , NodeLookup
-
-#import bevy_terrain::types TerrainViewConfig,TerrainConfig,TileList, Tile 
+#import bevy_terrain::node lookup_node, approximate_world_position, NodeLookup
  
+
+// --- untrusted imports 
  #import bevy_pbr::pbr_functions as pbr_functions
+ #import bevy_terrain::functions Blend , calculate_normal
+#import bevy_terrain::uniforms  view_config , config //this could be a huge issue 
  
- //this must be here! cant just be in functions 
- #import bevy_pbr::mesh_view_bindings  view
+ #import bevy_terrain::types Tile 
+ // ----
 
-#import bevy_terrain::uniforms atlas_sampler,config,height_atlas,minmax_atlas,tiles,view_config,quadtree
- 
- 
+
+
+
 struct FragmentInput {
     @builtin(front_facing)   is_front: bool,
     @builtin(position)       frag_coord: vec4<f32>,
@@ -38,22 +41,19 @@ struct Fragment {
 // To smoothen the transition between different lods the fragment data will be blended at the fringe between them.
 // struct FragmentData;
 
-// Lookup the terrain data required by your `fragment_color` function.
-// This will happen once or twice (lod fringe).
-// fn lookup_fragment_data(in: FragmentInput, lookup: AtlasLookup) -> FragmentData;
+struct FragmentData {
+    world_normal: vec3<f32>,
+    debug_color: vec4<f32>,
+}
 
-// Blend the terrain data on the fringe between two lods.
-// fn blend_fragment_data(data1: FragmentData, data2: FragmentData, blend_ratio: f32) -> FragmentData;
-
-// The function that evaluates the color of the fragment.
-// It will be called once in the fragment shader with the fragment input and the
-// blended fragment data.
-// fn process_fragment(input: FragmentInput, data: FragmentData) -> Fragment;
-
-// The default fragment entry point, which blends the terrain data at the fringe between two lods.
 @fragment
 fn fragment(input: FragmentInput) -> FragmentOutput {
-    let ddx   = dpdx(input.local_position);
+  //    let color   = vec4<f32>(1.0, 1.0, 1.0, 1.0);
+      
+  //return FragmentOutput(color);
+  
+  
+   let ddx   = dpdx(input.local_position);
     let ddy   = dpdy(input.local_position);
     let blend = calculate_blend(input.world_position );
 
@@ -73,21 +73,10 @@ fn fragment(input: FragmentInput) -> FragmentOutput {
     }
 
     return FragmentOutput(fragment.color);
+    
+    
 }
 
-
-
-struct FragmentData {
-    world_normal: vec3<f32>,
-    debug_color: vec4<f32>,
-}
-
-fn blend_fragment_data(data1: FragmentData, data2: FragmentData, blend_ratio: f32) -> FragmentData {
-    let world_normal = mix(data2.world_normal, data1.world_normal, blend_ratio);
-    let debug_color = mix(data2.debug_color, data1.debug_color, blend_ratio);
-
-    return FragmentData(world_normal, debug_color);
-}
 
 fn process_fragment(input: FragmentInput, data: FragmentData) -> Fragment {
     let do_discard = input.local_position.x < 2.0 || input.local_position.x > f32(config.terrain_size) - 2.0 ||
@@ -110,6 +99,33 @@ fn process_fragment(input: FragmentInput, data: FragmentData) -> Fragment {
 #endif
 
     return Fragment(color, do_discard);
+}
+
+
+
+
+
+fn blend_fragment_data(data1: FragmentData, data2: FragmentData, blend_ratio: f32) -> FragmentData {
+    let world_normal = mix(data2.world_normal, data1.world_normal, blend_ratio);
+    let debug_color = mix(data2.debug_color, data1.debug_color, blend_ratio);
+
+    return FragmentData(world_normal, debug_color);
+}
+
+
+fn calculate_blend(world_position: vec4<f32> ) -> Blend {
+    let viewer_distance = distance(world_position.xyz, view.world_position.xyz);
+    let log_distance = max(log2(2.0 * viewer_distance / view_config.blend_distance), 0.0);
+    let ratio = (1.0 - log_distance % 1.0) / view_config.blend_range;
+
+    return Blend(u32(log_distance), ratio);
+}
+
+fn calculate_morph(tile: Tile, world_position: vec4<f32> ) -> f32 {
+    let viewer_distance = distance(world_position.xyz, view.world_position.xyz);
+    let morph_distance = view_config.morph_distance * f32(tile.size << 1u);
+
+    return clamp(1.0 - (1.0 - viewer_distance / morph_distance) / view_config.morph_range, 0.0, 1.0);
 }
 
 
@@ -138,22 +154,4 @@ fn lookup_fragment_data(input: FragmentInput, lookup: NodeLookup, ddx: vec2<f32>
 #endif
 
     return FragmentData(world_normal, debug_color);
-}
-
-
-
-
-fn calculate_blend(world_position: vec4<f32> ) -> Blend {
-    let viewer_distance = distance(world_position.xyz, view.world_position.xyz);
-    let log_distance = max(log2(2.0 * viewer_distance / view_config.blend_distance), 0.0);
-    let ratio = (1.0 - log_distance % 1.0) / view_config.blend_range;
-
-    return Blend(u32(log_distance), ratio);
-}
-
-fn calculate_morph(tile: Tile, world_position: vec4<f32> ) -> f32 {
-    let viewer_distance = distance(world_position.xyz, view.world_position.xyz);
-    let morph_distance = view_config.morph_distance * f32(tile.size << 1u);
-
-    return clamp(1.0 - (1.0 - viewer_distance / morph_distance) / view_config.morph_range, 0.0, 1.0);
 }

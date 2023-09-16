@@ -1,8 +1,17 @@
 #define_import_path bevy_terrain::fragment
 
-#import bevy_pbr::mesh_view_bindings  view
-#import bevy_pbr::mesh_vertex_output  MeshVertexOutput
+ 
 #import bevy_pbr::utils               coords_to_viewport_uv
+
+ 
+ 
+ 
+ //why does this make a conflict !? 
+ 
+#import bevy_pbr::mesh_view_bindings    view
+#import bevy_pbr::mesh_vertex_output MeshVertexOutput
+ 
+ 
  
 #import bevy_terrain::node lookup_node, approximate_world_position, NodeLookup
  

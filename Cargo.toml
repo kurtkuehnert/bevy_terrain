@@ -41,6 +41,11 @@ path = "examples/basic2.rs"
  
 
 [[example]]
+name = "simpler"
+path = "examples/simpler.rs"
+ 
+
+[[example]]
 name = "advanced"
 path = "examples/advanced.rs"
  

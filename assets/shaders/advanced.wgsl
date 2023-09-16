@@ -88,9 +88,6 @@ struct FragmentData {
     world_normal: vec3<f32>,
     color: vec4<f32>,
 }
- 
- 
-
 
 
 

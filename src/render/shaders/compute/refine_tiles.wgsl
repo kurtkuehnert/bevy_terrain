@@ -65,6 +65,8 @@ fn frustum_cull(tile: Tile) -> bool {
     // frustum culling optimized
     let aabb_min = vec3<f32>(local_position.x - size / 2.0, minmax.x, local_position.y - size / 2.0);
     let aabb_max = vec3<f32>(local_position.x + size / 2.0, minmax.y, local_position.y + size / 2.0);
+    
+    //add the loop back here 
 
    
     return false;
@@ -94,7 +96,7 @@ fn should_be_divided(tile: Tile) -> bool {
 
         let local_position = vec2<f32>(corner_coords * tile.size) * view_config.tile_scale;
         let world_position = approximate_world_position(local_position );
-        //dist = min(dist, distance(world_position.xyz, world_position.xyz));
+        dist = min(dist, distance(world_position.xyz, world_position.xyz));
     }
 
     return dist < view_config.morph_distance * f32(tile.size);
