@@ -71,8 +71,8 @@ pub(crate) fn add_shader(app: &mut App) {
     );
     
     //disable refine tiles for now -- bind group is jacked 
-    /* assets.set_untracked(
+      assets.set_untracked(
         REFINE_TILES_SHADER,
         Shader::from_wgsl(include_str!("compute/refine_tiles.wgsl"),shader_path.clone()),
-    );*/ 
+    ); 
 }

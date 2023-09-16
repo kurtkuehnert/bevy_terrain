@@ -209,8 +209,8 @@ impl Plugin for TerrainPlugin {
                 )
                   
             )
-            .add_systems(bevy::render::Render,queue_terrain_compute_pipelines.in_set(RenderSet::Queue))
-            .add_systems(bevy::render::Render,
+            .add_systems( Update,queue_terrain_compute_pipelines.in_set(RenderSet::Queue))
+            .add_systems( Update,
                 (
                     prepare_quadtree,
                     prepare_node_atlas,
