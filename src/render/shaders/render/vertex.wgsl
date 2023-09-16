@@ -6,10 +6,28 @@
  
 #import bevy_terrain::types TerrainConfig,TerrainViewConfig,Tile,TileList
  
+ #import bevy_pbr::mesh_view_bindings view
+ 
 
-#import bevy_terrain::uniforms atlas_sampler,config,height_atlas,minmax_atlas,tiles,view_config,quadtree
+//why do i get a bind conflict ? 
+ 
+// terrain view bindings
+//@group(1) @binding(0)
+//var<uniform> view_config: TerrainViewConfig;
+@group(1) @binding(1)
+var quadtree: texture_2d_array<u32>;
+@group(1) @binding(2)
+var<storage> tiles: TileList;
 
-#import bevy_pbr::mesh_view_bindings view
+// terrain bindings
+//@group(2) @binding(0)
+//var<uniform> config: TerrainConfig;
+@group(2) @binding(1)
+var atlas_sampler: sampler;
+@group(2) @binding(2)
+var height_atlas: texture_2d_array<f32>;
+@group(2) @binding(3)
+var minmax_atlas: texture_2d_array<f32>;
   
 
   
@@ -36,8 +54,11 @@ struct VertexOutput {
 // The default vertex entry point, which blends the height at the fringe between two lods.
 @vertex
 fn vertex(vertex: VertexInput) -> VertexOutput {
-    let tile_index = vertex.instance_index / view_config.vertices_per_tile;
-    let grid_index = vertex.instance_index % view_config.vertices_per_tile;
+    
+    let vertices_per_tile = u32(12); //view_config.vertices_per_tile
+    
+    let tile_index = vertex.instance_index / vertices_per_tile;
+    let grid_index = vertex.instance_index % vertices_per_tile;
 
     let tile = tiles.data[tile_index];
     let grid_position = calculate_grid_position(grid_index );
@@ -96,28 +117,34 @@ fn vertex_output(local_position: vec2<f32>, height: f32) -> VertexOutput {
 // fn vertex_height(lookup: AtlasLookup) -> f32;
 
 fn vertex_height(lookup: NodeLookup) -> f32 {
-    let height_coords = lookup.atlas_coords * config.height_scale + config.height_offset;
+    let height_coords = lookup.atlas_coords ; //* config.height_scale + config.height_offset;
     let height = textureSampleLevel(height_atlas, atlas_sampler, height_coords, lookup.atlas_index, 0.0).x;
 
-    return height * config.height;
+    return height ; // * config.height;
 }
 
 
 
 fn calculate_local_position(tile: Tile, grid_position: vec2<u32> ) -> vec2<f32> {
-    let size = f32(tile.size) * view_config.tile_scale;
+    
+    let tile_scale = 1.0; //view_config.tile_scale;
+    let grid_size = 10.0; //view_config.grid_size;;
+    
+    let size = f32(tile.size) * tile_scale;
 
-    var local_position = (vec2<f32>(tile.coords) + vec2<f32>(grid_position) / view_config.grid_size) * size;
+    var local_position = (vec2<f32>(tile.coords) + vec2<f32>(grid_position) / grid_size) * size;
 
 #ifdef MESH_MORPH
     let world_position = approximate_world_position(local_position);
     let morph = calculate_morph(tile, world_position);
     let even_grid_position = vec2<f32>(grid_position & vec2<u32>(1u));
-    local_position = local_position - morph * even_grid_position / view_config.grid_size * size;
+    local_position = local_position - morph * even_grid_position / grid_size * size;
 #endif
 
-    local_position.x = clamp(local_position.x, 0.0, f32(config.terrain_size));
-    local_position.y = clamp(local_position.y, 0.0, f32(config.terrain_size));
+    let terrain_size = 1024.0; //config.terrain_size;
+
+    local_position.x = clamp(local_position.x, 0.0, f32(terrain_size));
+    local_position.y = clamp(local_position.y, 0.0, f32(terrain_size));
 
     return local_position;
 }
@@ -126,23 +153,33 @@ fn calculate_local_position(tile: Tile, grid_position: vec2<u32> ) -> vec2<f32> 
 
 
 fn calculate_morph(tile: Tile, world_position: vec4<f32> ) -> f32 {
+    
+    let config_morph_distance = 30.0; //view_config.morph_distance;
+    let config_morph_range = 20.0; //view_config.morph_range;
+    
     let viewer_distance = distance(world_position.xyz, view.world_position.xyz);
-    let morph_distance = view_config.morph_distance * f32(tile.size << 1u);
+    let morph_distance = config_morph_distance * f32(tile.size << 1u);
 
-    return clamp(1.0 - (1.0 - viewer_distance / morph_distance) / view_config.morph_range, 0.0, 1.0);
+    return clamp(1.0 - (1.0 - viewer_distance / morph_distance) / config_morph_range, 0.0, 1.0);
 }
 
 
 fn calculate_blend(world_position: vec4<f32> ) -> Blend {
+    let config_blend_distance = 30.0; //view_config.blend_distance
+    let config_blend_range = 30.0; 
+    
     let viewer_distance = distance(world_position.xyz, view.world_position.xyz);
-    let log_distance = max(log2(2.0 * viewer_distance / view_config.blend_distance), 0.0);
-    let ratio = (1.0 - log_distance % 1.0) / view_config.blend_range;
+    let log_distance = max(log2(2.0 * viewer_distance / config_blend_distance), 0.0);
+    let ratio = (1.0 - log_distance % 1.0) / config_blend_range;
 
     return Blend(u32(log_distance), ratio);
 }
 
 fn show_minmax_error(tile: Tile, height: f32) -> vec4<f32> {
-    let size = f32(tile.size) * view_config.tile_scale;
+    
+    let config_tile_scale = 1.0; //view_config.tile_scale 
+    
+    let size = f32(tile.size) * config_tile_scale;
     let local_position = (vec2<f32>(tile.coords) + 0.5) * size;
     let lod = u32(ceil(log2(size))) + 1u;
     let minmax = minmax(local_position, size );
@@ -153,8 +190,10 @@ fn show_minmax_error(tile: Tile, height: f32) -> vec4<f32> {
                           0.5);
 
     let tolerance = 0.00001;
+    
+    let lod_count = u32(3); //config.lod_count; 
 
-    if (height < minmax.x - tolerance || height > minmax.y + tolerance || lod >= config.lod_count) {
+    if (height < minmax.x - tolerance || height > minmax.y + tolerance  ){ // }|| lod >=  lod_count) {
         color = vec4<f32>(1.0, 0.0, 0.0, 0.5);
     }
 

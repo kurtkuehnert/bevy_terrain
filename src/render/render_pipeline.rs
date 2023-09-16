@@ -378,11 +378,15 @@ pub(crate) fn queue_terrain<M: Material>(
 {
     let draw_function = draw_functions.read().get_id::<DrawTerrain<M>>().unwrap();
 
+   
+    
     for mut opaque_phase in view_query.iter_mut() {
         for (entity, material) in terrain_query.iter() {
             if let Some(material) = render_materials.get(material) {
                 let mut flags = TerrainPipelineFlags::from_msaa_samples(msaa.samples());
-
+            
+                  
+                  
                 if let Some(debug) = &debug {
                     flags |= TerrainPipelineFlags::from_debug(debug);
                 } else {
@@ -446,7 +450,11 @@ where
     fn finish(&self, app: &mut App) {
         let render_app = match app.get_sub_app_mut(RenderApp) {
             Ok(render_app) => render_app,
-            Err(_) => return,
+            Err(_) =>  {
+                
+                println!("WARN no render app in render pipeline ");
+                return 
+            },
         };
 
         render_app

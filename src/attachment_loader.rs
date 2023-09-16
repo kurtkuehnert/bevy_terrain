@@ -72,6 +72,7 @@ pub(crate) fn start_loading_attachment_from_disk(
                 };
 
                 node.set_attachment(*attachment_index, handle);
+                println!("set attachment node {} {}",node_id, attachment_index);
             }
         }
     }
@@ -96,6 +97,7 @@ pub(crate) fn finish_loading_attachment_from_disk(
 
                     let node = node_atlas.loading_nodes.get_mut(&node_id).unwrap();
                     node.loaded(attachment_index);
+                    println!("finished loading attachment from disk {} {}",node_id,attachment_index);
                     break;
                 }
             }

@@ -154,6 +154,9 @@ impl Default for TerrainPlugin {
     }
 }
 
+
+//is this all correct !?
+
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
         add_shader(app);
@@ -215,21 +218,30 @@ impl Plugin for TerrainPlugin {
                     .in_set(RenderSet::Prepare),
             );
 
-        let compute_node = TerrainComputeNode::from_world(&mut render_app.world);
-
-        let mut render_graph = render_app.world.resource_mut::<RenderGraph>();
-        render_graph.add_node("terrain_compute", compute_node);
-        render_graph.add_node_edge("terrain_compute", CAMERA_DRIVER);
+       
+       println!("prep render app ! ");
     }
 
     fn finish(&self, app: &mut App) {
         let render_app = match app.get_sub_app_mut(RenderApp) {
             Ok(render_app) => render_app,
-            Err(_) => return,
+            Err(_) =>  {
+                println!("WARN: no render_app");
+                return 
+            },
         };
+         
+        
+        println!("init render app ! ");
 
         render_app
             .init_resource::<TerrainComputePipelines>()
             .init_resource::<SpecializedComputePipelines<TerrainComputePipelines>>();
+            
+         let compute_node = TerrainComputeNode::from_world(&mut render_app.world);
+            
+             let mut render_graph = render_app.world.resource_mut::<RenderGraph>();
+        render_graph.add_node("terrain_compute", compute_node);
+        render_graph.add_node_edge("terrain_compute", CAMERA_DRIVER);
     }
 }
