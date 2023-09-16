@@ -1,7 +1,7 @@
 #define_import_path bevy_terrain::vertex
 #import bevy_terrain::node lookup_node, approximate_world_position, NodeLookup
 
-#import bevy_terrain::functions VertexInput,VertexOutput,vertex_output,calculate_blend,calculate_grid_position,calculate_local_position
+#import bevy_terrain::functions  calculate_blend,calculate_grid_position,calculate_local_position
  
 
 #import bevy_terrain::uniforms atlas_sampler,config,height_atlas,minmax_atlas,tiles,view_config,quadtree
@@ -11,11 +11,27 @@
   
 
 
+
+
+struct Vertex {
+    @builtin(instance_index) instance_index: u32,
+    @location(0) position: vec3<f32>,
+    @location(1) blend_color: vec4<f32>,
+};
+
+struct VertexOutput {
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0) blend_color: vec4<f32>,
+};
+ 
+
+
+
 // The default vertex entry point, which blends the height at the fringe between two lods.
 @vertex
-fn vertex(in: VertexInput) -> VertexOutput {
-    let tile_index = in.vertex_index / view_config.vertices_per_tile;
-    let grid_index = in.vertex_index % view_config.vertices_per_tile;
+fn vertex(vertex: Vertex) -> VertexOutput {
+    let tile_index = vertex.instance_index / view_config.vertices_per_tile;
+    let grid_index = vertex.instance_index % view_config.vertices_per_tile;
 
     let tile = tiles.data[tile_index];
     let grid_position = calculate_grid_position(grid_index );

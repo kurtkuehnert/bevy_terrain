@@ -9,36 +9,6 @@
   
 
 
-
-struct VertexInput {
-    @builtin(instance_index) instance: u32,
-    @builtin(vertex_index)   vertex_index: u32,
-     
-    @location(0) position: vec3<f32>,
-    @location(1) blend_color: vec4<f32>,
-    
-    
-}
-
-struct VertexOutput {
-    @builtin(position)       frag_coord: vec4<f32>,
-    @location(0)             local_position: vec2<f32>,
-    @location(1)             world_position: vec4<f32>,
-    @location(2)             debug_color: vec4<f32>,
-}
-
-fn vertex_output(local_position: vec2<f32>, height: f32) -> VertexOutput {
-    var world_position = vec4<f32>(local_position.x, height, local_position.y, 1.0);
-
-    var output: VertexOutput;
-    output.frag_coord = view.view_proj * world_position;
-    output.local_position = vec2<f32>(local_position);
-    output.world_position = world_position;
-    output.debug_color = vec4<f32>(0.0);
-
-    return output;
-}
-
 struct FragmentInput {
     @builtin(front_facing)   is_front: bool,
     @builtin(position)       frag_coord: vec4<f32>,
