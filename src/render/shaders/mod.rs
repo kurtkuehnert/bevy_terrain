@@ -3,6 +3,8 @@ use bevy::{prelude::*, reflect::TypeUuid};
 
 const TYPES_SHADER: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 907665645684322571);
+const BINDINGS_SHADER: HandleUntyped =
+    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 570929401458920492);
 const PARAMETERS_SHADER: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 656456784512075658);
 const NODE_SHADER: HandleUntyped =
@@ -28,7 +30,7 @@ pub(crate) const DEFAULT_SHADER: HandleUntyped =
 
 pub(crate) fn add_shader(app: &mut App) {
     load_internal_asset!(app, TYPES_SHADER, "types.wgsl", Shader::from_wgsl);
-
+    load_internal_asset!(app, BINDINGS_SHADER, "bindings.wgsl", Shader::from_wgsl);
     load_internal_asset!(
         app,
         PARAMETERS_SHADER,
