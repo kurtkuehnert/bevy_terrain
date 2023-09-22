@@ -7,18 +7,19 @@ use crate::{
     },
     DebugTerrain, Terrain,
 };
-use bevy::pbr::{MAX_CASCADES_PER_LIGHT, MAX_DIRECTIONAL_LIGHTS};
-use bevy::render::Render;
 use bevy::{
     core_pipeline::core_3d::Opaque3d,
+    pbr::{extract_materials, prepare_materials, ExtractedMaterials, MaterialPipeline},
     pbr::{MeshPipeline, RenderMaterials, SetMaterialBindGroup, SetMeshViewBindGroup},
     prelude::*,
     render::{
+        extract_component::ExtractComponentPlugin,
+        render_asset::PrepareAssetSet,
         render_phase::{AddRenderCommand, DrawFunctions, RenderPhase, SetItemPipeline},
         render_resource::*,
         renderer::RenderDevice,
         texture::BevyDefault,
-        RenderApp, RenderSet,
+        Render, RenderApp, RenderSet,
     },
 };
 use std::{hash::Hash, marker::PhantomData};
@@ -275,16 +276,6 @@ where
     fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
         let mut shader_defs = key.flags.shader_defs();
 
-        // Todo: should be save to remove
-        shader_defs.push(ShaderDefVal::UInt(
-            "MAX_DIRECTIONAL_LIGHTS".to_string(),
-            MAX_DIRECTIONAL_LIGHTS as u32,
-        ));
-        shader_defs.push(ShaderDefVal::UInt(
-            "MAX_CASCADES_PER_LIGHT".to_string(),
-            MAX_CASCADES_PER_LIGHT as u32,
-        ));
-
         let mut bind_group_layout = match key.flags.msaa_samples() {
             1 => vec![self.view_layout.clone()],
             _ => {
@@ -427,26 +418,33 @@ where
     M::Data: PartialEq + Eq + Hash + Clone,
 {
     fn build(&self, app: &mut App) {
-        // Todo: don't use MaterialPlugin, but do the configuration here
-        app.add_plugins(MaterialPlugin::<M>::default());
+        app.add_asset::<M>()
+            .add_plugins(ExtractComponentPlugin::<Handle<M>>::extract_visible());
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
-                // .init_resource::<ExtractedMaterials<M>>()
-                // .init_resource::<RenderMaterials<M>>()
-                // .add_system_to_stage(RenderStage::Extract, extract_materials::<M>)
-                // .add_system_to_stage(
-                //     RenderStage::Prepare,
-                //     prepare_materials::<M>.after(PrepareAssetLabel::PreAssetPrepare),
-                // )
                 .add_render_command::<Opaque3d, DrawTerrain<M>>()
-                .add_systems(Render, queue_terrain::<M>.in_set(RenderSet::Queue));
+                .init_resource::<ExtractedMaterials<M>>()
+                .init_resource::<RenderMaterials<M>>()
+                .add_systems(ExtractSchedule, extract_materials::<M>)
+                .add_systems(
+                    Render,
+                    (
+                        prepare_materials::<M>
+                            .in_set(RenderSet::Prepare)
+                            .after(PrepareAssetSet::PreAssetPrepare),
+                        queue_terrain::<M>.in_set(RenderSet::Queue),
+                    ),
+                );
         }
     }
 
     fn finish(&self, app: &mut App) {
         app.sub_app_mut(RenderApp)
             .init_resource::<TerrainRenderPipeline<M>>()
-            .init_resource::<SpecializedRenderPipelines<TerrainRenderPipeline<M>>>();
+            .init_resource::<SpecializedRenderPipelines<TerrainRenderPipeline<M>>>()
+            // unused, but still required
+            .init_resource::<MaterialPipeline<M>>()
+            .init_resource::<SpecializedMeshPipelines<MaterialPipeline<M>>>();
     }
 }
