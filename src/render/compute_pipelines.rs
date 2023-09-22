@@ -33,11 +33,12 @@ pub enum TerrainComputePipelineId {
 }
 
 bitflags::bitflags! {
-#[repr(transparent)]
-pub struct TerrainComputePipelineFlags: u32 {
-    const NONE               = 0;
-    const TEST               = (1 << 0);
-}
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    #[repr(transparent)]
+    pub struct TerrainComputePipelineFlags: u32 {
+        const NONE               = 0;
+        const TEST               = (1 << 0);
+    }
 }
 
 impl TerrainComputePipelineFlags {
@@ -54,7 +55,7 @@ impl TerrainComputePipelineFlags {
     pub fn shader_defs(&self) -> Vec<ShaderDefVal> {
         let mut shader_defs = Vec::new();
 
-        if (self.bits & TerrainComputePipelineFlags::TEST.bits) != 0 {
+        if (self.bits() & TerrainComputePipelineFlags::TEST.bits()) != 0 {
             shader_defs.push("TEST".into());
         }
 
