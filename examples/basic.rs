@@ -23,9 +23,11 @@ fn main() {
     App::new()
         .add_plugins((
             DefaultPlugins,
-            TerrainPlugin {
-                attachment_count: 2, // has to match the attachments of the terrain
-            },
+            TerrainPluginBuilder::with_base_attachment(BaseConfig::new(
+                TEXTURE_SIZE,
+                MIP_LEVEL_COUNT,
+            ))
+            .build(),
             TerrainDebugPlugin, // enable debug settings and controls
             TerrainMaterialPlugin::<TerrainMaterial>::default(),
         ))
@@ -36,6 +38,7 @@ fn main() {
 
 fn setup(
     mut commands: Commands,
+    plugin_config: Res<TerrainPluginConfig>,
     mut materials: ResMut<Assets<TerrainMaterial>>,
     mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
@@ -45,6 +48,7 @@ fn setup(
 
     // Configure all the important properties of the terrain, as well as its attachments.
     let mut config = TerrainConfig::new(
+        &plugin_config,
         TERRAIN_SIZE,
         LOD_COUNT,
         HEIGHT,
@@ -53,9 +57,9 @@ fn setup(
     );
 
     config.add_base_attachment_from_disk(
+        &plugin_config,
         &mut preprocessor,
         &mut loader,
-        BaseConfig::new(TEXTURE_SIZE, MIP_LEVEL_COUNT),
         TileConfig {
             path: "assets/terrain/source/height".to_string(),
             size: TERRAIN_SIZE,

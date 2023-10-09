@@ -1,11 +1,9 @@
+use crate::plugin::TerrainPluginConfig;
 use crate::{
     render::{
         culling::CullingBindGroup,
-        render_pipeline::TerrainPipelineConfig,
         shaders::{PREPARE_INDIRECT_SHADER, REFINE_TILES_SHADER},
-        terrain_data::terrain_bind_group_layout,
-        terrain_view_data::TerrainViewConfigUniform,
-        terrain_view_data::TerrainViewData,
+        terrain_view_data::{TerrainViewConfigUniform, TerrainViewData},
         CULL_DATA_LAYOUT, PREPARE_INDIRECT_LAYOUT, REFINE_TILES_LAYOUT,
     },
     terrain::Terrain,
@@ -77,12 +75,12 @@ pub struct TerrainComputePipelines {
 impl FromWorld for TerrainComputePipelines {
     fn from_world(world: &mut World) -> Self {
         let device = world.resource::<RenderDevice>();
-        let config = world.resource::<TerrainPipelineConfig>();
+        let config = world.resource::<TerrainPluginConfig>();
 
         let prepare_indirect_layout = device.create_bind_group_layout(&PREPARE_INDIRECT_LAYOUT);
         let refine_tiles_layout = device.create_bind_group_layout(&REFINE_TILES_LAYOUT);
         let cull_data_layout = device.create_bind_group_layout(&CULL_DATA_LAYOUT);
-        let terrain_layout = terrain_bind_group_layout(device, config.attachment_count);
+        let terrain_layout = config.terrain_layout.clone();
 
         let prepare_indirect_shader = PREPARE_INDIRECT_SHADER.typed();
         let refine_tiles_shader = REFINE_TILES_SHADER.typed();
