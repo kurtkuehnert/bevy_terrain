@@ -1,5 +1,6 @@
+use crate::render::TERRAIN_CONFIG_SIZE;
 use crate::{
-    render::TERRAIN_CONFIG_SIZE,
+    plugin::TerrainPluginConfig,
     terrain::{Terrain, TerrainComponents},
     TerrainConfig,
 };
@@ -115,8 +116,9 @@ impl TerrainData {
         device: &RenderDevice,
         images: &RenderAssets<Image>,
         config: &TerrainConfig,
+        plugin_config: &TerrainPluginConfig,
     ) -> Self {
-        let layout = terrain_bind_group_layout(device, config.attachments.len());
+        let layout = plugin_config.terrain_layout.clone();
 
         // Todo: fill this with proper data
         let mesh_buffer = device.create_buffer_with_data(&BufferInitDescriptor {
@@ -190,11 +192,15 @@ impl TerrainData {
 pub(crate) fn initialize_terrain_data(
     device: Res<RenderDevice>,
     images: Res<RenderAssets<Image>>,
+    plugin_config: Res<TerrainPluginConfig>,
     mut terrain_data: ResMut<TerrainComponents<TerrainData>>,
     terrain_query: Extract<Query<(Entity, &TerrainConfig), Added<Terrain>>>,
 ) {
     for (terrain, config) in terrain_query.iter() {
-        terrain_data.insert(terrain, TerrainData::new(&device, &images, config));
+        terrain_data.insert(
+            terrain,
+            TerrainData::new(&device, &images, config, &plugin_config),
+        );
     }
 }
 

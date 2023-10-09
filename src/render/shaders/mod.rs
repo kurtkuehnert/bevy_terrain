@@ -24,7 +24,7 @@ pub(crate) const REFINE_TILES_SHADER: HandleUntyped =
 pub(crate) const DEFAULT_SHADER: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 556563744564564658);
 
-pub(crate) fn add_shader(app: &mut App) {
+pub(crate) fn load_terrain_shaders(app: &mut App) {
     load_internal_asset!(app, TYPES_SHADER, "types.wgsl", Shader::from_wgsl);
     load_internal_asset!(app, BINDINGS_SHADER, "bindings.wgsl", Shader::from_wgsl);
     load_internal_asset!(app, FUNCTIONS_SHADER, "functions.wgsl", Shader::from_wgsl);
