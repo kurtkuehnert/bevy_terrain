@@ -9,7 +9,7 @@ use crate::{
 /// of the terrain.
 pub fn save_config(config: &TerrainConfig) {
     let mut tc = TC { nodes: vec![] };
-    let attachment_directory = format_directory(&config.path, &config.attachments[0].name);
+    let attachment_directory = format_directory(&config.path, "height");
 
     for (name, _) in iterate_directory(&attachment_directory) {
         let node_id = name.parse::<NodeId>().unwrap();

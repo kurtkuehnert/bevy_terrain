@@ -1,7 +1,8 @@
+use crate::plugin::TerrainPluginConfig;
 use crate::{
     render::{
         shaders::DEFAULT_SHADER,
-        terrain_data::{terrain_bind_group_layout, SetTerrainBindGroup},
+        terrain_data::SetTerrainBindGroup,
         terrain_view_data::{DrawTerrainCommand, SetTerrainViewBindGroup},
         TERRAIN_VIEW_LAYOUT,
     },
@@ -23,13 +24,6 @@ use bevy::{
     },
 };
 use std::{hash::Hash, marker::PhantomData};
-
-/// Configures the default terrain pipeline.
-#[derive(Resource)]
-pub struct TerrainPipelineConfig {
-    /// The number of terrain attachments.
-    pub attachment_count: usize,
-}
 
 pub struct TerrainPipelineKey<M: Material> {
     pub flags: TerrainPipelineFlags,
@@ -234,11 +228,11 @@ impl<M: Material> FromWorld for TerrainRenderPipeline<M> {
         let device = world.resource::<RenderDevice>();
         let asset_server = world.resource::<AssetServer>();
         let mesh_pipeline = world.resource::<MeshPipeline>();
-        let config = world.resource::<TerrainPipelineConfig>();
+        let config = world.resource::<TerrainPluginConfig>();
 
         let view_layout = mesh_pipeline.view_layout.clone();
         let view_layout_multisampled = mesh_pipeline.view_layout_multisampled.clone();
-        let terrain_layout = terrain_bind_group_layout(device, config.attachment_count);
+        let terrain_layout = config.terrain_layout.clone();
         let terrain_view_layout = device.create_bind_group_layout(&TERRAIN_VIEW_LAYOUT);
         let material_layout = M::bind_group_layout(device);
 
