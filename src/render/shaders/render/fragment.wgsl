@@ -3,6 +3,7 @@
 #import bevy_terrain::types FragmentInput, FragmentOutput, Fragment, Blend, NodeLookup
 #import bevy_terrain::bindings config
 #import bevy_terrain::functions calculate_normal, calculate_blend, lookup_node
+#import bevy_terrain::debug show_lod
 #import bevy_pbr::mesh_view_bindings view
 #import bevy_pbr::pbr_functions PbrInput, pbr_input_new, calculate_view, pbr
 
@@ -86,7 +87,7 @@ fn process_fragment(input: FragmentInput, data: FragmentData) -> Fragment {
 
 // The default fragment entry point, which blends the terrain data at the fringe between two lods.
 @fragment
-fn fragment(input: FragmentInput) -> FragmentOutput {
+fn fragment_fn(input: FragmentInput) -> FragmentOutput {
     let ddx   = dpdx(input.local_position);
     let ddy   = dpdy(input.local_position);
     let blend = calculate_blend(input.world_position);

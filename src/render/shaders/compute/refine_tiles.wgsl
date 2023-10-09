@@ -22,13 +22,13 @@ var<storage, read_write> parameters: Parameters;
 var<uniform> view: CullingData;
 
  // terrain bindings
-@group(2) @binding(0)
-var<uniform> config: TerrainConfig;
 @group(2) @binding(1)
-var atlas_sampler: sampler;
+var<uniform> config: TerrainConfig;
 @group(2) @binding(2)
-var height_atlas: texture_2d_array<f32>;
+var atlas_sampler: sampler;
 @group(2) @binding(3)
+var height_atlas: texture_2d_array<f32>;
+@group(2) @binding(4)
 var minmax_atlas: texture_2d_array<f32>;
 
 #import bevy_terrain::functions

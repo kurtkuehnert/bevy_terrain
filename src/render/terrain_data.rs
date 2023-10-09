@@ -8,6 +8,7 @@ use bevy::{
         query::ROQueryItem,
         system::{lifetimeless::SRes, SystemParamItem},
     },
+    pbr::MeshUniform,
     prelude::*,
     render::{
         render_asset::RenderAssets,
@@ -63,6 +64,16 @@ pub fn terrain_bind_group_layout(
         BindGroupLayoutEntry {
             binding: 0,
             visibility: ShaderStages::all(),
+            count: None,
+            ty: BindingType::Buffer {
+                ty: BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: BufferSize::new(MeshUniform::min_size().get()),
+            },
+        },
+        BindGroupLayoutEntry {
+            binding: 1,
+            visibility: ShaderStages::all(),
             ty: BindingType::Buffer {
                 ty: BufferBindingType::Uniform,
                 has_dynamic_offset: false,
@@ -71,7 +82,7 @@ pub fn terrain_bind_group_layout(
             count: None,
         },
         BindGroupLayoutEntry {
-            binding: 1,
+            binding: 2,
             visibility: ShaderStages::all(),
             ty: BindingType::Sampler(SamplerBindingType::Filtering),
             count: None,
@@ -79,7 +90,7 @@ pub fn terrain_bind_group_layout(
     ];
 
     entries.extend((0..attachment_count).map(|binding| BindGroupLayoutEntry {
-        binding: binding as u32 + 2,
+        binding: binding as u32 + 3,
         visibility: ShaderStages::all(),
         ty: BindingType::Texture {
             sample_type: TextureSampleType::Float { filterable: true },
@@ -107,6 +118,13 @@ impl TerrainData {
     ) -> Self {
         let layout = terrain_bind_group_layout(device, config.attachments.len());
 
+        // Todo: fill this with proper data
+        let mesh_buffer = device.create_buffer_with_data(&BufferInitDescriptor {
+            label: None,
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            contents: &vec![0; MeshUniform::min_size().get() as usize],
+        });
+
         let mut buffer = encase::UniformBuffer::new(Vec::new());
         buffer.write(&TerrainConfigUniform::from(config)).unwrap();
 
@@ -132,10 +150,14 @@ impl TerrainData {
         let mut entries = vec![
             BindGroupEntry {
                 binding: 0,
-                resource: config_buffer.as_entire_binding(),
+                resource: mesh_buffer.as_entire_binding(),
             },
             BindGroupEntry {
                 binding: 1,
+                resource: config_buffer.as_entire_binding(),
+            },
+            BindGroupEntry {
+                binding: 2,
                 resource: BindingResource::Sampler(&sampler),
             },
         ];
@@ -149,7 +171,7 @@ impl TerrainData {
                     let attachment = images.get(&attachment.handle).unwrap();
 
                     BindGroupEntry {
-                        binding: binding as u32 + 2,
+                        binding: binding as u32 + 3,
                         resource: BindingResource::TextureView(&attachment.texture_view),
                     }
                 }),
