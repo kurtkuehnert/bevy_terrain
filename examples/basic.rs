@@ -1,5 +1,8 @@
-use bevy::reflect::TypePath;
-use bevy::{prelude::*, reflect::TypeUuid, render::render_resource::*};
+use bevy::{
+    prelude::*,
+    reflect::{TypePath, TypeUuid},
+    render::render_resource::*,
+};
 use bevy_terrain::prelude::*;
 
 const TERRAIN_SIZE: u32 = 1024;
