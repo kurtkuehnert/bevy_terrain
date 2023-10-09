@@ -3,7 +3,7 @@
 #import bevy_terrain::types NodeLookup, VertexInput, VertexOutput
 #import bevy_terrain::bindings view_config, tiles, config, atlas_sampler, height_atlas
 #import bevy_terrain::functions calculate_grid_position, calculate_local_position, approximate_world_position, calculate_blend, lookup_node, vertex_output
-
+#import bevy_terrain::debug show_tiles, show_minmax_error
 
 // Todo: make this user customizable
 fn vertex_height(lookup: NodeLookup) -> f32 {
@@ -14,8 +14,7 @@ fn vertex_height(lookup: NodeLookup) -> f32 {
 }
 
 // The default vertex entry point, which blends the height at the fringe between two lods.
-@vertex
-fn vertex(in: VertexInput) -> VertexOutput {
+fn vertex_fn(in: VertexInput) -> VertexOutput {
     let tile_index = in.vertex_index / view_config.vertices_per_tile;
     let grid_index = in.vertex_index % view_config.vertices_per_tile;
 
