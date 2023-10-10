@@ -1,6 +1,6 @@
-use crate::render::TERRAIN_CONFIG_SIZE;
 use crate::{
     plugin::TerrainPluginConfig,
+    render::TERRAIN_CONFIG_SIZE,
     terrain::{Terrain, TerrainComponents},
     TerrainConfig,
 };

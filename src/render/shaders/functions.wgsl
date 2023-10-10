@@ -2,7 +2,8 @@
 
 #import bevy_terrain::types TerrainConfig, TerrainViewConfig, Tile, TileList, NodeLookup, VertexInput
 #import bevy_terrain::types VertexOutput, FragmentInput, FragmentOutput, Fragment, Blend
-#import bevy_terrain::bindings view_config, quadtree, tiles, config, atlas_sampler, height_atlas, minmax_atlas
+#import bevy_terrain::bindings view_config, quadtree, tiles, config, atlas_sampler
+#import bevy_terrain::attachments height_atlas, minmax_atlas, HEIGHT_SIZE, MINMAX_SCALE, MINMAX_OFFSET
 #import bevy_pbr::mesh_view_bindings view
 
 fn approximate_world_position(local_position: vec2<f32>) -> vec4<f32> {
@@ -97,7 +98,7 @@ fn calculate_local_position(tile: Tile, grid_position: vec2<u32>) -> vec2<f32> {
 
 fn calculate_normal(coords: vec2<f32>, atlas_index: i32, atlas_lod: u32, ddx: vec2<f32>, ddy: vec2<f32>) -> vec3<f32> {
 #ifdef SAMPLE_GRAD
-    let offset = 1.0 / config.height_size;
+    let offset = 1.0 / HEIGHT_SIZE;
     let left  = textureSampleGrad(height_atlas, atlas_sampler, coords + vec2<f32>(-offset,     0.0), atlas_index, ddx, ddy).x;
     let up    = textureSampleGrad(height_atlas, atlas_sampler, coords + vec2<f32>(    0.0, -offset), atlas_index, ddx, ddy).x;
     let right = textureSampleGrad(height_atlas, atlas_sampler, coords + vec2<f32>( offset,     0.0), atlas_index, ddx, ddy).x;
@@ -122,7 +123,7 @@ fn minmax(local_position: vec2<f32>, size: f32) -> vec2<f32> {
 
     let lookup = lookup_node(lod, local_position);
     let atlas_index = lookup.atlas_index;
-    let minmax_coords = lookup.atlas_coords * config.minmax_scale + config.minmax_offset;
+    let minmax_coords = lookup.atlas_coords * MINMAX_SCALE + MINMAX_OFFSET;
 
     let min_gather = textureGather(0, minmax_atlas, atlas_sampler, minmax_coords, atlas_index);
     let max_gather = textureGather(1, minmax_atlas, atlas_sampler, minmax_coords, atlas_index);
