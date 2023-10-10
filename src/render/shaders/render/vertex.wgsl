@@ -1,13 +1,14 @@
 #define_import_path bevy_terrain::vertex
 
 #import bevy_terrain::types NodeLookup, VertexInput, VertexOutput
-#import bevy_terrain::bindings view_config, tiles, config, atlas_sampler, height_atlas
+#import bevy_terrain::bindings view_config, tiles, config, atlas_sampler
 #import bevy_terrain::functions calculate_grid_position, calculate_local_position, approximate_world_position, calculate_blend, lookup_node, vertex_output
 #import bevy_terrain::debug show_tiles, show_minmax_error
+#import bevy_terrain::attachments height_atlas, HEIGHT_SCALE, HEIGHT_OFFSET
 
-// Todo: make this user customizable
+// Todo: implement bump mapping, etc.
 fn vertex_height(lookup: NodeLookup) -> f32 {
-    let height_coords = lookup.atlas_coords * config.height_scale + config.height_offset;
+    let height_coords = lookup.atlas_coords * HEIGHT_SCALE + HEIGHT_OFFSET;
     let height = textureSampleLevel(height_atlas, atlas_sampler, height_coords, lookup.atlas_index, 0.0).x;
 
     return height * config.height;

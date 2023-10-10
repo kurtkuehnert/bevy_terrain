@@ -60,7 +60,7 @@ impl TerrainPluginBuilder {
         }
     }
 
-    pub fn add_attachment(&mut self, attachment: AttachmentConfig) -> &mut Self {
+    pub fn add_attachment(mut self, attachment: AttachmentConfig) -> Self {
         self.attachments.push(attachment);
         self
     }
@@ -70,9 +70,6 @@ impl TerrainPluginBuilder {
     }
 
     pub fn init(&self, app: &mut App) -> TerrainPluginConfig {
-        // Todo: load and customize shaders here
-        load_terrain_shaders(app);
-
         let device = app.sub_app_mut(RenderApp).world.resource::<RenderDevice>();
         let terrain_layout = terrain_bind_group_layout(device, self.attachments.len());
 
@@ -148,6 +145,9 @@ impl Plugin for TerrainPlugin {
 
     fn finish(&self, app: &mut App) {
         let config = self.builder.init(app);
+
+        load_terrain_shaders(app, &config);
+
         app.insert_resource(config.clone());
         app.sub_app_mut(RenderApp).insert_resource(config);
 

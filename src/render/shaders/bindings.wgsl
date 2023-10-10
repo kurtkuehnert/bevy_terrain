@@ -15,7 +15,3 @@ var<storage> tiles: TileList;
 var<uniform> config: TerrainConfig;
 @group(2) @binding(2)
 var atlas_sampler: sampler;
-@group(2) @binding(3)
-var height_atlas: texture_2d_array<f32>;
-@group(2) @binding(4)
-var minmax_atlas: texture_2d_array<f32>;
