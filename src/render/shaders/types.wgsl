@@ -1,24 +1,10 @@
 #define_import_path bevy_terrain::types
 
-// Todo: split into TerrainConfig and AttachmentConfig
 struct TerrainConfig {
     lod_count: u32,
     height: f32,
     leaf_node_size: u32,
     terrain_size: u32,
-
-    height_size: f32,
-    minmax_size: f32,
-    _empty_a: u32,
-    _empty_b: u32,
-    height_scale: f32,
-    minmax_scale: f32,
-    _empty_c: u32,
-    _empty_d: u32,
-    height_offset: f32,
-    minmax_offset: f32,
-    _empty_e: u32,
-    _empty_f: u32,
 }
 
 struct TerrainViewConfig {

@@ -4,6 +4,7 @@
 #import bevy_terrain::bindings config
 #import bevy_terrain::functions calculate_normal, calculate_blend, lookup_node
 #import bevy_terrain::debug show_lod
+#import bevy_terrain::attachments height_atlas, HEIGHT_SCALE, HEIGHT_OFFSET
 #import bevy_pbr::mesh_view_bindings view
 #import bevy_pbr::pbr_functions PbrInput, pbr_input_new, calculate_view, pbr
 
@@ -19,7 +20,7 @@ fn lookup_fragment_data(input: FragmentInput, lookup: NodeLookup, ddx: vec2<f32>
     let ddx = ddx / f32(1u << atlas_lod);
     let ddy = ddy / f32(1u << atlas_lod);
 
-    let height_coords = atlas_coords * config.height_scale + config.height_offset;
+    let height_coords = atlas_coords * HEIGHT_SCALE + HEIGHT_OFFSET;
     let height_ddx = ddx / 512.0;
     let height_ddy = ddy / 512.0;
 
