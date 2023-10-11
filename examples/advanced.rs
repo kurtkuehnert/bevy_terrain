@@ -30,24 +30,23 @@ impl Material for TerrainMaterial {
 }
 
 fn main() {
-    App::new()
-        .add_plugins((
-            DefaultPlugins.set(AssetPlugin {
-                watch_for_changes: ChangeWatcher::with_delay(Duration::from_millis(200)), // enable hot reloading for shader easy customization
-                ..default()
-            }),
-            TerrainPluginBuilder::with_base_attachment(BaseConfig::new(
-                TEXTURE_SIZE,
-                MIP_LEVEL_COUNT,
-            ))
+    let config =
+        TerrainPluginConfig::with_base_attachment(BaseConfig::new(TEXTURE_SIZE, MIP_LEVEL_COUNT))
             .add_attachment(AttachmentConfig::new(
                 "albedo".to_string(),
                 TEXTURE_SIZE,
                 1,
                 MIP_LEVEL_COUNT,
                 AttachmentFormat::Rgb8,
-            ))
-            .build(),
+            ));
+
+    App::new()
+        .add_plugins((
+            DefaultPlugins.set(AssetPlugin {
+                watch_for_changes: ChangeWatcher::with_delay(Duration::from_millis(200)), // enable hot reloading for shader easy customization
+                ..default()
+            }),
+            TerrainPlugin { config },
             TerrainDebugPlugin,
             TerrainMaterialPlugin::<TerrainMaterial>::default(),
         ))

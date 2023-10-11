@@ -20,14 +20,13 @@ pub struct TerrainMaterial {}
 impl Material for TerrainMaterial {}
 
 fn main() {
+    let config =
+        TerrainPluginConfig::with_base_attachment(BaseConfig::new(TEXTURE_SIZE, MIP_LEVEL_COUNT));
+
     App::new()
         .add_plugins((
             DefaultPlugins,
-            TerrainPluginBuilder::with_base_attachment(BaseConfig::new(
-                TEXTURE_SIZE,
-                MIP_LEVEL_COUNT,
-            ))
-            .build(),
+            TerrainPlugin { config },
             TerrainDebugPlugin, // enable debug settings and controls
             TerrainMaterialPlugin::<TerrainMaterial>::default(),
         ))
