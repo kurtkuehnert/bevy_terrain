@@ -8,7 +8,7 @@ use crate::{
         },
         culling::{prepare_and_queue_terrain_culling_bind_group, CullingBindGroup},
         shaders::load_terrain_shaders,
-        terrain_data::{initialize_terrain_data, terrain_bind_group_layout, TerrainData},
+        terrain_data::{initialize_terrain_data, TerrainData},
         terrain_view_data::{
             extract_terrain_view_config, initialize_terrain_view_data, prepare_terrain_view_config,
             TerrainViewConfigUniform, TerrainViewData,
@@ -32,8 +32,7 @@ use bevy::{
     prelude::*,
     render::{
         extract_component::ExtractComponentPlugin, main_graph::node::CAMERA_DRIVER,
-        render_graph::RenderGraph, render_resource::*, renderer::RenderDevice, Render, RenderApp,
-        RenderSet,
+        render_graph::RenderGraph, render_resource::*, Render, RenderApp, RenderSet,
     },
 };
 
@@ -42,10 +41,22 @@ pub struct TerrainPluginConfig {
     pub leaf_node_size: u32,
     pub base: BaseConfig,
     pub attachments: Vec<AttachmentConfig>,
-    pub terrain_layout: BindGroupLayout,
 }
 
 impl TerrainPluginConfig {
+    pub fn with_base_attachment(base: BaseConfig) -> Self {
+        Self {
+            leaf_node_size: base.texture_size - 2 * base.border_size,
+            base,
+            attachments: vec![base.height_attachment(), base.minmax_attachment()],
+        }
+    }
+
+    pub fn add_attachment(mut self, attachment: AttachmentConfig) -> Self {
+        self.attachments.push(attachment);
+        self
+    }
+
     pub fn configure_terrain(
         &self,
         terrain_size: u32,
@@ -76,46 +87,9 @@ impl TerrainPluginConfig {
     }
 }
 
-pub struct TerrainPluginBuilder {
-    pub leaf_node_size: u32,
-    pub base: BaseConfig,
-    pub attachments: Vec<AttachmentConfig>,
-}
-
-impl TerrainPluginBuilder {
-    pub fn with_base_attachment(base: BaseConfig) -> Self {
-        Self {
-            leaf_node_size: base.texture_size - 2 * base.border_size,
-            base,
-            attachments: vec![base.height_attachment(), base.minmax_attachment()],
-        }
-    }
-
-    pub fn add_attachment(mut self, attachment: AttachmentConfig) -> Self {
-        self.attachments.push(attachment);
-        self
-    }
-
-    pub fn build(self) -> TerrainPlugin {
-        TerrainPlugin { builder: self }
-    }
-
-    pub fn init(&self, app: &mut App) -> TerrainPluginConfig {
-        let device = app.sub_app_mut(RenderApp).world.resource::<RenderDevice>();
-        let terrain_layout = terrain_bind_group_layout(device, self.attachments.len());
-
-        TerrainPluginConfig {
-            leaf_node_size: self.leaf_node_size,
-            base: self.base.clone(),
-            attachments: self.attachments.clone(),
-            terrain_layout,
-        }
-    }
-}
-
 /// The plugin for the terrain renderer.
 pub struct TerrainPlugin {
-    pub builder: TerrainPluginBuilder,
+    pub config: TerrainPluginConfig,
 }
 
 impl Plugin for TerrainPlugin {
@@ -125,6 +99,7 @@ impl Plugin for TerrainPlugin {
             ExtractComponentPlugin::<Terrain>::default(),
             ExtractComponentPlugin::<TerrainView>::default(),
         ))
+        .insert_resource(self.config.clone())
         .init_resource::<TerrainViewComponents<Quadtree>>()
         .init_resource::<TerrainViewComponents<TerrainViewConfig>>()
         .add_systems(
@@ -140,6 +115,7 @@ impl Plugin for TerrainPlugin {
         );
 
         app.sub_app_mut(RenderApp)
+            .insert_resource(self.config.clone())
             .init_resource::<TerrainComponents<GpuNodeAtlas>>()
             .init_resource::<TerrainComponents<TerrainData>>()
             .init_resource::<TerrainViewComponents<GpuQuadtree>>()
@@ -175,12 +151,7 @@ impl Plugin for TerrainPlugin {
     }
 
     fn finish(&self, app: &mut App) {
-        let config = self.builder.init(app);
-
-        load_terrain_shaders(app, &config);
-
-        app.insert_resource(config.clone());
-        app.sub_app_mut(RenderApp).insert_resource(config);
+        load_terrain_shaders(app, &self.config);
 
         let render_app = app
             .sub_app_mut(RenderApp)

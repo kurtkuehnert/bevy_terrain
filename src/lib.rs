@@ -71,7 +71,7 @@ pub mod prelude {
     pub use crate::{
         attachment_loader::AttachmentFromDiskLoader,
         debug::{camera::DebugCamera, TerrainDebugPlugin},
-        plugin::{TerrainPluginBuilder, TerrainPluginConfig},
+        plugin::{TerrainPlugin, TerrainPluginConfig},
         preprocess::{BaseConfig, Preprocessor, TileConfig},
         render::render_pipeline::TerrainMaterialPlugin,
         terrain::{Terrain, TerrainConfig},
