@@ -1,7 +1,6 @@
-use crate::render::terrain_data::terrain_bind_group_layout;
 use crate::{
     attachment_loader::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk},
-    formats::TDFPlugin,
+    formats::{tc::load_node_config, TDFPlugin},
     preprocess::BaseConfig,
     render::{
         compute_pipelines::{
@@ -9,13 +8,13 @@ use crate::{
         },
         culling::{prepare_and_queue_terrain_culling_bind_group, CullingBindGroup},
         shaders::load_terrain_shaders,
-        terrain_data::{initialize_terrain_data, TerrainData},
+        terrain_data::{initialize_terrain_data, terrain_bind_group_layout, TerrainData},
         terrain_view_data::{
             extract_terrain_view_config, initialize_terrain_view_data, prepare_terrain_view_config,
             TerrainViewConfigUniform, TerrainViewData,
         },
     },
-    terrain::{Terrain, TerrainComponents},
+    terrain::{Terrain, TerrainComponents, TerrainConfig},
     terrain_data::{
         gpu_node_atlas::{
             extract_node_atlas, initialize_gpu_node_atlas, prepare_node_atlas, GpuNodeAtlas,
@@ -45,6 +44,38 @@ pub struct TerrainPluginConfig {
     pub attachments: Vec<AttachmentConfig>,
     pub terrain_layout: BindGroupLayout,
 }
+
+impl TerrainPluginConfig {
+    pub fn configure_terrain(
+        &self,
+        terrain_size: u32,
+        lod_count: u32,
+        height: f32,
+        node_atlas_size: u32,
+        path: String,
+    ) -> TerrainConfig {
+        let attachments = self
+            .attachments
+            .clone()
+            .into_iter()
+            .map(AttachmentConfig::into)
+            .collect();
+
+        let nodes = load_node_config(&path);
+
+        TerrainConfig {
+            lod_count,
+            height,
+            leaf_node_size: self.leaf_node_size,
+            terrain_size,
+            node_atlas_size,
+            path,
+            attachments,
+            nodes,
+        }
+    }
+}
+
 pub struct TerrainPluginBuilder {
     pub leaf_node_size: u32,
     pub base: BaseConfig,

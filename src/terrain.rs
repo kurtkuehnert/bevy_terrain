@@ -1,12 +1,6 @@
 //! Types for configuring terrains.
 
-use crate::plugin::TerrainPluginConfig;
-use crate::prelude::AttachmentConfig;
-use crate::{
-    attachment_loader::{AttachmentFromDisk, AttachmentFromDiskLoader},
-    preprocess::{Preprocessor, TileConfig},
-    terrain_data::{AtlasAttachment, NodeId},
-};
+use crate::terrain_data::{AtlasAttachment, NodeId};
 use bevy::{
     prelude::*,
     render::extract_component::ExtractComponent,
@@ -63,72 +57,4 @@ pub struct TerrainConfig {
     /// The attachments of the terrain.
     pub attachments: Vec<AtlasAttachment>,
     pub nodes: HashSet<NodeId>,
-}
-
-impl TerrainConfig {
-    pub fn new(
-        plugin_config: &TerrainPluginConfig,
-        terrain_size: u32,
-        lod_count: u32,
-        height: f32,
-        node_atlas_size: u32,
-        path: String,
-    ) -> Self {
-        let attachments = plugin_config
-            .attachments
-            .clone()
-            .into_iter()
-            .map(AttachmentConfig::into)
-            .collect();
-
-        Self {
-            lod_count,
-            height,
-            leaf_node_size: 0,
-            terrain_size,
-            node_atlas_size,
-            path,
-            attachments,
-            nodes: HashSet::new(),
-        }
-    }
-
-    pub fn add_base_attachment_from_disk(
-        &mut self,
-        plugin_config: &TerrainPluginConfig,
-        preprocessor: &mut Preprocessor,
-        loader: &mut AttachmentFromDiskLoader,
-        tile: TileConfig,
-    ) {
-        self.leaf_node_size = plugin_config.leaf_node_size;
-
-        loader.attachments.insert(
-            0,
-            AttachmentFromDisk::new(&plugin_config.base.height_attachment(), &self.path),
-        );
-        loader.attachments.insert(
-            1,
-            AttachmentFromDisk::new(&plugin_config.base.minmax_attachment(), &self.path),
-        );
-
-        preprocessor.base = Some((tile, plugin_config.base));
-    }
-
-    pub fn add_attachment_from_disk(
-        &mut self,
-        plugin_config: &TerrainPluginConfig,
-        preprocessor: &mut Preprocessor,
-        loader: &mut AttachmentFromDiskLoader,
-        tile: TileConfig,
-        attachment_index: usize,
-    ) {
-        let attachment = plugin_config.attachments[attachment_index].clone();
-
-        loader.attachments.insert(
-            attachment_index,
-            AttachmentFromDisk::new(&attachment, &self.path),
-        );
-
-        preprocessor.attachments.push((tile, attachment));
-    }
 }

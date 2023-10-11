@@ -70,34 +70,17 @@ fn setup(
         handle: texture.clone(),
     });
 
-    let mut preprocessor = Preprocessor::default();
-    let mut loader = AttachmentFromDiskLoader::default();
-
-    // Configure all the important properties of the terrain, as well as its attachments.
-    let mut config = TerrainConfig::new(
+    let mut loader = AttachmentFromDiskLoader::new(LOD_COUNT, PATH.to_string());
+    loader.add_base_attachment(
         &plugin_config,
-        TERRAIN_SIZE,
-        LOD_COUNT,
-        HEIGHT,
-        NODE_ATLAS_SIZE,
-        PATH.to_string(),
-    );
-
-    config.add_base_attachment_from_disk(
-        &plugin_config,
-        &mut preprocessor,
-        &mut loader,
         TileConfig {
             path: "assets/terrain/source/height".to_string(),
             size: TERRAIN_SIZE,
             file_format: FileFormat::PNG,
         },
     );
-
-    config.add_attachment_from_disk(
+    loader.add_attachment(
         &plugin_config,
-        &mut preprocessor,
-        &mut loader,
         TileConfig {
             path: "assets/terrain/source/albedo.png".to_string(),
             size: TERRAIN_SIZE,
@@ -108,9 +91,26 @@ fn setup(
 
     // Preprocesses the terrain data.
     // Todo: Should be commented out after the first run.
-    // preprocessor.preprocess(&config);
+    // loader.preprocess();
 
-    load_node_config(&mut config);
+    // Configure all the important properties of the terrain, as well as its attachments.
+    let config = plugin_config.configure_terrain(
+        TERRAIN_SIZE,
+        LOD_COUNT,
+        HEIGHT,
+        NODE_ATLAS_SIZE,
+        PATH.to_string(),
+    );
+
+    // Configure the quality settings of the terrain view. Adapt the settings to your liking.
+    let view_config = TerrainViewConfig {
+        tile_scale: 4.0,
+        grid_size: 4,
+        node_count: 10,
+        load_distance: 5.0,
+        view_distance: 4.0,
+        ..default()
+    };
 
     // Create the terrain.
     let terrain = commands
@@ -122,16 +122,6 @@ fn setup(
             }),
         ))
         .id();
-
-    // Configure the quality settings of the terrain view. Adapt the settings to your liking.
-    let view_config = TerrainViewConfig {
-        tile_scale: 4.0,
-        grid_size: 4,
-        node_count: 10,
-        load_distance: 5.0,
-        view_distance: 4.0,
-        ..default()
-    };
 
     // Create the view.
     let view = commands

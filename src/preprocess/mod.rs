@@ -1,19 +1,21 @@
 //! Contains the implementation for preprocessing source tiles into streamable nodes.
 
-pub mod attachment;
-pub mod config;
+pub mod base;
 pub mod down_sample;
 pub mod file_io;
 pub mod split;
 pub mod stitch;
 
 use crate::{
+    formats::tc::save_node_config,
     preprocess::{
-        attachment::{preprocess_attachment, preprocess_base},
-        config::save_config,
+        base::height_to_minmax,
+        down_sample::{down_sample_layer, linear, minmax},
+        file_io::{format_directory, reset_directory},
+        split::split_tiles,
+        stitch::stitch_layer,
     },
     terrain_data::{AttachmentConfig, AttachmentFormat, FileFormat},
-    TerrainConfig,
 };
 use bevy::prelude::*;
 use image::{ImageBuffer, Luma, LumaA, Rgb, Rgba};
@@ -47,7 +49,7 @@ impl BaseConfig {
             texture_size,
             border_size: 2,
             mip_level_count,
-            file_format: FileFormat::TDF,
+            file_format: FileFormat::PNG,
         }
     }
 
@@ -91,24 +93,104 @@ pub struct TileConfig {
 /// The preprocessor converts attachments from source data to streamable nodes.
 ///
 /// It gathers all configurations of the attachments and then optionally processes them.
-#[derive(Default)]
 pub struct Preprocessor {
+    lod_count: u32,
+    path: String,
     pub(crate) base: Option<(TileConfig, BaseConfig)>,
     pub(crate) attachments: Vec<(TileConfig, AttachmentConfig)>,
 }
 
 impl Preprocessor {
+    pub fn new(lod_count: u32, path: String) -> Self {
+        Self {
+            lod_count,
+            path,
+            base: None,
+            attachments: vec![],
+        }
+    }
+
     /// Preprocesses all attachments of the terrain.
-    pub fn preprocess(self, config: &TerrainConfig) {
-        if let Some(base) = self.base {
-            preprocess_base(config, &base.0, &base.1);
+    pub fn preprocess(&self) {
+        if let Some((tile, base)) = &self.base {
+            self.preprocess_base(tile, base);
         }
 
-        for (tile, attachment) in self.attachments {
-            preprocess_attachment(config, &tile, &attachment);
+        for (tile, attachment) in &self.attachments {
+            self.preprocess_attachment(tile, attachment);
         }
 
-        save_config(config);
+        save_node_config(&self.path);
+    }
+
+    fn preprocess_base(&self, tile: &TileConfig, base: &BaseConfig) {
+        let height_attachment = base.height_attachment();
+        let minmax_attachment = base.minmax_attachment();
+
+        let height_directory = format_directory(&self.path, "height");
+        let minmax_directory = format_directory(&self.path, "minmax");
+
+        reset_directory(&height_directory);
+        reset_directory(&minmax_directory);
+
+        let temp = split_tiles(&height_directory, tile, &height_attachment);
+
+        let (mut first, mut last) = temp;
+
+        for lod in 1..self.lod_count {
+            first = first.div_floor(2);
+            last = last.div_ceil(2);
+
+            down_sample_layer(
+                linear,
+                &height_directory,
+                &height_attachment,
+                lod,
+                first,
+                last,
+            );
+            stitch_layer(&height_directory, &height_attachment, lod, first, last);
+        }
+
+        height_to_minmax(
+            &height_directory,
+            &minmax_directory,
+            &height_attachment,
+            &minmax_attachment,
+        );
+
+        let (mut first, mut last) = temp;
+
+        for lod in 1..self.lod_count {
+            first = first.div_floor(2);
+            last = last.div_ceil(2);
+
+            down_sample_layer(
+                minmax,
+                &minmax_directory,
+                &minmax_attachment,
+                lod,
+                first,
+                last,
+            );
+            stitch_layer(&minmax_directory, &minmax_attachment, lod, first, last);
+        }
+    }
+
+    fn preprocess_attachment(&self, tile: &TileConfig, attachment: &AttachmentConfig) {
+        let directory = format_directory(&self.path, &attachment.name);
+
+        reset_directory(&directory);
+
+        let (mut first, mut last) = split_tiles(&directory, tile, attachment);
+
+        for lod in 1..self.lod_count {
+            first = first.div_floor(2);
+            last = last.div_ceil(2);
+
+            down_sample_layer(linear, &directory, attachment, lod, first, last);
+            stitch_layer(&directory, attachment, lod, first, last);
+        }
     }
 }
 
