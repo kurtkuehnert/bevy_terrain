@@ -1,7 +1,8 @@
-use crate::plugin::TerrainPluginConfig;
 use crate::{
+    plugin::TerrainPluginConfig,
     render::{
         shaders::DEFAULT_SHADER,
+        terrain_data::terrain_bind_group_layout,
         terrain_data::SetTerrainBindGroup,
         terrain_view_data::{DrawTerrainCommand, SetTerrainViewBindGroup},
         TERRAIN_VIEW_LAYOUT,
@@ -10,8 +11,10 @@ use crate::{
 };
 use bevy::{
     core_pipeline::core_3d::Opaque3d,
-    pbr::{extract_materials, prepare_materials, ExtractedMaterials, MaterialPipeline},
-    pbr::{MeshPipeline, RenderMaterials, SetMaterialBindGroup, SetMeshViewBindGroup},
+    pbr::{
+        extract_materials, prepare_materials, ExtractedMaterials, MaterialPipeline, MeshPipeline,
+        RenderMaterials, SetMaterialBindGroup, SetMeshViewBindGroup,
+    },
     prelude::*,
     render::{
         extract_component::ExtractComponentPlugin,
@@ -228,11 +231,11 @@ impl<M: Material> FromWorld for TerrainRenderPipeline<M> {
         let device = world.resource::<RenderDevice>();
         let asset_server = world.resource::<AssetServer>();
         let mesh_pipeline = world.resource::<MeshPipeline>();
-        let config = world.resource::<TerrainPluginConfig>();
+        let plugin_config = world.resource::<TerrainPluginConfig>();
 
         let view_layout = mesh_pipeline.view_layout.clone();
         let view_layout_multisampled = mesh_pipeline.view_layout_multisampled.clone();
-        let terrain_layout = config.terrain_layout.clone();
+        let terrain_layout = terrain_bind_group_layout(device, plugin_config.attachments.len());
         let terrain_view_layout = device.create_bind_group_layout(&TERRAIN_VIEW_LAYOUT);
         let material_layout = M::bind_group_layout(device);
 
