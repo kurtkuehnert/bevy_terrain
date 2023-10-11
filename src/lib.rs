@@ -72,7 +72,7 @@ pub mod prelude {
         attachment_loader::AttachmentFromDiskLoader,
         debug::{camera::DebugCamera, TerrainDebugPlugin},
         plugin::{TerrainPluginBuilder, TerrainPluginConfig},
-        preprocess::{config::load_node_config, BaseConfig, Preprocessor, TileConfig},
+        preprocess::{BaseConfig, Preprocessor, TileConfig},
         render::render_pipeline::TerrainMaterialPlugin,
         terrain::{Terrain, TerrainConfig},
         terrain_data::{

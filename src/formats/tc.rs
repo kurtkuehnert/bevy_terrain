@@ -1,5 +1,7 @@
+use crate::preprocess::file_io::{format_directory, iterate_directory};
 use crate::terrain_data::NodeId;
 use anyhow::Result;
+use bevy::utils::HashSet;
 use bincode::{config, Decode, Encode};
 use std::{fs, path::Path};
 
@@ -31,4 +33,26 @@ impl TC {
         fs::write(path, encoded)?;
         Ok(())
     }
+}
+
+/// Saves the node configuration of the terrain, which stores the [`NodeId`]s of all the nodes
+/// of the terrain.
+pub(crate) fn save_node_config(path: &str) {
+    let mut tc = TC { nodes: vec![] };
+    let attachment_directory = format_directory(path, "height");
+
+    for (name, _) in iterate_directory(&attachment_directory) {
+        let node_id = name.parse::<NodeId>().unwrap();
+        tc.nodes.push(node_id);
+    }
+
+    tc.save_file(format_directory(path, "../config.tc"))
+        .unwrap();
+}
+
+/// Loads the node configuration of the terrain, which stores the [`NodeId`]s of all the nodes
+/// of the terrain.
+pub(crate) fn load_node_config(path: &str) -> HashSet<NodeId> {
+    let tc = TC::load_file(format_directory(path, "../config.tc")).unwrap();
+    tc.nodes.into_iter().collect()
 }
