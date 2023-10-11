@@ -1,5 +1,7 @@
 //! The default attachment loader, which loads node data from disk.
 
+use crate::plugin::TerrainPluginConfig;
+use crate::preprocess::{Preprocessor, TileConfig};
 use crate::terrain_data::{
     node_atlas::NodeAtlas, AttachmentConfig, AttachmentIndex, FileFormat, NodeId,
 };
@@ -27,11 +29,57 @@ impl AttachmentFromDisk {
 }
 
 /// This component is used to load attachments from disk memory into the corresponding [`NodeAtlas`].
-#[derive(Default, Component)]
+#[derive(Component)]
 pub struct AttachmentFromDiskLoader {
     pub(crate) attachments: HashMap<AttachmentIndex, AttachmentFromDisk>,
     /// Maps the id of an asset to the corresponding node id.
     handle_mapping: HashMap<HandleId, (NodeId, AttachmentIndex)>,
+    preprocessor: Preprocessor,
+    path: String,
+}
+
+impl AttachmentFromDiskLoader {
+    pub fn new(lod_count: u32, path: String) -> Self {
+        Self {
+            attachments: Default::default(),
+            handle_mapping: Default::default(),
+            preprocessor: Preprocessor::new(lod_count, path.clone()),
+            path,
+        }
+    }
+
+    pub fn add_base_attachment(&mut self, plugin_config: &TerrainPluginConfig, tile: TileConfig) {
+        self.attachments.insert(
+            0,
+            AttachmentFromDisk::new(&plugin_config.base.height_attachment(), &self.path),
+        );
+        self.attachments.insert(
+            1,
+            AttachmentFromDisk::new(&plugin_config.base.minmax_attachment(), &self.path),
+        );
+
+        self.preprocessor.base = Some((tile, plugin_config.base));
+    }
+
+    pub fn add_attachment(
+        &mut self,
+        plugin_config: &TerrainPluginConfig,
+        tile: TileConfig,
+        attachment_index: usize,
+    ) {
+        let attachment = plugin_config.attachments[attachment_index].clone();
+
+        self.attachments.insert(
+            attachment_index,
+            AttachmentFromDisk::new(&attachment, &self.path),
+        );
+
+        self.preprocessor.attachments.push((tile, attachment));
+    }
+
+    pub fn preprocess(&self) {
+        self.preprocessor.preprocess();
+    }
 }
 
 pub(crate) fn start_loading_attachment_from_disk(
@@ -48,6 +96,7 @@ pub(crate) fn start_loading_attachment_from_disk(
         let AttachmentFromDiskLoader {
             ref mut attachments,
             ref mut handle_mapping,
+            ..
         } = config.as_mut();
 
         for &node_id in load_events.iter() {
