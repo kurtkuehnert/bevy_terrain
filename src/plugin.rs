@@ -115,7 +115,6 @@ impl Plugin for TerrainPlugin {
         );
 
         app.sub_app_mut(RenderApp)
-            .insert_resource(self.config.clone())
             .init_resource::<TerrainComponents<GpuNodeAtlas>>()
             .init_resource::<TerrainComponents<TerrainData>>()
             .init_resource::<TerrainViewComponents<GpuQuadtree>>()
