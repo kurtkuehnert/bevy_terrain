@@ -1,9 +1,9 @@
 //! The default attachment loader, which loads node data from disk.
 
-use crate::plugin::TerrainPluginConfig;
-use crate::preprocess::{Preprocessor, TileConfig};
-use crate::terrain_data::{
-    node_atlas::NodeAtlas, AttachmentConfig, AttachmentIndex, FileFormat, NodeId,
+use crate::{
+    plugin::TerrainPluginConfig,
+    preprocess::{Preprocessor, TileConfig},
+    terrain_data::{node_atlas::NodeAtlas, AttachmentConfig, AttachmentIndex, FileFormat, NodeId},
 };
 use bevy::{
     asset::{AssetServer, HandleId, LoadState},
