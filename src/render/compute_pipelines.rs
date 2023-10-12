@@ -2,12 +2,12 @@ use crate::{
     render::{
         culling::CullingBindGroup,
         shaders::{PREPARE_INDIRECT_SHADER, REFINE_TILES_SHADER},
-        terrain_data::terrain_bind_group_layout,
+        terrain_data::{TerrainData, TerrainDataBindGroup},
         terrain_view_data::{TerrainViewConfigUniform, TerrainViewData},
         CULL_DATA_LAYOUT, PREPARE_INDIRECT_LAYOUT, REFINE_TILES_LAYOUT,
     },
     terrain::Terrain,
-    DebugTerrain, TerrainComponents, TerrainData, TerrainView, TerrainViewComponents,
+    DebugTerrain, TerrainComponents, TerrainView, TerrainViewComponents,
 };
 use bevy::{
     prelude::*,
@@ -79,7 +79,7 @@ impl FromWorld for TerrainComputePipelines {
         let prepare_indirect_layout = device.create_bind_group_layout(&PREPARE_INDIRECT_LAYOUT);
         let refine_tiles_layout = device.create_bind_group_layout(&REFINE_TILES_LAYOUT);
         let cull_data_layout = device.create_bind_group_layout(&CULL_DATA_LAYOUT);
-        let terrain_layout = terrain_bind_group_layout(device);
+        let terrain_layout = TerrainData::bind_group_layout(device);
 
         let prepare_indirect_shader = PREPARE_INDIRECT_SHADER.typed();
         let refine_tiles_shader = REFINE_TILES_SHADER.typed();
@@ -178,13 +178,13 @@ impl TerrainComputeNode {
         pass: &mut ComputePass<'a>,
         pipelines: &'a [&'a ComputePipeline],
         view_data: &'a TerrainViewData,
-        terrain_data: &'a TerrainData,
+        terrain_data: &'a TerrainDataBindGroup,
         culling_bind_group: &'a BindGroup,
         refinement_count: u32,
     ) {
         pass.set_bind_group(0, &view_data.refine_tiles_bind_group, &[]);
         pass.set_bind_group(1, culling_bind_group, &[]);
-        pass.set_bind_group(2, &terrain_data.terrain_bind_group, &[]);
+        pass.set_bind_group(2, &terrain_data.bind_group(), &[]);
         pass.set_bind_group(3, &view_data.prepare_indirect_bind_group, &[]);
 
         pass.set_pipeline(pipelines[TerrainComputePipelineId::PrepareRoot as usize]);
@@ -222,7 +222,7 @@ impl render_graph::Node for TerrainComputeNode {
         let pipeline_cache = world.resource::<PipelineCache>();
         let view_config_uniforms =
             world.resource::<TerrainViewComponents<TerrainViewConfigUniform>>();
-        let terrain_data = world.resource::<TerrainComponents<TerrainData>>();
+        let terrain_data = world.resource::<TerrainComponents<TerrainDataBindGroup>>();
         let terrain_view_data = world.resource::<TerrainViewComponents<TerrainViewData>>();
         let culling_bind_groups = world.resource::<TerrainViewComponents<CullingBindGroup>>();
 
