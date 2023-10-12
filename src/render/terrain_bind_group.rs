@@ -21,7 +21,7 @@ use bevy::{
 
 /// The terrain config data that is available in shaders.
 #[derive(Clone, Default, ShaderType)]
-pub(crate) struct TerrainConfigUniform {
+struct TerrainConfigUniform {
     lod_count: u32,
     height: f32,
     chunk_size: u32,
@@ -40,7 +40,7 @@ impl From<&TerrainConfig> for TerrainConfigUniform {
 }
 
 #[derive(AsBindGroup)]
-pub(crate) struct TerrainData {
+struct TerrainData {
     #[uniform(0)]
     mesh: MeshUniform,
     #[uniform(1)]
@@ -64,8 +64,15 @@ pub(crate) struct TerrainData {
     attachment_8: Option<Handle<Image>>,
 }
 
-impl TerrainData {
-    pub(crate) fn new(config: &TerrainConfig) -> Self {
+pub struct TerrainBindGroup(PreparedBindGroup<()>);
+
+impl TerrainBindGroup {
+    fn new(
+        config: &TerrainConfig,
+        device: &RenderDevice,
+        images: &RenderAssets<Image>,
+        fallback_image: &FallbackImage,
+    ) -> Self {
         // Todo: pipe this properly
         let mesh = MeshUniform {
             transform: Default::default(),
@@ -75,37 +82,35 @@ impl TerrainData {
         };
 
         let attachments = &config.attachments;
-        let attachment_1 = attachments.get(0).map(|a| a.handle.clone());
-        let attachment_2 = attachments.get(1).map(|a| a.handle.clone());
-        let attachment_3 = attachments.get(2).map(|a| a.handle.clone());
-        let attachment_4 = attachments.get(3).map(|a| a.handle.clone());
-        let attachment_5 = attachments.get(4).map(|a| a.handle.clone());
-        let attachment_6 = attachments.get(5).map(|a| a.handle.clone());
-        let attachment_7 = attachments.get(6).map(|a| a.handle.clone());
-        let attachment_8 = attachments.get(7).map(|a| a.handle.clone());
 
-        let config = config.into();
-
-        Self {
+        let terrain_data = TerrainData {
             mesh,
-            config,
-            attachment_1,
-            attachment_2,
-            attachment_3,
-            attachment_4,
-            attachment_5,
-            attachment_6,
-            attachment_7,
-            attachment_8,
-        }
+            attachment_1: attachments.get(0).map(|a| a.handle.clone()),
+            attachment_2: attachments.get(1).map(|a| a.handle.clone()),
+            attachment_3: attachments.get(2).map(|a| a.handle.clone()),
+            attachment_4: attachments.get(3).map(|a| a.handle.clone()),
+            attachment_5: attachments.get(4).map(|a| a.handle.clone()),
+            attachment_6: attachments.get(5).map(|a| a.handle.clone()),
+            attachment_7: attachments.get(6).map(|a| a.handle.clone()),
+            attachment_8: attachments.get(7).map(|a| a.handle.clone()),
+            config: config.into(),
+        };
+
+        let layout = Self::layout(&device);
+        let bind_group = terrain_data
+            .as_bind_group(&layout, &device, &images, &fallback_image)
+            .ok()
+            .unwrap();
+
+        Self(bind_group)
     }
-}
 
-pub struct TerrainDataBindGroup(PreparedBindGroup<()>);
-
-impl TerrainDataBindGroup {
     pub(crate) fn bind_group(&self) -> &BindGroup {
         &self.0.bind_group
+    }
+
+    pub(crate) fn layout(device: &RenderDevice) -> BindGroupLayout {
+        TerrainData::bind_group_layout(device)
     }
 }
 
@@ -113,26 +118,20 @@ pub(crate) fn initialize_terrain_data(
     device: Res<RenderDevice>,
     images: Res<RenderAssets<Image>>,
     fallback_image: Res<FallbackImage>,
-    mut terrain_data: ResMut<TerrainComponents<TerrainDataBindGroup>>,
+    mut terrain_bind_groups: ResMut<TerrainComponents<TerrainBindGroup>>,
     terrain_query: Extract<Query<(Entity, &TerrainConfig), Added<Terrain>>>,
 ) {
     for (terrain, config) in terrain_query.iter() {
-        let layout = TerrainData::bind_group_layout(&device);
-        let data = TerrainData::new(config);
-        let data = TerrainDataBindGroup(
-            data.as_bind_group(&layout, &device, &images, &fallback_image)
-                .ok()
-                .unwrap(),
-        );
+        let terrain_bind_group = TerrainBindGroup::new(config, &device, &images, &fallback_image);
 
-        terrain_data.insert(terrain, data);
+        terrain_bind_groups.insert(terrain, terrain_bind_group);
     }
 }
 
 pub struct SetTerrainBindGroup<const I: usize>;
 
 impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetTerrainBindGroup<I> {
-    type Param = SRes<TerrainComponents<TerrainDataBindGroup>>;
+    type Param = SRes<TerrainComponents<TerrainBindGroup>>;
     type ViewWorldQuery = ();
     type ItemWorldQuery = ();
 
