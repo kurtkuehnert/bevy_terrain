@@ -169,10 +169,6 @@ pub struct AtlasAttachment {
     /// The name of the attachment.
     pub(crate) name: String,
     pub(crate) texture_size: u32,
-    /// The none overlapping center size in pixels.
-    pub(crate) center_size: u32,
-    /// The overlapping border size around the node, used to prevent sampling artifacts.
-    pub(crate) border_size: u32,
     pub mip_level_count: u32,
     /// The format of the attachment.
     pub(crate) format: TextureFormat,
@@ -191,8 +187,6 @@ impl From<AttachmentConfig> for AtlasAttachment {
             handle,
             name: config.name,
             texture_size: config.texture_size,
-            center_size: config.center_size,
-            border_size: config.border_size,
             mip_level_count: config.mip_level_count,
             format: config.format.into(),
         }

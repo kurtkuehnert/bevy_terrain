@@ -1,8 +1,7 @@
 use crate::{
     render::{
         shaders::DEFAULT_SHADER,
-        terrain_data::terrain_bind_group_layout,
-        terrain_data::SetTerrainBindGroup,
+        terrain_data::{SetTerrainBindGroup, TerrainData},
         terrain_view_data::{DrawTerrainCommand, SetTerrainViewBindGroup},
         TERRAIN_VIEW_LAYOUT,
     },
@@ -233,7 +232,7 @@ impl<M: Material> FromWorld for TerrainRenderPipeline<M> {
 
         let view_layout = mesh_pipeline.view_layout.clone();
         let view_layout_multisampled = mesh_pipeline.view_layout_multisampled.clone();
-        let terrain_layout = terrain_bind_group_layout(device);
+        let terrain_layout = TerrainData::bind_group_layout(device);
         let terrain_view_layout = device.create_bind_group_layout(&TERRAIN_VIEW_LAYOUT);
         let material_layout = M::bind_group_layout(device);
 

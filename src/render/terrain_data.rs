@@ -1,9 +1,7 @@
 use crate::{
-    render::TERRAIN_CONFIG_SIZE,
     terrain::{Terrain, TerrainComponents},
     TerrainConfig,
 };
-use bevy::render::texture::FallbackImage;
 use bevy::{
     ecs::{
         query::ROQueryItem,
@@ -16,11 +14,10 @@ use bevy::{
         render_phase::{PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass},
         render_resource::*,
         renderer::RenderDevice,
+        texture::FallbackImage,
         Extract,
     },
 };
-
-pub const MAX_ATTACHMENT_COUNT: usize = 8;
 
 /// The terrain config data that is available in shaders.
 #[derive(Clone, Default, ShaderType)]
@@ -29,175 +26,86 @@ pub(crate) struct TerrainConfigUniform {
     height: f32,
     chunk_size: u32,
     terrain_size: u32,
-    attachment_sizes: Vec4,
-    attachment_scales: Vec4,
-    attachment_offsets: Vec4,
 }
 
 impl From<&TerrainConfig> for TerrainConfigUniform {
     fn from(config: &TerrainConfig) -> Self {
-        // Todo: figure out a better way to store data for more than four attachments
-        let mut sizes = [0.0; 4];
-        let mut scales = [1.0; 4];
-        let mut offsets = [0.0; 4];
-
-        for (i, attachment) in config.attachments.iter().enumerate() {
-            sizes[i] = attachment.texture_size as f32;
-            scales[i] = attachment.center_size as f32 / attachment.texture_size as f32;
-            offsets[i] = attachment.border_size as f32 / attachment.texture_size as f32;
-        }
-
         Self {
             lod_count: config.lod_count,
             height: config.height,
             chunk_size: config.leaf_node_size,
             terrain_size: config.terrain_size,
-            attachment_sizes: Vec4::from_array(sizes),
-            attachment_scales: Vec4::from_array(scales),
-            attachment_offsets: Vec4::from_array(offsets),
         }
     }
 }
 
-pub fn terrain_bind_group_layout(device: &RenderDevice) -> BindGroupLayout {
-    let mut entries = vec![
-        BindGroupLayoutEntry {
-            binding: 0,
-            visibility: ShaderStages::all(),
-            count: None,
-            ty: BindingType::Buffer {
-                ty: BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: BufferSize::new(MeshUniform::min_size().get()),
-            },
-        },
-        BindGroupLayoutEntry {
-            binding: 1,
-            visibility: ShaderStages::all(),
-            ty: BindingType::Buffer {
-                ty: BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: BufferSize::new(TERRAIN_CONFIG_SIZE),
-            },
-            count: None,
-        },
-        BindGroupLayoutEntry {
-            binding: 2,
-            visibility: ShaderStages::all(),
-            ty: BindingType::Sampler(SamplerBindingType::Filtering),
-            count: None,
-        },
-    ];
-
-    entries.extend(
-        (0..MAX_ATTACHMENT_COUNT).map(|binding| BindGroupLayoutEntry {
-            binding: binding as u32 + 3,
-            visibility: ShaderStages::all(),
-            ty: BindingType::Texture {
-                sample_type: TextureSampleType::Float { filterable: true },
-                view_dimension: TextureViewDimension::D2Array,
-                multisampled: false,
-            },
-            count: None,
-        }),
-    );
-
-    device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-        label: "terrain_layout".into(),
-        entries: &entries,
-    })
-}
-
-pub struct TerrainData {
-    pub(crate) terrain_bind_group: BindGroup,
+#[derive(AsBindGroup)]
+pub(crate) struct TerrainData {
+    #[uniform(0)]
+    mesh: MeshUniform,
+    #[uniform(1)]
+    config: TerrainConfigUniform,
+    #[sampler(2, visibility(all))]
+    #[texture(3, dimension = "2d_array")]
+    attachment_1: Option<Handle<Image>>,
+    #[texture(4, dimension = "2d_array")]
+    attachment_2: Option<Handle<Image>>,
+    #[texture(5, dimension = "2d_array")]
+    attachment_3: Option<Handle<Image>>,
+    #[texture(6, dimension = "2d_array")]
+    attachment_4: Option<Handle<Image>>,
+    #[texture(7, dimension = "2d_array")]
+    attachment_5: Option<Handle<Image>>,
+    #[texture(8, dimension = "2d_array")]
+    attachment_6: Option<Handle<Image>>,
+    #[texture(9, dimension = "2d_array")]
+    attachment_7: Option<Handle<Image>>,
+    #[texture(10, dimension = "2d_array")]
+    attachment_8: Option<Handle<Image>>,
 }
 
 impl TerrainData {
-    pub(crate) fn new(
-        device: &RenderDevice,
-        images: &RenderAssets<Image>,
-        fallback_image: &FallbackImage,
-        config: &TerrainConfig,
-    ) -> Self {
-        let layout = terrain_bind_group_layout(device);
-
-        // Todo: fill this with proper data
-        let mesh_buffer = device.create_buffer_with_data(&BufferInitDescriptor {
-            label: None,
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            contents: &vec![0; MeshUniform::min_size().get() as usize],
-        });
-
-        let mut buffer = encase::UniformBuffer::new(Vec::new());
-        buffer.write(&TerrainConfigUniform::from(config)).unwrap();
-
-        let config_buffer = device.create_buffer_with_data(&BufferInitDescriptor {
-            label: None,
-            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            contents: &buffer.into_inner(),
-        });
-
-        let sampler_descriptor = SamplerDescriptor {
-            address_mode_u: Default::default(),
-            address_mode_v: Default::default(),
-            address_mode_w: Default::default(),
-            mag_filter: FilterMode::Linear,
-            min_filter: FilterMode::Linear,
-            mipmap_filter: FilterMode::Linear,
-            anisotropy_clamp: 16,
-            ..default()
+    pub(crate) fn new(config: &TerrainConfig) -> Self {
+        // Todo: pipe this properly
+        let mesh = MeshUniform {
+            transform: Default::default(),
+            previous_transform: Default::default(),
+            inverse_transpose_model: Default::default(),
+            flags: 0,
         };
 
-        let sampler = device.create_sampler(&sampler_descriptor);
+        let attachments = &config.attachments;
+        let attachment_1 = attachments.get(0).map(|a| a.handle.clone());
+        let attachment_2 = attachments.get(1).map(|a| a.handle.clone());
+        let attachment_3 = attachments.get(2).map(|a| a.handle.clone());
+        let attachment_4 = attachments.get(3).map(|a| a.handle.clone());
+        let attachment_5 = attachments.get(4).map(|a| a.handle.clone());
+        let attachment_6 = attachments.get(5).map(|a| a.handle.clone());
+        let attachment_7 = attachments.get(6).map(|a| a.handle.clone());
+        let attachment_8 = attachments.get(7).map(|a| a.handle.clone());
 
-        let mut entries = vec![
-            BindGroupEntry {
-                binding: 0,
-                resource: mesh_buffer.as_entire_binding(),
-            },
-            BindGroupEntry {
-                binding: 1,
-                resource: config_buffer.as_entire_binding(),
-            },
-            BindGroupEntry {
-                binding: 2,
-                resource: BindingResource::Sampler(&sampler),
-            },
-        ];
+        let config = config.into();
 
-        entries.extend(
-            config
-                .attachments
-                .iter()
-                .enumerate()
-                .map(|(binding, attachment)| {
-                    let attachment = images.get(&attachment.handle).unwrap();
+        Self {
+            mesh,
+            config,
+            attachment_1,
+            attachment_2,
+            attachment_3,
+            attachment_4,
+            attachment_5,
+            attachment_6,
+            attachment_7,
+            attachment_8,
+        }
+    }
+}
 
-                    BindGroupEntry {
-                        binding: binding as u32 + 3,
-                        resource: BindingResource::TextureView(&attachment.texture_view),
-                    }
-                }),
-        );
+pub struct TerrainDataBindGroup(PreparedBindGroup<()>);
 
-        entries.extend(
-            (config.attachments.len()..MAX_ATTACHMENT_COUNT).map(|binding| {
-                let attachment = &fallback_image.d2_array;
-
-                BindGroupEntry {
-                    binding: binding as u32 + 3,
-                    resource: BindingResource::TextureView(&attachment.texture_view),
-                }
-            }),
-        );
-
-        let terrain_bind_group = device.create_bind_group(&BindGroupDescriptor {
-            label: "terrain_bind_group".into(),
-            entries: &entries,
-            layout: &layout,
-        });
-
-        Self { terrain_bind_group }
+impl TerrainDataBindGroup {
+    pub(crate) fn bind_group(&self) -> &BindGroup {
+        &self.0.bind_group
     }
 }
 
@@ -205,21 +113,26 @@ pub(crate) fn initialize_terrain_data(
     device: Res<RenderDevice>,
     images: Res<RenderAssets<Image>>,
     fallback_image: Res<FallbackImage>,
-    mut terrain_data: ResMut<TerrainComponents<TerrainData>>,
+    mut terrain_data: ResMut<TerrainComponents<TerrainDataBindGroup>>,
     terrain_query: Extract<Query<(Entity, &TerrainConfig), Added<Terrain>>>,
 ) {
     for (terrain, config) in terrain_query.iter() {
-        terrain_data.insert(
-            terrain,
-            TerrainData::new(&device, &images, &fallback_image, config),
+        let layout = TerrainData::bind_group_layout(&device);
+        let data = TerrainData::new(config);
+        let data = TerrainDataBindGroup(
+            data.as_bind_group(&layout, &device, &images, &fallback_image)
+                .ok()
+                .unwrap(),
         );
+
+        terrain_data.insert(terrain, data);
     }
 }
 
 pub struct SetTerrainBindGroup<const I: usize>;
 
 impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetTerrainBindGroup<I> {
-    type Param = SRes<TerrainComponents<TerrainData>>;
+    type Param = SRes<TerrainComponents<TerrainDataBindGroup>>;
     type ViewWorldQuery = ();
     type ItemWorldQuery = ();
 
@@ -232,7 +145,7 @@ impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetTerrainBindGroup<I> {
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
         let data = terrain_data.into_inner().get(&item.entity()).unwrap();
-        pass.set_bind_group(I, &data.terrain_bind_group, &[]);
+        pass.set_bind_group(I, &data.bind_group(), &[]);
         RenderCommandResult::Success
     }
 }

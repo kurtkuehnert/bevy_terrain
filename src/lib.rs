@@ -47,7 +47,7 @@ extern crate core;
 
 use crate::{
     debug::DebugTerrain,
-    render::{compute_pipelines::TerrainComputePipelines, terrain_data::TerrainData},
+    render::compute_pipelines::TerrainComputePipelines,
     terrain::{Terrain, TerrainComponents, TerrainConfig},
     terrain_data::node_atlas::NodeAtlas,
     terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
