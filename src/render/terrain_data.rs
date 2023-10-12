@@ -3,6 +3,7 @@ use crate::{
     terrain::{Terrain, TerrainComponents},
     TerrainConfig,
 };
+use bevy::render::texture::FallbackImage;
 use bevy::{
     ecs::{
         query::ROQueryItem,
@@ -18,6 +19,8 @@ use bevy::{
         Extract,
     },
 };
+
+pub const MAX_ATTACHMENT_COUNT: usize = 8;
 
 /// The terrain config data that is available in shaders.
 #[derive(Clone, Default, ShaderType)]
@@ -56,10 +59,7 @@ impl From<&TerrainConfig> for TerrainConfigUniform {
     }
 }
 
-pub fn terrain_bind_group_layout(
-    device: &RenderDevice,
-    attachment_count: usize,
-) -> BindGroupLayout {
+pub fn terrain_bind_group_layout(device: &RenderDevice) -> BindGroupLayout {
     let mut entries = vec![
         BindGroupLayoutEntry {
             binding: 0,
@@ -89,16 +89,18 @@ pub fn terrain_bind_group_layout(
         },
     ];
 
-    entries.extend((0..attachment_count).map(|binding| BindGroupLayoutEntry {
-        binding: binding as u32 + 3,
-        visibility: ShaderStages::all(),
-        ty: BindingType::Texture {
-            sample_type: TextureSampleType::Float { filterable: true },
-            view_dimension: TextureViewDimension::D2Array,
-            multisampled: false,
-        },
-        count: None,
-    }));
+    entries.extend(
+        (0..MAX_ATTACHMENT_COUNT).map(|binding| BindGroupLayoutEntry {
+            binding: binding as u32 + 3,
+            visibility: ShaderStages::all(),
+            ty: BindingType::Texture {
+                sample_type: TextureSampleType::Float { filterable: true },
+                view_dimension: TextureViewDimension::D2Array,
+                multisampled: false,
+            },
+            count: None,
+        }),
+    );
 
     device.create_bind_group_layout(&BindGroupLayoutDescriptor {
         label: "terrain_layout".into(),
@@ -114,9 +116,10 @@ impl TerrainData {
     pub(crate) fn new(
         device: &RenderDevice,
         images: &RenderAssets<Image>,
+        fallback_image: &FallbackImage,
         config: &TerrainConfig,
     ) -> Self {
-        let layout = terrain_bind_group_layout(device, config.attachments.len());
+        let layout = terrain_bind_group_layout(device);
 
         // Todo: fill this with proper data
         let mesh_buffer = device.create_buffer_with_data(&BufferInitDescriptor {
@@ -177,6 +180,17 @@ impl TerrainData {
                 }),
         );
 
+        entries.extend(
+            (config.attachments.len()..MAX_ATTACHMENT_COUNT).map(|binding| {
+                let attachment = &fallback_image.d2_array;
+
+                BindGroupEntry {
+                    binding: binding as u32 + 3,
+                    resource: BindingResource::TextureView(&attachment.texture_view),
+                }
+            }),
+        );
+
         let terrain_bind_group = device.create_bind_group(&BindGroupDescriptor {
             label: "terrain_bind_group".into(),
             entries: &entries,
@@ -190,11 +204,15 @@ impl TerrainData {
 pub(crate) fn initialize_terrain_data(
     device: Res<RenderDevice>,
     images: Res<RenderAssets<Image>>,
+    fallback_image: Res<FallbackImage>,
     mut terrain_data: ResMut<TerrainComponents<TerrainData>>,
     terrain_query: Extract<Query<(Entity, &TerrainConfig), Added<Terrain>>>,
 ) {
     for (terrain, config) in terrain_query.iter() {
-        terrain_data.insert(terrain, TerrainData::new(&device, &images, config));
+        terrain_data.insert(
+            terrain,
+            TerrainData::new(&device, &images, &fallback_image, config),
+        );
     }
 }
 
