@@ -13,7 +13,7 @@ pub mod compute_pipelines;
 pub mod culling;
 pub mod render_pipeline;
 pub mod shaders;
-pub mod terrain_data;
+pub mod terrain_bind_group;
 pub mod terrain_view_data;
 
 pub(crate) const TERRAIN_VIEW_CONFIG_SIZE: BufferAddress =
