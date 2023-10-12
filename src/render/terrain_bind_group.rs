@@ -41,26 +41,26 @@ impl From<&TerrainConfig> for TerrainConfigUniform {
 
 #[derive(AsBindGroup)]
 struct TerrainData {
-    #[uniform(0)]
+    #[uniform(0, visibility(all))]
     mesh: MeshUniform,
-    #[uniform(1)]
+    #[uniform(1, visibility(all))]
     config: TerrainConfigUniform,
     #[sampler(2, visibility(all))]
-    #[texture(3, dimension = "2d_array")]
+    #[texture(3, dimension = "2d_array", visibility(all))]
     attachment_1: Option<Handle<Image>>,
-    #[texture(4, dimension = "2d_array")]
+    #[texture(4, dimension = "2d_array", visibility(all))]
     attachment_2: Option<Handle<Image>>,
-    #[texture(5, dimension = "2d_array")]
+    #[texture(5, dimension = "2d_array", visibility(all))]
     attachment_3: Option<Handle<Image>>,
-    #[texture(6, dimension = "2d_array")]
+    #[texture(6, dimension = "2d_array", visibility(all))]
     attachment_4: Option<Handle<Image>>,
-    #[texture(7, dimension = "2d_array")]
+    #[texture(7, dimension = "2d_array", visibility(all))]
     attachment_5: Option<Handle<Image>>,
-    #[texture(8, dimension = "2d_array")]
+    #[texture(8, dimension = "2d_array", visibility(all))]
     attachment_6: Option<Handle<Image>>,
-    #[texture(9, dimension = "2d_array")]
+    #[texture(9, dimension = "2d_array", visibility(all))]
     attachment_7: Option<Handle<Image>>,
-    #[texture(10, dimension = "2d_array")]
+    #[texture(10, dimension = "2d_array", visibility(all))]
     attachment_8: Option<Handle<Image>>,
 }
 
@@ -97,6 +97,7 @@ impl TerrainBindGroup {
         };
 
         let layout = Self::layout(&device);
+
         let bind_group = terrain_data
             .as_bind_group(&layout, &device, &images, &fallback_image)
             .ok()
@@ -114,7 +115,7 @@ impl TerrainBindGroup {
     }
 }
 
-pub(crate) fn initialize_terrain_data(
+pub(crate) fn initialize_terrain_bind_group(
     device: Res<RenderDevice>,
     images: Res<RenderAssets<Image>>,
     fallback_image: Res<FallbackImage>,
@@ -140,11 +141,15 @@ impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetTerrainBindGroup<I> {
         item: &P,
         _: ROQueryItem<'w, Self::ViewWorldQuery>,
         _: ROQueryItem<'w, Self::ItemWorldQuery>,
-        terrain_data: SystemParamItem<'w, '_, Self::Param>,
+        terrain_bind_groups: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let data = terrain_data.into_inner().get(&item.entity()).unwrap();
-        pass.set_bind_group(I, &data.bind_group(), &[]);
+        let terrain_bind_group = terrain_bind_groups
+            .into_inner()
+            .get(&item.entity())
+            .unwrap();
+
+        pass.set_bind_group(I, &terrain_bind_group.bind_group(), &[]);
         RenderCommandResult::Success
     }
 }
