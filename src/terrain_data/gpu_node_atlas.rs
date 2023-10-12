@@ -40,13 +40,24 @@ impl AtlasAttachment {
             view_formats: &[],
         });
 
+        let sampler = device.create_sampler(&SamplerDescriptor {
+            address_mode_u: Default::default(),
+            address_mode_v: Default::default(),
+            address_mode_w: Default::default(),
+            mag_filter: FilterMode::Linear,
+            min_filter: FilterMode::Linear,
+            mipmap_filter: FilterMode::Linear,
+            anisotropy_clamp: 16,
+            ..default()
+        });
+
         images.insert(
             self.handle.clone(),
             GpuImage {
                 texture_view: texture.create_view(&TextureViewDescriptor::default()),
                 texture,
                 texture_format: self.format,
-                sampler: device.create_sampler(&SamplerDescriptor::default()),
+                sampler,
                 size: Vec2::splat(self.texture_size as f32),
                 mip_level_count: self.mip_level_count,
             },
