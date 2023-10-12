@@ -17,12 +17,12 @@ fn lookup_fragment_data(input: FragmentInput, lookup: NodeLookup, ddx: vec2<f32>
     let atlas_lod = lookup.atlas_lod;
     let atlas_index = lookup.atlas_index;
     let atlas_coords = lookup.atlas_coords;
-    let ddx = ddx / f32(1u << atlas_lod);
-    let ddy = ddy / f32(1u << atlas_lod);
+    let atlas_ddx = ddx / f32(1u << atlas_lod);
+    let atlas_ddy = ddy / f32(1u << atlas_lod);
 
     let height_coords = atlas_coords * HEIGHT_SCALE + HEIGHT_OFFSET;
-    let height_ddx = ddx / 512.0;
-    let height_ddy = ddy / 512.0;
+    let height_ddx = atlas_ddx / 512.0;
+    let height_ddy = atlas_ddy / 512.0;
 
     let world_normal = calculate_normal(height_coords, atlas_index, atlas_lod, height_ddx, height_ddy);
 

@@ -1,11 +1,6 @@
 //! Types for configuring terrain views.
 
-use bevy::{
-    prelude::*,
-    render::extract_component::ExtractComponent,
-    utils::{HashMap, Uuid},
-};
-use std::str::FromStr;
+use bevy::{prelude::*, render::extract_component::ExtractComponent, utils::HashMap};
 
 /// Resource that stores components that are associated to a terrain entity and a view entity.
 #[derive(Clone, Resource)]
@@ -69,11 +64,7 @@ pub struct TerrainViewConfig {
 impl Default for TerrainViewConfig {
     fn default() -> Self {
         Self {
-            quadtree_handle: HandleUntyped::weak_from_u64(
-                Uuid::from_str("6ea26da6-6cf8-4ea2-9986-1d7bf6c17d6f").unwrap(),
-                fastrand::u64(..),
-            )
-            .typed(), // Todo: fix this awful hack
+            quadtree_handle: Handle::<Image>::weak_from_u128(fastrand::u128(..)), // Todo: fix this hack
             height_under_viewer: 0.0,
             load_distance: 5.0,
             node_count: 10,

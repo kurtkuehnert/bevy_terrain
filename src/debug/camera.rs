@@ -71,7 +71,7 @@ pub(crate) fn debug_camera_control(
         let mut rotation_delta = Vec2::ZERO;
         let mut translation_delta = dolly::glam::Vec3::ZERO;
 
-        for motion in motion_events.iter() {
+        for motion in motion_events.read() {
             rotation_delta += -motion.delta;
         }
 
@@ -127,7 +127,7 @@ pub(crate) fn debug_camera_control(
             .driver_mut::<Position>()
             .translate(translation_delta);
     } else {
-        for _ in motion_events.iter() {}
+        for _ in motion_events.read() {}
     }
 
     for (mut transform, mut camera) in &mut camera_rig_query {

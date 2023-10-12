@@ -12,13 +12,13 @@ authors = ["Kurt Kühnert <kurt@kuehnert.dev>"]
 repository = "https://github.com/kurtkuehnert/bevy_terrain"
 
 [dependencies]
-bevy = "0.11.2"
+bevy = { git="https://github.com/bevyengine/bevy" }
 dtm = "0.1"
 rapid-qoi = "0.6"
 ndarray = "0.15"
 itertools = "0.11.0"
 image = "0.24"
-lru = "0.11.1"
+lru = "0.12.0"
 bitflags = "2.4.0"
 strum = "0.25.0"
 strum_macros = "0.25.2"
@@ -27,3 +27,19 @@ bytemuck = "1.10"
 anyhow = "1.0"
 bincode = "2.0.0-rc.1"
 dolly = "0.4"
+
+[[example]]
+name = "basic"
+path = "examples/basic.rs"
+
+[package.metadata.example.basic]
+name = "Basic"
+description = "Renders a basic terrain with only the base attachment."
+
+[[example]]
+name = "advanced"
+path = "examples/advanced.rs"
+
+[package.metadata.example.advanced]
+name = "Advanced"
+description = "Renders a terrain with the base attachment and an albedo texture, using a custom shader."

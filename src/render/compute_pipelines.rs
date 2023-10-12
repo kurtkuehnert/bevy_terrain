@@ -67,8 +67,6 @@ pub struct TerrainComputePipelines {
     pub(crate) refine_tiles_layout: BindGroupLayout,
     pub(crate) cull_data_layout: BindGroupLayout,
     pub(crate) terrain_layout: BindGroupLayout,
-    prepare_indirect_shader: Handle<Shader>,
-    refine_tiles_shader: Handle<Shader>,
     pipelines: [Option<CachedComputePipelineId>; TerrainComputePipelineId::COUNT],
 }
 
@@ -81,16 +79,11 @@ impl FromWorld for TerrainComputePipelines {
         let cull_data_layout = device.create_bind_group_layout(&CULL_DATA_LAYOUT);
         let terrain_layout = TerrainBindGroup::layout(device);
 
-        let prepare_indirect_shader = PREPARE_INDIRECT_SHADER.typed();
-        let refine_tiles_shader = REFINE_TILES_SHADER.typed();
-
         TerrainComputePipelines {
             prepare_indirect_layout,
             refine_tiles_layout,
             cull_data_layout,
             terrain_layout,
-            prepare_indirect_shader,
-            refine_tiles_shader,
             pipelines: [None; TerrainComputePipelineId::COUNT],
         }
     }
@@ -113,7 +106,7 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
                     self.cull_data_layout.clone(),
                     self.terrain_layout.clone(),
                 ];
-                shader = self.refine_tiles_shader.clone();
+                shader = REFINE_TILES_SHADER;
                 entry_point = "refine_tiles".into();
             }
             TerrainComputePipelineId::PrepareRoot => {
@@ -123,7 +116,7 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
                     self.terrain_layout.clone(),
                     self.prepare_indirect_layout.clone(),
                 ];
-                shader = self.prepare_indirect_shader.clone();
+                shader = PREPARE_INDIRECT_SHADER;
                 entry_point = "prepare_root".into();
             }
             TerrainComputePipelineId::PrepareNext => {
@@ -133,7 +126,7 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
                     self.terrain_layout.clone(),
                     self.prepare_indirect_layout.clone(),
                 ];
-                shader = self.prepare_indirect_shader.clone();
+                shader = PREPARE_INDIRECT_SHADER;
                 entry_point = "prepare_next".into();
             }
             TerrainComputePipelineId::PrepareRender => {
@@ -143,7 +136,7 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
                     self.terrain_layout.clone(),
                     self.prepare_indirect_layout.clone(),
                 ];
-                shader = self.prepare_indirect_shader.clone();
+                shader = PREPARE_INDIRECT_SHADER;
                 entry_point = "prepare_render".into();
             }
         }

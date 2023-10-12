@@ -7,21 +7,31 @@ pub mod tdf;
 
 use crate::formats::tdf::TDF;
 use bevy::{
-    asset::{AssetLoader, Error, LoadedAsset},
+    asset::{io::Reader, AssetLoader, AsyncReadExt, LoadContext},
     prelude::*,
     render::render_resource::*,
+    utils::BoxedFuture,
 };
 
+#[derive(Default)]
 struct TDFAssetLoader;
 
 impl AssetLoader for TDFAssetLoader {
+    type Asset = Image;
+    type Settings = ();
+    type Error = std::io::Error;
+
     fn load<'a>(
         &'a self,
-        bytes: &'a [u8],
-        load_context: &'a mut bevy::asset::LoadContext,
-    ) -> bevy::utils::BoxedFuture<'a, Result<(), Error>> {
+        reader: &'a mut Reader,
+        _settings: &'a (),
+        _load_context: &'a mut LoadContext,
+    ) -> BoxedFuture<'a, Result<Self::Asset, Self::Error>> {
         Box::pin(async move {
-            let (descriptor, mut data) = TDF::decode_alloc(bytes, true).unwrap();
+            let mut bytes = Vec::new();
+            reader.read_to_end(&mut bytes).await?;
+
+            let (descriptor, mut data) = TDF::decode_alloc(&bytes, true).unwrap();
 
             // extend alpha channel
             if descriptor.channel_count == 3 && descriptor.pixel_size == 1 {
@@ -51,9 +61,7 @@ impl AssetLoader for TDFAssetLoader {
                 texture_view_descriptor: None,
             };
 
-            load_context.set_default_asset(LoadedAsset::new(image));
-
-            Ok(())
+            Ok(image)
         })
     }
 
@@ -67,6 +75,6 @@ pub struct TDFPlugin;
 
 impl Plugin for TDFPlugin {
     fn build(&self, app: &mut App) {
-        app.add_asset_loader(TDFAssetLoader);
+        app.init_asset_loader::<TDFAssetLoader>();
     }
 }

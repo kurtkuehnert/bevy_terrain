@@ -1,11 +1,10 @@
 use bevy::{
-    asset::{ChangeWatcher, LoadState},
+    asset::LoadState,
     prelude::*,
     reflect::{TypePath, TypeUuid},
     render::{render_resource::*, texture::ImageSampler},
 };
 use bevy_terrain::prelude::*;
-use std::time::Duration;
 
 const TERRAIN_SIZE: u32 = 1024;
 const TEXTURE_SIZE: u32 = 512;
@@ -15,7 +14,7 @@ const HEIGHT: f32 = 200.0;
 const NODE_ATLAS_SIZE: u32 = 100;
 const PATH: &str = "terrain";
 
-#[derive(AsBindGroup, TypeUuid, TypePath, Clone)]
+#[derive(AsBindGroup, Asset, TypeUuid, TypePath, Clone)]
 #[uuid = "4ccc53dd-2cfd-48ba-b659-c0e1a9bc0bdb"]
 pub struct TerrainMaterial {
     #[texture(0, dimension = "2d_array")]
@@ -42,10 +41,7 @@ fn main() {
 
     App::new()
         .add_plugins((
-            DefaultPlugins.set(AssetPlugin {
-                watch_for_changes: ChangeWatcher::with_delay(Duration::from_millis(200)), // enable hot reloading for shader easy customization
-                ..default()
-            }),
+            DefaultPlugins,
             TerrainPlugin { config },
             TerrainDebugPlugin,
             TerrainMaterialPlugin::<TerrainMaterial>::default(),
@@ -171,7 +167,7 @@ fn create_array_texture(
     mut images: ResMut<Assets<Image>>,
 ) {
     if loading_texture.is_loaded
-        || asset_server.get_load_state(loading_texture.handle.clone()) != LoadState::Loaded
+        || asset_server.load_state(&loading_texture.handle) != LoadState::Loaded
     {
         return;
     }

@@ -77,7 +77,8 @@ impl TerrainBindGroup {
         let mesh = MeshUniform {
             transform: Default::default(),
             previous_transform: Default::default(),
-            inverse_transpose_model: Default::default(),
+            inverse_transpose_model_a: Default::default(),
+            inverse_transpose_model_b: Default::default(),
             flags: 0,
         };
 

@@ -13,7 +13,7 @@ const HEIGHT: f32 = 200.0;
 const NODE_ATLAS_SIZE: u32 = 100;
 const PATH: &str = "terrain";
 
-#[derive(AsBindGroup, TypeUuid, TypePath, Clone)]
+#[derive(AsBindGroup, Asset, TypeUuid, TypePath, Clone)]
 #[uuid = "003e1d5d-241c-45a6-8c25-731dee22d820"]
 pub struct TerrainMaterial {}
 

@@ -32,16 +32,16 @@ fn lookup_fragment_data(input: FragmentInput, lookup: NodeLookup, ddx: vec2<f32>
     let atlas_lod = lookup.atlas_lod;
     let atlas_index = lookup.atlas_index;
     let atlas_coords = lookup.atlas_coords;
-    let ddx = ddx / f32(1u << atlas_lod);
-    let ddy = ddy / f32(1u << atlas_lod);
+    let atlas_ddx = ddx / f32(1u << atlas_lod);
+    let atlas_ddy = ddy / f32(1u << atlas_lod);
 
     // Adjust the uvs and deltas for your attachments.
     let height_coords = atlas_coords * HEIGHT_SCALE + HEIGHT_OFFSET;
-    let height_ddx = ddx / HEIGHT_SIZE;
-    let height_ddy = ddy / HEIGHT_SIZE;
+    let height_ddx = atlas_ddx / HEIGHT_SIZE;
+    let height_ddy = atlas_ddy / HEIGHT_SIZE;
     let albedo_coords = atlas_coords * ALBEDO_SCALE + ALBEDO_OFFSET;
-    let albedo_ddx = ddx / ALBEDO_SIZE;
-    let albedo_ddy = ddy / ALBEDO_SIZE;
+    let albedo_ddx = atlas_ddx / ALBEDO_SIZE;
+    let albedo_ddy = atlas_ddy / ALBEDO_SIZE;
 
     // Calculate the normal from the heightmap.
     let world_normal = calculate_normal(height_coords, atlas_index, atlas_lod, height_ddx, height_ddy);
