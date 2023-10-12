@@ -8,7 +8,7 @@ use crate::{
         },
         culling::{prepare_and_queue_terrain_culling_bind_group, CullingBindGroup},
         shaders::load_terrain_shaders,
-        terrain_data::{initialize_terrain_data, TerrainDataBindGroup},
+        terrain_bind_group::{initialize_terrain_bind_group, TerrainBindGroup},
         terrain_view_data::{
             extract_terrain_view_config, initialize_terrain_view_data, prepare_terrain_view_config,
             TerrainViewConfigUniform, TerrainViewData,
@@ -116,7 +116,7 @@ impl Plugin for TerrainPlugin {
 
         app.sub_app_mut(RenderApp)
             .init_resource::<TerrainComponents<GpuNodeAtlas>>()
-            .init_resource::<TerrainComponents<TerrainDataBindGroup>>()
+            .init_resource::<TerrainComponents<TerrainBindGroup>>()
             .init_resource::<TerrainViewComponents<GpuQuadtree>>()
             .init_resource::<TerrainViewComponents<TerrainViewData>>()
             .init_resource::<TerrainViewComponents<TerrainViewConfigUniform>>()
@@ -127,7 +127,7 @@ impl Plugin for TerrainPlugin {
                     extract_terrain_view_config,
                     initialize_gpu_node_atlas,
                     initialize_gpu_quadtree,
-                    initialize_terrain_data.after(initialize_gpu_node_atlas),
+                    initialize_terrain_bind_group.after(initialize_gpu_node_atlas),
                     initialize_terrain_view_data.after(initialize_gpu_quadtree),
                     extract_node_atlas.after(initialize_gpu_node_atlas),
                     extract_quadtree.after(initialize_gpu_quadtree),
