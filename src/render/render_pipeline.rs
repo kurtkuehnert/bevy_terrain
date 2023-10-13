@@ -424,8 +424,6 @@ where
                 .init_resource::<ExtractedMaterials<M>>()
                 .init_resource::<RenderMaterials<M>>()
                 .init_resource::<SpecializedRenderPipelines<TerrainRenderPipeline<M>>>()
-                // unused, but still required
-                .init_resource::<SpecializedMeshPipelines<MaterialPipeline<M>>>()
                 .add_systems(ExtractSchedule, extract_materials::<M>)
                 .add_systems(
                     Render,
@@ -442,7 +440,7 @@ where
     fn finish(&self, app: &mut App) {
         app.sub_app_mut(RenderApp)
             .init_resource::<TerrainRenderPipeline<M>>()
-            // unused, but still required
+            // unused, but still required, since the prepare_materials requires the layout of the pipeline
             .init_resource::<MaterialPipeline<M>>();
     }
 }
