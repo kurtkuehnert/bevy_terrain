@@ -20,7 +20,7 @@ pub(crate) const TERRAIN_VIEW_CONFIG_SIZE: BufferAddress =
     mem::size_of::<TerrainViewConfigUniform>() as BufferAddress;
 pub(crate) const CULL_DATA_BUFFER_SIZE: BufferAddress =
     mem::size_of::<CullingData>() as BufferAddress;
-pub(crate) const TILE_SIZE: BufferAddress = 6 * 4;
+pub(crate) const TILE_SIZE: BufferAddress = 16 * 4;
 pub(crate) const INDIRECT_BUFFER_SIZE: BufferAddress = 5 * 4;
 pub(crate) const PARAMETER_BUFFER_SIZE: BufferAddress = 7 * 4;
 

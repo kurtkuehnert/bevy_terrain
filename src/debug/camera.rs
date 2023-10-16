@@ -19,9 +19,9 @@ impl Default for DebugCamera {
     fn default() -> Self {
         Self {
             rig: CameraRig::builder()
-                .with(Position::new(dolly::glam::Vec3::new(0.0, 100.0, 0.0)))
+                .with(Position::new(dolly::glam::Vec3::new(-150.0, 000.0, 0.0)))
                 .with(YawPitch {
-                    yaw_degrees: -135.0,
+                    yaw_degrees: -90.0,
                     pitch_degrees: 0.0,
                 })
                 .with(Smooth::new_position_rotation(3.0, 1.5))

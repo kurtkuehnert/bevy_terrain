@@ -1,6 +1,6 @@
-/*
 #define_import_path bevy_terrain::functions
 
+/*
 #import bevy_terrain::types TerrainConfig, TerrainViewConfig, Tile, TileList, NodeLookup, VertexInput
 #import bevy_terrain::types VertexOutput, FragmentInput, FragmentOutput, Fragment, Blend
 #import bevy_terrain::bindings view_config, quadtree, tiles, config, atlas_sampler
@@ -135,3 +135,20 @@ fn minmax(local_position: vec2<f32>, size: f32) -> vec2<f32> {
     return vec2(min_height, max_height) * config.height;
 }
 */
+
+fn cube_to_sphere(position: vec3<f32>) -> vec3<f32> {
+    let p = 2.0 * (position - 0.5);
+    let x2 = p.x * p.x;
+	let y2 = p.y * p.y;
+	let z2 = p.z * p.z;
+
+	let rx = p.x * sqrt(1.0 - (y2 + z2) / 2.0 + y2 * z2 / 3.0);
+	let ry = p.y * sqrt(1.0 - (x2 + z2) / 2.0 + x2 * z2 / 3.0);
+	let rz = p.z * sqrt(1.0 - (x2 + y2) / 2.0 + x2 * y2 / 3.0);
+
+    var r = p;
+    // r = normalize(p);
+    r = vec3<f32>(rx, ry, rz);
+
+    return r;
+}
