@@ -31,7 +31,7 @@ var height_atlas: texture_2d_array<f32>;
 @group(2) @binding(4)
 var minmax_atlas: texture_2d_array<f32>;
 
-#import bevy_terrain::functions
+// #import bevy_terrain::functions
 
 // Todo: remove duplicate
 fn approximate_world_position(local_position: vec2<f32>) -> vec4<f32> {
@@ -50,6 +50,7 @@ fn final_index() -> i32 {
     return atomicAdd(&parameters.final_index, 1);
 }
 
+/*
 fn frustum_cull(tile: Tile) -> bool {
     let size = f32(tile.size) * view_config.tile_scale;
     let local_position = (vec2<f32>(tile.coords) + 0.5) * size;
@@ -128,6 +129,7 @@ fn subdivide(tile: Tile) {
         }
     }
 }
+*/
 
 @compute @workgroup_size(64, 1, 1)
 fn refine_tiles(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
@@ -137,10 +139,14 @@ fn refine_tiles(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
 
     let tile = temporary_tiles.data[parent_index(invocation_id.x)];
 
+    final_tiles.data[final_index()] = tile;
+
+/*
     if (should_be_divided(tile)) {
         subdivide(tile);
     }
     else {
         final_tiles.data[final_index()] = tile;
     }
+*/
 }
