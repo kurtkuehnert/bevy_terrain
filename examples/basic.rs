@@ -1,4 +1,8 @@
-use bevy::{prelude::*, reflect::TypeUuid, render::render_resource::*};
+use bevy::{
+    prelude::*,
+    reflect::{TypePath, TypeUuid},
+    render::render_resource::*,
+};
 use bevy_terrain::prelude::*;
 
 const TERRAIN_SIZE: u32 = 1024;
@@ -9,47 +13,38 @@ const HEIGHT: f32 = 200.0;
 const NODE_ATLAS_SIZE: u32 = 100;
 const PATH: &str = "terrain";
 
-#[derive(AsBindGroup, TypeUuid, Clone)]
+#[derive(AsBindGroup, TypeUuid, TypePath, Clone)]
 #[uuid = "003e1d5d-241c-45a6-8c25-731dee22d820"]
 pub struct TerrainMaterial {}
 
 impl Material for TerrainMaterial {}
 
 fn main() {
+    let config =
+        TerrainPluginConfig::with_base_attachment(BaseConfig::new(TEXTURE_SIZE, MIP_LEVEL_COUNT));
+
     App::new()
-        .add_plugins(DefaultPlugins)
-        .add_plugin(TerrainPlugin {
-            attachment_count: 2, // has to match the attachments of the terrain
-        })
-        .add_plugin(TerrainDebugPlugin) // enable debug settings and controls
-        .add_plugin(TerrainMaterialPlugin::<TerrainMaterial>::default())
-        .add_startup_system(setup)
-        .add_system(toggle_camera)
+        .add_plugins((
+            DefaultPlugins,
+            TerrainPlugin { config },
+            TerrainDebugPlugin, // enable debug settings and controls
+            TerrainMaterialPlugin::<TerrainMaterial>::default(),
+        ))
+        .add_systems(Startup, setup)
+        .add_systems(Update, toggle_camera)
         .run();
 }
 
 fn setup(
     mut commands: Commands,
+    plugin_config: Res<TerrainPluginConfig>,
     mut materials: ResMut<Assets<TerrainMaterial>>,
     mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
 ) {
-    let mut preprocessor = Preprocessor::default();
-    let mut loader = AttachmentFromDiskLoader::default();
-
-    // Configure all the important properties of the terrain, as well as its attachments.
-    let mut config = TerrainConfig::new(
-        TERRAIN_SIZE,
-        LOD_COUNT,
-        HEIGHT,
-        NODE_ATLAS_SIZE,
-        PATH.to_string(),
-    );
-
-    config.add_base_attachment_from_disk(
-        &mut preprocessor,
-        &mut loader,
-        BaseConfig::new(TEXTURE_SIZE, MIP_LEVEL_COUNT),
+    let mut loader = AttachmentFromDiskLoader::new(LOD_COUNT, PATH.to_string());
+    loader.add_base_attachment(
+        &plugin_config,
         TileConfig {
             path: "assets/terrain/source/height".to_string(),
             size: TERRAIN_SIZE,
@@ -59,18 +54,16 @@ fn setup(
 
     // Preprocesses the terrain data.
     // Todo: Should be commented out after the first run.
-    preprocessor.preprocess(&config);
+    // loader.preprocess();
 
-    load_node_config(&mut config);
-
-    // Create the terrain.
-    let terrain = commands
-        .spawn((
-            TerrainBundle::new(config.clone()),
-            loader,
-            materials.add(TerrainMaterial {}),
-        ))
-        .id();
+    // Configure all the important properties of the terrain, as well as its attachments.
+    let config = plugin_config.configure_terrain(
+        TERRAIN_SIZE,
+        LOD_COUNT,
+        HEIGHT,
+        NODE_ATLAS_SIZE,
+        PATH.to_string(),
+    );
 
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
     let view_config = TerrainViewConfig {
@@ -81,6 +74,15 @@ fn setup(
         view_distance: 4.0,
         ..default()
     };
+
+    // Create the terrain.
+    let terrain = commands
+        .spawn((
+            TerrainBundle::new(config.clone()),
+            loader,
+            materials.add(TerrainMaterial {}),
+        ))
+        .id();
 
     // Create the view.
     let view = commands

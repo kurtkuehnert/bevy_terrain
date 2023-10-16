@@ -1,12 +1,21 @@
 #define_import_path bevy_terrain::vertex
 
-// The function that evaluates the height of the vertex.
-// This will happen once or twice (lod fringe).
-// fn vertex_height(lookup: AtlasLookup) -> f32;
+#import bevy_terrain::types NodeLookup, VertexInput, VertexOutput
+#import bevy_terrain::bindings view_config, tiles, config, atlas_sampler
+#import bevy_terrain::functions calculate_grid_position, calculate_local_position, approximate_world_position, calculate_blend, lookup_node, vertex_output
+#import bevy_terrain::debug show_tiles, show_minmax_error
+#import bevy_terrain::attachments height_atlas, HEIGHT_SCALE, HEIGHT_OFFSET
+
+// Todo: implement bump mapping, etc.
+fn vertex_height(lookup: NodeLookup) -> f32 {
+    let height_coords = lookup.atlas_coords * HEIGHT_SCALE + HEIGHT_OFFSET;
+    let height = textureSampleLevel(height_atlas, atlas_sampler, height_coords, lookup.atlas_index, 0.0).x;
+
+    return height * config.height;
+}
 
 // The default vertex entry point, which blends the height at the fringe between two lods.
-@vertex
-fn vertex(in: VertexInput) -> VertexOutput {
+fn vertex_fn(in: VertexInput) -> VertexOutput {
     let tile_index = in.vertex_index / view_config.vertices_per_tile;
     let grid_index = in.vertex_index % view_config.vertices_per_tile;
 

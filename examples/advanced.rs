@@ -1,10 +1,11 @@
 use bevy::{
-    asset::LoadState,
+    asset::{ChangeWatcher, LoadState},
     prelude::*,
-    reflect::TypeUuid,
+    reflect::{TypePath, TypeUuid},
     render::{render_resource::*, texture::ImageSampler},
 };
 use bevy_terrain::prelude::*;
+use std::time::Duration;
 
 const TERRAIN_SIZE: u32 = 1024;
 const TEXTURE_SIZE: u32 = 512;
@@ -14,7 +15,7 @@ const HEIGHT: f32 = 200.0;
 const NODE_ATLAS_SIZE: u32 = 100;
 const PATH: &str = "terrain";
 
-#[derive(AsBindGroup, TypeUuid, Clone)]
+#[derive(AsBindGroup, TypeUuid, TypePath, Clone)]
 #[uuid = "4ccc53dd-2cfd-48ba-b659-c0e1a9bc0bdb"]
 pub struct TerrainMaterial {
     #[texture(0, dimension = "2d_array")]
@@ -29,25 +30,35 @@ impl Material for TerrainMaterial {
 }
 
 fn main() {
+    let config =
+        TerrainPluginConfig::with_base_attachment(BaseConfig::new(TEXTURE_SIZE, MIP_LEVEL_COUNT))
+            .add_attachment(AttachmentConfig::new(
+                "albedo".to_string(),
+                TEXTURE_SIZE,
+                1,
+                MIP_LEVEL_COUNT,
+                AttachmentFormat::Rgb8,
+            ));
+
     App::new()
-        .add_plugins(DefaultPlugins.set(AssetPlugin {
-            watch_for_changes: true, // enable hot reloading for shader easy customization
-            ..default()
-        }))
-        .add_plugin(TerrainPlugin {
-            attachment_count: 3, // has to match the attachments of the terrain
-        })
-        .add_plugin(TerrainDebugPlugin)
-        .add_plugin(TerrainMaterialPlugin::<TerrainMaterial>::default())
-        .add_system(create_array_texture)
-        .add_startup_system(setup)
-        .add_system(toggle_camera)
+        .add_plugins((
+            DefaultPlugins.set(AssetPlugin {
+                watch_for_changes: ChangeWatcher::with_delay(Duration::from_millis(200)), // enable hot reloading for shader easy customization
+                ..default()
+            }),
+            TerrainPlugin { config },
+            TerrainDebugPlugin,
+            TerrainMaterialPlugin::<TerrainMaterial>::default(),
+        ))
+        .add_systems(Startup, setup)
+        .add_systems(Update, (create_array_texture, toggle_camera))
         .run();
 }
 
 fn setup(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
+    plugin_config: Res<TerrainPluginConfig>,
     mut materials: ResMut<Assets<TerrainMaterial>>,
     mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
@@ -58,11 +69,31 @@ fn setup(
         handle: texture.clone(),
     });
 
-    let mut preprocessor = Preprocessor::default();
-    let mut loader = AttachmentFromDiskLoader::default();
+    let mut loader = AttachmentFromDiskLoader::new(LOD_COUNT, PATH.to_string());
+    loader.add_base_attachment(
+        &plugin_config,
+        TileConfig {
+            path: "assets/terrain/source/height".to_string(),
+            size: TERRAIN_SIZE,
+            file_format: FileFormat::PNG,
+        },
+    );
+    loader.add_attachment(
+        &plugin_config,
+        TileConfig {
+            path: "assets/terrain/source/albedo.png".to_string(),
+            size: TERRAIN_SIZE,
+            file_format: FileFormat::PNG,
+        },
+        2,
+    );
+
+    // Preprocesses the terrain data.
+    // Todo: Should be commented out after the first run.
+    // loader.preprocess();
 
     // Configure all the important properties of the terrain, as well as its attachments.
-    let mut config = TerrainConfig::new(
+    let config = plugin_config.configure_terrain(
         TERRAIN_SIZE,
         LOD_COUNT,
         HEIGHT,
@@ -70,39 +101,15 @@ fn setup(
         PATH.to_string(),
     );
 
-    config.add_base_attachment_from_disk(
-        &mut preprocessor,
-        &mut loader,
-        BaseConfig::new(TEXTURE_SIZE, MIP_LEVEL_COUNT),
-        TileConfig {
-            path: "assets/terrain/source/height".to_string(),
-            size: TERRAIN_SIZE,
-            file_format: FileFormat::PNG,
-        },
-    );
-
-    config.add_attachment_from_disk(
-        &mut preprocessor,
-        &mut loader,
-        AttachmentConfig::new(
-            "albedo".to_string(),
-            TEXTURE_SIZE,
-            1,
-            MIP_LEVEL_COUNT,
-            AttachmentFormat::Rgb8,
-        ),
-        TileConfig {
-            path: "assets/terrain/source/albedo.png".to_string(),
-            size: TERRAIN_SIZE,
-            file_format: FileFormat::PNG,
-        },
-    );
-
-    // Preprocesses the terrain data.
-    // Todo: Should be commented out after the first run.
-    preprocessor.preprocess(&config);
-
-    load_node_config(&mut config);
+    // Configure the quality settings of the terrain view. Adapt the settings to your liking.
+    let view_config = TerrainViewConfig {
+        tile_scale: 4.0,
+        grid_size: 4,
+        node_count: 10,
+        load_distance: 5.0,
+        view_distance: 4.0,
+        ..default()
+    };
 
     // Create the terrain.
     let terrain = commands
@@ -114,16 +121,6 @@ fn setup(
             }),
         ))
         .id();
-
-    // Configure the quality settings of the terrain view. Adapt the settings to your liking.
-    let view_config = TerrainViewConfig {
-        tile_scale: 4.0,
-        grid_size: 4,
-        node_count: 10,
-        load_distance: 5.0,
-        view_distance: 4.0,
-        ..default()
-    };
 
     // Create the view.
     let view = commands

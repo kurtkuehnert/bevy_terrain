@@ -1,5 +1,10 @@
 #define_import_path bevy_terrain::debug
 
+#import bevy_terrain::types Tile
+#import bevy_terrain::bindings config, view_config
+#import bevy_terrain::functions calculate_morph, minmax, node_size
+#import bevy_pbr::mesh_view_bindings view
+
 fn lod_color(lod: u32) -> vec4<f32> {
     if (lod % 6u == 0u) {
         return vec4<f32>(1.0, 0.0, 0.0, 1.0);
