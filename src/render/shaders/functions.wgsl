@@ -1,3 +1,4 @@
+/*
 #define_import_path bevy_terrain::functions
 
 #import bevy_terrain::types TerrainConfig, TerrainViewConfig, Tile, TileList, NodeLookup, VertexInput
@@ -133,3 +134,4 @@ fn minmax(local_position: vec2<f32>, size: f32) -> vec2<f32> {
 
     return vec2(min_height, max_height) * config.height;
 }
+*/

@@ -1,9 +1,11 @@
+use bevy::asset::ChangeWatcher;
 use bevy::{
     prelude::*,
     reflect::{TypePath, TypeUuid},
     render::render_resource::*,
 };
 use bevy_terrain::prelude::*;
+use std::time::Duration;
 
 const TERRAIN_SIZE: u32 = 1024;
 const TEXTURE_SIZE: u32 = 512;
@@ -32,7 +34,10 @@ fn main() {
 
     App::new()
         .add_plugins((
-            DefaultPlugins,
+            DefaultPlugins.set(AssetPlugin {
+                watch_for_changes: ChangeWatcher::with_delay(Duration::from_millis(200)), // enable hot reloading for shader easy customization
+                ..default()
+            }),
             TerrainPlugin { config },
             TerrainDebugPlugin, // enable debug settings and controls
             TerrainMaterialPlugin::<TerrainMaterial>::default(),

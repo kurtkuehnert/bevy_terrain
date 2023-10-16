@@ -24,8 +24,9 @@ struct TerrainViewConfig {
 }
 
 struct Tile {
-    coords: vec2<u32>,
-    size: u32,
+    coord: vec3<f32>,
+    u: vec3<f32>,
+    v:vec3<f32>,
 }
 
 struct TileList {
