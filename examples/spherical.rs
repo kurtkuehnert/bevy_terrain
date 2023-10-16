@@ -50,6 +50,7 @@ fn main() {
 fn setup(
     mut commands: Commands,
     plugin_config: Res<TerrainPluginConfig>,
+    mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<TerrainMaterial>>,
     mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
@@ -122,6 +123,11 @@ fn setup(
     });
     commands.insert_resource(AmbientLight {
         brightness: 0.2,
+        ..default()
+    });
+
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Mesh::from(shape::Cube { size: 5.0 })),
         ..default()
     });
 }

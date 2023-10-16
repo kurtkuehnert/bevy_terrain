@@ -1,6 +1,7 @@
 #import bevy_terrain::types VertexInput, VertexOutput, FragmentInput, FragmentOutput
 #import bevy_terrain::bindings view_config, tiles, config
 #import bevy_pbr::mesh_view_bindings view
+#import bevy_terrain::functions cube_to_sphere
 
 fn color(lod: u32) -> vec4<f32> {
     if (lod % 6u == 0u) {
@@ -23,23 +24,6 @@ fn color(lod: u32) -> vec4<f32> {
     }
 
     return vec4<f32>(0.0);
-}
-
-fn cube_to_sphere(position: vec3<f32>) -> vec3<f32> {
-    let p = 2.0 * (position - 0.5);
-    let x2 = p.x * p.x;
-	let y2 = p.y * p.y;
-	let z2 = p.z * p.z;
-
-	let rx = p.x * sqrt(1.0 - (y2 + z2) / 2.0 + y2 * z2 / 3.0);
-	let ry = p.y * sqrt(1.0 - (x2 + z2) / 2.0 + x2 * z2 / 3.0);
-	let rz = p.z * sqrt(1.0 - (x2 + y2) / 2.0 + x2 * y2 / 3.0);
-
-    var r = p;
-    r = normalize(p);
-    r = vec3<f32>(rx, ry, rz);
-
-    return r;
 }
 
 fn calculate_grid_position(grid_index: u32) -> vec2<u32>{
@@ -71,7 +55,7 @@ fn vertex(in: VertexInput) -> VertexOutput {
     output.world_position = world_position;
     // output.debug_color = show_tiles(tile, output.world_position);
 
-    output.debug_color = color(tile_index);
+    output.debug_color = color(tile.side);
 
     return output;
 }
