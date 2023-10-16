@@ -22,6 +22,9 @@ use bevy::{
     },
 };
 
+// Todo: clean up this file similar to terrain_bind_groups.rs, once buffers can be shared in the
+// AsBindGroup derive macro
+
 #[derive(Clone, Default, ShaderType)]
 pub(crate) struct TerrainViewConfigUniform {
     height_under_viewer: f32,

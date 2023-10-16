@@ -1,11 +1,13 @@
+use crate::plugin::TerrainPluginConfig;
+use bevy::asset::load_internal_asset;
 use bevy::{prelude::*, reflect::TypeUuid};
 
 const TYPES_SHADER: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 907665645684322571);
-const PARAMETERS_SHADER: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 656456784512075658);
-const NODE_SHADER: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 124345314345873273);
+const ATTACHMENTS_SHADER: HandleUntyped =
+    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 455702068769385768);
+const BINDINGS_SHADER: HandleUntyped =
+    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 570929401458920492);
 const FUNCTIONS_SHADER: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 234313897973543254);
 const DEBUG_SHADER: HandleUntyped =
@@ -25,45 +27,75 @@ pub(crate) const REFINE_TILES_SHADER: HandleUntyped =
 pub(crate) const DEFAULT_SHADER: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 556563744564564658);
 
-pub(crate) fn add_shader(app: &mut App) {
-    let mut assets = app.world.resource_mut::<Assets<_>>();
+pub(crate) fn load_terrain_shaders(app: &mut App, plugin_config: &TerrainPluginConfig) {
+    let attachments_shader = generate_attachment_shader(plugin_config);
 
-    assets.set_untracked(TYPES_SHADER, Shader::from_wgsl(include_str!("types.wgsl")));
+    let mut assets = app.world.resource_mut::<Assets<Shader>>();
+    assets.set_untracked(ATTACHMENTS_SHADER, attachments_shader);
 
-    assets.set_untracked(
-        PARAMETERS_SHADER,
-        Shader::from_wgsl(include_str!("compute/parameters.wgsl")),
-    );
-    assets.set_untracked(NODE_SHADER, Shader::from_wgsl(include_str!("node.wgsl")));
-    assets.set_untracked(
-        FUNCTIONS_SHADER,
-        Shader::from_wgsl(include_str!("functions.wgsl")),
-    );
-    assets.set_untracked(DEBUG_SHADER, Shader::from_wgsl(include_str!("debug.wgsl")));
+    load_internal_asset!(app, TYPES_SHADER, "types.wgsl", Shader::from_wgsl);
+    load_internal_asset!(app, BINDINGS_SHADER, "bindings.wgsl", Shader::from_wgsl);
+    load_internal_asset!(app, FUNCTIONS_SHADER, "functions.wgsl", Shader::from_wgsl);
+    load_internal_asset!(app, DEBUG_SHADER, "debug.wgsl", Shader::from_wgsl);
 
-    assets.set_untracked(
-        MINMAX_SHADER,
-        Shader::from_wgsl(include_str!("render/minmax.wgsl")),
-    );
-    assets.set_untracked(
-        VERTEX_SHADER,
-        Shader::from_wgsl(include_str!("render/vertex.wgsl")),
-    );
-    assets.set_untracked(
+    load_internal_asset!(app, MINMAX_SHADER, "render/minmax.wgsl", Shader::from_wgsl);
+    load_internal_asset!(app, VERTEX_SHADER, "render/vertex.wgsl", Shader::from_wgsl);
+    load_internal_asset!(
+        app,
         FRAGMENT_SHADER,
-        Shader::from_wgsl(include_str!("render/fragment.wgsl")),
+        "render/fragment.wgsl",
+        Shader::from_wgsl
     );
-    assets.set_untracked(
+    load_internal_asset!(
+        app,
         DEFAULT_SHADER,
-        Shader::from_wgsl(include_str!("render/default.wgsl")),
+        "render/default.wgsl",
+        Shader::from_wgsl
     );
 
-    assets.set_untracked(
+    load_internal_asset!(
+        app,
         PREPARE_INDIRECT_SHADER,
-        Shader::from_wgsl(include_str!("compute/prepare_indirect.wgsl")),
+        "compute/prepare_indirect.wgsl",
+        Shader::from_wgsl
     );
-    assets.set_untracked(
+    load_internal_asset!(
+        app,
         REFINE_TILES_SHADER,
-        Shader::from_wgsl(include_str!("compute/refine_tiles.wgsl")),
+        "compute/refine_tiles.wgsl",
+        Shader::from_wgsl
     );
+}
+
+pub(crate) fn generate_attachment_shader(plugin_config: &TerrainPluginConfig) -> Shader {
+    let mut source = String::from("#define_import_path bevy_terrain::attachments\r\n");
+
+    for (i, attachment) in plugin_config.attachments.iter().enumerate() {
+        let binding = 3 + i;
+        let attachment_name_lower = attachment.name.to_lowercase();
+        let attachment_name_upper = attachment.name.to_uppercase();
+
+        let attachment_size = attachment.texture_size as f32;
+        let attachment_scale = attachment.center_size as f32 / attachment.texture_size as f32;
+        let attachment_offset = attachment.border_size as f32 / attachment.texture_size as f32;
+
+        source.push_str(&format!(
+            include_str!("attachments.wgsl"),
+            binding = binding,
+            attachment_name_lower = attachment_name_lower,
+            attachment_name_upper = attachment_name_upper,
+            attachment_size = attachment_size,
+            attachment_scale = attachment_scale,
+            attachment_offset = attachment_offset
+        ));
+    }
+
+    Shader::from_wgsl(
+        source,
+        std::path::Path::new(file!())
+            .parent()
+            .unwrap()
+            .join("attachments.wgsl")
+            .to_string_lossy(),
+    )
 }

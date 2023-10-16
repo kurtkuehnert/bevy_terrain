@@ -1,10 +1,6 @@
 //! Types for configuring terrains.
 
-use crate::{
-    attachment_loader::{AttachmentFromDisk, AttachmentFromDiskLoader},
-    preprocess::{BaseConfig, Preprocessor, TileConfig},
-    terrain_data::{AtlasAttachment, AttachmentConfig, AttachmentIndex, NodeId},
-};
+use crate::terrain_data::{AtlasAttachment, NodeId};
 use bevy::{
     prelude::*,
     render::extract_component::ExtractComponent,
@@ -61,84 +57,4 @@ pub struct TerrainConfig {
     /// The attachments of the terrain.
     pub attachments: Vec<AtlasAttachment>,
     pub nodes: HashSet<NodeId>,
-}
-
-impl TerrainConfig {
-    pub fn new(
-        terrain_size: u32,
-        lod_count: u32,
-        height: f32,
-        node_atlas_size: u32,
-        path: String,
-    ) -> Self {
-        Self {
-            lod_count,
-            height,
-            leaf_node_size: 0,
-            terrain_size,
-            node_atlas_size,
-            path,
-            attachments: vec![],
-            nodes: HashSet::new(),
-        }
-    }
-}
-
-impl TerrainConfig {
-    /// Adds an attachment to the terrain.
-    ///
-    /// The attachment will not be loaded automatically, but the caller has to handle the loading instead.
-    pub fn add_attachment(&mut self, attachment: AttachmentConfig) -> AttachmentIndex {
-        self.attachments.push(attachment.into());
-        self.attachments.len() - 1
-    }
-
-    /// Adds an attachment to the terrain, which will be loaded from disk automatically.
-    pub fn add_attachment_from_disk(
-        &mut self,
-        preprocessor: &mut Preprocessor,
-        loader: &mut AttachmentFromDiskLoader,
-        attachment: AttachmentConfig,
-        tile: TileConfig,
-    ) {
-        let attachment_index = self.add_attachment(attachment.clone());
-
-        loader.attachments.insert(
-            attachment_index,
-            AttachmentFromDisk::new(&attachment, &self.path),
-        );
-
-        preprocessor.attachments.push((tile, attachment));
-    }
-
-    /// Adds the base attachment, which contains a height and minmax information.
-    ///
-    /// This is required by terrains, that use the default render pipeline.
-    pub fn add_base_attachment(&mut self, base: BaseConfig) {
-        self.add_attachment(base.height_attachment());
-        self.add_attachment(base.minmax_attachment());
-    }
-
-    pub fn add_base_attachment_from_disk(
-        &mut self,
-        preprocessor: &mut Preprocessor,
-        loader: &mut AttachmentFromDiskLoader,
-        base: BaseConfig,
-        tile: TileConfig,
-    ) {
-        self.leaf_node_size = base.texture_size - 2 * base.border_size;
-
-        loader.attachments.insert(
-            self.attachments.len(),
-            AttachmentFromDisk::new(&base.height_attachment(), &self.path),
-        );
-        loader.attachments.insert(
-            self.attachments.len() + 1,
-            AttachmentFromDisk::new(&base.minmax_attachment(), &self.path),
-        );
-
-        self.add_base_attachment(base);
-
-        preprocessor.base = Some((tile, base));
-    }
 }
