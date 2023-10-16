@@ -14,13 +14,11 @@ pub struct TerrainDebugPlugin;
 impl Plugin for TerrainDebugPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<DebugTerrain>()
-            .add_system(debug_camera_control)
-            .add_system(toggle_debug)
-            .add_system(change_config);
+            .add_systems(Update, (debug_camera_control, toggle_debug, change_config));
 
         app.sub_app_mut(RenderApp)
             .init_resource::<DebugTerrain>()
-            .add_system(extract_debug.in_schedule(ExtractSchedule));
+            .add_systems(ExtractSchedule, extract_debug);
     }
 }
 
@@ -190,7 +188,7 @@ pub fn change_config(
     input: Res<Input<KeyCode>>,
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
 ) {
-    for mut view_config in &mut view_configs.0.values_mut() {
+    for view_config in &mut view_configs.0.values_mut() {
         if input.just_pressed(KeyCode::H) && view_config.tile_scale > 0.25 {
             view_config.tile_scale /= 2.0;
             println!("Decreased the tile scale to {}.", view_config.tile_scale);

@@ -5,10 +5,7 @@
 //! each view. Then they are drawn using a single draw indirect call and morphed together to form
 //! one continuous surface.
 
-use crate::render::{
-    culling::CullingData, terrain_data::TerrainConfigUniform,
-    terrain_view_data::TerrainViewConfigUniform,
-};
+use crate::render::{culling::CullingData, terrain_view_data::TerrainViewConfigUniform};
 use bevy::render::render_resource::*;
 use std::mem;
 
@@ -16,11 +13,9 @@ pub mod compute_pipelines;
 pub mod culling;
 pub mod render_pipeline;
 pub mod shaders;
-pub mod terrain_data;
+pub mod terrain_bind_group;
 pub mod terrain_view_data;
 
-pub(crate) const TERRAIN_CONFIG_SIZE: BufferAddress =
-    mem::size_of::<TerrainConfigUniform>() as BufferAddress;
 pub(crate) const TERRAIN_VIEW_CONFIG_SIZE: BufferAddress =
     mem::size_of::<TerrainViewConfigUniform>() as BufferAddress;
 pub(crate) const CULL_DATA_BUFFER_SIZE: BufferAddress =

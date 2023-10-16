@@ -1,7 +1,7 @@
 use crate::{
     render::{
         shaders::DEFAULT_SHADER,
-        terrain_data::{terrain_bind_group_layout, SetTerrainBindGroup},
+        terrain_bind_group::{SetTerrainBindGroup, TerrainBindGroup},
         terrain_view_data::{DrawTerrainCommand, SetTerrainViewBindGroup},
         TERRAIN_VIEW_LAYOUT,
     },
@@ -9,25 +9,22 @@ use crate::{
 };
 use bevy::{
     core_pipeline::core_3d::Opaque3d,
-    pbr::{MeshPipeline, RenderMaterials, SetMaterialBindGroup, SetMeshViewBindGroup},
+    pbr::{
+        extract_materials, prepare_materials, ExtractedMaterials, MaterialPipeline, MeshPipeline,
+        RenderMaterials, SetMaterialBindGroup, SetMeshViewBindGroup,
+    },
     prelude::*,
     render::{
+        extract_component::ExtractComponentPlugin,
+        render_asset::PrepareAssetSet,
         render_phase::{AddRenderCommand, DrawFunctions, RenderPhase, SetItemPipeline},
         render_resource::*,
         renderer::RenderDevice,
         texture::BevyDefault,
-        RenderApp, RenderSet,
+        Render, RenderApp, RenderSet,
     },
 };
 use std::{hash::Hash, marker::PhantomData};
-use bevy::pbr::{MAX_CASCADES_PER_LIGHT, MAX_DIRECTIONAL_LIGHTS};
-
-/// Configures the default terrain pipeline.
-#[derive(Resource)]
-pub struct TerrainPipelineConfig {
-    /// The number of terrain attachments.
-    pub attachment_count: usize,
-}
 
 pub struct TerrainPipelineKey<M: Material> {
     pub flags: TerrainPipelineFlags,
@@ -68,27 +65,28 @@ where
 }
 
 bitflags::bitflags! {
-#[repr(transparent)]
-pub struct TerrainPipelineFlags: u32 {
-    const NONE               = 0;
-    const WIREFRAME          = (1 <<  0);
-    const SHOW_TILES         = (1 <<  1);
-    const SHOW_LOD           = (1 <<  2);
-    const SHOW_UV            = (1 <<  3);
-    const SHOW_NODES         = (1 <<  4);
-    const SHOW_MINMAX_ERROR  = (1 <<  5);
-    const MINMAX             = (1 <<  6);
-    const MESH_MORPH         = (1 <<  7);
-    const ALBEDO             = (1 <<  8);
-    const BRIGHT             = (1 <<  9);
-    const LIGHTING           = (1 << 10);
-    const SAMPLE_GRAD        = (1 << 11);
-    const TEST1              = (1 << 12);
-    const TEST2              = (1 << 13);
-    const TEST3              = (1 << 14);
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    #[repr(transparent)]
+    pub struct TerrainPipelineFlags: u32 {
+        const NONE               = 0;
+        const WIREFRAME          = (1 <<  0);
+        const SHOW_TILES         = (1 <<  1);
+        const SHOW_LOD           = (1 <<  2);
+        const SHOW_UV            = (1 <<  3);
+        const SHOW_NODES         = (1 <<  4);
+        const SHOW_MINMAX_ERROR  = (1 <<  5);
+        const MINMAX             = (1 <<  6);
+        const MESH_MORPH         = (1 <<  7);
+        const ALBEDO             = (1 <<  8);
+        const BRIGHT             = (1 <<  9);
+        const LIGHTING           = (1 << 10);
+        const SAMPLE_GRAD        = (1 << 11);
+        const TEST1              = (1 << 12);
+        const TEST2              = (1 << 13);
+        const TEST3              = (1 << 14);
 
-    const MSAA_RESERVED_BITS = TerrainPipelineFlags::MSAA_MASK_BITS << TerrainPipelineFlags::MSAA_SHIFT_BITS;
-}
+        const MSAA_RESERVED_BITS = TerrainPipelineFlags::MSAA_MASK_BITS << TerrainPipelineFlags::MSAA_SHIFT_BITS;
+    }
 }
 
 impl TerrainPipelineFlags {
@@ -153,11 +151,11 @@ impl TerrainPipelineFlags {
     }
 
     pub fn msaa_samples(&self) -> u32 {
-        ((self.bits >> Self::MSAA_SHIFT_BITS) & Self::MSAA_MASK_BITS) + 1
+        ((self.bits() >> Self::MSAA_SHIFT_BITS) & Self::MSAA_MASK_BITS) + 1
     }
 
     pub fn polygon_mode(&self) -> PolygonMode {
-        match (self.bits & TerrainPipelineFlags::WIREFRAME.bits) != 0 {
+        match (self.bits() & TerrainPipelineFlags::WIREFRAME.bits()) != 0 {
             true => PolygonMode::Line,
             false => PolygonMode::Fill,
         }
@@ -166,46 +164,46 @@ impl TerrainPipelineFlags {
     pub fn shader_defs(&self) -> Vec<ShaderDefVal> {
         let mut shader_defs = Vec::new();
 
-        if (self.bits & TerrainPipelineFlags::SHOW_TILES.bits) != 0 {
+        if (self.bits() & TerrainPipelineFlags::SHOW_TILES.bits()) != 0 {
             shader_defs.push("SHOW_TILES".into());
         }
-        if (self.bits & TerrainPipelineFlags::SHOW_LOD.bits) != 0 {
+        if (self.bits() & TerrainPipelineFlags::SHOW_LOD.bits()) != 0 {
             shader_defs.push("SHOW_LOD".into());
         }
-        if (self.bits & TerrainPipelineFlags::SHOW_UV.bits) != 0 {
+        if (self.bits() & TerrainPipelineFlags::SHOW_UV.bits()) != 0 {
             shader_defs.push("SHOW_UV".into());
         }
-        if (self.bits & TerrainPipelineFlags::SHOW_NODES.bits) != 0 {
+        if (self.bits() & TerrainPipelineFlags::SHOW_NODES.bits()) != 0 {
             shader_defs.push("SHOW_NODES".into());
         }
-        if (self.bits & TerrainPipelineFlags::SHOW_MINMAX_ERROR.bits) != 0 {
+        if (self.bits() & TerrainPipelineFlags::SHOW_MINMAX_ERROR.bits()) != 0 {
             shader_defs.push("SHOW_MINMAX_ERROR".into());
         }
-        if (self.bits & TerrainPipelineFlags::MINMAX.bits) != 0 {
+        if (self.bits() & TerrainPipelineFlags::MINMAX.bits()) != 0 {
             shader_defs.push("MINMAX".into());
         }
-        if (self.bits & TerrainPipelineFlags::MESH_MORPH.bits) != 0 {
+        if (self.bits() & TerrainPipelineFlags::MESH_MORPH.bits()) != 0 {
             shader_defs.push("MESH_MORPH".into());
         }
-        if (self.bits & TerrainPipelineFlags::ALBEDO.bits) != 0 {
+        if (self.bits() & TerrainPipelineFlags::ALBEDO.bits()) != 0 {
             shader_defs.push("ALBEDO".into());
         }
-        if (self.bits & TerrainPipelineFlags::BRIGHT.bits) != 0 {
+        if (self.bits() & TerrainPipelineFlags::BRIGHT.bits()) != 0 {
             shader_defs.push("BRIGHT".into());
         }
-        if (self.bits & TerrainPipelineFlags::LIGHTING.bits) != 0 {
+        if (self.bits() & TerrainPipelineFlags::LIGHTING.bits()) != 0 {
             shader_defs.push("LIGHTING".into());
         }
-        if (self.bits & TerrainPipelineFlags::SAMPLE_GRAD.bits) != 0 {
+        if (self.bits() & TerrainPipelineFlags::SAMPLE_GRAD.bits()) != 0 {
             shader_defs.push("SAMPLE_GRAD".into());
         }
-        if (self.bits & TerrainPipelineFlags::TEST1.bits) != 0 {
+        if (self.bits() & TerrainPipelineFlags::TEST1.bits()) != 0 {
             shader_defs.push("TEST1".into());
         }
-        if (self.bits & TerrainPipelineFlags::TEST2.bits) != 0 {
+        if (self.bits() & TerrainPipelineFlags::TEST2.bits()) != 0 {
             shader_defs.push("TEST2".into());
         }
-        if (self.bits & TerrainPipelineFlags::TEST3.bits) != 0 {
+        if (self.bits() & TerrainPipelineFlags::TEST3.bits()) != 0 {
             shader_defs.push("TEST3".into());
         }
 
@@ -231,11 +229,10 @@ impl<M: Material> FromWorld for TerrainRenderPipeline<M> {
         let device = world.resource::<RenderDevice>();
         let asset_server = world.resource::<AssetServer>();
         let mesh_pipeline = world.resource::<MeshPipeline>();
-        let config = world.resource::<TerrainPipelineConfig>();
 
         let view_layout = mesh_pipeline.view_layout.clone();
         let view_layout_multisampled = mesh_pipeline.view_layout_multisampled.clone();
-        let terrain_layout = terrain_bind_group_layout(device, config.attachment_count);
+        let terrain_layout = TerrainBindGroup::layout(device);
         let terrain_view_layout = device.create_bind_group_layout(&TERRAIN_VIEW_LAYOUT);
         let material_layout = M::bind_group_layout(device);
 
@@ -272,9 +269,6 @@ where
 
     fn specialize(&self, key: Self::Key) -> RenderPipelineDescriptor {
         let mut shader_defs = key.flags.shader_defs();
-
-        shader_defs.push(ShaderDefVal::UInt("MAX_DIRECTIONAL_LIGHTS".to_string(), MAX_DIRECTIONAL_LIGHTS as u32));
-        shader_defs.push(ShaderDefVal::UInt("MAX_CASCADES_PER_LIGHT".to_string(), MAX_CASCADES_PER_LIGHT as u32));
 
         let mut bind_group_layout = match key.flags.msaa_samples() {
             1 => vec![self.view_layout.clone()],
@@ -418,22 +412,33 @@ where
     M::Data: PartialEq + Eq + Hash + Clone,
 {
     fn build(&self, app: &mut App) {
-        // Todo: don't use MaterialPlugin, but do the configuration here
-        app.add_plugin(MaterialPlugin::<M>::default());
+        app.add_asset::<M>()
+            .add_plugins(ExtractComponentPlugin::<Handle<M>>::extract_visible());
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
-                // .init_resource::<ExtractedMaterials<M>>()
-                // .init_resource::<RenderMaterials<M>>()
-                // .add_system_to_stage(RenderStage::Extract, extract_materials::<M>)
-                // .add_system_to_stage(
-                //     RenderStage::Prepare,
-                //     prepare_materials::<M>.after(PrepareAssetLabel::PreAssetPrepare),
-                // )
                 .add_render_command::<Opaque3d, DrawTerrain<M>>()
-                .init_resource::<TerrainRenderPipeline<M>>()
-                .init_resource::<SpecializedRenderPipelines<TerrainRenderPipeline<M>>>()
-                .add_system(queue_terrain::<M>.in_set(RenderSet::Queue));
+                .init_resource::<ExtractedMaterials<M>>()
+                .init_resource::<RenderMaterials<M>>()
+                .add_systems(ExtractSchedule, extract_materials::<M>)
+                .add_systems(
+                    Render,
+                    (
+                        prepare_materials::<M>
+                            .in_set(RenderSet::Prepare)
+                            .after(PrepareAssetSet::PreAssetPrepare),
+                        queue_terrain::<M>.in_set(RenderSet::Queue),
+                    ),
+                );
         }
+    }
+
+    fn finish(&self, app: &mut App) {
+        app.sub_app_mut(RenderApp)
+            .init_resource::<TerrainRenderPipeline<M>>()
+            .init_resource::<SpecializedRenderPipelines<TerrainRenderPipeline<M>>>()
+            // unused, but still required
+            .init_resource::<MaterialPipeline<M>>()
+            .init_resource::<SpecializedMeshPipelines<MaterialPipeline<M>>>();
     }
 }

@@ -1,25 +1,4 @@
-#import bevy_terrain::types
-#import bevy_terrain::parameters
-
-struct TerrainConfig {
-    lod_count: u32,
-    height: f32,
-    leaf_node_size: u32,
-    terrain_size: u32,
-
-    height_size: f32,
-    minmax_size: f32,
-    _empty: u32,
-    _empty: u32,
-    height_scale: f32,
-    minmax_scale: f32,
-    _empty: u32,
-    _empty: u32,
-    height_offset: f32,
-    minmax_offset: f32,
-    _empty: u32,
-    _empty: u32,
-}
+#import bevy_terrain::types TerrainConfig, TerrainViewConfig, Tile, TileList, Parameters, NodeLookup
 
 struct CullingData {
     world_position: vec4<f32>,
@@ -43,17 +22,21 @@ var<storage, read_write> parameters: Parameters;
 var<uniform> view: CullingData;
 
  // terrain bindings
-@group(2) @binding(0)
-var<uniform> config: TerrainConfig;
 @group(2) @binding(1)
-var atlas_sampler: sampler;
+var<uniform> config: TerrainConfig;
 @group(2) @binding(2)
-var height_atlas: texture_2d_array<f32>;
+var atlas_sampler: sampler;
 @group(2) @binding(3)
+var height_atlas: texture_2d_array<f32>;
+@group(2) @binding(4)
 var minmax_atlas: texture_2d_array<f32>;
 
-#import bevy_terrain::node
 #import bevy_terrain::functions
+
+// Todo: remove duplicate
+fn approximate_world_position(local_position: vec2<f32>) -> vec4<f32> {
+    return vec4<f32>(local_position.x, view_config.approximate_height, local_position.y, 1.0);
+}
 
 fn child_index() -> i32 {
     return atomicAdd(&parameters.child_index, parameters.counter);
