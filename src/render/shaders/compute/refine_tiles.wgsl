@@ -1,4 +1,5 @@
 #import bevy_terrain::types TerrainConfig, TerrainViewConfig, Tile, TileList, Parameters, NodeLookup
+#import bevy_terrain::functions cube_to_sphere
 
 struct CullingData {
     world_position: vec4<f32>,
@@ -30,8 +31,6 @@ var atlas_sampler: sampler;
 var height_atlas: texture_2d_array<f32>;
 @group(2) @binding(4)
 var minmax_atlas: texture_2d_array<f32>;
-
-// #import bevy_terrain::functions
 
 // Todo: remove duplicate
 fn approximate_world_position(local_position: vec2<f32>) -> vec4<f32> {
@@ -95,41 +94,40 @@ fn outside_cull(tile: Tile) -> bool {
 fn cull(tile: Tile) -> bool {
     return outside_cull(tile) || frustum_cull(tile);
 }
+*/
 
 fn should_be_divided(tile: Tile) -> bool {
-    if (tile.size == 1u) {
-        return false;
-    }
+    let size = length(tile.u);
 
     var dist = 1000000000.0;
 
     for (var i: u32 = 0u; i < 4u; i = i + 1u) {
-        let corner_coords = vec2<u32>(tile.coords.x + (i       & 1u),
-                                      tile.coords.y + (i >> 1u & 1u));
+        let u = tile.u * f32(i & 1u);
+        let v = tile.v * f32(i >> 1u & 1u);
 
-        let local_position = vec2<f32>(corner_coords * tile.size) * view_config.tile_scale;
-        let world_position = approximate_world_position(local_position);
-        dist = min(dist, distance(world_position.xyz, view.world_position.xyz));
+        var position = tile.coord + u + v;
+        position = cube_to_sphere(position) * 50.0;
+
+        dist = min(dist, distance(position, view.world_position.xyz));
     }
 
-    return dist < view_config.morph_distance * f32(tile.size);
+    return dist < size * 300.0;
 }
 
 fn subdivide(tile: Tile) {
-    let size = tile.size >> 1u;
+    let tile_u = tile.u / 2.0;
+    let tile_v = tile.v / 2.0;
 
     for (var i: u32 = 0u; i < 4u; i = i + 1u) {
-        let coords = vec2<u32>((tile.coords.x << 1u) + (i       & 1u),
-                               (tile.coords.y << 1u) + (i >> 1u & 1u));
+        let u = tile_u * f32(i & 1u);
+        let v = tile_v * f32(i >> 1u & 1u);
+        let coord = tile.coord + u + v;
 
-        let tile = Tile(coords, size);
+        let tile = Tile(coord, tile_u, tile_v, tile.side);
 
-        if (!cull(tile)) {
-            temporary_tiles.data[child_index()] = tile;
-        }
+        temporary_tiles.data[child_index()] = tile;
     }
 }
-*/
 
 @compute @workgroup_size(64, 1, 1)
 fn refine_tiles(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
@@ -139,14 +137,10 @@ fn refine_tiles(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
 
     let tile = temporary_tiles.data[parent_index(invocation_id.x)];
 
-    final_tiles.data[final_index()] = tile;
-
-/*
     if (should_be_divided(tile)) {
         subdivide(tile);
     }
     else {
         final_tiles.data[final_index()] = tile;
     }
-*/
 }
