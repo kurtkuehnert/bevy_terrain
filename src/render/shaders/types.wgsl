@@ -55,7 +55,7 @@ struct VertexInput {
 
 struct VertexOutput {
     @builtin(position)       frag_coord: vec4<f32>,
-    @location(0)             local_position: vec2<f32>,
+    @location(0)             local_position: vec3<f32>,
     @location(1)             world_position: vec4<f32>,
     @location(2)             debug_color: vec4<f32>,
 }
@@ -63,7 +63,7 @@ struct VertexOutput {
 struct FragmentInput {
     @builtin(front_facing)   is_front: bool,
     @builtin(position)       frag_coord: vec4<f32>,
-    @location(0)             local_position: vec2<f32>,
+    @location(0)             local_position: vec3<f32>,
     @location(1)             world_position: vec4<f32>,
     @location(2)             debug_color: vec4<f32>,
 }
