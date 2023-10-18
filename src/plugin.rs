@@ -6,7 +6,7 @@ use crate::{
         compute_pipelines::{
             queue_terrain_compute_pipelines, TerrainComputeNode, TerrainComputePipelines,
         },
-        culling::{prepare_and_queue_terrain_culling_bind_group, CullingBindGroup},
+        culling_bind_group::{prepare_culling_bind_group, CullingBindGroup},
         shaders::load_terrain_shaders,
         terrain_bind_group::{initialize_terrain_bind_group, TerrainBindGroup},
         terrain_view_data::{
@@ -60,6 +60,7 @@ impl TerrainPluginConfig {
     pub fn configure_terrain(
         &self,
         terrain_size: u32,
+        radius: f32,
         lod_count: u32,
         height: f32,
         node_atlas_size: u32,
@@ -79,6 +80,7 @@ impl TerrainPluginConfig {
             height,
             leaf_node_size: self.leaf_node_size,
             terrain_size,
+            radius,
             node_atlas_size,
             path,
             attachments,
@@ -143,7 +145,7 @@ impl Plugin for TerrainPlugin {
                     prepare_quadtree,
                     prepare_node_atlas,
                     prepare_terrain_view_config,
-                    prepare_and_queue_terrain_culling_bind_group,
+                    prepare_culling_bind_group,
                 )
                     .in_set(RenderSet::Prepare),
             );

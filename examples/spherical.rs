@@ -72,6 +72,7 @@ fn setup(
     // Configure all the important properties of the terrain, as well as its attachments.
     let config = plugin_config.configure_terrain(
         TERRAIN_SIZE,
+        50.0,
         LOD_COUNT,
         HEIGHT,
         NODE_ATLAS_SIZE,
@@ -84,7 +85,7 @@ fn setup(
         grid_size: 4,
         node_count: 10,
         load_distance: 5.0,
-        view_distance: 2.0,
+        view_distance: 3.0,
         ..default()
     };
 

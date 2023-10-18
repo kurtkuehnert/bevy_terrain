@@ -1,11 +1,12 @@
 use crate::{
+    debug::DebugTerrain,
     render::{
         shaders::DEFAULT_SHADER,
         terrain_bind_group::{SetTerrainBindGroup, TerrainBindGroup},
         terrain_view_data::{DrawTerrainCommand, SetTerrainViewBindGroup},
         TERRAIN_VIEW_LAYOUT,
     },
-    DebugTerrain, Terrain,
+    terrain::Terrain,
 };
 use bevy::{
     core_pipeline::core_3d::Opaque3d,
