@@ -50,6 +50,7 @@ pub struct TerrainConfig {
     pub leaf_node_size: u32, // Todo: reconsider this
     /// The size of the terrain.
     pub terrain_size: u32, // Todo: reconsider this
+    pub radius: f32,
     /// The amount of nodes the can be loaded simultaneously in the node atlas.
     pub node_atlas_size: u32,
     /// The path to the terrain folder inside the assets directory.

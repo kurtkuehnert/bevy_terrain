@@ -43,19 +43,8 @@
 //!
 //! [^note]: Some of these claims are not yet fully implemented.
 
-extern crate core;
-
-use crate::{
-    debug::DebugTerrain,
-    render::compute_pipelines::TerrainComputePipelines,
-    terrain::{Terrain, TerrainComponents, TerrainConfig},
-    terrain_data::node_atlas::NodeAtlas,
-    terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
-};
-
-use bevy::{prelude::*, render::view::NoFrustumCulling};
-
 pub mod attachment_loader;
+pub mod bundle;
 pub mod debug;
 pub mod formats;
 pub mod plugin;
@@ -70,6 +59,7 @@ pub mod prelude {
     // #[doc(hidden)]
     pub use crate::{
         attachment_loader::AttachmentFromDiskLoader,
+        bundle::TerrainBundle,
         debug::{camera::DebugCamera, TerrainDebugPlugin},
         plugin::{TerrainPlugin, TerrainPluginConfig},
         preprocess::{BaseConfig, Preprocessor, TileConfig},
@@ -80,35 +70,5 @@ pub mod prelude {
             FileFormat,
         },
         terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
-        TerrainBundle,
     };
-}
-
-/// The components of a terrain.
-///
-/// Does not include loader(s) and a material.
-#[derive(Bundle)]
-pub struct TerrainBundle {
-    terrain: Terrain,
-    node_atlas: NodeAtlas,
-    config: TerrainConfig,
-    transform: Transform,
-    global_transform: GlobalTransform,
-    visibility_bundle: VisibilityBundle,
-    no_frustum_culling: NoFrustumCulling,
-}
-
-impl TerrainBundle {
-    /// Creates a new terrain bundle from the config.
-    pub fn new(config: TerrainConfig) -> Self {
-        Self {
-            terrain: Terrain,
-            node_atlas: NodeAtlas::from_config(&config),
-            config,
-            transform: default(),
-            global_transform: default(),
-            visibility_bundle: default(),
-            no_frustum_culling: NoFrustumCulling,
-        }
-    }
 }

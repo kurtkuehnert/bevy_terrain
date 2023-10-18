@@ -5,12 +5,12 @@
 //! each view. Then they are drawn using a single draw indirect call and morphed together to form
 //! one continuous surface.
 
-use crate::render::{culling::CullingData, terrain_view_data::TerrainViewConfigUniform};
+use crate::render::terrain_view_data::TerrainViewConfigUniform;
 use bevy::render::render_resource::*;
 use std::mem;
 
 pub mod compute_pipelines;
-pub mod culling;
+pub mod culling_bind_group;
 pub mod render_pipeline;
 pub mod shaders;
 pub mod terrain_bind_group;
@@ -18,8 +18,6 @@ pub mod terrain_view_data;
 
 pub(crate) const TERRAIN_VIEW_CONFIG_SIZE: BufferAddress =
     mem::size_of::<TerrainViewConfigUniform>() as BufferAddress;
-pub(crate) const CULL_DATA_BUFFER_SIZE: BufferAddress =
-    mem::size_of::<CullingData>() as BufferAddress;
 pub(crate) const TILE_SIZE: BufferAddress = 16 * 4;
 pub(crate) const INDIRECT_BUFFER_SIZE: BufferAddress = 5 * 4;
 pub(crate) const PARAMETER_BUFFER_SIZE: BufferAddress = 7 * 4;
@@ -35,23 +33,6 @@ pub(crate) const PREPARE_INDIRECT_LAYOUT: BindGroupLayoutDescriptor = BindGroupL
                 ty: BufferBindingType::Storage { read_only: false },
                 has_dynamic_offset: false,
                 min_binding_size: BufferSize::new(INDIRECT_BUFFER_SIZE),
-            },
-            count: None,
-        },
-    ],
-};
-
-pub(crate) const CULL_DATA_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
-    label: None,
-    entries: &[
-        // cull data
-        BindGroupLayoutEntry {
-            binding: 0,
-            visibility: ShaderStages::COMPUTE,
-            ty: BindingType::Buffer {
-                ty: BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: BufferSize::new(CULL_DATA_BUFFER_SIZE),
             },
             count: None,
         },

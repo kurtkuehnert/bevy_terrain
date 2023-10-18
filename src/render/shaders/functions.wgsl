@@ -1,5 +1,100 @@
 #define_import_path bevy_terrain::functions
 
+#import bevy_terrain::bindings config, view_config
+#import bevy_terrain::types Tile
+#import bevy_pbr::mesh_view_bindings view
+
+fn calculate_sphere_position(coordinate: vec3<f32>) -> vec3<f32> {
+    let p = 2.0 * coordinate - 1.0;
+    let x2 = p.x * p.x;
+	let y2 = p.y * p.y;
+	let z2 = p.z * p.z;
+
+	let rx = p.x * sqrt(1.0 - (y2 + z2) / 2.0 + y2 * z2 / 3.0);
+	let ry = p.y * sqrt(1.0 - (x2 + z2) / 2.0 + x2 * z2 / 3.0);
+	let rz = p.z * sqrt(1.0 - (x2 + y2) / 2.0 + x2 * y2 / 3.0);
+
+    // let r = p;
+    // let r = normalize(p);
+    let r = vec3<f32>(rx, ry, rz);
+
+    return r * config.radius;
+}
+
+fn approximate_world_position(local_position: vec3<f32>) -> vec4<f32> {
+    return vec4<f32>(local_position, 1.0);
+}
+
+fn tile_coordinate(tile: Tile, uv: vec2<f32>) -> vec3<f32> {
+    return tile.coordinate + tile.u * uv.x + tile.v * uv.y;
+}
+
+fn tile_local_position(tile: Tile, uv: vec2<f32>) -> vec3<f32> {
+    let coordinate = tile_coordinate(tile, uv);
+
+    return calculate_sphere_position(coordinate);
+}
+
+fn morph(tile: Tile, world_position: vec4<f32>) -> f32 {
+    let viewer_distance = distance(world_position.xyz, view.world_position.xyz);
+    let size = length(tile.u);
+
+    let morph_distance = 2.0 * size * config.radius * view_config.view_distance;
+
+    return clamp(1.0 - (1.0 - viewer_distance / morph_distance) / view_config.morph_range, 0.0, 1.0);
+}
+
+fn grid_offset(grid_index: u32) -> vec2<u32>{
+    // use first and last indices of the rows twice, to form degenerate triangles
+    let row_index    = clamp(grid_index % view_config.vertices_per_row, 1u, view_config.vertices_per_row - 2u) - 1u;
+    let column_index = grid_index / view_config.vertices_per_row;
+
+    return vec2<u32>(column_index + (row_index & 1u), row_index >> 1u);
+}
+
+fn vertex_local_position(tile: Tile, grid_index: u32) -> vec3<f32> {
+    let grid_offset = grid_offset(grid_index);
+    let grid_uv = vec2<f32>(grid_offset) / view_config.grid_size;
+    var local_position = tile_local_position(tile, grid_uv);
+
+    #ifdef MESH_MORPH
+        let world_position = vec4<f32>(local_position, 1.0);
+        let morph = morph(tile, world_position);
+
+        // let even_grid_offset = grid_offset & vec2<u32>(4294967294u); // set last bit to zero
+        let even_grid_offset = grid_offset - (grid_offset & vec2<u32>(1u)); // set last bit to zero
+        let even_grid_uv = vec2<f32>(even_grid_offset) / view_config.grid_size;
+        let even_local_position = tile_local_position(tile, even_grid_uv);
+
+        local_position = mix(local_position, even_local_position, morph);
+    #endif
+
+    return local_position;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 /*
 #import bevy_terrain::types TerrainConfig, TerrainViewConfig, Tile, TileList, NodeLookup, VertexInput
 #import bevy_terrain::types VertexOutput, FragmentInput, FragmentOutput, Fragment, Blend
@@ -135,20 +230,3 @@ fn minmax(local_position: vec2<f32>, size: f32) -> vec2<f32> {
     return vec2(min_height, max_height) * config.height;
 }
 */
-
-fn cube_to_sphere(position: vec3<f32>) -> vec3<f32> {
-    let p = 2.0 * (position - 0.5);
-    let x2 = p.x * p.x;
-	let y2 = p.y * p.y;
-	let z2 = p.z * p.z;
-
-	let rx = p.x * sqrt(1.0 - (y2 + z2) / 2.0 + y2 * z2 / 3.0);
-	let ry = p.y * sqrt(1.0 - (x2 + z2) / 2.0 + x2 * z2 / 3.0);
-	let rz = p.z * sqrt(1.0 - (x2 + y2) / 2.0 + x2 * y2 / 3.0);
-
-    var r = p;
-    // r = normalize(p);
-    r = vec3<f32>(rx, ry, rz);
-
-    return r;
-}

@@ -4,8 +4,7 @@ use crate::{
         TERRAIN_VIEW_CONFIG_SIZE, TERRAIN_VIEW_LAYOUT, TILE_SIZE,
     },
     terrain::{Terrain, TerrainConfig},
-    terrain_view::{TerrainView, TerrainViewConfig},
-    TerrainViewComponents,
+    terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
 };
 use bevy::{
     ecs::{
@@ -35,6 +34,7 @@ pub(crate) struct TerrainViewConfigUniform {
     grid_size: f32,
     vertices_per_row: u32,
     vertices_per_tile: u32,
+    view_distance: f32,
     morph_distance: f32,
     blend_distance: f32,
     morph_range: f32,
@@ -54,6 +54,7 @@ impl TerrainViewConfigUniform {
             grid_size: view_config.grid_size as f32,
             vertices_per_row: 2 * (view_config.grid_size + 2),
             vertices_per_tile: 2 * view_config.grid_size * (view_config.grid_size + 2),
+            view_distance: view_config.view_distance,
             morph_distance: view_distance
                 / 2.0_f32.powf(view_config.additional_refinement as f32 + 1.0),
             blend_distance: view_distance,

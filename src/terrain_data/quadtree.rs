@@ -5,7 +5,7 @@ use crate::{
         node_atlas::{LoadingState, NodeAtlas},
         AtlasIndex, NodeCoordinate, NodeId, INVALID_ATLAS_INDEX, INVALID_LOD, INVALID_NODE_ID,
     },
-    TerrainView, TerrainViewComponents, TerrainViewConfig,
+    terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
 };
 use bevy::{math::Vec3Swizzles, prelude::*};
 use bytemuck::{Pod, Zeroable};

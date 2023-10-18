@@ -3,7 +3,7 @@ use crate::{
     terrain_data::{
         quadtree::Quadtree, AtlasAttachment, AtlasIndex, AttachmentIndex, NodeId, INVALID_NODE_ID,
     },
-    TerrainView, TerrainViewComponents,
+    terrain_view::{TerrainView, TerrainViewComponents},
 };
 use bevy::{
     prelude::*,
