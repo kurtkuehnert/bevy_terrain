@@ -1,6 +1,9 @@
 //! Contains a debug resource and systems controlling it to visualize different internal
 //! data of the plugin.
-use crate::{debug::camera::debug_camera_control, TerrainViewComponents, TerrainViewConfig};
+use crate::{
+    debug::camera::debug_camera_control,
+    terrain_view::{TerrainViewComponents, TerrainViewConfig},
+};
 use bevy::{
     prelude::*,
     render::{Extract, RenderApp},

@@ -4,13 +4,13 @@ struct IndirectBuffer {
     workgroup_count: vec3<u32>,
 }
 
-@group(0) @binding(0)
+@group(1) @binding(0)
 var<uniform> view_config: TerrainViewConfig;
-@group(0) @binding(2)
+@group(1) @binding(2)
 var<storage, read_write> final_tiles: TileList;
-@group(0) @binding(3)
+@group(1) @binding(3)
 var<storage, read_write> temporary_tiles: TileList;
-@group(0) @binding(4)
+@group(1) @binding(4)
 var<storage, read_write> parameters: Parameters;
 
 @group(3) @binding(0)
@@ -24,40 +24,40 @@ fn prepare_root() {
     atomicStore(&parameters.final_index, 0);
 
     var top_tile: Tile;
-    top_tile.coord = vec3<f32>(0.0, 1.0, 0.0);
-    top_tile.u     = vec3<f32>(1.0, 0.0, 0.0);
-    top_tile.v     = vec3<f32>(0.0, 0.0, 1.0);
-    top_tile.side  = 0u;
+    top_tile.coordinate = vec3<f32>(0.0, 1.0, 0.0);
+    top_tile.u          = vec3<f32>(1.0, 0.0, 0.0);
+    top_tile.v          = vec3<f32>(0.0, 0.0, 1.0);
+    top_tile.side       = 0u;
 
     var bottom_tile: Tile;
-    bottom_tile.coord = vec3<f32>(0.0, 0.0, 0.0);
-    bottom_tile.u     = vec3<f32>(0.0, 0.0, 1.0);
-    bottom_tile.v     = vec3<f32>(1.0, 0.0, 0.0);
-    bottom_tile.side  = 1u;
+    bottom_tile.coordinate = vec3<f32>(0.0, 0.0, 0.0);
+    bottom_tile.u          = vec3<f32>(0.0, 0.0, 1.0);
+    bottom_tile.v          = vec3<f32>(1.0, 0.0, 0.0);
+    bottom_tile.side       = 1u;
 
     var front_tile: Tile;
-    front_tile.coord = vec3<f32>(0.0, 0.0, 0.0);
-    front_tile.u     = vec3<f32>(0.0, 1.0, 0.0);
-    front_tile.v     = vec3<f32>(0.0, 0.0, 1.0);
-    front_tile.side  = 2u;
+    front_tile.coordinate = vec3<f32>(0.0, 0.0, 0.0);
+    front_tile.u          = vec3<f32>(0.0, 1.0, 0.0);
+    front_tile.v          = vec3<f32>(0.0, 0.0, 1.0);
+    front_tile.side       = 2u;
 
     var back_tile: Tile;
-    back_tile.coord = vec3<f32>(1.0, 0.0, 0.0);
-    back_tile.u     = vec3<f32>(0.0, 0.0, 1.0);
-    back_tile.v     = vec3<f32>(0.0, 1.0, 0.0);
-    back_tile.side  = 3u;
+    back_tile.coordinate = vec3<f32>(1.0, 0.0, 0.0);
+    back_tile.u          = vec3<f32>(0.0, 0.0, 1.0);
+    back_tile.v          = vec3<f32>(0.0, 1.0, 0.0);
+    back_tile.side       = 3u;
 
     var left_tile: Tile;
-    left_tile.coord = vec3<f32>(0.0, 0.0, 0.0);
-    left_tile.u     = vec3<f32>(1.0, 0.0, 0.0);
-    left_tile.v     = vec3<f32>(0.0, 1.0, 0.0);
-    left_tile.side  = 4u;
+    left_tile.coordinate = vec3<f32>(0.0, 0.0, 0.0);
+    left_tile.u          = vec3<f32>(1.0, 0.0, 0.0);
+    left_tile.v          = vec3<f32>(0.0, 1.0, 0.0);
+    left_tile.side       = 4u;
 
     var right_tile: Tile;
-    right_tile.coord = vec3<f32>(0.0, 0.0, 1.0);
-    right_tile.u     = vec3<f32>(0.0, 1.0, 0.0);
-    right_tile.v     = vec3<f32>(1.0, 0.0, 0.0);
-    right_tile.side  = 5u;
+    right_tile.coordinate = vec3<f32>(0.0, 0.0, 1.0);
+    right_tile.u          = vec3<f32>(0.0, 1.0, 0.0);
+    right_tile.v          = vec3<f32>(1.0, 0.0, 0.0);
+    right_tile.side       = 5u;
 
     temporary_tiles.data[0] = top_tile;
     temporary_tiles.data[1] = bottom_tile;

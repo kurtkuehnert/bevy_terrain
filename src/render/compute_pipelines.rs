@@ -1,13 +1,15 @@
+use crate::terrain::TerrainComponents;
+use crate::terrain_view::{TerrainView, TerrainViewComponents};
 use crate::{
+    debug::DebugTerrain,
     render::{
-        culling::CullingBindGroup,
+        culling_bind_group::CullingBindGroup,
         shaders::{PREPARE_INDIRECT_SHADER, REFINE_TILES_SHADER},
         terrain_bind_group::TerrainBindGroup,
         terrain_view_data::{TerrainViewConfigUniform, TerrainViewData},
-        CULL_DATA_LAYOUT, PREPARE_INDIRECT_LAYOUT, REFINE_TILES_LAYOUT,
+        PREPARE_INDIRECT_LAYOUT, REFINE_TILES_LAYOUT,
     },
     terrain::Terrain,
-    DebugTerrain, TerrainComponents, TerrainView, TerrainViewComponents,
 };
 use bevy::{
     prelude::*,
@@ -65,8 +67,8 @@ impl TerrainComputePipelineFlags {
 pub struct TerrainComputePipelines {
     pub(crate) prepare_indirect_layout: BindGroupLayout,
     pub(crate) refine_tiles_layout: BindGroupLayout,
-    pub(crate) cull_data_layout: BindGroupLayout,
-    pub(crate) terrain_layout: BindGroupLayout,
+    culling_data_layout: BindGroupLayout,
+    terrain_layout: BindGroupLayout,
     prepare_indirect_shader: Handle<Shader>,
     refine_tiles_shader: Handle<Shader>,
     pipelines: [Option<CachedComputePipelineId>; TerrainComputePipelineId::COUNT],
@@ -78,7 +80,7 @@ impl FromWorld for TerrainComputePipelines {
 
         let prepare_indirect_layout = device.create_bind_group_layout(&PREPARE_INDIRECT_LAYOUT);
         let refine_tiles_layout = device.create_bind_group_layout(&REFINE_TILES_LAYOUT);
-        let cull_data_layout = device.create_bind_group_layout(&CULL_DATA_LAYOUT);
+        let culling_data_layout = CullingBindGroup::layout(device);
         let terrain_layout = TerrainBindGroup::layout(device);
 
         let prepare_indirect_shader = PREPARE_INDIRECT_SHADER.typed();
@@ -87,7 +89,7 @@ impl FromWorld for TerrainComputePipelines {
         TerrainComputePipelines {
             prepare_indirect_layout,
             refine_tiles_layout,
-            cull_data_layout,
+            culling_data_layout,
             terrain_layout,
             prepare_indirect_shader,
             refine_tiles_shader,
@@ -109,8 +111,8 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
         match key.0 {
             TerrainComputePipelineId::RefineTiles => {
                 layout = vec![
+                    self.culling_data_layout.clone(),
                     self.refine_tiles_layout.clone(),
-                    self.cull_data_layout.clone(),
                     self.terrain_layout.clone(),
                 ];
                 shader = self.refine_tiles_shader.clone();
@@ -118,8 +120,8 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
             }
             TerrainComputePipelineId::PrepareRoot => {
                 layout = vec![
+                    self.culling_data_layout.clone(),
                     self.refine_tiles_layout.clone(),
-                    self.cull_data_layout.clone(),
                     self.terrain_layout.clone(),
                     self.prepare_indirect_layout.clone(),
                 ];
@@ -128,8 +130,8 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
             }
             TerrainComputePipelineId::PrepareNext => {
                 layout = vec![
+                    self.culling_data_layout.clone(),
                     self.refine_tiles_layout.clone(),
-                    self.cull_data_layout.clone(),
                     self.terrain_layout.clone(),
                     self.prepare_indirect_layout.clone(),
                 ];
@@ -138,8 +140,8 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
             }
             TerrainComputePipelineId::PrepareRender => {
                 layout = vec![
+                    self.culling_data_layout.clone(),
                     self.refine_tiles_layout.clone(),
-                    self.cull_data_layout.clone(),
                     self.terrain_layout.clone(),
                     self.prepare_indirect_layout.clone(),
                 ];
@@ -179,12 +181,12 @@ impl TerrainComputeNode {
         pipelines: &'a [&'a ComputePipeline],
         view_data: &'a TerrainViewData,
         terrain_data: &'a TerrainBindGroup,
-        culling_bind_group: &'a BindGroup,
+        culling_bind_group: &'a CullingBindGroup,
         refinement_count: u32,
     ) {
-        pass.set_bind_group(0, &view_data.refine_tiles_bind_group, &[]);
-        pass.set_bind_group(1, culling_bind_group, &[]);
-        pass.set_bind_group(2, &terrain_data.bind_group(), &[]);
+        pass.set_bind_group(0, culling_bind_group.bind_group(), &[]);
+        pass.set_bind_group(1, &view_data.refine_tiles_bind_group, &[]);
+        pass.set_bind_group(2, terrain_data.bind_group(), &[]);
         pass.set_bind_group(3, &view_data.prepare_indirect_bind_group, &[]);
 
         pass.set_pipeline(pipelines[TerrainComputePipelineId::PrepareRoot as usize]);
@@ -261,7 +263,7 @@ impl render_graph::Node for TerrainComputeNode {
                     pipelines,
                     view_data,
                     terrain_data,
-                    &culling_bind_group.value,
+                    culling_bind_group,
                     view_config.refinement_count,
                 );
             }

@@ -1,8 +1,7 @@
 use crate::{
     terrain::Terrain,
     terrain_data::quadtree::{Quadtree, QuadtreeEntry},
-    terrain_view::TerrainView,
-    TerrainViewComponents,
+    terrain_view::{TerrainView, TerrainViewComponents},
 };
 use bevy::{
     core::cast_slice,

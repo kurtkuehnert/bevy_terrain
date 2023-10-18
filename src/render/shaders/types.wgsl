@@ -5,6 +5,7 @@ struct TerrainConfig {
     height: f32,
     leaf_node_size: u32,
     terrain_size: u32,
+    radius: f32,
 }
 
 struct TerrainViewConfig {
@@ -17,6 +18,7 @@ struct TerrainViewConfig {
     grid_size: f32,
     vertices_per_row: u32,
     vertices_per_tile: u32,
+    view_distance: f32,
     morph_distance: f32,
     blend_distance: f32,
     morph_range: f32,
@@ -24,10 +26,10 @@ struct TerrainViewConfig {
 }
 
 struct Tile {
-    coord: vec3<f32>,
-    u: vec3<f32>,
-    v: vec3<f32>,
-    side: u32,
+    coordinate: vec3<f32>, // [0..1]
+    u: vec3<f32>, // Todo: consider storing u and v in an array and only use the side index to look them up
+    v: vec3<f32>, // [0..1]
+    side: u32, // [0..6]
 }
 
 struct TileList {

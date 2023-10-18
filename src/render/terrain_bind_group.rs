@@ -1,7 +1,4 @@
-use crate::{
-    terrain::{Terrain, TerrainComponents},
-    TerrainConfig,
-};
+use crate::terrain::{Terrain, TerrainComponents, TerrainConfig};
 use bevy::{
     ecs::{
         query::ROQueryItem,
@@ -26,6 +23,7 @@ struct TerrainConfigUniform {
     height: f32,
     chunk_size: u32,
     terrain_size: u32,
+    radius: f32,
 }
 
 impl From<&TerrainConfig> for TerrainConfigUniform {
@@ -35,6 +33,7 @@ impl From<&TerrainConfig> for TerrainConfigUniform {
             height: config.height,
             chunk_size: config.leaf_node_size,
             terrain_size: config.terrain_size,
+            radius: config.radius,
         }
     }
 }
