@@ -1,3 +1,4 @@
+use bevy::asset::LoadState;
 use bevy::{
     asset::ChangeWatcher,
     prelude::*,
@@ -18,7 +19,12 @@ const PATH: &str = "terrain";
 
 #[derive(AsBindGroup, TypeUuid, TypePath, Clone)]
 #[uuid = "003e1d5d-241c-45a6-8c25-731dee22d820"]
-pub struct TerrainMaterial {}
+pub struct TerrainMaterial {
+    #[texture(0, dimension = "cube")]
+    cube_map: Handle<Image>,
+    #[texture(1, dimension = "1d")]
+    gradient: Handle<Image>,
+}
 
 impl Material for TerrainMaterial {
     fn vertex_shader() -> ShaderRef {
@@ -44,18 +50,28 @@ fn main() {
             TerrainMaterialPlugin::<TerrainMaterial>::default(),
         ))
         .add_systems(Startup, setup)
-        .add_systems(Update, toggle_camera)
+        .add_systems(Update, (toggle_camera, create_array_texture))
         .run();
 }
 
 fn setup(
     mut commands: Commands,
     plugin_config: Res<TerrainPluginConfig>,
+    asset_server: Res<AssetServer>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<TerrainMaterial>>,
     mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
 ) {
+    let cube_map = asset_server.load("textures/test_stacked.png");
+    let gradient = asset_server.load("textures/gradient.png");
+
+    commands.insert_resource(LoadingTextures {
+        is_loaded: false,
+        cube_map: cube_map.clone(),
+        gradient: gradient.clone(),
+    });
+
     let mut loader = AttachmentFromDiskLoader::new(LOD_COUNT, PATH.to_string());
     loader.add_base_attachment(
         &plugin_config,
@@ -83,10 +99,10 @@ fn setup(
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
     let view_config = TerrainViewConfig {
         tile_scale: 16.0,
-        grid_size: 4,
+        grid_size: 8,
         node_count: 10,
         load_distance: 5.0,
-        view_distance: 3.0,
+        view_distance: 8.0,
         ..default()
     };
 
@@ -95,7 +111,7 @@ fn setup(
         .spawn((
             TerrainBundle::new(config.clone()),
             loader,
-            materials.add(TerrainMaterial {}),
+            materials.add(TerrainMaterial { cube_map, gradient }),
         ))
         .id();
 
@@ -139,4 +155,40 @@ fn toggle_camera(input: Res<Input<KeyCode>>, mut camera_query: Query<&mut DebugC
     if input.just_pressed(KeyCode::T) {
         camera.active = !camera.active;
     }
+}
+
+#[derive(Resource)]
+struct LoadingTextures {
+    is_loaded: bool,
+    cube_map: Handle<Image>,
+    gradient: Handle<Image>,
+}
+
+fn create_array_texture(
+    asset_server: Res<AssetServer>,
+    mut loading_textures: ResMut<LoadingTextures>,
+    mut images: ResMut<Assets<Image>>,
+) {
+    if loading_textures.is_loaded
+        || asset_server.get_load_state(loading_textures.cube_map.clone()) != LoadState::Loaded
+        || asset_server.get_load_state(loading_textures.gradient.clone()) != LoadState::Loaded
+    {
+        return;
+    }
+
+    loading_textures.is_loaded = true;
+
+    let image = images.get_mut(&loading_textures.cube_map).unwrap();
+
+    image.texture_view_descriptor = Some(TextureViewDescriptor {
+        dimension: Some(TextureViewDimension::Cube),
+        ..default()
+    });
+
+    // Create a new array texture asset from the loaded texture.
+    let array_layers = 6;
+    image.reinterpret_stacked_2d_as_array(array_layers);
+
+    let image = images.get_mut(&loading_textures.gradient).unwrap();
+    image.texture_descriptor.dimension = TextureDimension::D1;
 }
