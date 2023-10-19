@@ -89,8 +89,8 @@ fn process_fragment(input: FragmentInput, data: FragmentData) -> Fragment {
 // The default fragment entry point, which blends the terrain data at the fringe between two lods.
 @fragment
 fn fragment_fn(input: FragmentInput) -> FragmentOutput {
-    let ddx   = dpdx(input.local_position);
-    let ddy   = dpdy(input.local_position);
+    let ddx   = dpdx(input.local_position.xz);
+    let ddy   = dpdy(input.local_position.xz);
     let blend = calculate_blend(input.world_position);
 
     let lookup = lookup_node(blend.lod, input.local_position);
@@ -104,9 +104,9 @@ fn fragment_fn(input: FragmentInput) -> FragmentOutput {
 
     let fragment = process_fragment(input, data);
 
-    if (fragment.do_discard) {
-        discard;
-    }
+    // if (fragment.do_discard) {
+    //     discard;
+    // }
 
     return FragmentOutput(fragment.color);
 }

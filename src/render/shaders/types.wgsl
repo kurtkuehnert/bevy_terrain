@@ -4,7 +4,7 @@ struct TerrainConfig {
     lod_count: u32,
     height: f32,
     leaf_node_size: u32,
-    terrain_size: u32,
+    terrain_size: f32,
     radius: f32,
 }
 

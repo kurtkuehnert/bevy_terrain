@@ -11,6 +11,9 @@ readme = "README.md"
 authors = ["Kurt Kühnert <kurt@kuehnert.dev>"]
 repository = "https://github.com/kurtkuehnert/bevy_terrain"
 
+[features]
+spherical = []
+
 [dependencies]
 bevy = "0.11.2"
 dtm = "0.1"
@@ -27,3 +30,30 @@ bytemuck = "1.10"
 anyhow = "1.0"
 bincode = "2.0.0-rc.1"
 dolly = "0.4"
+
+[[example]]
+name = "basic"
+path = "examples/basic.rs"
+
+[package.metadata.example.basic]
+name = "Basic"
+description = "Renders a basic flat terrain with only the base attachment."
+
+[[example]]
+name = "advanced"
+path = "examples/advanced.rs"
+
+[package.metadata.example.advanced]
+name = "Advanced"
+description = "Renders a flat terrain with the base attachment and an albedo texture, using a custom shader."
+
+
+[[example]]
+name = "spherical"
+path = "examples/spherical.rs"
+required-features = ["spherical"]
+
+[package.metadata.example.spherical]
+name = "Spherical"
+description = "Renders a spherical terrain using a custom shader."
+
