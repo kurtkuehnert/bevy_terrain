@@ -49,7 +49,7 @@ pub struct TerrainConfig {
     /// The size of the smallest nodes (with lod 0).
     pub leaf_node_size: u32, // Todo: reconsider this
     /// The size of the terrain.
-    pub terrain_size: u32, // Todo: reconsider this
+    pub terrain_size: f32, // Todo: reconsider this
     pub radius: f32,
     /// The amount of nodes the can be loaded simultaneously in the node atlas.
     pub node_atlas_size: u32,

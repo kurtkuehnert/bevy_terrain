@@ -22,7 +22,7 @@ struct TerrainConfigUniform {
     lod_count: u32,
     height: f32,
     chunk_size: u32,
-    terrain_size: u32,
+    terrain_size: f32,
     radius: f32,
 }
 

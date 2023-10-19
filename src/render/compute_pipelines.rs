@@ -37,7 +37,8 @@ bitflags::bitflags! {
     #[repr(transparent)]
     pub struct TerrainComputePipelineFlags: u32 {
         const NONE               = 0;
-        const TEST               = (1 << 0);
+        const SPHERICAL          = (1 << 0);
+        const TEST               = (1 << 1);
     }
 }
 
@@ -55,6 +56,9 @@ impl TerrainComputePipelineFlags {
     pub fn shader_defs(&self) -> Vec<ShaderDefVal> {
         let mut shader_defs = Vec::new();
 
+        if (self.bits() & TerrainComputePipelineFlags::SPHERICAL.bits()) != 0 {
+            shader_defs.push("SPHERICAL".into());
+        }
         if (self.bits() & TerrainComputePipelineFlags::TEST.bits()) != 0 {
             shader_defs.push("TEST".into());
         }
@@ -237,9 +241,9 @@ impl render_graph::Node for TerrainComputeNode {
         }
 
         let pipelines = &match TerrainComputePipelineId::iter()
-            .map(|key| {
+            .map(|id| {
                 pipeline_cache
-                    .get_compute_pipeline(compute_pipelines.pipelines[key as usize].unwrap())
+                    .get_compute_pipeline(compute_pipelines.pipelines[id as usize].unwrap())
             })
             .collect::<Option<Vec<_>>>()
         {
@@ -280,6 +284,11 @@ pub(crate) fn queue_terrain_compute_pipelines(
     mut pipelines: ResMut<SpecializedComputePipelines<TerrainComputePipelines>>,
 ) {
     let mut flags = TerrainComputePipelineFlags::NONE;
+
+    #[cfg(feature = "spherical")]
+    {
+        flags |= TerrainComputePipelineFlags::SPHERICAL;
+    }
 
     if let Some(debug) = &debug {
         flags |= TerrainComputePipelineFlags::from_debug(debug);

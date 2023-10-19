@@ -2,7 +2,7 @@
 
 #import bevy_terrain::types Tile
 #import bevy_terrain::bindings config, view_config
-#import bevy_terrain::functions calculate_morph, minmax, node_size
+#import bevy_terrain::functions morph
 #import bevy_pbr::mesh_view_bindings view
 
 fn lod_color(lod: u32) -> vec4<f32> {
@@ -31,42 +31,27 @@ fn lod_color(lod: u32) -> vec4<f32> {
 fn show_tiles(tile: Tile, world_position: vec4<f32>) -> vec4<f32> {
     var color: vec4<f32>;
 
-    if ((tile.coords.x + tile.coords.y) % 2u == 0u) {
+    let size = length(tile.v);
+
+    let index = ((tile.coordinate.x + tile.coordinate.y + tile.coordinate.z) / size) % 2.0;
+
+    if (index < 0.1) {
         color = vec4<f32>(0.5, 0.5, 0.5, 1.0);
     }
     else {
         color = vec4<f32>(0.1, 0.1, 0.1, 1.0);
     }
 
-    let lod = u32(ceil(log2(f32(tile.size))));
+    let lod = u32(ceil(log2(1.0 / size)));
     color = mix(color, lod_color(lod), 0.5);
+    color = mix(color, lod_color(tile.side), 0.5);
 
 #ifdef MESH_MORPH
-    let morph = calculate_morph(tile, world_position);
-    color = color + vec4<f32>(1.0, 1.0, 1.0, 1.0) * morph;
+    let morph = morph(tile, world_position);
+    color = color + vec4<f32>(0.3) * morph;
 #endif
 
     return vec4<f32>(color.xyz, 0.5);
-}
-
-fn show_minmax_error(tile: Tile, height: f32) -> vec4<f32> {
-    let size = f32(tile.size) * view_config.tile_scale;
-    let local_position = (vec2<f32>(tile.coords) + 0.5) * size;
-    let lod = u32(ceil(log2(size))) + 1u;
-    let minmax = minmax(local_position, size);
-
-    var color = vec4<f32>(0.0,
-                          clamp((minmax.y - height) / size / 2.0, 0.0, 1.0),
-                          clamp((height - minmax.x) / size / 2.0, 0.0, 1.0),
-                          0.5);
-
-    let tolerance = 0.00001;
-
-    if (height < minmax.x - tolerance || height > minmax.y + tolerance || lod >= config.lod_count) {
-        color = vec4<f32>(1.0, 0.0, 0.0, 0.5);
-    }
-
-    return color;
 }
 
 fn show_lod(lod: u32, world_position: vec3<f32>) -> vec4<f32> {

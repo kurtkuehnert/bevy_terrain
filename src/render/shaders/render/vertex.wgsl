@@ -1,10 +1,11 @@
 #define_import_path bevy_terrain::vertex
 
-#import bevy_terrain::types NodeLookup, VertexInput, VertexOutput
-#import bevy_terrain::bindings view_config, tiles, config, atlas_sampler
-#import bevy_terrain::functions calculate_grid_position, calculate_local_position, approximate_world_position, calculate_blend, lookup_node, vertex_output
+#import bevy_terrain::types VertexInput, VertexOutput, NodeLookup
+#import bevy_terrain::bindings config, view_config, tiles, atlas_sampler
+#import bevy_terrain::functions vertex_local_position, approximate_world_position, calculate_blend, lookup_node
 #import bevy_terrain::debug show_tiles, show_minmax_error
 #import bevy_terrain::attachments height_atlas, HEIGHT_SCALE, HEIGHT_OFFSET
+#import bevy_pbr::mesh_view_bindings view
 
 // Todo: implement bump mapping, etc.
 fn vertex_height(lookup: NodeLookup) -> f32 {
@@ -20,10 +21,13 @@ fn vertex_fn(in: VertexInput) -> VertexOutput {
     let grid_index = in.vertex_index % view_config.vertices_per_tile;
 
     let tile = tiles.data[tile_index];
-    let grid_position = calculate_grid_position(grid_index);
 
-    let local_position = calculate_local_position(tile, grid_position);
-    let world_position = approximate_world_position(local_position);
+    let new_local_position = vertex_local_position(tile, grid_index);
+    var world_position = approximate_world_position(new_local_position);
+
+    // adjust local position, to work with old sampling code
+    // Todo: fix this hack
+    let local_position = new_local_position + 0.5 * vec3<f32>(f32(config.terrain_size));
 
     let blend = calculate_blend(world_position);
 
@@ -36,7 +40,13 @@ fn vertex_fn(in: VertexInput) -> VertexOutput {
         height      = mix(height2, height, blend.ratio);
     }
 
-    var output = vertex_output(local_position, height);
+    world_position = vec4<f32>(new_local_position.x, height, new_local_position.z, 1.0);
+
+    var output: VertexOutput;
+    output.frag_coord = view.view_proj * world_position;
+    output.local_position = local_position;
+    output.world_position = world_position;
+    output.debug_color = vec4<f32>(0.0);
 
 #ifdef SHOW_TILES
     output.debug_color = show_tiles(tile, output.world_position);

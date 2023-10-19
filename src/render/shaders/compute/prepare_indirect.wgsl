@@ -19,9 +19,11 @@ var<storage, read_write> indirect_buffer: IndirectBuffer;
 @compute @workgroup_size(1, 1, 1)
 fn prepare_root() {
     parameters.counter = -1;
-    parameters.tile_count = 6u;
     atomicStore(&parameters.child_index, i32(view_config.tile_count - 1u));
     atomicStore(&parameters.final_index, 0);
+
+#ifdef SPHERICAL
+    parameters.tile_count = 6u;
 
     var top_tile: Tile;
     top_tile.coordinate = vec3<f32>(0.0, 1.0, 0.0);
@@ -65,6 +67,17 @@ fn prepare_root() {
     temporary_tiles.data[3] = back_tile;
     temporary_tiles.data[4] = left_tile;
     temporary_tiles.data[5] = right_tile;
+#else
+    parameters.tile_count = 1u;
+
+    var tile: Tile;
+    tile.coordinate = vec3<f32>(0.0, 0.5, 0.0);
+    tile.u          = vec3<f32>(1.0, 0.0, 0.0);
+    tile.v          = vec3<f32>(0.0, 0.0, 1.0);
+    tile.side       = 0u;
+
+    temporary_tiles.data[0] = tile;
+#endif
 
     indirect_buffer.workgroup_count = vec3<u32>(1u, 1u, 1u);
 }

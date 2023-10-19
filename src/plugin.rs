@@ -59,7 +59,7 @@ impl TerrainPluginConfig {
 
     pub fn configure_terrain(
         &self,
-        terrain_size: u32,
+        terrain_size: f32,
         radius: f32,
         lod_count: u32,
         height: f32,
