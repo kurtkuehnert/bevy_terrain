@@ -92,7 +92,7 @@ fn process_fragment(in: FragmentInput, data: FragmentData) -> Fragment {
     let height_weight = (max(min(height, max_height), min_height) - min_height) / (max_height - min_height);
 
     // Sample your custom material.
-    let uv = in.local_position / 10.0f;
+    let uv = in.local_position.xz / 10.0f;
     let grass = textureSample(array_texture, array_sampler, uv, 0);
     let rock = textureSample(array_texture, array_sampler, uv, 1);
     let snow = textureSample(array_texture, array_sampler, uv, 2);
@@ -122,8 +122,8 @@ fn process_fragment(in: FragmentInput, data: FragmentData) -> Fragment {
 
 @fragment
 fn fragment(input: FragmentInput) -> FragmentOutput {
-    let ddx   = dpdx(input.local_position);
-    let ddy   = dpdy(input.local_position);
+    let ddx   = dpdx(input.local_position.xz);
+    let ddy   = dpdy(input.local_position.xz);
     let blend = calculate_blend(input.world_position);
 
     let lookup = lookup_node(blend.lod, input.local_position);
@@ -137,9 +137,9 @@ fn fragment(input: FragmentInput) -> FragmentOutput {
 
     let fragment = process_fragment(input, data);
 
-    if (fragment.do_discard) {
-        discard;
-    }
+    // if (fragment.do_discard) {
+    //     discard;
+    // }
 
     return FragmentOutput(fragment.color);
 }

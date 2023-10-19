@@ -70,21 +70,22 @@ bitflags::bitflags! {
     #[repr(transparent)]
     pub struct TerrainPipelineFlags: u32 {
         const NONE               = 0;
-        const WIREFRAME          = (1 <<  0);
-        const SHOW_TILES         = (1 <<  1);
-        const SHOW_LOD           = (1 <<  2);
-        const SHOW_UV            = (1 <<  3);
-        const SHOW_NODES         = (1 <<  4);
-        const SHOW_MINMAX_ERROR  = (1 <<  5);
-        const MINMAX             = (1 <<  6);
-        const MESH_MORPH         = (1 <<  7);
-        const ALBEDO             = (1 <<  8);
-        const BRIGHT             = (1 <<  9);
-        const LIGHTING           = (1 << 10);
-        const SAMPLE_GRAD        = (1 << 11);
-        const TEST1              = (1 << 12);
-        const TEST2              = (1 << 13);
-        const TEST3              = (1 << 14);
+        const SPHERICAL          = (1 <<  0);
+        const WIREFRAME          = (1 <<  1);
+        const SHOW_TILES         = (1 <<  2);
+        const SHOW_LOD           = (1 <<  3);
+        const SHOW_UV            = (1 <<  4);
+        const SHOW_NODES         = (1 <<  5);
+        const SHOW_MINMAX_ERROR  = (1 <<  6);
+        const MINMAX             = (1 <<  7);
+        const MESH_MORPH         = (1 <<  8);
+        const ALBEDO             = (1 <<  9);
+        const BRIGHT             = (1 << 10);
+        const LIGHTING           = (1 << 11);
+        const SAMPLE_GRAD        = (1 << 12);
+        const TEST1              = (1 << 13);
+        const TEST2              = (1 << 14);
+        const TEST3              = (1 << 15);
 
         const MSAA_RESERVED_BITS = TerrainPipelineFlags::MSAA_MASK_BITS << TerrainPipelineFlags::MSAA_SHIFT_BITS;
     }
@@ -165,6 +166,9 @@ impl TerrainPipelineFlags {
     pub fn shader_defs(&self) -> Vec<ShaderDefVal> {
         let mut shader_defs = Vec::new();
 
+        if (self.bits() & TerrainPipelineFlags::SPHERICAL.bits()) != 0 {
+            shader_defs.push("SPHERICAL".into());
+        }
         if (self.bits() & TerrainPipelineFlags::SHOW_TILES.bits()) != 0 {
             shader_defs.push("SHOW_TILES".into());
         }
@@ -369,6 +373,11 @@ pub(crate) fn queue_terrain<M: Material>(
         for (entity, material) in terrain_query.iter() {
             if let Some(material) = render_materials.get(material) {
                 let mut flags = TerrainPipelineFlags::from_msaa_samples(msaa.samples());
+
+                #[cfg(feature = "spherical")]
+                {
+                    flags |= TerrainPipelineFlags::SPHERICAL;
+                }
 
                 if let Some(debug) = &debug {
                     flags |= TerrainPipelineFlags::from_debug(debug);

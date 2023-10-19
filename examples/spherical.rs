@@ -1,5 +1,5 @@
-use bevy::asset::ChangeWatcher;
 use bevy::{
+    asset::ChangeWatcher,
     prelude::*,
     reflect::{TypePath, TypeUuid},
     render::render_resource::*,
@@ -7,7 +7,8 @@ use bevy::{
 use bevy_terrain::prelude::*;
 use std::time::Duration;
 
-const TERRAIN_SIZE: u32 = 1024;
+const TERRAIN_SIZE: f32 = 0.0;
+const RADIUS: f32 = 50.0;
 const TEXTURE_SIZE: u32 = 512;
 const MIP_LEVEL_COUNT: u32 = 1;
 const LOD_COUNT: u32 = 4;
@@ -60,7 +61,7 @@ fn setup(
         &plugin_config,
         TileConfig {
             path: "assets/terrain/source/height".to_string(),
-            size: TERRAIN_SIZE,
+            size: TERRAIN_SIZE as u32,
             file_format: FileFormat::PNG,
         },
     );
@@ -72,7 +73,7 @@ fn setup(
     // Configure all the important properties of the terrain, as well as its attachments.
     let config = plugin_config.configure_terrain(
         TERRAIN_SIZE,
-        50.0,
+        RADIUS,
         LOD_COUNT,
         HEIGHT,
         NODE_ATLAS_SIZE,
