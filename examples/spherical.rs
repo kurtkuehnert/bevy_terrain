@@ -39,6 +39,9 @@ fn main() {
     let config =
         TerrainPluginConfig::with_base_attachment(BaseConfig::new(TEXTURE_SIZE, MIP_LEVEL_COUNT));
 
+    // Use   magick mogrify -resize 1000x1000 -quality 100 -path ../earth_1k -format png *.tif
+    // bevy_terrain::preprocess::cube_map::create_cube_map();
+
     App::new()
         .add_plugins((
             DefaultPlugins.set(AssetPlugin {
@@ -63,7 +66,7 @@ fn setup(
     mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
 ) {
-    let cube_map = asset_server.load("textures/test_stacked.png");
+    let cube_map = asset_server.load("textures/earth_cube.png");
     let gradient = asset_server.load("textures/gradient.png");
 
     commands.insert_resource(LoadingTextures {
@@ -179,6 +182,8 @@ fn create_array_texture(
     loading_textures.is_loaded = true;
 
     let image = images.get_mut(&loading_textures.cube_map).unwrap();
+
+    image.texture_descriptor.format = TextureFormat::R16Unorm;
 
     image.texture_view_descriptor = Some(TextureViewDescriptor {
         dimension: Some(TextureViewDimension::Cube),
