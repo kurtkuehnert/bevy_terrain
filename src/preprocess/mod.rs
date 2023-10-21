@@ -1,6 +1,7 @@
 //! Contains the implementation for preprocessing source tiles into streamable nodes.
 
 pub mod base;
+pub mod cube_map;
 pub mod down_sample;
 pub mod file_io;
 pub mod split;

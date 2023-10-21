@@ -20,9 +20,10 @@ fn vertex(in: VertexInput) -> VertexOutput {
     var world_position = approximate_world_position(local_position);
 
     let direction = normalize(local_position);
-    let height = 20.0 * pow(textureSampleLevel(cube_map, atlas_sampler, direction, 0.0).x, 0.2);
+    // let height = 20.0 * pow(textureSampleLevel(cube_map, atlas_sampler, direction, 0.0).x, 0.2);
 
-
+    let scale = 2.0 * textureSampleLevel(cube_map, atlas_sampler, direction, 0.0).x - 1.0;
+    let height = 40.0 * sign(scale) * pow(abs(scale), 1.5);
 
     world_position = world_position + vec4<f32>(direction * height, 0.0);
 
@@ -40,10 +41,22 @@ fn vertex(in: VertexInput) -> VertexOutput {
 @fragment
 fn fragment(in: FragmentInput) -> FragmentOutput {
     let direction = normalize(in.local_position);
-    let height = pow(textureSample(cube_map, atlas_sampler, direction).x, 0.62);
-    let color = textureSample(gradient, atlas_sampler, height);
 
+    let scale = 2.0 * textureSampleLevel(cube_map, atlas_sampler, direction, 0.0).x - 1.0;
 
-    // return FragmentOutput(color);
-    return FragmentOutput(in.debug_color);
+    let sample_ocean = textureSample(gradient, atlas_sampler, mix(0.0, 0.075, pow(-scale, 0.25)));
+    let sample_land = textureSample(gradient, atlas_sampler, mix(0.09, 1.0, pow(scale * 6.0, 1.75)));
+
+    var color: vec4<f32>;
+
+    if (scale < 0.0) {
+        color = sample_ocean;
+    }
+    else {
+        color = sample_land;
+    }
+
+    // color = in.debug_color;
+
+    return FragmentOutput(color);
 }
