@@ -25,58 +25,13 @@ fn prepare_root() {
 #ifdef SPHERICAL
     parameters.tile_count = 6u;
 
-    var top_tile: Tile;
-    top_tile.coordinate = vec3<f32>(0.0, 1.0, 0.0);
-    top_tile.u          = vec3<f32>(1.0, 0.0, 0.0);
-    top_tile.v          = vec3<f32>(0.0, 0.0, 1.0);
-    top_tile.side       = 0u;
-
-    var bottom_tile: Tile;
-    bottom_tile.coordinate = vec3<f32>(0.0, 0.0, 0.0);
-    bottom_tile.u          = vec3<f32>(0.0, 0.0, 1.0);
-    bottom_tile.v          = vec3<f32>(1.0, 0.0, 0.0);
-    bottom_tile.side       = 1u;
-
-    var front_tile: Tile;
-    front_tile.coordinate = vec3<f32>(0.0, 0.0, 0.0);
-    front_tile.u          = vec3<f32>(0.0, 1.0, 0.0);
-    front_tile.v          = vec3<f32>(0.0, 0.0, 1.0);
-    front_tile.side       = 2u;
-
-    var back_tile: Tile;
-    back_tile.coordinate = vec3<f32>(1.0, 0.0, 0.0);
-    back_tile.u          = vec3<f32>(0.0, 0.0, 1.0);
-    back_tile.v          = vec3<f32>(0.0, 1.0, 0.0);
-    back_tile.side       = 3u;
-
-    var left_tile: Tile;
-    left_tile.coordinate = vec3<f32>(0.0, 0.0, 0.0);
-    left_tile.u          = vec3<f32>(1.0, 0.0, 0.0);
-    left_tile.v          = vec3<f32>(0.0, 1.0, 0.0);
-    left_tile.side       = 4u;
-
-    var right_tile: Tile;
-    right_tile.coordinate = vec3<f32>(0.0, 0.0, 1.0);
-    right_tile.u          = vec3<f32>(0.0, 1.0, 0.0);
-    right_tile.v          = vec3<f32>(1.0, 0.0, 0.0);
-    right_tile.side       = 5u;
-
-    temporary_tiles.data[0] = top_tile;
-    temporary_tiles.data[1] = bottom_tile;
-    temporary_tiles.data[2] = front_tile;
-    temporary_tiles.data[3] = back_tile;
-    temporary_tiles.data[4] = left_tile;
-    temporary_tiles.data[5] = right_tile;
+    for (var i: u32 = 0u; i < 6u; i = i + 1u) {
+        temporary_tiles.data[i] = Tile(vec2<f32>(0.0), 1.0, i);
+    }
 #else
     parameters.tile_count = 1u;
 
-    var tile: Tile;
-    tile.coordinate = vec3<f32>(0.0, 0.5, 0.0);
-    tile.u          = vec3<f32>(1.0, 0.0, 0.0);
-    tile.v          = vec3<f32>(0.0, 0.0, 1.0);
-    tile.side       = 0u;
-
-    temporary_tiles.data[0] = tile;
+    temporary_tiles.data[0] = Tile(vec2<f32>(0.0), 1.0, 0u); // Todo: fix 2D
 #endif
 
     indirect_buffer.workgroup_count = vec3<u32>(1u, 1u, 1u);

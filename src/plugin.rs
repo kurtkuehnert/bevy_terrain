@@ -21,9 +21,7 @@ use crate::{
         },
         gpu_quadtree::{extract_quadtree, initialize_gpu_quadtree, prepare_quadtree, GpuQuadtree},
         node_atlas::update_node_atlas,
-        quadtree::{
-            adjust_quadtree, compute_quadtree_request, update_height_under_viewer, Quadtree,
-        },
+        quadtree::{adjust_quadtree, compute_quadtree_request, Quadtree},
         AttachmentConfig,
     },
     terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
@@ -112,7 +110,7 @@ impl Plugin for TerrainPlugin {
                 update_node_atlas,
                 adjust_quadtree.after(update_node_atlas),
                 start_loading_attachment_from_disk.after(update_node_atlas),
-                update_height_under_viewer.after(adjust_quadtree),
+                // update_height_under_viewer.after(adjust_quadtree),
             ),
         );
 

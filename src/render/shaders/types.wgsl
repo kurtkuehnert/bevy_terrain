@@ -26,9 +26,8 @@ struct TerrainViewConfig {
 }
 
 struct Tile {
-    coordinate: vec3<f32>, // [0..1]
-    u: vec3<f32>, // Todo: consider storing u and v in an array and only use the side index to look them up
-    v: vec3<f32>, // [0..1]
+    uv: vec2<f32>, // [0..1]
+    size: f32, // [0..1]
     side: u32, // [0..6]
 }
 
@@ -41,6 +40,11 @@ struct Parameters {
     counter: i32,
     child_index: atomic<i32>,
     final_index: atomic<i32>,
+}
+
+struct S2Coordinate {
+    side: u32,
+    st: vec2<f32>,
 }
 
 // A lookup of a node inside the node atlas based on the view of a quadtree.

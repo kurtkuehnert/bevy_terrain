@@ -25,15 +25,11 @@ var<storage, read_write> parameters: Parameters;
 
 // Todo: figure out how to remove this duplicate
 fn morph_threshold_distance(tile: Tile) -> f32 {
-    let size = length(tile.u);
-
-    #ifdef SPHERICAL
-        let threshold_distance = size * config.radius * view_config.view_distance;
-    #else
-        let threshold_distance = size * config.terrain_size * view_config.view_distance;
-    #endif
-
-    return threshold_distance;
+#ifdef SPHERICAL
+    return tile.size * config.radius * view_config.view_distance;
+#else
+    return tile.size * config.terrain_size * view_config.view_distance;
+#endif
 }
 
 fn child_index() -> i32 {
@@ -63,16 +59,12 @@ fn should_be_divided(tile: Tile) -> bool {
 }
 
 fn subdivide(tile: Tile) {
-    let child_u = 0.5 * tile.u;
-    let child_v = 0.5 * tile.v;
+    let child_size = 0.5 * tile.size;
 
     for (var i: u32 = 0u; i < 4u; i = i + 1u) {
-        let uv = 0.5 * vec2<f32>(f32(i & 1u), f32(i >> 1u & 1u));
-        let child_coordinate = tile_coordinate(tile, uv);
+        let child_uv = tile.uv + child_size * vec2<f32>(f32(i & 1u), f32(i >> 1u & 1u));
 
-        let child_tile = Tile(child_coordinate, child_u, child_v, tile.side);
-
-        temporary_tiles.data[child_index()] = child_tile;
+        temporary_tiles.data[child_index()] = Tile(child_uv, child_size, tile.side);
     }
 }
 

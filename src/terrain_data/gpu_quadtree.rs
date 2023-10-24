@@ -14,7 +14,7 @@ use bevy::{
         Extract,
     },
 };
-use ndarray::Array3;
+use ndarray::Array4;
 
 /// Stores the GPU representation of the [`Quadtree`] (array texture)
 /// alongside the data to update it.
@@ -25,7 +25,7 @@ pub struct GpuQuadtree {
     /// The handle of the quadtree texture.
     handle: Handle<Image>,
     /// The current cpu quadtree data. This is synced each frame with the quadtree data.
-    data: Array3<QuadtreeEntry>,
+    data: Array4<QuadtreeEntry>,
     /// The count of level of detail layers.
     lod_count: u32,
     /// The count of nodes in x and y direction per layer.

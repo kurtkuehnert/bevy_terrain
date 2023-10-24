@@ -31,9 +31,7 @@ fn lod_color(lod: u32) -> vec4<f32> {
 fn show_tiles(tile: Tile, world_position: vec4<f32>) -> vec4<f32> {
     var color: vec4<f32>;
 
-    let size = length(tile.v);
-
-    let index = ((tile.coordinate.x + tile.coordinate.y + tile.coordinate.z) / size) % 2.0;
+    let index = ((tile.uv.x + tile.uv.y) / tile.size) % 2.0;
 
     if (index < 0.1) {
         color = vec4<f32>(0.5, 0.5, 0.5, 1.0);
@@ -42,7 +40,7 @@ fn show_tiles(tile: Tile, world_position: vec4<f32>) -> vec4<f32> {
         color = vec4<f32>(0.1, 0.1, 0.1, 1.0);
     }
 
-    let lod = u32(ceil(log2(1.0 / size)));
+    let lod = u32(ceil(log2(1.0 / tile.size)));
     color = mix(color, lod_color(lod), 0.5);
     color = mix(color, lod_color(tile.side), 0.5);
 
