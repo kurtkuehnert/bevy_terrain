@@ -4,7 +4,7 @@ use crate::{
         UVec2Utils,
     },
     skip_none,
-    terrain_data::{AttachmentConfig, AttachmentFormat},
+    terrain_data::{AttachmentConfig, AttachmentFormat, NodeCoordinate},
 };
 use bevy::prelude::*;
 use image::{DynamicImage, GenericImage, GenericImageView, Luma, LumaA, Pixel, Rgb, Rgba};
@@ -137,40 +137,6 @@ pub(crate) fn linear(
     }
 }
 
-pub(crate) fn minmax(
-    parent_image: &mut DynamicImage,
-    child_image: &DynamicImage,
-    attachment: &AttachmentConfig,
-    offset: UVec2,
-) {
-    let parent_image = parent_image.as_mut_luma_alpha16().unwrap();
-    let child_image = child_image.as_luma_alpha16().unwrap();
-
-    let child_size = attachment.center_size >> 1;
-
-    let node_x = offset.x * child_size + attachment.border_size;
-    let node_y = offset.y * child_size + attachment.border_size;
-
-    for (x, y) in iproduct!(0..child_size, 0..child_size) {
-        let mut min = u16::MAX;
-        let mut max = u16::MIN;
-
-        for (cx, cy) in iproduct!(0..2, 0..2) {
-            let value = child_image
-                .get_pixel(
-                    (x << 1) + cx + attachment.border_size,
-                    (y << 1) + cy + attachment.border_size,
-                )
-                .0;
-            min = min.min(value[0]);
-            max = max.max(value[1]);
-        }
-
-        let value = LumaA([min, max]);
-        parent_image.put_pixel(node_x + x, node_y + y, value);
-    }
-}
-
 pub(crate) fn down_sample_layer(
     filter: Filter,
     directory: &str,
@@ -180,11 +146,19 @@ pub(crate) fn down_sample_layer(
     last: UVec2,
 ) {
     first.product(last).for_each(|(x, y)| {
-        let node_path = format_node_path(directory, lod, x, y);
+        let node_coordinate = NodeCoordinate { side: 0, lod, x, y };
+        let node_path = format_node_path(directory, &node_coordinate);
         let mut node_image = load_or_create_node(&node_path, attachment);
 
         for (cx, cy) in iproduct!(0..2, 0..2) {
-            let child_path = format_node_path(directory, lod - 1, (x << 1) + cx, (y << 1) + cy);
+            let child_coordinate = NodeCoordinate {
+                side: 0,
+                lod: lod - 1,
+                x: (x << 1) + cx,
+                y: (y << 1) + cy,
+            };
+
+            let child_path = format_node_path(directory, &child_coordinate);
             let child_image = skip_none!(load_image(&child_path, attachment.file_format));
             // Todo: if a child node is not available, we should fill the gap in the parent one
             // maybe this should not even be possible

@@ -1,7 +1,7 @@
 use crate::{
     formats::tdf::TDF,
     preprocess::{R16Image, Rg16Image, Rgb8Image, Rgba8Image},
-    terrain_data::{calc_node_id, AttachmentConfig, AttachmentFormat, FileFormat},
+    terrain_data::{AttachmentConfig, AttachmentFormat, FileFormat, NodeCoordinate},
 };
 use bytemuck::cast_slice;
 use dtm::DTM;
@@ -20,7 +20,7 @@ pub(crate) fn iterate_directory(
     fs::read_dir(directory).unwrap().filter_map(|path| {
         let path = path.unwrap().path();
 
-        let name = path
+        let node_name = path
             .with_extension("")
             .file_name()
             .unwrap()
@@ -30,10 +30,10 @@ pub(crate) fn iterate_directory(
 
         let path = path.into_os_string().into_string().unwrap();
 
-        if name.starts_with('.') {
+        if node_name.starts_with('.') {
             None
         } else {
-            Some((name, path))
+            Some((node_name, path))
         }
     })
 }
@@ -51,10 +51,8 @@ pub(crate) fn format_directory(path: &str, name: &str) -> String {
     }
 }
 
-pub(crate) fn format_node_path(directory: &str, lod: u32, x: u32, y: u32) -> String {
-    let node_id = calc_node_id(lod, x, y);
-
-    format!("{directory}/{node_id}",)
+pub(crate) fn format_node_path(path: &str, node_coordinate: &NodeCoordinate) -> String {
+    format!("{path}/{node_coordinate}",)
 }
 
 pub fn load_image(path: &str, file_format: FileFormat) -> Option<DynamicImage> {

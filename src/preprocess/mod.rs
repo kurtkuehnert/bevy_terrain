@@ -1,6 +1,5 @@
 //! Contains the implementation for preprocessing source tiles into streamable nodes.
 
-pub mod base;
 pub mod cube_map;
 pub mod down_sample;
 pub mod file_io;
@@ -10,8 +9,7 @@ pub mod stitch;
 use crate::{
     formats::tc::save_node_config,
     preprocess::{
-        base::height_to_minmax,
-        down_sample::{down_sample_layer, linear, minmax},
+        down_sample::{down_sample_layer, linear},
         file_io::{format_directory, reset_directory},
         split::split_tiles,
         stitch::stitch_layer,
@@ -87,6 +85,7 @@ pub struct TileConfig {
     pub path: String,
     /// The size of the tile in pixels.
     pub size: u32,
+    pub side: u32,
     /// The file format of the tile.
     pub file_format: FileFormat,
 }
@@ -126,13 +125,13 @@ impl Preprocessor {
 
     fn preprocess_base(&self, tile: &TileConfig, base: &BaseConfig) {
         let height_attachment = base.height_attachment();
-        let minmax_attachment = base.minmax_attachment();
+        // let minmax_attachment = base.minmax_attachment();
 
         let height_directory = format_directory(&self.path, "height");
-        let minmax_directory = format_directory(&self.path, "minmax");
+        // let minmax_directory = format_directory(&self.path, "minmax");
 
         reset_directory(&height_directory);
-        reset_directory(&minmax_directory);
+        // reset_directory(&minmax_directory);
 
         let temp = split_tiles(&height_directory, tile, &height_attachment);
 
@@ -153,7 +152,8 @@ impl Preprocessor {
             stitch_layer(&height_directory, &height_attachment, lod, first, last);
         }
 
-        height_to_minmax(
+        /*
+            height_to_minmax(
             &height_directory,
             &minmax_directory,
             &height_attachment,
@@ -176,6 +176,7 @@ impl Preprocessor {
             );
             stitch_layer(&minmax_directory, &minmax_attachment, lod, first, last);
         }
+        */
     }
 
     fn preprocess_attachment(&self, tile: &TileConfig, attachment: &AttachmentConfig) {

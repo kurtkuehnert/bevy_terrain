@@ -1,8 +1,6 @@
 use crate::{
     terrain::{Terrain, TerrainConfig},
-    terrain_data::{
-        quadtree::Quadtree, AtlasAttachment, AtlasIndex, AttachmentIndex, NodeId, INVALID_NODE_ID,
-    },
+    terrain_data::{quadtree::Quadtree, AtlasAttachment, AtlasIndex, AttachmentIndex, NodeId},
     terrain_view::{TerrainView, TerrainViewComponents},
 };
 use bevy::{
@@ -122,7 +120,7 @@ impl NodeAtlas {
     ) -> Self {
         let unused_nodes = (0..size)
             .map(|atlas_index| UnusedNode {
-                node_id: INVALID_NODE_ID,
+                node_id: NodeId::INVALID,
                 atlas_index,
             })
             .collect();
