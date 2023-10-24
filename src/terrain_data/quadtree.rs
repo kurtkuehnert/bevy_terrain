@@ -2,14 +2,14 @@ use crate::{
     terrain::{Terrain, TerrainConfig},
     terrain_data::{
         node_atlas::{LoadingState, NodeAtlas},
-        AtlasIndex, NodeCoordinate, NodeId, INVALID_ATLAS_INDEX, INVALID_LOD,
+        AtlasIndex, NodeCoordinate, NodeId, INVALID_ATLAS_INDEX, INVALID_LOD, SIDE_COUNT,
     },
     terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
 };
 use bevy::{math::Vec3Swizzles, prelude::*};
 use bytemuck::{Pod, Zeroable};
 use itertools::iproduct;
-use ndarray::Array3;
+use ndarray::Array4;
 
 /// The current state of a node of a [`Quadtree`].
 ///
@@ -88,7 +88,7 @@ pub struct Quadtree {
     /// The handle of the quadtree texture.
     pub(crate) handle: Handle<Image>,
     /// The current cpu quadtree data. This is synced each frame with the gpu quadtree data.
-    pub(crate) data: Array3<QuadtreeEntry>,
+    pub(crate) data: Array4<QuadtreeEntry>,
     /// Nodes that are no longer required by this quadtree.
     pub(crate) released_nodes: Vec<NodeId>,
     /// Nodes that are requested to be loaded by this quadtree.
@@ -100,11 +100,11 @@ pub struct Quadtree {
     /// The size of the smallest nodes (with lod 0).
     leaf_node_size: u32,
     /// The distance (measured in node sizes) until which to request nodes to be loaded.
-    load_distance: f32,
-    height: f32,
-    height_under_viewer: f32,
+    _load_distance: f32,
+    _height: f32,
+    _height_under_viewer: f32,
     /// The internal node states of the quadtree.
-    nodes: Array3<TreeNode>,
+    nodes: Array4<TreeNode>,
 }
 
 impl Quadtree {
@@ -129,11 +129,21 @@ impl Quadtree {
             lod_count,
             node_count,
             leaf_node_size,
-            load_distance,
-            height,
-            height_under_viewer: height / 2.0,
-            data: Array3::default((lod_count as usize, node_count as usize, node_count as usize)),
-            nodes: Array3::default((lod_count as usize, node_count as usize, node_count as usize)),
+            _load_distance: load_distance,
+            _height: height,
+            _height_under_viewer: height / 2.0,
+            data: Array4::default((
+                SIDE_COUNT as usize,
+                lod_count as usize,
+                node_count as usize,
+                node_count as usize,
+            )),
+            nodes: Array4::default((
+                SIDE_COUNT as usize,
+                lod_count as usize,
+                node_count as usize,
+                node_count as usize,
+            )),
             released_nodes: default(),
             requested_nodes: default(),
         }
@@ -160,69 +170,76 @@ impl Quadtree {
     /// Traverses the quadtree and updates the node states,
     /// while selecting newly requested and released nodes.
     pub(crate) fn compute_requests(&mut self, viewer_position: Vec3) {
-        for lod in 0..self.lod_count {
-            let node_size = self.node_size(lod);
+        for side in 0..SIDE_COUNT {
+            for lod in 0..self.lod_count {
+                let node_size = self.node_size(lod);
 
-            // bottom left position of grid in node coordinates
-            let grid_coordinate: IVec2 = (viewer_position.xz() / node_size as f32 + 0.5
-                - (self.node_count >> 1) as f32)
-                .as_ivec2();
+                // bottom left position of grid in node coordinates
+                let grid_coordinate: IVec2 = (viewer_position.xz() / node_size as f32 + 0.5
+                    - (self.node_count >> 1) as f32)
+                    .as_ivec2();
 
-            for node_coordinate in iproduct!(0..self.node_count as i32, 0..self.node_count as i32)
-                .filter_map(|(x, y)| {
-                    let coordinate = grid_coordinate + IVec2::new(x, y);
+                for node_coordinate in
+                    iproduct!(0..self.node_count as i32, 0..self.node_count as i32).filter_map(
+                        |(x, y)| {
+                            let coordinate = grid_coordinate + IVec2::new(x, y);
 
-                    if coordinate.x < 0 || coordinate.y < 0 {
-                        None
-                    } else {
-                        Some(NodeCoordinate {
-                            side: 0,
-                            lod,
-                            x: coordinate.x as u32,
-                            y: coordinate.y as u32,
-                        })
+                            if coordinate.x < 0 || coordinate.y < 0 {
+                                None
+                            } else {
+                                Some(NodeCoordinate {
+                                    side,
+                                    lod,
+                                    x: coordinate.x as u32,
+                                    y: coordinate.y as u32,
+                                })
+                            }
+                        },
+                    )
+                {
+                    let node_id = NodeId::from(&node_coordinate);
+
+                    let node = &mut self.nodes[[
+                        side as usize,
+                        lod as usize,
+                        (node_coordinate.x % self.node_count) as usize,
+                        (node_coordinate.y % self.node_count) as usize,
+                    ]];
+
+                    // quadtree slot refers to a new node
+                    if node_id != node.node_id {
+                        // release old node
+                        if node.state == RequestState::Requested {
+                            self.released_nodes.push(node.node_id);
+                            node.state = RequestState::Released;
+                        }
+
+                        node.node_id = node_id;
                     }
-                })
-            {
-                let node_id = NodeId::from(&node_coordinate);
 
-                let node = &mut self.nodes[[
-                    lod as usize,
-                    (node_coordinate.x % self.node_count) as usize,
-                    (node_coordinate.y % self.node_count) as usize,
-                ]];
+                    // let local_position =
+                    //     (Vec2::new(node_coordinate.x as f32, node_coordinate.y as f32) + 0.5)
+                    //         * node_size as f32;
+                    // let world_position =
+                    //     Vec3::new(local_position.x, self.height_under_viewer, local_position.y);
+                    // let distance = viewer_position.xyz().distance(world_position);
+                    // let mut demanded = distance < self.load_distance * node_size as f32;
+                    // demanded |= lod == self.lod_count - 1; // always request highest lod
 
-                // quadtree slot refers to a new node
-                if node_id != node.node_id {
-                    // release old node
-                    if node.state == RequestState::Requested {
-                        self.released_nodes.push(node.node_id);
-                        node.state = RequestState::Released;
+                    let demanded = true; // request all nodes
+
+                    // request or release node based on their distance to the viewer
+                    match (node.state, demanded) {
+                        (RequestState::Released, true) => {
+                            self.requested_nodes.push(node.node_id);
+                            node.state = RequestState::Requested;
+                        }
+                        (RequestState::Requested, false) => {
+                            self.released_nodes.push(node.node_id);
+                            node.state = RequestState::Released;
+                        }
+                        (_, _) => {}
                     }
-
-                    node.node_id = node_id;
-                }
-
-                let node_position = (Vec2::new(node_coordinate.x as f32, node_coordinate.y as f32)
-                    + 0.5)
-                    * node_size as f32;
-                let world_position =
-                    Vec3::new(node_position.x, self.height_under_viewer, node_position.y);
-                let distance = viewer_position.xyz().distance(world_position);
-                let mut demanded = distance < self.load_distance * node_size as f32;
-                demanded |= lod == self.lod_count - 1; // always request highest lod
-
-                // request or release node based on their distance to the viewer
-                match (node.state, demanded) {
-                    (RequestState::Released, true) => {
-                        self.requested_nodes.push(node.node_id);
-                        node.state = RequestState::Requested;
-                    }
-                    (RequestState::Requested, false) => {
-                        self.released_nodes.push(node.node_id);
-                        node.state = RequestState::Released;
-                    }
-                    (_, _) => {}
                 }
             }
         }
@@ -230,7 +247,7 @@ impl Quadtree {
 
     /// Adjusts the quadtree to the node atlas by updating the entries with the best available nodes.
     fn adjust(&mut self, node_atlas: &NodeAtlas) {
-        for ((lod, x, y), node) in self.nodes.indexed_iter_mut() {
+        for ((side, lod, x, y), node) in self.nodes.indexed_iter_mut() {
             let mut node_id = node.node_id;
             let mut node_coordinate = NodeCoordinate::from(&node_id);
 
@@ -254,7 +271,7 @@ impl Quadtree {
                 node_id = NodeId::from(&node_coordinate);
             };
 
-            self.data[[lod, y, x]] = QuadtreeEntry {
+            self.data[[side, lod, y, x]] = QuadtreeEntry {
                 atlas_index,
                 atlas_lod,
             };
@@ -296,6 +313,7 @@ pub(crate) fn adjust_quadtree(
     }
 }
 
+/*
 pub(crate) fn update_height_under_viewer(
     images: Res<Assets<Image>>,
     mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
@@ -354,3 +372,4 @@ fn height_under_viewer(
 
     quadtree.height_under_viewer
 }
+*/
