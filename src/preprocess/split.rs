@@ -5,7 +5,7 @@ use crate::{
         },
         TileConfig, UVec2Utils,
     },
-    terrain_data::{AttachmentConfig, AttachmentFormat},
+    terrain_data::{AttachmentConfig, AttachmentFormat, NodeCoordinate},
 };
 use bevy::prelude::*;
 use image::{
@@ -60,7 +60,13 @@ fn split_tile(directory: &str, tile: &TileConfig, attachment: &AttachmentConfig,
     let last = (offset + tile.size + attachment.border_size).div_ceil(attachment.center_size);
 
     for (x, y) in first.product(last) {
-        let node_path = format_node_path(directory, 0, x, y);
+        let node_coordinate = NodeCoordinate {
+            side: tile.side,
+            lod: 0,
+            x,
+            y,
+        };
+        let node_path = format_node_path(directory, &node_coordinate);
 
         let mut node_image = load_or_create_node(&node_path, attachment);
 
@@ -89,6 +95,8 @@ pub(crate) fn split_tiles(
             let mut parts = tile_name.split('_');
             parts.next();
 
+            let side = parts.next().unwrap().parse::<u32>().unwrap();
+
             let coord = UVec2::new(
                 parts.next().unwrap().parse::<u32>().unwrap(),
                 parts.next().unwrap().parse::<u32>().unwrap(),
@@ -96,6 +104,7 @@ pub(crate) fn split_tiles(
 
             let tile = TileConfig {
                 path: tile_path,
+                side,
                 ..*tile
             };
 

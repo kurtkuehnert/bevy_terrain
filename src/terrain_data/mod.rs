@@ -17,31 +17,20 @@
 
 use bevy::{prelude::*, render::render_resource::*, utils::Uuid};
 use bincode::{Decode, Encode};
-use std::str::FromStr;
+use std::{fmt, str::FromStr};
+
 pub mod gpu_node_atlas;
 pub mod gpu_quadtree;
 pub mod node_atlas;
 pub mod quadtree;
 
-// Todo: may be swap to u64 for giant terrains
-// Todo: consider 3 bit face data, for cube sphere
-/// A globally unique identifier of a node.
-/// lod |  x |  y
-///   6 | 13 | 13
-pub type NodeId = u32;
-pub const INVALID_NODE_ID: NodeId = NodeId::MAX;
-
-/// Identifier of a node (and its attachments) inside the node atlas.
-pub type AtlasIndex = u16;
-pub const INVALID_ATLAS_INDEX: AtlasIndex = AtlasIndex::MAX;
-
-pub const INVALID_LOD: u16 = u16::MAX;
-
-/// Identifier of an attachment inside the node atlas.
-pub type AttachmentIndex = usize;
-
 /// The global coordinate of a node.
+///
+/// Can be packed into the smaller [`NodeId`].
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Encode, Decode)]
 pub struct NodeCoordinate {
+    /// The side of the cube sphere the node is located on.
+    pub side: u32,
     /// The lod of the node, where 0 is the highest level of detail with the smallest size
     /// and highest resolution
     pub lod: u32,
@@ -51,23 +40,82 @@ pub struct NodeCoordinate {
     pub y: u32,
 }
 
-impl From<NodeId> for NodeCoordinate {
+impl From<&NodeId> for NodeCoordinate {
     /// Determines the coordinate of the node based on its id.
     #[inline]
-    fn from(id: NodeId) -> Self {
+    fn from(id: &NodeId) -> Self {
         Self {
-            lod: ((id >> 26) & 0x3F),
-            x: ((id >> 13) & 0x1FFF),
-            y: (id & 0x1FFF),
+            side: (id.side_x >> 20) & 0x7,
+            lod: (id.lod_y >> 20) & 0x1F,
+            x: id.side_x & 0xFFFFF,
+            y: id.lod_y & 0xFFFFF,
         }
     }
 }
 
-/// Calculates the node identifier from the node coordinate.
-#[inline]
-pub fn calc_node_id(lod: u32, x: u32, y: u32) -> NodeId {
-    (lod as NodeId & 0x3F) << 26 | (x as NodeId & 0x1FFF) << 13 | y as NodeId & 0x1FFF
+impl fmt::Display for NodeCoordinate {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "{}_{}_{}_{}", self.side, self.lod, self.x, self.y)
+    }
 }
+
+impl FromStr for NodeCoordinate {
+    type Err = std::num::ParseIntError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut parts = s.split("_");
+
+        Ok(Self {
+            side: parts.next().unwrap().parse()?,
+            lod: parts.next().unwrap().parse()?,
+            x: parts.next().unwrap().parse()?,
+            y: parts.next().unwrap().parse()?,
+        })
+    }
+}
+
+// Todo: consider storing terrain id for multiple terrains as well
+/// A packed and unique identifier of a node.
+///
+/// A smaller version of the [`NodeCoordinate`].
+/// side |  x | lod |  y
+///   3  | 20 |   5 | 20
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+pub struct NodeId {
+    side_x: u32,
+    lod_y: u32,
+}
+
+impl From<&NodeCoordinate> for NodeId {
+    fn from(value: &NodeCoordinate) -> Self {
+        Self {
+            side_x: (value.side << 20) & value.x,
+            lod_y: (value.lod << 20) & value.y,
+        }
+    }
+}
+
+impl Default for NodeId {
+    fn default() -> Self {
+        Self::INVALID
+    }
+}
+
+impl NodeId {
+    pub const INVALID: NodeId = NodeId {
+        side_x: u32::MAX,
+        lod_y: u32::MAX,
+    };
+}
+
+/// Identifier of a node (and its attachments) inside the node atlas.
+pub type AtlasIndex = u16;
+pub const INVALID_ATLAS_INDEX: AtlasIndex = AtlasIndex::MAX;
+
+pub const INVALID_LOD: u16 = u16::MAX;
+
+/// Identifier of an attachment inside the node atlas.
+pub type AttachmentIndex = usize;
 
 /// The data format of an attachment.
 #[derive(Encode, Decode, Clone, Copy, Debug)]

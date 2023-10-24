@@ -1,9 +1,8 @@
 use crate::{
     terrain::{Terrain, TerrainConfig},
     terrain_data::{
-        calc_node_id,
         node_atlas::{LoadingState, NodeAtlas},
-        AtlasIndex, NodeCoordinate, NodeId, INVALID_ATLAS_INDEX, INVALID_LOD, INVALID_NODE_ID,
+        AtlasIndex, NodeCoordinate, NodeId, INVALID_ATLAS_INDEX, INVALID_LOD,
     },
     terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
 };
@@ -34,7 +33,7 @@ struct TreeNode {
 impl Default for TreeNode {
     fn default() -> Self {
         Self {
-            node_id: INVALID_NODE_ID,
+            node_id: NodeId::INVALID,
             state: RequestState::Released,
         }
     }
@@ -169,22 +168,28 @@ impl Quadtree {
                 - (self.node_count >> 1) as f32)
                 .as_ivec2();
 
-            for coordinate in iproduct!(0..self.node_count as i32, 0..self.node_count as i32)
+            for node_coordinate in iproduct!(0..self.node_count as i32, 0..self.node_count as i32)
                 .filter_map(|(x, y)| {
                     let coordinate = grid_coordinate + IVec2::new(x, y);
 
                     if coordinate.x < 0 || coordinate.y < 0 {
                         None
                     } else {
-                        Some(coordinate.as_uvec2())
+                        Some(NodeCoordinate {
+                            side: 0,
+                            lod,
+                            x: coordinate.x as u32,
+                            y: coordinate.y as u32,
+                        })
                     }
                 })
             {
-                let node_id = calc_node_id(lod, coordinate.x, coordinate.y);
+                let node_id = NodeId::from(&node_coordinate);
+
                 let node = &mut self.nodes[[
                     lod as usize,
-                    (coordinate.x % self.node_count) as usize,
-                    (coordinate.y % self.node_count) as usize,
+                    (node_coordinate.x % self.node_count) as usize,
+                    (node_coordinate.y % self.node_count) as usize,
                 ]];
 
                 // quadtree slot refers to a new node
@@ -198,7 +203,9 @@ impl Quadtree {
                     node.node_id = node_id;
                 }
 
-                let node_position = (coordinate.as_vec2() + 0.5) * node_size as f32;
+                let node_position = (Vec2::new(node_coordinate.x as f32, node_coordinate.y as f32)
+                    + 0.5)
+                    * node_size as f32;
                 let world_position =
                     Vec3::new(node_position.x, self.height_under_viewer, node_position.y);
                 let distance = viewer_position.xyz().distance(world_position);
@@ -225,10 +232,10 @@ impl Quadtree {
     fn adjust(&mut self, node_atlas: &NodeAtlas) {
         for ((lod, x, y), node) in self.nodes.indexed_iter_mut() {
             let mut node_id = node.node_id;
-            let mut coordinate = NodeCoordinate::from(node_id);
+            let mut node_coordinate = NodeCoordinate::from(&node_id);
 
             let (atlas_index, atlas_lod) = loop {
-                if coordinate.lod == self.lod_count || node_id == INVALID_NODE_ID {
+                if node_coordinate.lod == self.lod_count || node_id == NodeId::INVALID {
                     // highest lod is not loaded
                     break (INVALID_ATLAS_INDEX, u16::MAX);
                 }
@@ -236,15 +243,15 @@ impl Quadtree {
                 if let Some(atlas_node) = node_atlas.nodes.get(&node_id) {
                     if atlas_node.state == LoadingState::Loaded {
                         // found best loaded node
-                        break (atlas_node.atlas_index, coordinate.lod as u16);
+                        break (atlas_node.atlas_index, node_coordinate.lod as u16);
                     }
                 }
 
                 // node not loaded, try parent
-                coordinate.lod += 1;
-                coordinate.x >>= 1;
-                coordinate.y >>= 1;
-                node_id = calc_node_id(coordinate.lod, coordinate.x, coordinate.y);
+                node_coordinate.lod += 1;
+                node_coordinate.x >>= 1;
+                node_coordinate.y >>= 1;
+                node_id = NodeId::from(&node_coordinate);
             };
 
             self.data[[lod, y, x]] = QuadtreeEntry {

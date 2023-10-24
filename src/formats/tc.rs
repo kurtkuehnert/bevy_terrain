@@ -1,5 +1,7 @@
-use crate::preprocess::file_io::{format_directory, iterate_directory};
-use crate::terrain_data::NodeId;
+use crate::{
+    preprocess::file_io::{format_directory, iterate_directory},
+    terrain_data::{NodeCoordinate, NodeId},
+};
 use anyhow::Result;
 use bevy::utils::HashSet;
 use bincode::{config, Decode, Encode};
@@ -7,7 +9,7 @@ use std::{fs, path::Path};
 
 #[derive(Encode, Decode, Debug)]
 pub struct TC {
-    pub nodes: Vec<NodeId>,
+    pub nodes: Vec<NodeCoordinate>,
 }
 
 impl TC {
@@ -35,15 +37,15 @@ impl TC {
     }
 }
 
-/// Saves the node configuration of the terrain, which stores the [`NodeId`]s of all the nodes
+/// Saves the node configuration of the terrain, which stores the [`NodeCoordinate`]s of all the nodes
 /// of the terrain.
 pub(crate) fn save_node_config(path: &str) {
     let mut tc = TC { nodes: vec![] };
     let attachment_directory = format_directory(path, "height");
 
     for (name, _) in iterate_directory(&attachment_directory) {
-        let node_id = name.parse::<NodeId>().unwrap();
-        tc.nodes.push(node_id);
+        let node_coordinate = name.parse::<NodeCoordinate>().unwrap();
+        tc.nodes.push(node_coordinate);
     }
 
     tc.save_file(format_directory(path, "../config.tc"))
@@ -54,5 +56,5 @@ pub(crate) fn save_node_config(path: &str) {
 /// of the terrain.
 pub(crate) fn load_node_config(path: &str) -> HashSet<NodeId> {
     let tc = TC::load_file(format_directory(path, "../config.tc")).unwrap();
-    tc.nodes.into_iter().collect()
+    tc.nodes.iter().map(NodeId::from).collect()
 }

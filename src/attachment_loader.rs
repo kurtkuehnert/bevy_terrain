@@ -3,7 +3,10 @@
 use crate::{
     plugin::TerrainPluginConfig,
     preprocess::{Preprocessor, TileConfig},
-    terrain_data::{node_atlas::NodeAtlas, AttachmentConfig, AttachmentIndex, FileFormat, NodeId},
+    terrain_data::{
+        node_atlas::NodeAtlas, AttachmentConfig, AttachmentIndex, FileFormat, NodeCoordinate,
+        NodeId,
+    },
 };
 use bevy::{
     asset::{AssetServer, HandleId, LoadState},
@@ -52,10 +55,6 @@ impl AttachmentFromDiskLoader {
         self.attachments.insert(
             0,
             AttachmentFromDisk::new(&plugin_config.base.height_attachment(), &self.path),
-        );
-        self.attachments.insert(
-            1,
-            AttachmentFromDisk::new(&plugin_config.base.minmax_attachment(), &self.path),
         );
 
         self.preprocessor.base = Some((tile, plugin_config.base));
@@ -111,8 +110,12 @@ pub(crate) fn start_loading_attachment_from_disk(
                 },
             ) in attachments.iter()
             {
-                let handle: Handle<Image> =
-                    asset_server.load(&format!("{path}/{node_id}.{}", file_format.extension()));
+                let node_coordinate = NodeCoordinate::from(&node_id);
+
+                let handle: Handle<Image> = asset_server.load(&format!(
+                    "{path}/{node_coordinate}.{}",
+                    file_format.extension()
+                ));
 
                 if asset_server.get_load_state(handle.clone()) == LoadState::Loaded {
                     node.loaded(*attachment_index);

@@ -4,7 +4,7 @@ use crate::{
         UVec2Utils,
     },
     skip_none,
-    terrain_data::{AttachmentConfig, AttachmentFormat},
+    terrain_data::{AttachmentConfig, AttachmentFormat, NodeCoordinate},
 };
 use bevy::prelude::*;
 use image::DynamicImage;
@@ -137,7 +137,8 @@ pub(crate) fn stitch_layer(
     }
 
     for (x, y) in first.product(last) {
-        let node_path = format_node_path(directory, lod, x, y);
+        let node_coordinate = NodeCoordinate { side: 0, lod, x, y };
+        let node_path = format_node_path(directory, &node_coordinate);
         let mut node_image = skip_none!(load_image(&node_path, attachment.file_format));
 
         for direction in iproduct!(-1..=1, -1..=1) {
@@ -145,10 +146,11 @@ pub(crate) fn stitch_layer(
                 continue;
             };
 
-            let x = x as i32 + direction.0;
-            let y = y as i32 + direction.1;
+            let x = (x as i32 + direction.0) as u32;
+            let y = (y as i32 + direction.1) as u32;
 
-            let adjacent_path = format_node_path(directory, lod, x as u32, y as u32);
+            let adjacent_coordinate = NodeCoordinate { side: 0, lod, x, y };
+            let adjacent_path = format_node_path(directory, &adjacent_coordinate);
 
             if let Some(adjacent_image) = load_image(&adjacent_path, attachment.file_format) {
                 stitch(&mut node_image, &adjacent_image, attachment, direction);
