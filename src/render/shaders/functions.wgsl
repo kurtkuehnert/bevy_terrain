@@ -172,11 +172,30 @@ fn world_position_to_s2_coordinate(world_position: vec4<f32>) -> S2Coordinate {
     return S2Coordinate(side, st);
 }
 
+fn node_count(lod: u32) -> f32 {
+    return config.leaf_node_count / f32(1u << lod);
+}
 
+fn lookup_node(lod: u32, world_position: vec4<f32>) -> NodeLookup {
+    let s2_coordinate = world_position_to_s2_coordinate(world_position);
+    let st = s2_coordinate.st;
+    let side = s2_coordinate.side;
 
+    let quadtree_lod = min(lod, config.lod_count - 1u);
+    let node_count = node_count(quadtree_lod);
+    let node_coordinate = st * node_count; // Todo: replace with fract(node_coordinate)
+    let quadtree_coordinate = vec2<i32>(node_coordinate);
 
+    let lookup = textureLoad(quadtree, quadtree_coordinate, side * config.lod_count + quadtree_lod, 0);
 
+    let atlas_index      = lookup.x;
+    let atlas_lod        = lookup.y;
+    let atlas_coordinate = node_coordinate - floor(node_coordinate);
 
+    return NodeLookup(atlas_index, atlas_lod, atlas_coordinate);
+}
+
+/*
 fn node_size(lod: u32) -> f32 {
     return f32(config.leaf_node_size * (1u << lod));
 }
@@ -209,6 +228,7 @@ fn lookup_node(lod: u32, local_position: vec3<f32>) -> NodeLookup {
 
     return NodeLookup(atlas_lod, atlas_index, atlas_coords);
 }
+*/
 
 fn calculate_blend(world_position: vec4<f32>) -> Blend {
     let viewer_distance = distance(world_position.xyz, view.world_position.xyz);

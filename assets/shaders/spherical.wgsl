@@ -1,7 +1,8 @@
 #import bevy_terrain::types VertexInput, VertexOutput, FragmentInput, FragmentOutput, Tile
 #import bevy_terrain::bindings config, view_config, tiles, atlas_sampler
-#import bevy_terrain::functions vertex_local_position, approximate_world_position, world_position_to_s2_coordinate
+#import bevy_terrain::functions vertex_local_position, approximate_world_position, world_position_to_s2_coordinate, lookup_node
 #import bevy_terrain::debug lod_color, show_tiles
+#import bevy_terrain::attachments height_atlas, HEIGHT_SIZE, HEIGHT_SCALE, HEIGHT_OFFSET
 #import bevy_pbr::mesh_view_bindings view
 
 @group(3) @binding(0)
@@ -64,9 +65,15 @@ fn fragment(in: FragmentInput) -> FragmentOutput {
         color = sample_land;
     }
 
+    let lookup = lookup_node(0u, in.world_position);
+
+    let height_coordinate = lookup.atlas_coordinate * HEIGHT_SCALE + HEIGHT_OFFSET;
+    let height = textureSampleLevel(height_atlas, atlas_sampler, st, 3u, 0.0).x;
+
+    // color = vec4<f32>(lookup.atlas_coordinate, 0.0, 1.0);
 
 
-
+    color = vec4<f32>(height);
 
 
     // color = lod_color(side);

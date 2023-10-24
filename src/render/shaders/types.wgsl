@@ -3,6 +3,7 @@
 struct TerrainConfig {
     lod_count: u32,
     height: f32,
+    leaf_node_count: f32,
     leaf_node_size: u32,
     terrain_size: f32,
     radius: f32,
@@ -49,9 +50,9 @@ struct S2Coordinate {
 
 // A lookup of a node inside the node atlas based on the view of a quadtree.
 struct NodeLookup {
+    atlas_index: u32,
     atlas_lod: u32,
-    atlas_index: i32,
-    atlas_coords: vec2<f32>,
+    atlas_coordinate: vec2<f32>,
 }
 
 struct VertexInput {

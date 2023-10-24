@@ -21,7 +21,8 @@ use bevy::{
 struct TerrainConfigUniform {
     lod_count: u32,
     height: f32,
-    chunk_size: u32,
+    leaf_node_count: f32,
+    leaf_node_size: u32,
     terrain_size: f32,
     radius: f32,
 }
@@ -31,7 +32,8 @@ impl From<&TerrainConfig> for TerrainConfigUniform {
         Self {
             lod_count: config.lod_count,
             height: config.height,
-            chunk_size: config.leaf_node_size,
+            leaf_node_count: config.leaf_node_count,
+            leaf_node_size: config.leaf_node_size,
             terrain_size: config.terrain_size,
             radius: config.radius,
         }
