@@ -92,6 +92,7 @@ fn setup(
     // Configure all the important properties of the terrain, as well as its attachments.
     let config = plugin_config.configure_terrain(
         0.0,
+        TILE_SIZE as f32 / TEXTURE_SIZE as f32,
         RADIUS,
         LOD_COUNT,
         HEIGHT,

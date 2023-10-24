@@ -1,3 +1,4 @@
+use crate::terrain_data::SIDE_COUNT;
 use crate::{
     terrain::Terrain,
     terrain_data::quadtree::{Quadtree, QuadtreeEntry},
@@ -14,7 +15,7 @@ use bevy::{
         Extract,
     },
 };
-use ndarray::Array4;
+use ndarray::Array3;
 
 /// Stores the GPU representation of the [`Quadtree`] (array texture)
 /// alongside the data to update it.
@@ -25,7 +26,7 @@ pub struct GpuQuadtree {
     /// The handle of the quadtree texture.
     handle: Handle<Image>,
     /// The current cpu quadtree data. This is synced each frame with the quadtree data.
-    data: Array4<QuadtreeEntry>,
+    data: Array3<QuadtreeEntry>,
     /// The count of level of detail layers.
     lod_count: u32,
     /// The count of nodes in x and y direction per layer.
@@ -45,7 +46,7 @@ impl GpuQuadtree {
             size: Extent3d {
                 width: quadtree.node_count,
                 height: quadtree.node_count,
-                depth_or_array_layers: quadtree.lod_count,
+                depth_or_array_layers: quadtree.lod_count * SIDE_COUNT,
             },
             mip_level_count: 1,
             sample_count: 1,
@@ -63,7 +64,7 @@ impl GpuQuadtree {
                 texture_format: Self::FORMAT,
                 sampler: device.create_sampler(&SamplerDescriptor::default()),
                 size: Vec2::splat(quadtree.node_count as f32),
-                mip_level_count: quadtree.lod_count,
+                mip_level_count: 1,
             },
         );
 
@@ -95,7 +96,7 @@ impl GpuQuadtree {
             Extent3d {
                 width: self.node_count,
                 height: self.node_count,
-                depth_or_array_layers: self.lod_count,
+                depth_or_array_layers: self.lod_count * SIDE_COUNT,
             },
         );
     }
