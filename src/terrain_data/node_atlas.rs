@@ -100,7 +100,7 @@ pub struct NodeAtlas {
     /// Stores the currently loading nodes.
     pub(crate) loading_nodes: HashMap<NodeId, LoadingNode>,
     /// The amount of nodes the can be loaded simultaneously in the node atlas.
-    pub(crate) size: u16,
+    pub(crate) size: AtlasIndex,
     /// Stores the states of all present nodes.
     pub(crate) nodes: HashMap<NodeId, AtlasNode>,
     pub(crate) existing_nodes: HashSet<NodeId>,

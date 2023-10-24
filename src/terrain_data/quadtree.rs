@@ -9,7 +9,7 @@ use crate::{
 use bevy::{math::Vec3Swizzles, prelude::*};
 use bytemuck::{Pod, Zeroable};
 use itertools::iproduct;
-use ndarray::Array4;
+use ndarray::{Array3, Array4};
 
 /// The current state of a node of a [`Quadtree`].
 ///
@@ -88,7 +88,7 @@ pub struct Quadtree {
     /// The handle of the quadtree texture.
     pub(crate) handle: Handle<Image>,
     /// The current cpu quadtree data. This is synced each frame with the gpu quadtree data.
-    pub(crate) data: Array4<QuadtreeEntry>,
+    pub(crate) data: Array3<QuadtreeEntry>,
     /// Nodes that are no longer required by this quadtree.
     pub(crate) released_nodes: Vec<NodeId>,
     /// Nodes that are requested to be loaded by this quadtree.
@@ -132,9 +132,8 @@ impl Quadtree {
             _load_distance: load_distance,
             _height: height,
             _height_under_viewer: height / 2.0,
-            data: Array4::default((
-                SIDE_COUNT as usize,
-                lod_count as usize,
+            data: Array3::default((
+                SIDE_COUNT as usize * lod_count as usize,
                 node_count as usize,
                 node_count as usize,
             )),
@@ -271,7 +270,7 @@ impl Quadtree {
                 node_id = NodeId::from(&node_coordinate);
             };
 
-            self.data[[side, lod, y, x]] = QuadtreeEntry {
+            self.data[[side * self.lod_count as usize + lod, y, x]] = QuadtreeEntry {
                 atlas_index,
                 atlas_lod,
             };
