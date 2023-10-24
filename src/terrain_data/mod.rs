@@ -24,6 +24,8 @@ pub mod gpu_quadtree;
 pub mod node_atlas;
 pub mod quadtree;
 
+pub const SIDE_COUNT: u32 = 6;
+
 /// The global coordinate of a node.
 ///
 /// Can be packed into the smaller [`NodeId`].

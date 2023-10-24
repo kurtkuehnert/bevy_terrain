@@ -1,7 +1,7 @@
 #define_import_path bevy_terrain::functions
 
 #import bevy_terrain::bindings config, view_config, quadtree, atlas_sampler
-#import bevy_terrain::types Tile, NodeLookup, Blend
+#import bevy_terrain::types Tile, NodeLookup, Blend, S2Coordinate
 #import bevy_terrain::attachments height_atlas, HEIGHT_SIZE,
 #import bevy_pbr::mesh_view_bindings view
 
@@ -32,12 +32,41 @@ fn approximate_world_position(local_position: vec3<f32>) -> vec4<f32> {
     return vec4<f32>(local_position, 1.0);
 }
 
-fn tile_coordinate(tile: Tile, uv: vec2<f32>) -> vec3<f32> {
-    return tile.coordinate + tile.u * uv.x + tile.v * uv.y;
+fn tile_coordinate(tile: Tile, uv_offset: vec2<f32>) -> vec3<f32> {
+    var COORDINATE_ARRAY = array<vec3<f32>, 6u>(
+        vec3<f32>(0.0, 1.0, 0.0),
+        vec3<f32>(0.0, 0.0, 0.0),
+        vec3<f32>(0.0, 0.0, 0.0),
+        vec3<f32>(1.0, 0.0, 0.0),
+        vec3<f32>(0.0, 0.0, 0.0),
+        vec3<f32>(0.0, 0.0, 1.0),
+    );
+
+    var U_ARRAY = array<vec3<f32>, 6u>(
+        vec3<f32>(1.0, 0.0, 0.0),
+        vec3<f32>(0.0, 0.0, 1.0),
+        vec3<f32>(0.0, 1.0, 0.0),
+        vec3<f32>(0.0, 0.0, 1.0),
+        vec3<f32>(1.0, 0.0, 0.0),
+        vec3<f32>(0.0, 1.0, 0.0),
+    );
+
+    var V_ARRAY = array<vec3<f32>, 6u>(
+        vec3<f32>(0.0, 0.0, 1.0),
+        vec3<f32>(1.0, 0.0, 0.0),
+        vec3<f32>(0.0, 0.0, 1.0),
+        vec3<f32>(0.0, 1.0, 0.0),
+        vec3<f32>(0.0, 1.0, 0.0),
+        vec3<f32>(1.0, 0.0, 0.0),
+    );
+
+    let uv = tile.uv + tile.size * uv_offset;
+
+    return COORDINATE_ARRAY[tile.side] + uv.x * U_ARRAY[tile.side] + uv.y * V_ARRAY[tile.side];
 }
 
-fn tile_local_position(tile: Tile, uv: vec2<f32>) -> vec3<f32> {
-    let coordinate = tile_coordinate(tile, uv);
+fn tile_local_position(tile: Tile, uv_offset: vec2<f32>) -> vec3<f32> {
+    let coordinate = tile_coordinate(tile, uv_offset);
 
 #ifdef SPHERICAL
     let local_position = calculate_sphere_position(coordinate);
@@ -49,15 +78,11 @@ fn tile_local_position(tile: Tile, uv: vec2<f32>) -> vec3<f32> {
 }
 
 fn morph_threshold_distance(tile: Tile) -> f32 {
-    let size = length(tile.u);
-
-    #ifdef SPHERICAL
-        let threshold_distance = size * config.radius * view_config.view_distance;
-    #else
-        let threshold_distance = size * config.terrain_size * view_config.view_distance;
-    #endif
-
-    return threshold_distance;
+#ifdef SPHERICAL
+    return tile.size * config.radius * view_config.view_distance;
+#else
+    return tile.size * config.terrain_size * view_config.view_distance;
+#endif
 }
 
 fn morph(tile: Tile, world_position: vec4<f32>) -> f32 {
@@ -84,8 +109,7 @@ fn vertex_local_position(tile: Tile, grid_index: u32) -> vec3<f32> {
         let world_position = vec4<f32>(local_position, 1.0);
         let morph = morph(tile, world_position);
 
-        // let even_grid_offset = grid_offset & vec2<u32>(4294967294u); // set last bit to zero
-        let even_grid_offset = grid_offset - (grid_offset & vec2<u32>(1u)); // set last bit to zero
+        let even_grid_offset = grid_offset & vec2<u32>(4294967294u); // set last bit to zero
         let even_grid_uv = vec2<f32>(even_grid_offset) / view_config.grid_size;
         let even_local_position = tile_local_position(tile, even_grid_uv);
 
@@ -94,6 +118,64 @@ fn vertex_local_position(tile: Tile, grid_index: u32) -> vec3<f32> {
 
     return local_position;
 }
+
+// https://docs.s2cell.aliddell.com/en/stable/s2_concepts.html#lat-lon-to-s2-cell-id
+// uses adjusted logic to match bevys coordinate system
+fn world_position_to_s2_coordinate(world_position: vec4<f32>) -> S2Coordinate {
+    let local_position = world_position.xyz;
+
+    let direction = normalize(local_position);
+    let abs_direction = abs(direction);
+
+    var side: u32;
+    var uv: vec2<f32>;
+
+    if (abs_direction.x > abs_direction.y && abs_direction.x > abs_direction.z) {
+        if (direction.x < 0.0) {
+            side = 0u;
+            uv = vec2<f32>(-direction.z / direction.x, direction.y / direction.x);
+        }
+        else {
+            side = 3u;
+            uv = vec2<f32>(-direction.y / direction.x, direction.z / direction.x);
+        }
+    }
+    else if (abs_direction.z > abs_direction.y) {
+        if (direction.z > 0.0) {
+            side = 1u;
+            uv = vec2<f32>(direction.x / direction.z, -direction.y / direction.z);
+        }
+        else {
+            side = 4u;
+            uv = vec2<f32>(direction.y / direction.z, -direction.x / direction.z);
+        }
+    }
+    else {
+        if (direction.y > 0.0) {
+            side = 2u;
+            uv = vec2<f32>(direction.x / direction.y, direction.z / direction.y);
+        }
+        else {
+            side = 5u;
+            uv = vec2<f32>(-direction.z / direction.y, -direction.x / direction.y);
+        }
+    }
+
+    var st = vec2<f32>(0.0);
+
+    if (uv.x > 0.0) { st.x =       0.5 * sqrt(1.0 + 3.0 * uv.x); }
+    else            { st.x = 1.0 - 0.5 * sqrt(1.0 - 3.0 * uv.x); }
+
+    if (uv.y > 0.0) { st.y =       0.5 * sqrt(1.0 + 3.0 * uv.y); }
+    else            { st.y = 1.0 - 0.5 * sqrt(1.0 - 3.0 * uv.y); }
+
+    return S2Coordinate(side, st);
+}
+
+
+
+
+
 
 fn node_size(lod: u32) -> f32 {
     return f32(config.leaf_node_size * (1u << lod));

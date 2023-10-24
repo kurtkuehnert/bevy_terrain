@@ -19,7 +19,7 @@ const PATH: &str = "earth";
 #[derive(AsBindGroup, TypeUuid, TypePath, Clone)]
 #[uuid = "003e1d5d-241c-45a6-8c25-731dee22d820"]
 pub struct TerrainMaterial {
-    #[texture(0, dimension = "cube")]
+    #[texture(0, dimension = "2d_array")]
     cube_map: Handle<Image>,
     #[texture(1, dimension = "1d")]
     gradient: Handle<Image>,
@@ -186,7 +186,7 @@ fn create_array_texture(
     image.texture_descriptor.format = TextureFormat::R16Unorm;
 
     image.texture_view_descriptor = Some(TextureViewDescriptor {
-        dimension: Some(TextureViewDimension::Cube),
+        dimension: Some(TextureViewDimension::D2Array),
         ..default()
     });
 
