@@ -32,8 +32,7 @@ macro_rules! skip_none {
 }
 
 /// The configuration of the base attachment of the terrain.
-/// The base attachment consists of the height data and the corresponding minmax
-/// information of the terrain.
+/// The base attachment consists of the height data of the terrain.
 #[derive(Copy, Clone)]
 pub struct BaseConfig {
     pub texture_size: u32,
@@ -59,18 +58,6 @@ impl BaseConfig {
             self.border_size,
             self.mip_level_count,
             AttachmentFormat::R16,
-        );
-
-        attachment.file_format = self.file_format;
-        attachment
-    }
-    pub(crate) fn minmax_attachment(&self) -> AttachmentConfig {
-        let mut attachment = AttachmentConfig::new(
-            "minmax".to_string(),
-            self.texture_size,
-            1,
-            self.mip_level_count,
-            AttachmentFormat::Rg16,
         );
 
         attachment.file_format = self.file_format;
@@ -125,13 +112,10 @@ impl Preprocessor {
 
     fn preprocess_base(&self, tile: &TileConfig, base: &BaseConfig) {
         let height_attachment = base.height_attachment();
-        // let minmax_attachment = base.minmax_attachment();
 
         let height_directory = format_directory(&self.path, "height");
-        // let minmax_directory = format_directory(&self.path, "minmax");
 
         reset_directory(&height_directory);
-        // reset_directory(&minmax_directory);
 
         let temp = split_tiles(&height_directory, tile, &height_attachment);
 
@@ -151,32 +135,6 @@ impl Preprocessor {
             );
             stitch_layer(&height_directory, &height_attachment, lod, first, last);
         }
-
-        /*
-            height_to_minmax(
-            &height_directory,
-            &minmax_directory,
-            &height_attachment,
-            &minmax_attachment,
-        );
-
-        let (mut first, mut last) = temp;
-
-        for lod in 1..self.lod_count {
-            first = first.div_floor(2);
-            last = last.div_ceil(2);
-
-            down_sample_layer(
-                minmax,
-                &minmax_directory,
-                &minmax_attachment,
-                lod,
-                first,
-                last,
-            );
-            stitch_layer(&minmax_directory, &minmax_attachment, lod, first, last);
-        }
-        */
     }
 
     fn preprocess_attachment(&self, tile: &TileConfig, attachment: &AttachmentConfig) {

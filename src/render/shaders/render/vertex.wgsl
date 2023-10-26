@@ -3,7 +3,7 @@
 #import bevy_terrain::types VertexInput, VertexOutput, NodeLookup
 #import bevy_terrain::bindings config, view_config, tiles, atlas_sampler
 #import bevy_terrain::functions vertex_local_position, approximate_world_position, calculate_blend, lookup_node
-#import bevy_terrain::debug show_tiles, show_minmax_error
+#import bevy_terrain::debug show_tiles
 #import bevy_terrain::attachments height_atlas, HEIGHT_SCALE, HEIGHT_OFFSET
 #import bevy_pbr::mesh_view_bindings view
 
@@ -50,10 +50,6 @@ fn vertex_fn(in: VertexInput) -> VertexOutput {
 
 #ifdef SHOW_TILES
     output.debug_color = show_tiles(tile, output.world_position);
-#endif
-
-#ifdef SHOW_MINMAX_ERROR
-    output.debug_color = show_minmax_error(tile, height);
 #endif
 
 #ifdef TEST2

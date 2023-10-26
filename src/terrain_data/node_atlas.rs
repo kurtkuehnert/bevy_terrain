@@ -1,6 +1,8 @@
 use crate::{
     terrain::{Terrain, TerrainConfig},
-    terrain_data::{quadtree::Quadtree, AtlasAttachment, AtlasIndex, AttachmentIndex, NodeId},
+    terrain_data::{
+        quadtree::Quadtree, AtlasAttachment, AtlasIndex, AttachmentIndex, NodeCoordinate,
+    },
     terrain_view::{TerrainView, TerrainViewComponents},
 };
 use bevy::{
@@ -69,7 +71,7 @@ pub(crate) struct AtlasNode {
 
 /// A node which is not currently requested by any [`Quadtree`].
 struct UnusedNode {
-    node_id: NodeId,
+    node_coordinate: NodeCoordinate,
     atlas_index: AtlasIndex,
 }
 
@@ -78,8 +80,8 @@ struct UnusedNode {
 ///
 /// A node is considered present and assigned an [`AtlasIndex`] as soon as it is
 /// requested by any quadtree. Then the node atlas will start loading all of its attachments
-/// by storing the [`NodeId`] (for one frame) in `load_events` for which attachment-loading-systems
-/// can listen.
+/// by storing the [`NodeCoordinate`] (for one frame) in `load_events` for which
+/// attachment-loading-systems can listen.
 /// Nodes that are not being used by any quadtree anymore are cached (LRU),
 /// until new atlas indices are required.
 ///
@@ -88,7 +90,7 @@ struct UnusedNode {
 #[derive(Component)]
 pub struct NodeAtlas {
     /// Nodes that are requested to be loaded this frame.
-    pub load_events: Vec<NodeId>,
+    pub load_events: Vec<NodeCoordinate>,
     /// Stores the cpu accessible data of all loaded nodes.
     pub(crate) data: Vec<NodeData>, // Todo: build api for accessing data on the cpu
     /// Stores the atlas attachments of the terrain.
@@ -98,12 +100,12 @@ pub struct NodeAtlas {
     /// [`GpuNodeAtlas`](super::gpu_node_atlas::GpuNodeAtlas) each frame.
     pub(crate) loaded_nodes: Vec<LoadingNode>,
     /// Stores the currently loading nodes.
-    pub(crate) loading_nodes: HashMap<NodeId, LoadingNode>,
+    pub(crate) loading_nodes: HashMap<NodeCoordinate, LoadingNode>,
     /// The amount of nodes the can be loaded simultaneously in the node atlas.
     pub(crate) size: AtlasIndex,
     /// Stores the states of all present nodes.
-    pub(crate) nodes: HashMap<NodeId, AtlasNode>,
-    pub(crate) existing_nodes: HashSet<NodeId>,
+    pub(crate) nodes: HashMap<NodeCoordinate, AtlasNode>,
+    pub(crate) existing_nodes: HashSet<NodeCoordinate>,
     /// Lists the unused nodes in least recently used order.
     unused_nodes: VecDeque<UnusedNode>,
 }
@@ -116,11 +118,11 @@ impl NodeAtlas {
     pub fn new(
         size: u16,
         attachments: Vec<AtlasAttachment>,
-        existing_nodes: HashSet<NodeId>,
+        existing_nodes: HashSet<NodeCoordinate>,
     ) -> Self {
         let unused_nodes = (0..size)
             .map(|atlas_index| UnusedNode {
-                node_id: NodeId::INVALID,
+                node_coordinate: NodeCoordinate::INVALID,
                 atlas_index,
             })
             .collect();
@@ -161,33 +163,33 @@ impl NodeAtlas {
         } = self;
 
         // release nodes that are on longer required
-        for node_id in quadtree.released_nodes.drain(..) {
-            if !existing_nodes.contains(&node_id) {
+        for node_coordinate in quadtree.released_nodes.drain(..) {
+            if !existing_nodes.contains(&node_coordinate) {
                 continue;
             }
 
             let node = nodes
-                .get_mut(&node_id)
+                .get_mut(&node_coordinate)
                 .expect("Tried releasing a node, which is not present.");
             node.requests -= 1;
 
             if node.requests == 0 {
                 // the node is not used anymore
                 unused_nodes.push_back(UnusedNode {
-                    node_id,
+                    node_coordinate,
                     atlas_index: node.atlas_index,
                 });
             }
         }
 
         // load nodes that are requested
-        for node_id in quadtree.requested_nodes.drain(..) {
-            if !existing_nodes.contains(&node_id) {
+        for node_coordinate in quadtree.requested_nodes.drain(..) {
+            if !existing_nodes.contains(&node_coordinate) {
                 continue;
             }
 
             // check if the node is already present else start loading it
-            if let Some(node) = nodes.get_mut(&node_id) {
+            if let Some(node) = nodes.get_mut(&node_coordinate) {
                 if node.requests == 0 {
                     // the node is now used again
                     unused_nodes.retain(|unused_node| node.atlas_index != unused_node.atlas_index);
@@ -199,9 +201,9 @@ impl NodeAtlas {
                 // remove least recently used node and reuse its atlas index
                 let unused_node = unused_nodes.pop_front().expect("Atlas out of indices");
 
-                nodes.remove(&unused_node.node_id);
+                nodes.remove(&unused_node.node_coordinate);
                 nodes.insert(
-                    node_id,
+                    node_coordinate,
                     AtlasNode {
                         requests: 1,
                         state: LoadingState::Loading,
@@ -210,9 +212,9 @@ impl NodeAtlas {
                 );
 
                 // start loading the node
-                load_events.push(node_id);
+                load_events.push(node_coordinate);
                 loading_nodes.insert(
-                    node_id,
+                    node_coordinate,
                     LoadingNode {
                         atlas_index: unused_node.atlas_index,
                         loading_attachments: (0..attachments.len()).collect(),
@@ -243,8 +245,10 @@ impl NodeAtlas {
         load_events.clear();
 
         // update all nodes that have finished loading
-        for (node_id, loading_node) in loading_nodes.extract_if(|_, node| node.finished_loading()) {
-            if let Some(node) = nodes.get_mut(&node_id) {
+        for (node_coordinate, loading_node) in
+            loading_nodes.extract_if(|_, node| node.finished_loading())
+        {
+            if let Some(node) = nodes.get_mut(&node_coordinate) {
                 node.state = LoadingState::Loaded;
 
                 // Todo: only keep attachments required by the CPU around

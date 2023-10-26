@@ -76,16 +76,14 @@ bitflags::bitflags! {
         const SHOW_LOD           = (1 <<  3);
         const SHOW_UV            = (1 <<  4);
         const SHOW_NODES         = (1 <<  5);
-        const SHOW_MINMAX_ERROR  = (1 <<  6);
-        const MINMAX             = (1 <<  7);
-        const MESH_MORPH         = (1 <<  8);
-        const ALBEDO             = (1 <<  9);
-        const BRIGHT             = (1 << 10);
-        const LIGHTING           = (1 << 11);
-        const SAMPLE_GRAD        = (1 << 12);
-        const TEST1              = (1 << 13);
-        const TEST2              = (1 << 14);
-        const TEST3              = (1 << 15);
+        const MESH_MORPH         = (1 <<  6);
+        const ALBEDO             = (1 <<  7);
+        const BRIGHT             = (1 <<  8);
+        const LIGHTING           = (1 <<  9);
+        const SAMPLE_GRAD        = (1 << 10);
+        const TEST1              = (1 << 11);
+        const TEST2              = (1 << 12);
+        const TEST3              = (1 << 13);
 
         const MSAA_RESERVED_BITS = TerrainPipelineFlags::MSAA_MASK_BITS << TerrainPipelineFlags::MSAA_SHIFT_BITS;
     }
@@ -114,12 +112,6 @@ impl TerrainPipelineFlags {
         }
         if debug.show_uv {
             key |= TerrainPipelineFlags::SHOW_UV;
-        }
-        if debug.show_minmax_error {
-            key |= TerrainPipelineFlags::SHOW_MINMAX_ERROR;
-        }
-        if debug.minmax {
-            key |= TerrainPipelineFlags::MINMAX;
         }
         if debug.show_nodes {
             key |= TerrainPipelineFlags::SHOW_NODES;
@@ -180,12 +172,6 @@ impl TerrainPipelineFlags {
         }
         if (self.bits() & TerrainPipelineFlags::SHOW_NODES.bits()) != 0 {
             shader_defs.push("SHOW_NODES".into());
-        }
-        if (self.bits() & TerrainPipelineFlags::SHOW_MINMAX_ERROR.bits()) != 0 {
-            shader_defs.push("SHOW_MINMAX_ERROR".into());
-        }
-        if (self.bits() & TerrainPipelineFlags::MINMAX.bits()) != 0 {
-            shader_defs.push("MINMAX".into());
         }
         if (self.bits() & TerrainPipelineFlags::MESH_MORPH.bits()) != 0 {
             shader_defs.push("MESH_MORPH".into());

@@ -102,7 +102,6 @@ impl GpuNodeAtlas {
     /// finished loading this frame.
     fn update(&mut self, command_encoder: &mut CommandEncoder, images: &RenderAssets<Image>) {
         for node in self.loaded_nodes.drain(..) {
-            dbg!("test");
             for (node_handle, atlas_handle) in
                 self.attachments
                     .iter()

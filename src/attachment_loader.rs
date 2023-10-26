@@ -5,7 +5,6 @@ use crate::{
     preprocess::{Preprocessor, TileConfig},
     terrain_data::{
         node_atlas::NodeAtlas, AttachmentConfig, AttachmentIndex, FileFormat, NodeCoordinate,
-        NodeId,
     },
 };
 use bevy::{
@@ -35,8 +34,8 @@ impl AttachmentFromDisk {
 #[derive(Component)]
 pub struct AttachmentFromDiskLoader {
     pub(crate) attachments: HashMap<AttachmentIndex, AttachmentFromDisk>,
-    /// Maps the id of an asset to the corresponding node id.
-    handle_mapping: HashMap<HandleId, (NodeId, AttachmentIndex)>,
+    /// Maps the id of an asset to the corresponding node coordinate.
+    handle_mapping: HashMap<HandleId, (NodeCoordinate, AttachmentIndex)>,
     preprocessor: Preprocessor,
     path: String,
 }
@@ -98,8 +97,8 @@ pub(crate) fn start_loading_attachment_from_disk(
             ..
         } = config.as_mut();
 
-        for &node_id in load_events.iter() {
-            let node = loading_nodes.get_mut(&node_id).unwrap();
+        for &node_coordinate in load_events.iter() {
+            let node = loading_nodes.get_mut(&node_coordinate).unwrap();
 
             for (
                 attachment_index,
@@ -110,8 +109,6 @@ pub(crate) fn start_loading_attachment_from_disk(
                 },
             ) in attachments.iter()
             {
-                let node_coordinate = NodeCoordinate::from(&node_id);
-
                 let handle: Handle<Image> = asset_server.load(&format!(
                     "{path}/{node_coordinate}.{}",
                     file_format.extension()
@@ -120,7 +117,7 @@ pub(crate) fn start_loading_attachment_from_disk(
                 if asset_server.get_load_state(handle.clone()) == LoadState::Loaded {
                     node.loaded(*attachment_index);
                 } else {
-                    handle_mapping.insert(handle.id(), (node_id, *attachment_index));
+                    handle_mapping.insert(handle.id(), (node_coordinate, *attachment_index));
                 };
 
                 node.set_attachment(*attachment_index, handle);
@@ -137,7 +134,7 @@ pub(crate) fn finish_loading_attachment_from_disk(
     for event in asset_events.iter() {
         if let AssetEvent::Created { handle } = event {
             for (mut node_atlas, mut config) in terrain_query.iter_mut() {
-                if let Some((node_id, attachment_index)) =
+                if let Some((node_coordinate, attachment_index)) =
                     config.handle_mapping.remove(&handle.id())
                 {
                     let image = images.get_mut(handle).unwrap();
@@ -146,7 +143,7 @@ pub(crate) fn finish_loading_attachment_from_disk(
                     image.texture_descriptor.format = attachment.format;
                     image.texture_descriptor.usage |= TextureUsages::COPY_SRC;
 
-                    let node = node_atlas.loading_nodes.get_mut(&node_id).unwrap();
+                    let node = node_atlas.loading_nodes.get_mut(&node_coordinate).unwrap();
                     node.loaded(attachment_index);
                     break;
                 }

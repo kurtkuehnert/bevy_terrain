@@ -26,9 +26,7 @@ pub mod quadtree;
 
 pub const SIDE_COUNT: u32 = 6;
 
-/// The global coordinate of a node.
-///
-/// Can be packed into the smaller [`NodeId`].
+/// The global coordinate and identifier of a node.
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Encode, Decode)]
 pub struct NodeCoordinate {
     /// The side of the cube sphere the node is located on.
@@ -41,20 +39,6 @@ pub struct NodeCoordinate {
     /// The y position of the node in node sizes.
     pub y: u32,
 }
-
-impl From<&NodeId> for NodeCoordinate {
-    /// Determines the coordinate of the node based on its id.
-    #[inline]
-    fn from(id: &NodeId) -> Self {
-        Self {
-            side: (id.side_x >> 20) & 0x7,
-            lod: (id.lod_y >> 20) & 0x1F,
-            x: id.side_x & 0xFFFFF,
-            y: id.lod_y & 0xFFFFF,
-        }
-    }
-}
-
 impl fmt::Display for NodeCoordinate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(f, "{}_{}_{}_{}", self.side, self.lod, self.x, self.y)
@@ -76,37 +60,12 @@ impl FromStr for NodeCoordinate {
     }
 }
 
-// Todo: consider storing terrain id for multiple terrains as well
-/// A packed and unique identifier of a node.
-///
-/// A smaller version of the [`NodeCoordinate`].
-/// side |  x | lod |  y
-///   3  | 20 |   5 | 20
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-pub struct NodeId {
-    side_x: u32,
-    lod_y: u32,
-}
-
-impl From<&NodeCoordinate> for NodeId {
-    fn from(value: &NodeCoordinate) -> Self {
-        Self {
-            side_x: (value.side << 20) & value.x,
-            lod_y: (value.lod << 20) & value.y,
-        }
-    }
-}
-
-impl Default for NodeId {
-    fn default() -> Self {
-        Self::INVALID
-    }
-}
-
-impl NodeId {
-    pub const INVALID: NodeId = NodeId {
-        side_x: u32::MAX,
-        lod_y: u32::MAX,
+impl NodeCoordinate {
+    const INVALID: NodeCoordinate = NodeCoordinate {
+        side: u32::MAX,
+        lod: u32::MAX,
+        x: u32::MAX,
+        y: u32::MAX,
     };
 }
 

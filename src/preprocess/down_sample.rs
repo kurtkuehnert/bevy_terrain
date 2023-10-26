@@ -146,31 +146,33 @@ pub(crate) fn down_sample_layer(
     last: UVec2,
 ) {
     first.product(last).for_each(|(x, y)| {
-        let node_coordinate = NodeCoordinate { side: 0, lod, x, y };
-        let node_path = format_node_path(directory, &node_coordinate);
-        let mut node_image = load_or_create_node(&node_path, attachment);
+        for side in 0..6 {
+            let node_coordinate = NodeCoordinate { side, lod, x, y };
+            let node_path = format_node_path(directory, &node_coordinate);
+            let mut node_image = load_or_create_node(&node_path, attachment);
 
-        for (cx, cy) in iproduct!(0..2, 0..2) {
-            let child_coordinate = NodeCoordinate {
-                side: 0,
-                lod: lod - 1,
-                x: (x << 1) + cx,
-                y: (y << 1) + cy,
-            };
+            for (cx, cy) in iproduct!(0..2, 0..2) {
+                let child_coordinate = NodeCoordinate {
+                    side,
+                    lod: lod - 1,
+                    x: (x << 1) + cx,
+                    y: (y << 1) + cy,
+                };
 
-            let child_path = format_node_path(directory, &child_coordinate);
-            let child_image = skip_none!(load_image(&child_path, attachment.file_format));
-            // Todo: if a child node is not available, we should fill the gap in the parent one
-            // maybe this should not even be possible
+                let child_path = format_node_path(directory, &child_coordinate);
+                let child_image = skip_none!(load_image(&child_path, attachment.file_format));
+                // Todo: if a child node is not available, we should fill the gap in the parent one
+                // maybe this should not even be possible
 
-            filter(
-                &mut node_image,
-                &child_image,
-                attachment,
-                UVec2::new(cx, cy),
-            );
+                filter(
+                    &mut node_image,
+                    &child_image,
+                    attachment,
+                    UVec2::new(cx, cy),
+                );
+            }
+
+            save_image(&node_path, &node_image, attachment);
         }
-
-        save_image(&node_path, &node_image, attachment);
     });
 }
