@@ -1,6 +1,6 @@
 use crate::{
     preprocess::file_io::{format_directory, iterate_directory},
-    terrain_data::{NodeCoordinate, NodeId},
+    terrain_data::NodeCoordinate,
 };
 use anyhow::Result;
 use bevy::utils::HashSet;
@@ -52,9 +52,9 @@ pub(crate) fn save_node_config(path: &str) {
         .unwrap();
 }
 
-/// Loads the node configuration of the terrain, which stores the [`NodeId`]s of all the nodes
+/// Loads the node configuration of the terrain, which stores the [`NodeCoordinate`]s of all the nodes
 /// of the terrain.
-pub(crate) fn load_node_config(path: &str) -> HashSet<NodeId> {
+pub(crate) fn load_node_config(path: &str) -> HashSet<NodeCoordinate> {
     let tc = TC::load_file(format_directory(path, "../config.tc")).unwrap();
-    tc.nodes.iter().map(NodeId::from).collect()
+    tc.nodes.into_iter().collect()
 }

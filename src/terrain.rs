@@ -1,6 +1,6 @@
 //! Types for configuring terrains.
 
-use crate::terrain_data::{AtlasAttachment, NodeId};
+use crate::terrain_data::{AtlasAttachment, NodeCoordinate};
 use bevy::{
     prelude::*,
     render::extract_component::ExtractComponent,
@@ -58,5 +58,5 @@ pub struct TerrainConfig {
     pub path: String,
     /// The attachments of the terrain.
     pub attachments: Vec<AtlasAttachment>,
-    pub nodes: HashSet<NodeId>,
+    pub nodes: HashSet<NodeCoordinate>,
 }

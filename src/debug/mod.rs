@@ -32,8 +32,6 @@ pub struct DebugTerrain {
     pub show_lod: bool,
     pub show_uv: bool,
     pub show_nodes: bool,
-    pub show_minmax_error: bool,
-    pub minmax: bool,
     pub mesh_morph: bool,
     pub albedo: bool,
     pub bright: bool,
@@ -53,8 +51,6 @@ impl Default for DebugTerrain {
             show_lod: false,
             show_uv: false,
             show_nodes: false,
-            show_minmax_error: false,
-            minmax: false,
             mesh_morph: true,
             albedo: false,
             bright: false,
@@ -106,20 +102,6 @@ pub fn toggle_debug(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTerrain>)
         println!(
             "Toggled the node view {}.",
             if debug.show_nodes { "on" } else { "off" }
-        )
-    }
-    if input.just_pressed(KeyCode::Y) {
-        debug.show_minmax_error = !debug.show_minmax_error;
-        println!(
-            "Toggled the minmax error view {}.",
-            if debug.show_minmax_error { "on" } else { "off" }
-        )
-    }
-    if input.just_pressed(KeyCode::M) {
-        debug.minmax = !debug.minmax;
-        println!(
-            "Toggled the minmax view {}.",
-            if debug.minmax { "on" } else { "off" }
         )
     }
     if input.just_pressed(KeyCode::D) {

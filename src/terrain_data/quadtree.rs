@@ -2,7 +2,7 @@ use crate::{
     terrain::{Terrain, TerrainConfig},
     terrain_data::{
         node_atlas::{LoadingState, NodeAtlas},
-        AtlasIndex, NodeCoordinate, NodeId, INVALID_ATLAS_INDEX, INVALID_LOD, SIDE_COUNT,
+        AtlasIndex, NodeCoordinate, INVALID_ATLAS_INDEX, INVALID_LOD, SIDE_COUNT,
     },
     terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
 };
@@ -24,8 +24,8 @@ enum RequestState {
 
 /// The internal representation of a node in a [`Quadtree`].
 struct TreeNode {
-    /// The current node id at the quadtree position.
-    node_id: NodeId,
+    /// The current node coordinate at the quadtree position.
+    node_coordinate: NodeCoordinate,
     /// Indicates, whether the node is currently demanded or released.
     state: RequestState,
 }
@@ -33,7 +33,7 @@ struct TreeNode {
 impl Default for TreeNode {
     fn default() -> Self {
         Self {
-            node_id: NodeId::INVALID,
+            node_coordinate: NodeCoordinate::INVALID,
             state: RequestState::Released,
         }
     }
@@ -90,9 +90,9 @@ pub struct Quadtree {
     /// The current cpu quadtree data. This is synced each frame with the gpu quadtree data.
     pub(crate) data: Array3<QuadtreeEntry>,
     /// Nodes that are no longer required by this quadtree.
-    pub(crate) released_nodes: Vec<NodeId>,
+    pub(crate) released_nodes: Vec<NodeCoordinate>,
     /// Nodes that are requested to be loaded by this quadtree.
-    pub(crate) requested_nodes: Vec<NodeId>,
+    pub(crate) requested_nodes: Vec<NodeCoordinate>,
     /// The count of level of detail layers.
     pub(crate) lod_count: u32,
     /// The count of nodes in x and y direction per layer.
@@ -168,6 +168,7 @@ impl Quadtree {
 
     /// Traverses the quadtree and updates the node states,
     /// while selecting newly requested and released nodes.
+    /*
     pub(crate) fn compute_requests(&mut self, viewer_position: Vec3) {
         for side in 0..SIDE_COUNT {
             for lod in 0..self.lod_count {
@@ -243,20 +244,44 @@ impl Quadtree {
             }
         }
     }
+    */
+
+    pub(crate) fn compute_requests(&mut self, viewer_position: Vec3) {
+        for side in 0..SIDE_COUNT {
+            let node_coordinate = NodeCoordinate {
+                side,
+                lod: 1,
+                x: 0,
+                y: 0,
+            };
+
+            let node = &mut self.nodes[[
+                node_coordinate.side as usize,
+                node_coordinate.lod as usize,
+                node_coordinate.x as usize,
+                node_coordinate.y as usize,
+            ]];
+
+            node.node_coordinate = node_coordinate;
+            self.requested_nodes.push(node.node_coordinate);
+            node.state = RequestState::Requested;
+        }
+    }
 
     /// Adjusts the quadtree to the node atlas by updating the entries with the best available nodes.
     fn adjust(&mut self, node_atlas: &NodeAtlas) {
         for ((side, lod, x, y), node) in self.nodes.indexed_iter_mut() {
-            let mut node_id = node.node_id;
-            let mut node_coordinate = NodeCoordinate::from(&node_id);
+            let mut node_coordinate = node.node_coordinate;
 
             let (atlas_index, atlas_lod) = loop {
-                if node_coordinate.lod == self.lod_count || node_id == NodeId::INVALID {
+                if node_coordinate.lod == self.lod_count
+                    || node_coordinate == NodeCoordinate::INVALID
+                {
                     // highest lod is not loaded
                     break (INVALID_ATLAS_INDEX, u16::MAX);
                 }
 
-                if let Some(atlas_node) = node_atlas.nodes.get(&node_id) {
+                if let Some(atlas_node) = node_atlas.nodes.get(&node_coordinate) {
                     if atlas_node.state == LoadingState::Loaded {
                         // found best loaded node
                         break (atlas_node.atlas_index, node_coordinate.lod as u16);
@@ -267,7 +292,6 @@ impl Quadtree {
                 node_coordinate.lod += 1;
                 node_coordinate.x >>= 1;
                 node_coordinate.y >>= 1;
-                node_id = NodeId::from(&node_coordinate);
             };
 
             self.data[[side * self.lod_count as usize + lod, y, x]] = QuadtreeEntry {

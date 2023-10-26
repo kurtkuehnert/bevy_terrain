@@ -51,7 +51,14 @@ fn fragment(in: FragmentInput) -> FragmentOutput {
     let st = s2_coordinate.st;
     let side = s2_coordinate.side;
 
-    let scale = 2.0 * textureSampleLevel(cube_map, atlas_sampler, st, side, 0.0).x - 1.0;
+    let lookup = lookup_node(1u, in.world_position);
+    let height_coordinate = lookup.atlas_coordinate * HEIGHT_SCALE + HEIGHT_OFFSET;
+
+    var height: f32;
+    height = textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0).x;
+    // height = textureSampleLevel(cube_map, atlas_sampler, st, side, 0.0).x;
+
+    let scale = 2.0 * height - 1.0;
 
     let sample_ocean = textureSample(gradient, atlas_sampler, mix(0.0, 0.075, pow(-scale, 0.25)));
     let sample_land = textureSample(gradient, atlas_sampler, mix(0.09, 1.0, pow(scale * 6.0, 1.75)));
@@ -65,19 +72,17 @@ fn fragment(in: FragmentInput) -> FragmentOutput {
         color = sample_land;
     }
 
-    let lookup = lookup_node(0u, in.world_position);
 
-    let height_coordinate = lookup.atlas_coordinate * HEIGHT_SCALE + HEIGHT_OFFSET;
-    let height = textureSampleLevel(height_atlas, atlas_sampler, st, 3u, 0.0).x;
 
     // color = vec4<f32>(lookup.atlas_coordinate, 0.0, 1.0);
 
 
-    color = vec4<f32>(height);
+    // color = vec4<f32>(height);
 
 
     // color = lod_color(side);
     // color = vec4<f32>(st.x, st.y, 0.0, 1.0);
+    // color = vec4<f32>(height_coordinate.x, height_coordinate.y, 0.0, 1.0);
 
     // color = in.debug_color;
 
