@@ -46,7 +46,7 @@ impl TerrainPluginConfig {
         Self {
             leaf_node_size: base.texture_size - 2 * base.border_size,
             base,
-            attachments: vec![base.height_attachment(), base.minmax_attachment()],
+            attachments: vec![base.height_attachment()],
         }
     }
 

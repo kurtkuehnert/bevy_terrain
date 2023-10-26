@@ -12,8 +12,6 @@ const FUNCTIONS_SHADER: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 234313897973543254);
 const DEBUG_SHADER: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 513467378691355413);
-const MINMAX_SHADER: HandleUntyped =
-    HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 705341350987806053);
 const VERTEX_SHADER: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 187371091254673438);
 const FRAGMENT_SHADER: HandleUntyped =
@@ -38,7 +36,6 @@ pub(crate) fn load_terrain_shaders(app: &mut App, plugin_config: &TerrainPluginC
     load_internal_asset!(app, FUNCTIONS_SHADER, "functions.wgsl", Shader::from_wgsl);
     load_internal_asset!(app, DEBUG_SHADER, "debug.wgsl", Shader::from_wgsl);
 
-    load_internal_asset!(app, MINMAX_SHADER, "render/minmax.wgsl", Shader::from_wgsl);
     load_internal_asset!(app, VERTEX_SHADER, "render/vertex.wgsl", Shader::from_wgsl);
     load_internal_asset!(
         app,

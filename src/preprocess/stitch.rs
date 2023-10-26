@@ -137,28 +137,30 @@ pub(crate) fn stitch_layer(
     }
 
     for (x, y) in first.product(last) {
-        let node_coordinate = NodeCoordinate { side: 0, lod, x, y };
-        let node_path = format_node_path(directory, &node_coordinate);
-        let mut node_image = skip_none!(load_image(&node_path, attachment.file_format));
+        for side in 0..6 {
+            let node_coordinate = NodeCoordinate { side, lod, x, y };
+            let node_path = format_node_path(directory, &node_coordinate);
+            let mut node_image = skip_none!(load_image(&node_path, attachment.file_format));
 
-        for direction in iproduct!(-1..=1, -1..=1) {
-            if direction == (0, 0) {
-                continue;
-            };
+            for direction in iproduct!(-1..=1, -1..=1) {
+                if direction == (0, 0) {
+                    continue;
+                };
 
-            let x = (x as i32 + direction.0) as u32;
-            let y = (y as i32 + direction.1) as u32;
+                let x = (x as i32 + direction.0) as u32;
+                let y = (y as i32 + direction.1) as u32;
 
-            let adjacent_coordinate = NodeCoordinate { side: 0, lod, x, y };
-            let adjacent_path = format_node_path(directory, &adjacent_coordinate);
+                let adjacent_coordinate = NodeCoordinate { side, lod, x, y };
+                let adjacent_path = format_node_path(directory, &adjacent_coordinate);
 
-            if let Some(adjacent_image) = load_image(&adjacent_path, attachment.file_format) {
-                stitch(&mut node_image, &adjacent_image, attachment, direction);
-            } else {
-                extend(&mut node_image, attachment, direction);
+                if let Some(adjacent_image) = load_image(&adjacent_path, attachment.file_format) {
+                    stitch(&mut node_image, &adjacent_image, attachment, direction);
+                } else {
+                    extend(&mut node_image, attachment, direction);
+                }
             }
-        }
 
-        save_image(&node_path, &node_image, attachment);
+            save_image(&node_path, &node_image, attachment);
+        }
     }
 }
