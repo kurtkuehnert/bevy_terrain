@@ -97,24 +97,38 @@ fn quadtree_outlines(lod: u32, frag_s2: S2Coordinate) -> f32 {
     return outer - inner;
 }
 
+fn quadtree_lod(view_s2: S2Coordinate, frag_s2: S2Coordinate) -> u32 {
+    var lod = 0u;
+
+    loop {
+        let inside_quadtree = inside_quadtree(lod, view_s2, frag_s2);
+
+        if (inside_quadtree == 1.0 || lod == config.lod_count - 1u) { break; }
+
+        lod = lod + 1u;
+    }
+
+    return lod;
+}
+
 fn show_quadtree(world_position: vec4<f32>) -> vec4<f32> {
     let view_s2 = world_position_to_s2_coordinate(vec4<f32>(view.world_position, 1.0));
     let frag_s2 = world_position_to_s2_coordinate(world_position);
 
-    let blend = blend(world_position);
-    var lod = blend.lod;
-    lod = 0u;
+    let blend_lod = blend(world_position).lod;
+    let quadtree_lod = quadtree_lod(view_s2, frag_s2);
 
-    var color: vec4<f32> = index_color(lod);
+    var lod = max(blend_lod, quadtree_lod);
+    lod = quadtree_lod;
 
-    let inside_quadtree = inside_quadtree(lod, view_s2, frag_s2);
-    color = mix(0.3 * color, color, inside_quadtree);
+    let is_outline = quadtree_outlines(lod, frag_s2);
 
-    let outlines = quadtree_outlines(lod, frag_s2);
-    color = mix(color, index_color(lod) * 0.1, outlines);
+    var color: vec4<f32>;
+
+    color = mix(index_color(lod), vec4<f32>(0.0), is_outline);
 
     if (frag_s2.side == view_s2.side && distance(frag_s2.st, view_s2.st) < 0.005) {
-        color = 0.0 * color;
+        color = vec4<f32>(0.0);
     }
 
     return color;
@@ -138,7 +152,7 @@ fn vertex(in: VertexInput) -> VertexOutput {
 
     let scale = 2.0 * textureSampleLevel(cube_map, atlas_sampler, st, side, 0.0).x - 1.0;
     //let height = 40.0 * sign(scale) * pow(abs(scale), 1.5);
-    let height = 20.0 * sign(scale) * pow(abs(scale), 1.5);
+    let height = 0.0 * sign(scale) * pow(abs(scale), 1.5);
 
     world_position = world_position + vec4<f32>(direction * height, 0.0);
 
