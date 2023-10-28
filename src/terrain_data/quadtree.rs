@@ -247,13 +247,13 @@ impl Quadtree {
     */
 
     pub(crate) fn compute_requests(&mut self, viewer_position: Vec3) {
-        for side in 0..SIDE_COUNT {
-            let node_coordinate = NodeCoordinate {
-                side,
-                lod: 1,
-                x: 0,
-                y: 0,
-            };
+        for (side, lod, x, y) in iproduct!(
+            0..SIDE_COUNT,
+            0..self.lod_count,
+            0..self.node_count,
+            0..self.node_count
+        ) {
+            let node_coordinate = NodeCoordinate { side, lod, x, y };
 
             let node = &mut self.nodes[[
                 node_coordinate.side as usize,
@@ -263,8 +263,8 @@ impl Quadtree {
             ]];
 
             node.node_coordinate = node_coordinate;
-            self.requested_nodes.push(node.node_coordinate);
             node.state = RequestState::Requested;
+            self.requested_nodes.push(node.node_coordinate);
         }
     }
 

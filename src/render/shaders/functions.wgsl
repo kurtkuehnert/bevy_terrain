@@ -88,8 +88,18 @@ fn morph_threshold_distance(tile: Tile) -> f32 {
 fn morph(tile: Tile, world_position: vec4<f32>) -> f32 {
     let viewer_distance = distance(world_position.xyz, view.world_position.xyz);
     let threshold_distance = 2.0 * morph_threshold_distance(tile);
+    let ratio = clamp(1.0 - (1.0 - viewer_distance / threshold_distance) / view_config.morph_range, 0.0, 1.0);
 
-    return clamp(1.0 - (1.0 - viewer_distance / threshold_distance) / view_config.morph_range, 0.0, 1.0);
+    return ratio;
+}
+
+fn blend(world_position: vec4<f32>) -> Blend {
+    let viewer_distance = distance(world_position.xyz, view.world_position.xyz);
+    let threshold_distance = 2.0 * view_config.view_distance;
+    let log_distance = max(log2(viewer_distance / threshold_distance), 0.0);
+    let ratio = (1.0 - log_distance % 1.0) / view_config.blend_range;
+
+    return Blend(u32(log_distance), ratio);
 }
 
 fn grid_offset(grid_index: u32) -> vec2<u32>{
@@ -230,13 +240,7 @@ fn lookup_node(lod: u32, local_position: vec3<f32>) -> NodeLookup {
 }
 */
 
-fn calculate_blend(world_position: vec4<f32>) -> Blend {
-    let viewer_distance = distance(world_position.xyz, view.world_position.xyz);
-    let log_distance = max(log2(2.0 * viewer_distance / view_config.blend_distance), 0.0);
-    let ratio = (1.0 - log_distance % 1.0) / view_config.blend_range;
 
-    return Blend(u32(log_distance), ratio);
-}
 
 fn calculate_normal(coords: vec2<f32>, atlas_index: i32, atlas_lod: u32, ddx: vec2<f32>, ddy: vec2<f32>) -> vec3<f32> {
 #ifdef SAMPLE_GRAD
