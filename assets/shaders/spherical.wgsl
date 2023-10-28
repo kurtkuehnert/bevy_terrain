@@ -1,4 +1,4 @@
-#import bevy_terrain::types VertexInput, VertexOutput, FragmentInput, FragmentOutput, Tile
+#import bevy_terrain::types VertexInput, VertexOutput, FragmentInput, FragmentOutput, Tile, S2Coordinate
 #import bevy_terrain::bindings config, view_config, tiles, atlas_sampler
 #import bevy_terrain::functions vertex_local_position, approximate_world_position, world_position_to_s2_coordinate, lookup_node, blend, node_count
 #import bevy_terrain::debug index_color, show_tiles, show_lod
@@ -28,69 +28,78 @@ const F0: u32 = 0u;
 const F1: u32 = 1u;
 const PS: u32 = 2u;
 const PT: u32 = 3u;
+// const NS: u32 = 4u;
+// const NT: u32 = 5u;
 
-fn show_quadtree(world_position: vec4<f32>) -> vec4<f32> {
+fn inside_rect(position: vec2<f32>, origin: vec2<f32>, size: f32) -> f32 {
+    let inside = step(origin, position) * step(position, origin + size);
 
+    return inside.x * inside.y;
+}
 
-    // const NS: u32 = 4u;
-    // const NT: u32 = 5u;
-
-    // var EVEN_LIST = array<vec2<u32>, 6u>(
-    // );
-    // var ODD_LIST = array<vec2<u32>, 6u>(
-    // );
-
-    var SIDE_MATRIX = array<vec2<u32>, 36u>(
-        vec2<u32>(PS, PT), // side 0 to side 0
-        vec2<u32>(F0, PT), // side 0 to side 1
-        vec2<u32>(F0, PS), // side 0 to side 2
-        vec2<u32>(PT, PS), // side 0 to side 3
-        vec2<u32>(PT, F0), // side 0 to side 4
-        vec2<u32>(PS, F0), // side 0 to side 5
-
-        vec2<u32>(F1, PT), // side 1 to side 0
-        vec2<u32>(PS, PT), // side 1 to side 1
-        vec2<u32>(PS, F1), // side 1 to side 2
-        vec2<u32>(PT, F1), // side 1 to side 3
-        vec2<u32>(PT, PS), // side 1 to side 4
-        vec2<u32>(F1, PS), // side 1 to side 5
-
-        vec2<u32>(PT, F0), // side 2 to side 0
-        vec2<u32>(PS, F0), // side 2 to side 1
-        vec2<u32>(PS, PT), // side 2 to side 2
-        vec2<u32>(F0, PT), // side 2 to side 3
-        vec2<u32>(F0, PS), // side 2 to side 4
-        vec2<u32>(PS, F0), // side 2 to side 5
-
-        vec2<u32>(PT, PS), // side 3 to side 0
-        vec2<u32>(F1, PS), // side 3 to side 1
-        vec2<u32>(F1, PT), // side 3 to side 2
-        vec2<u32>(PS, PT), // side 3 to side 3
-        vec2<u32>(PS, F1), // side 3 to side 4
-        vec2<u32>(PT, F1), // side 3 to side 5
-
-        vec2<u32>(F0, PS), // side 4 to side 0
-        vec2<u32>(PT, PS), // side 4 to side 1
-        vec2<u32>(PT, F0), // side 4 to side 2
-        vec2<u32>(PS, F0), // side 4 to side 3
-        vec2<u32>(PS, PT), // side 4 to side 4
-        vec2<u32>(F0, PT), // side 4 to side 5
-
-        vec2<u32>(PS, F1), // side 5 to side 0
-        vec2<u32>(PT, F1), // side 5 to side 1
-        vec2<u32>(PT, PS), // side 5 to side 2
-        vec2<u32>(F1, PS), // side 5 to side 3
-        vec2<u32>(F1, PT), // side 5 to side 4
-        vec2<u32>(PS, PT), // side 5 to side 5
+fn inside_quadtree(lod: u32, view_s2: S2Coordinate, frag_s2: S2Coordinate) -> f32 {
+    var EVEN_LIST = array<vec2<u32>, 6u>(
+        vec2<u32>(PS, PT),
+        vec2<u32>(F0, PT),
+        vec2<u32>(F0, PS),
+        vec2<u32>(PT, PS),
+        vec2<u32>(PT, F0),
+        vec2<u32>(PS, F0),
+    );
+    var ODD_LIST = array<vec2<u32>, 6u>(
+        vec2<u32>(PS, PT),
+        vec2<u32>(PS, F1),
+        vec2<u32>(PT, F1),
+        vec2<u32>(PT, PS),
+        vec2<u32>(F1, PS),
+        vec2<u32>(F1, PT),
     );
 
-    let view_s2_coordinate = world_position_to_s2_coordinate(vec4<f32>(view.world_position, 1.0));
-    let view_st = view_s2_coordinate.st;
-    let view_side = view_s2_coordinate.side;
+    let index = (6u + frag_s2.side - view_s2.side) % 6u;
 
-    let s2_coordinate = world_position_to_s2_coordinate(world_position);
-    let st = s2_coordinate.st;
-    let side = s2_coordinate.side;
+    var info: vec2<u32>;
+    var origin_st: vec2<f32>;
+
+    if (view_s2.side % 2u == 0u) { info = EVEN_LIST[index]; }
+    else                         { info =  ODD_LIST[index]; }
+
+    if (info.x == F0)      { origin_st.x = 0.0; }
+    else if (info.x == F1) { origin_st.x = 1.0; }
+    else if (info.x == PS) { origin_st.x = view_s2.st.x; }
+    else if (info.x == PT) { origin_st.x = view_s2.st.y; }
+
+    if (info.y == F0)      { origin_st.y = 0.0; }
+    else if (info.y == F1) { origin_st.y = 1.0; }
+    else if (info.y == PS) { origin_st.y = view_s2.st.x; }
+    else if (info.y == PT) { origin_st.y = view_s2.st.y; }
+
+    let node_count = node_count(lod);
+    let frag_node_coordinate = frag_s2.st * node_count;
+    let origin_node_coordinate = origin_st * node_count;
+
+    let quadtree_size = f32(view_config.node_count);
+    let max_size = ceil(node_count) - quadtree_size;
+    let quadtree_origin = clamp(round(origin_node_coordinate - 0.5 * quadtree_size), vec2<f32>(0.0), vec2<f32>(max_size));
+
+    let dist = floor(frag_node_coordinate) - floor(quadtree_origin);
+
+    return inside_rect(dist, vec2<f32>(0.0), quadtree_size - 1.0);
+}
+
+fn quadtree_outlines(lod: u32, frag_s2: S2Coordinate) -> f32 {
+    let node_coordinate = frag_s2.st * node_count(lod);
+    let atlas_coordinate = node_coordinate % 1.0;
+
+    let thickness = 0.01;
+    let outer = inside_rect(atlas_coordinate, vec2<f32>(0.0)            , 1.0);
+    let inner = inside_rect(atlas_coordinate, vec2<f32>(0.0) + thickness, 1.0 - thickness);
+
+    return outer - inner;
+}
+
+fn show_quadtree(world_position: vec4<f32>) -> vec4<f32> {
+    let view_s2 = world_position_to_s2_coordinate(vec4<f32>(view.world_position, 1.0));
+    let frag_s2 = world_position_to_s2_coordinate(world_position);
 
     let blend = blend(world_position);
     var lod = blend.lod;
@@ -98,84 +107,15 @@ fn show_quadtree(world_position: vec4<f32>) -> vec4<f32> {
 
     var color: vec4<f32> = index_color(lod);
 
-    let node_count = node_count(lod);
+    let inside_quadtree = inside_quadtree(lod, view_s2, frag_s2);
+    color = mix(0.3 * color, color, inside_quadtree);
 
-    let view_node_coordinate = view_st * node_count;
-    let node_coordinate      = st * node_count;
+    let outlines = quadtree_outlines(lod, frag_s2);
+    color = mix(color, index_color(lod) * 0.1, outlines);
 
-
-    if (side == view_side && distance(st, view_st) < 0.005) {
+    if (frag_s2.side == view_s2.side && distance(frag_s2.st, view_s2.st) < 0.005) {
         color = 0.0 * color;
     }
-
-    let thickness = 0.01;
-
-    let atlas_coordinate = node_coordinate % 1.0;
-
-
-    let info = SIDE_MATRIX[6u * view_side + side];
-
-    var test_st: vec2<f32>;
-    if (info.x == F0) { test_st.x = 0.0; }
-    if (info.x == F1) { test_st.x = 1.0; }
-    if (info.x == PS) { test_st.x = view_st.x; }
-    if (info.x == PT) { test_st.x = view_st.y; }
-
-    if (info.y == F0) { test_st.y = 0.0; }
-    if (info.y == F1) { test_st.y = 1.0; }
-    if (info.y == PS) { test_st.y = view_st.x; }
-    if (info.y == PT) { test_st.y = view_st.y; }
-
-    let test_node_coordinate = test_st * node_count;
-
-    let quadtree_size = i32(view_config.node_count);
-    var quadtree_origin = vec2<i32>(round(test_node_coordinate - 0.5 * f32(quadtree_size)));
-
-    quadtree_origin = clamp(quadtree_origin, vec2<i32>(0), vec2<i32>(i32(ceil(node_count)) - quadtree_size));
-
-    let node_under_frag = vec2<i32>(node_coordinate);
-    let dist = node_under_frag - quadtree_origin;
-
-    if (dist.x < 0 || dist.y < 0 || dist.x >= quadtree_size || dist.y >= quadtree_size) {
-        color = 0.3 * color;
-    }
-
-
-
-
-/*    if (side != view_side) {
-        color = 0.3 * color;
-
-
-    }
-    else {
-        let node_count = i32(view_config.node_count);
-        let lower = vec2<i32>(round(view_node_coordinate - 0.5 * f32(view_config.node_count)));
-        let node_under_frag = vec2<i32>(node_coordinate);
-        let dist = node_under_frag - lower;
-
-        if (dist.x < 0 || dist.y < 0 || dist.x >= node_count || dist.y >= node_count) {
-            color = 0.3 * color;
-        }
-    }*/
-
-    let grid_outer = step(vec2<f32>(0.0)            , atlas_coordinate) * step(atlas_coordinate, vec2<f32>(1.0));
-    let grid_inner = step(vec2<f32>(0.0) + thickness, atlas_coordinate) * step(atlas_coordinate, vec2<f32>(1.0) - thickness);
-    let outline = grid_outer.x * grid_outer.y - grid_inner.x * grid_inner.y;
-
-
-
-//        let node_size = node_size(lod);
-//        let grid_position = floor(view.world_position.xz / node_size + 0.5 - f32(view_config.node_count >> 1u)) * node_size;
-//        let grid_size = node_size * f32(view_config.node_count);
-//        let thickness = f32(8u << lod);
-//
-//        let grid_outer = step(grid_position, world_position.xz) * step(world_position.xz, grid_position + grid_size);
-//        let grid_inner = step(grid_position + thickness, world_position.xz) * step(world_position.xz, grid_position + grid_size - thickness);
-//        let outline = grid_outer.x * grid_outer.y - grid_inner.x * grid_inner.y;
-
-    color = mix(color, index_color(lod) * 0.1, outline);
-
 
     return color;
 }
