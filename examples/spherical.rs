@@ -9,11 +9,11 @@ use std::time::Duration;
 
 const TILE_SIZE: u32 = 1000;
 const RADIUS: f32 = 50.0;
-const TEXTURE_SIZE: u32 = 512;
+const TEXTURE_SIZE: u32 = 128;
 const MIP_LEVEL_COUNT: u32 = 1;
 const LOD_COUNT: u32 = 4;
 const HEIGHT: f32 = 200.0;
-const NODE_ATLAS_SIZE: u32 = 100;
+const NODE_ATLAS_SIZE: u32 = 1024;
 const PATH: &str = "earth";
 
 #[derive(AsBindGroup, TypeUuid, TypePath, Clone)]
@@ -92,7 +92,7 @@ fn setup(
     // Configure all the important properties of the terrain, as well as its attachments.
     let config = plugin_config.configure_terrain(
         0.0,
-        TILE_SIZE as f32 / TEXTURE_SIZE as f32,
+        TILE_SIZE as f32 / plugin_config.leaf_node_size as f32,
         RADIUS,
         LOD_COUNT,
         HEIGHT,
@@ -103,10 +103,10 @@ fn setup(
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
     let view_config = TerrainViewConfig {
         tile_scale: 16.0,
-        grid_size: 8,
-        node_count: 10,
+        grid_size: 16,
+        node_count: 3,
         load_distance: 5.0,
-        view_distance: 8.0,
+        view_distance: 14.0,
         ..default()
     };
 
