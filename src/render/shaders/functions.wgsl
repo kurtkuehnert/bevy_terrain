@@ -131,7 +131,7 @@ fn vertex_local_position(tile: Tile, grid_index: u32) -> vec3<f32> {
 
 // https://docs.s2cell.aliddell.com/en/stable/s2_concepts.html#lat-lon-to-s2-cell-id
 // uses adjusted logic to match bevys coordinate system
-fn world_position_to_s2_coordinate(world_position: vec4<f32>) -> S2Coordinate {
+fn s2_from_world_position(world_position: vec4<f32>) -> S2Coordinate {
     let local_position = world_position.xyz;
 
     let direction = normalize(local_position);
@@ -182,25 +182,104 @@ fn world_position_to_s2_coordinate(world_position: vec4<f32>) -> S2Coordinate {
     return S2Coordinate(side, st);
 }
 
+fn s2_project_to_side(s2: S2Coordinate, side: u32) -> S2Coordinate {
+    let F0 = 0u;
+    let F1 = 1u;
+    let PS = 2u;
+    let PT = 3u;
+
+    var EVEN_LIST = array<vec2<u32>, 6u>(
+        vec2<u32>(PS, PT),
+        vec2<u32>(F0, PT),
+        vec2<u32>(F0, PS),
+        vec2<u32>(PT, PS),
+        vec2<u32>(PT, F0),
+        vec2<u32>(PS, F0),
+    );
+    var ODD_LIST = array<vec2<u32>, 6u>(
+        vec2<u32>(PS, PT),
+        vec2<u32>(PS, F1),
+        vec2<u32>(PT, F1),
+        vec2<u32>(PT, PS),
+        vec2<u32>(F1, PS),
+        vec2<u32>(F1, PT),
+    );
+
+    let index = (6u + side - s2.side) % 6u;
+
+    var info: vec2<u32>;
+    var st: vec2<f32>;
+
+    if (s2.side % 2u == 0u) { info = EVEN_LIST[index]; }
+    else                         { info =  ODD_LIST[index]; }
+
+    if (info.x == F0)      { st.x = 0.0; }
+    else if (info.x == F1) { st.x = 1.0; }
+    else if (info.x == PS) { st.x = s2.st.x; }
+    else if (info.x == PT) { st.x = s2.st.y; }
+
+    if (info.y == F0)      { st.y = 0.0; }
+    else if (info.y == F1) { st.y = 1.0; }
+    else if (info.y == PS) { st.y = s2.st.x; }
+    else if (info.y == PT) { st.y = s2.st.y; }
+
+    return S2Coordinate(side, st);
+}
+
 fn nodes_per_side(lod: u32) -> f32 {
     return config.nodes_per_side / f32(1u << lod);
 }
 
-fn lookup_node(lod: u32, world_position: vec4<f32>) -> NodeLookup {
-    let s2_coordinate = world_position_to_s2_coordinate(world_position);
-    let st = s2_coordinate.st;
-    let side = s2_coordinate.side;
+fn node_coordinate(st: vec2<f32>, lod: u32) -> vec2<f32> {
+    return st * nodes_per_side(lod);
+}
 
-    let quadtree_lod = min(lod, config.lod_count - 1u);
-    let nodes_per_side = nodes_per_side(quadtree_lod);
-    let node_coordinate = st * nodes_per_side; // Todo: replace with fract(node_coordinate)
-    let quadtree_coordinate = vec2<i32>(node_coordinate) % i32(view_config.node_count);
+fn inside_rect(position: vec2<f32>, origin: vec2<f32>, size: f32) -> f32 {
+    let inside = step(origin, position) * step(position, origin + size);
 
-    let lookup = textureLoad(quadtree, quadtree_coordinate, side * config.lod_count + quadtree_lod, 0);
+    return inside.x * inside.y;
+}
 
-    let atlas_index      = lookup.x;
+fn inside_quadtree(view_s2: S2Coordinate, frag_s2: S2Coordinate, lod: u32) -> f32 {
+    let frag_coordinate = node_coordinate(frag_s2.st, lod);
+
+    let quadtree_s2 = s2_project_to_side(view_s2, frag_s2.side);
+    let quadtree_coordinate = node_coordinate(quadtree_s2.st, lod);
+    let max_offset = ceil(nodes_per_side(lod)) - f32(view_config.node_count);
+    let quadtree_origin_coordinate = clamp(round(quadtree_coordinate - 0.5 * f32(view_config.node_count)), vec2<f32>(0.0), vec2<f32>(max_offset));
+
+    let dist = floor(frag_coordinate) - floor(quadtree_origin_coordinate);
+
+    return inside_rect(dist, vec2<f32>(0.0), f32(view_config.node_count - 1u));
+}
+
+fn quadtree_lod(world_position: vec4<f32>) -> u32 {
+    let view_s2 = s2_from_world_position(vec4<f32>(view.world_position, 1.0));
+    let frag_s2 = s2_from_world_position(world_position);
+
+    var lod = 0u;
+
+    loop {
+        if (inside_quadtree(view_s2, frag_s2, lod) == 1.0 || lod == config.lod_count - 1u) { break; }
+
+        lod = lod + 1u;
+    }
+
+    return lod;
+}
+
+fn lookup_node(world_position: vec4<f32>, lod: u32) -> NodeLookup {
+    let s2 = s2_from_world_position(world_position);
+
+    let quadtree_lod        = min(lod, config.lod_count - 1u);
+    let quadtree_index      = s2.side * config.lod_count + quadtree_lod;
+    let quadtree_coordinate = vec2<u32>(node_coordinate(s2.st, quadtree_lod)) % view_config.node_count;
+
+    let lookup = textureLoad(quadtree, quadtree_coordinate, quadtree_index, 0);
+
     let atlas_lod        = lookup.y;
-    let atlas_coordinate = node_coordinate - floor(node_coordinate);
+    let atlas_index      = lookup.x;
+    let atlas_coordinate = node_coordinate(s2.st, atlas_lod) % 1.0;
 
     return NodeLookup(atlas_index, atlas_lod, atlas_coordinate);
 }
