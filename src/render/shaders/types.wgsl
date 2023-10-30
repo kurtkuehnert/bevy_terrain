@@ -3,7 +3,7 @@
 struct TerrainConfig {
     lod_count: u32,
     height: f32,
-    leaf_node_count: f32,
+    nodes_per_side: f32,
     leaf_node_size: u32,
     terrain_size: f32,
     radius: f32,

@@ -11,6 +11,120 @@ use bytemuck::{Pod, Zeroable};
 use itertools::iproduct;
 use ndarray::{Array3, Array4};
 
+#[derive(Clone, Copy)]
+enum SideInfo {
+    Fixed0,
+    Fixed1,
+    PositiveS,
+    PositiveT,
+}
+
+impl SideInfo {
+    const EVEN_LIST: [[SideInfo; 2]; 6] = [
+        [SideInfo::PositiveS, SideInfo::PositiveT],
+        [SideInfo::Fixed0, SideInfo::PositiveT],
+        [SideInfo::Fixed0, SideInfo::PositiveS],
+        [SideInfo::PositiveT, SideInfo::PositiveS],
+        [SideInfo::PositiveT, SideInfo::Fixed0],
+        [SideInfo::PositiveS, SideInfo::Fixed0],
+    ];
+    const ODD_LIST: [[SideInfo; 2]; 6] = [
+        [SideInfo::PositiveS, SideInfo::PositiveT],
+        [SideInfo::PositiveS, SideInfo::Fixed1],
+        [SideInfo::PositiveT, SideInfo::Fixed1],
+        [SideInfo::PositiveT, SideInfo::PositiveS],
+        [SideInfo::Fixed1, SideInfo::PositiveS],
+        [SideInfo::Fixed1, SideInfo::PositiveT],
+    ];
+}
+
+#[derive(Clone, Copy)]
+struct S2Coordinate {
+    side: u32,
+    st: Vec2,
+}
+
+impl S2Coordinate {
+    fn from_world_position(world_position: Vec3) -> Self {
+        let local_position = world_position.xyz();
+
+        let direction = local_position.normalize();
+        let abs_direction = direction.abs();
+
+        let (side, uv) = if abs_direction.x > abs_direction.y && abs_direction.x > abs_direction.z {
+            if direction.x < 0.0 {
+                (
+                    0,
+                    Vec2::new(-direction.z / direction.x, direction.y / direction.x),
+                )
+            } else {
+                (
+                    3,
+                    Vec2::new(-direction.y / direction.x, direction.z / direction.x),
+                )
+            }
+        } else if abs_direction.z > abs_direction.y {
+            if direction.z > 0.0 {
+                (
+                    1,
+                    Vec2::new(direction.x / direction.z, -direction.y / direction.z),
+                )
+            } else {
+                (
+                    4,
+                    Vec2::new(direction.y / direction.z, -direction.x / direction.z),
+                )
+            }
+        } else {
+            if direction.y > 0.0 {
+                (
+                    2,
+                    Vec2::new(direction.x / direction.y, direction.z / direction.y),
+                )
+            } else {
+                (
+                    5,
+                    Vec2::new(-direction.z / direction.y, -direction.x / direction.y),
+                )
+            }
+        };
+
+        let st = uv
+            .to_array()
+            .map(|f| {
+                if f > 0.0 {
+                    0.5 * (1.0 + 3.0 * f).sqrt()
+                } else {
+                    1.0 - 0.5 * (1.0 - 3.0 * f).sqrt()
+                }
+            })
+            .into();
+
+        Self { side, st }
+    }
+
+    fn project_to_side(self, side: u32) -> Self {
+        let index = ((6 + side - self.side) % 6) as usize;
+
+        let info = if self.side % 2 == 0 {
+            SideInfo::EVEN_LIST[index]
+        } else {
+            SideInfo::ODD_LIST[index]
+        };
+
+        let st = info
+            .map(|info| match info {
+                SideInfo::Fixed0 => 0.0,
+                SideInfo::Fixed1 => 1.0,
+                SideInfo::PositiveS => self.st.x,
+                SideInfo::PositiveT => self.st.y,
+            })
+            .into();
+
+        Self { side, st }
+    }
+}
+
 /// The current state of a node of a [`Quadtree`].
 ///
 /// This indicates, whether or not the node should be loaded into the [`NodeAtlas`).
@@ -97,8 +211,7 @@ pub struct Quadtree {
     pub(crate) lod_count: u32,
     /// The count of nodes in x and y direction per layer.
     pub(crate) node_count: u32,
-    /// The size of the smallest nodes (with lod 0).
-    leaf_node_size: u32,
+    nodes_per_side: f32,
     /// The distance (measured in node sizes) until which to request nodes to be loaded.
     _load_distance: f32,
     _height: f32,
@@ -120,7 +233,7 @@ impl Quadtree {
         handle: Handle<Image>,
         lod_count: u32,
         node_count: u32,
-        leaf_node_size: u32,
+        nodes_per_side: f32,
         load_distance: f32,
         height: f32,
     ) -> Self {
@@ -128,7 +241,7 @@ impl Quadtree {
             handle,
             lod_count,
             node_count,
-            leaf_node_size,
+            nodes_per_side,
             _load_distance: load_distance,
             _height: height,
             _height_under_viewer: height / 2.0,
@@ -154,89 +267,77 @@ impl Quadtree {
             view_config.quadtree_handle.clone(),
             config.lod_count,
             view_config.node_count,
-            config.leaf_node_size,
+            config.nodes_per_side,
             view_config.load_distance,
             config.height,
         )
     }
 
-    /// Calculates the size of a node.
     #[inline]
-    fn node_size(&self, lod: u32) -> u32 {
-        self.leaf_node_size * (1 << lod)
+    fn nodes_per_side(&self, lod: u32) -> f32 {
+        self.nodes_per_side / (1 << lod) as f32
     }
 
-    /// Traverses the quadtree and updates the node states,
-    /// while selecting newly requested and released nodes.
-    /*
-    pub(crate) fn compute_requests(&mut self, viewer_position: Vec3) {
+    fn origin(&self, quadtree_s2: S2Coordinate, lod: u32) -> UVec2 {
+        let nodes_per_side = self.nodes_per_side(lod);
+        let origin_node_coordinate = quadtree_s2.st * nodes_per_side;
+        let quadtree_size = self.node_count as f32;
+        let max_size = nodes_per_side.ceil() - quadtree_size;
+
+        let quadtree_origin = (origin_node_coordinate - 0.5 * quadtree_size)
+            .round()
+            .clamp(Vec2::splat(0.0), Vec2::splat(max_size));
+
+        quadtree_origin.as_uvec2()
+    }
+
+    pub(crate) fn compute_requests(&mut self, view_position: Vec3) {
+        let view_s2 = S2Coordinate::from_world_position(view_position);
+
         for side in 0..SIDE_COUNT {
+            let quadtree_s2 = view_s2.project_to_side(side);
+
             for lod in 0..self.lod_count {
-                let node_size = self.node_size(lod);
+                let quadtree_origin: UVec2 = self.origin(quadtree_s2, lod);
 
-                // bottom left position of grid in node coordinates
-                let grid_coordinate: IVec2 = (viewer_position.xz() / node_size as f32 + 0.5
-                    - (self.node_count >> 1) as f32)
-                    .as_ivec2();
-
-                for node_coordinate in
-                    iproduct!(0..self.node_count as i32, 0..self.node_count as i32).filter_map(
-                        |(x, y)| {
-                            let coordinate = grid_coordinate + IVec2::new(x, y);
-
-                            if coordinate.x < 0 || coordinate.y < 0 {
-                                None
-                            } else {
-                                Some(NodeCoordinate {
-                                    side,
-                                    lod,
-                                    x: coordinate.x as u32,
-                                    y: coordinate.y as u32,
-                                })
-                            }
-                        },
-                    )
-                {
-                    let node_id = NodeId::from(&node_coordinate);
+                for (x, y) in iproduct!(0..self.node_count, 0..self.node_count) {
+                    let new_node_coordinate = NodeCoordinate {
+                        side,
+                        lod,
+                        x: quadtree_origin.x + x,
+                        y: quadtree_origin.y + y,
+                    };
 
                     let node = &mut self.nodes[[
                         side as usize,
                         lod as usize,
-                        (node_coordinate.x % self.node_count) as usize,
-                        (node_coordinate.y % self.node_count) as usize,
+                        (new_node_coordinate.x % self.node_count) as usize,
+                        (new_node_coordinate.y % self.node_count) as usize,
                     ]];
 
-                    // quadtree slot refers to a new node
-                    if node_id != node.node_id {
+                    // check if quadtree slot refers to a new node
+                    if new_node_coordinate != node.node_coordinate {
                         // release old node
                         if node.state == RequestState::Requested {
-                            self.released_nodes.push(node.node_id);
                             node.state = RequestState::Released;
+                            self.released_nodes.push(node.node_coordinate);
                         }
 
-                        node.node_id = node_id;
+                        node.node_coordinate = new_node_coordinate;
                     }
 
-                    // let local_position =
-                    //     (Vec2::new(node_coordinate.x as f32, node_coordinate.y as f32) + 0.5)
-                    //         * node_size as f32;
-                    // let world_position =
-                    //     Vec3::new(local_position.x, self.height_under_viewer, local_position.y);
-                    // let distance = viewer_position.xyz().distance(world_position);
-                    // let mut demanded = distance < self.load_distance * node_size as f32;
-                    // demanded |= lod == self.lod_count - 1; // always request highest lod
+                    // Todo: figure out whether to request or release the node based on viewer distance
+                    let new_state = RequestState::Requested; // request all nodes
 
-                    let demanded = true; // request all nodes
-
-                    // request or release node based on their distance to the viewer
-                    match (node.state, demanded) {
-                        (RequestState::Released, true) => {
-                            self.requested_nodes.push(node.node_id);
+                    // request or release node based on its distance to the view
+                    match (node.state, new_state) {
+                        (RequestState::Released, RequestState::Requested) => {
                             node.state = RequestState::Requested;
+                            self.requested_nodes.push(node.node_coordinate);
                         }
-                        (RequestState::Requested, false) => {
-                            self.released_nodes.push(node.node_id);
+                        (RequestState::Requested, RequestState::Released) => {
                             node.state = RequestState::Released;
+                            self.released_nodes.push(node.node_coordinate);
                         }
                         (_, _) => {}
                     }
@@ -244,54 +345,31 @@ impl Quadtree {
             }
         }
     }
-    */
-
-    pub(crate) fn compute_requests(&mut self, viewer_position: Vec3) {
-        for (side, lod, x, y) in iproduct!(
-            0..SIDE_COUNT,
-            0..self.lod_count,
-            0..self.node_count,
-            0..self.node_count
-        ) {
-            let node_coordinate = NodeCoordinate { side, lod, x, y };
-
-            let node = &mut self.nodes[[
-                node_coordinate.side as usize,
-                node_coordinate.lod as usize,
-                node_coordinate.x as usize,
-                node_coordinate.y as usize,
-            ]];
-
-            node.node_coordinate = node_coordinate;
-            node.state = RequestState::Requested;
-            self.requested_nodes.push(node.node_coordinate);
-        }
-    }
 
     /// Adjusts the quadtree to the node atlas by updating the entries with the best available nodes.
     fn adjust(&mut self, node_atlas: &NodeAtlas) {
         for ((side, lod, x, y), node) in self.nodes.indexed_iter_mut() {
-            let mut node_coordinate = node.node_coordinate;
+            let mut best_node_coordinate = node.node_coordinate;
 
             let (atlas_index, atlas_lod) = loop {
-                if node_coordinate.lod == self.lod_count
-                    || node_coordinate == NodeCoordinate::INVALID
+                if best_node_coordinate == NodeCoordinate::INVALID
+                    || best_node_coordinate.lod == self.lod_count
                 {
                     // highest lod is not loaded
                     break (INVALID_ATLAS_INDEX, u16::MAX);
                 }
 
-                if let Some(atlas_node) = node_atlas.nodes.get(&node_coordinate) {
+                if let Some(atlas_node) = node_atlas.nodes.get(&best_node_coordinate) {
                     if atlas_node.state == LoadingState::Loaded {
                         // found best loaded node
-                        break (atlas_node.atlas_index, node_coordinate.lod as u16);
+                        break (atlas_node.atlas_index, best_node_coordinate.lod as u16);
                     }
                 }
 
                 // node not loaded, try parent
-                node_coordinate.lod += 1;
-                node_coordinate.x >>= 1;
-                node_coordinate.y >>= 1;
+                best_node_coordinate.lod += 1;
+                best_node_coordinate.x >>= 1;
+                best_node_coordinate.y >>= 1;
             };
 
             self.data[[side * self.lod_count as usize + lod, y, x]] = QuadtreeEntry {
