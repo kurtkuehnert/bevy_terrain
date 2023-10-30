@@ -58,7 +58,7 @@ impl TerrainPluginConfig {
     pub fn configure_terrain(
         &self,
         terrain_size: f32,
-        leaf_node_count: f32,
+        nodes_per_side: f32,
         radius: f32,
         lod_count: u32,
         height: f32,
@@ -78,7 +78,7 @@ impl TerrainPluginConfig {
             lod_count,
             height,
             leaf_node_size: self.leaf_node_size,
-            leaf_node_count,
+            nodes_per_side,
             terrain_size,
             radius,
             node_atlas_size,

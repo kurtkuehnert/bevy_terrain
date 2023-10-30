@@ -1,6 +1,6 @@
 #import bevy_terrain::types VertexInput, VertexOutput, FragmentInput, FragmentOutput, Tile, S2Coordinate
 #import bevy_terrain::bindings config, view_config, tiles, atlas_sampler
-#import bevy_terrain::functions vertex_local_position, approximate_world_position, world_position_to_s2_coordinate, lookup_node, blend, node_count
+#import bevy_terrain::functions vertex_local_position, approximate_world_position, world_position_to_s2_coordinate, lookup_node, blend, nodes_per_side
 #import bevy_terrain::debug index_color, show_tiles, show_lod
 #import bevy_terrain::attachments height_atlas, HEIGHT_SIZE, HEIGHT_SCALE, HEIGHT_OFFSET
 #import bevy_pbr::mesh_view_bindings view
@@ -73,12 +73,12 @@ fn inside_quadtree(lod: u32, view_s2: S2Coordinate, frag_s2: S2Coordinate) -> f3
     else if (info.y == PS) { origin_st.y = view_s2.st.x; }
     else if (info.y == PT) { origin_st.y = view_s2.st.y; }
 
-    let node_count = node_count(lod);
-    let frag_node_coordinate = frag_s2.st * node_count;
-    let origin_node_coordinate = origin_st * node_count;
+    let nodes_per_side = nodes_per_side(lod);
+    let frag_node_coordinate = frag_s2.st * nodes_per_side;
+    let origin_node_coordinate = origin_st * nodes_per_side;
 
     let quadtree_size = f32(view_config.node_count);
-    let max_size = ceil(node_count) - quadtree_size;
+    let max_size = ceil(nodes_per_side) - quadtree_size;
     let quadtree_origin = clamp(round(origin_node_coordinate - 0.5 * quadtree_size), vec2<f32>(0.0), vec2<f32>(max_size));
 
     let dist = floor(frag_node_coordinate) - floor(quadtree_origin);
@@ -87,7 +87,7 @@ fn inside_quadtree(lod: u32, view_s2: S2Coordinate, frag_s2: S2Coordinate) -> f3
 }
 
 fn quadtree_outlines(lod: u32, frag_s2: S2Coordinate) -> f32 {
-    let node_coordinate = frag_s2.st * node_count(lod);
+    let node_coordinate = frag_s2.st * nodes_per_side(lod);
     let atlas_coordinate = node_coordinate % 1.0;
 
     let thickness = 0.01;
@@ -179,16 +179,27 @@ fn fragment(in: FragmentInput) -> FragmentOutput {
     let cube_height = textureSampleLevel(cube_map, atlas_sampler, st, side, 0.0).x;
 
     let blend = blend(in.world_position);
-    let lookup = lookup_node(blend.lod, in.world_position);
+    var lod: u32 = blend.lod;
+
+    let view_s2 = world_position_to_s2_coordinate(vec4<f32>(view.world_position, 1.0));
+    let frag_s2 = world_position_to_s2_coordinate(in.world_position);
+    lod = quadtree_lod(view_s2, frag_s2);
+
+    let lookup = lookup_node(lod, in.world_position);
     let height_coordinate = lookup.atlas_coordinate * HEIGHT_SCALE + HEIGHT_OFFSET;
     let atlas_height = textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0).x;
 
+    let is_outline = quadtree_outlines(lod, frag_s2);
+
     var color: vec4<f32>;
-    color = terrain_color(cube_height);
-    // color = terrain_color(atlas_height);
+    // color = terrain_color(cube_height);
+    color = terrain_color(atlas_height);
+
+    color = mix(color, vec4<f32>(0.0), is_outline);
 
     // color = show_lod(in.world_position);
-    color = show_quadtree(in.world_position);
+    // color = show_quadtree(in.world_position);
+
 
     // color = vec4<f32>(lookup.atlas_coordinate, 0.0, 1.0);
     // color = vec4<f32>(height);
