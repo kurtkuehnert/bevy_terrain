@@ -7,11 +7,11 @@ use bevy::{
 use bevy_terrain::prelude::*;
 use std::time::Duration;
 
-const TILE_SIZE: u32 = 1000;
+const TILE_SIZE: u32 = 4000;
 const RADIUS: f32 = 50.0;
 const TEXTURE_SIZE: u32 = 128;
 const MIP_LEVEL_COUNT: u32 = 1;
-const LOD_COUNT: u32 = 4;
+const LOD_COUNT: u32 = 6;
 const HEIGHT: f32 = 200.0;
 const NODE_ATLAS_SIZE: u32 = 1024;
 const PATH: &str = "earth";
@@ -104,7 +104,7 @@ fn setup(
     let view_config = TerrainViewConfig {
         tile_scale: 16.0,
         grid_size: 16,
-        node_count: 3,
+        node_count: 4,
         load_distance: 5.0,
         view_distance: 14.0,
         ..default()

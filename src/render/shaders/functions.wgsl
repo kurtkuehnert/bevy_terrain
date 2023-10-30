@@ -182,8 +182,8 @@ fn world_position_to_s2_coordinate(world_position: vec4<f32>) -> S2Coordinate {
     return S2Coordinate(side, st);
 }
 
-fn node_count(lod: u32) -> f32 {
-    return config.leaf_node_count / f32(1u << lod);
+fn nodes_per_side(lod: u32) -> f32 {
+    return config.nodes_per_side / f32(1u << lod);
 }
 
 fn lookup_node(lod: u32, world_position: vec4<f32>) -> NodeLookup {
@@ -192,9 +192,9 @@ fn lookup_node(lod: u32, world_position: vec4<f32>) -> NodeLookup {
     let side = s2_coordinate.side;
 
     let quadtree_lod = min(lod, config.lod_count - 1u);
-    let node_count = node_count(quadtree_lod);
-    let node_coordinate = st * node_count; // Todo: replace with fract(node_coordinate)
-    let quadtree_coordinate = vec2<i32>(node_coordinate);
+    let nodes_per_side = nodes_per_side(quadtree_lod);
+    let node_coordinate = st * nodes_per_side; // Todo: replace with fract(node_coordinate)
+    let quadtree_coordinate = vec2<i32>(node_coordinate) % i32(view_config.node_count);
 
     let lookup = textureLoad(quadtree, quadtree_coordinate, side * config.lod_count + quadtree_lod, 0);
 

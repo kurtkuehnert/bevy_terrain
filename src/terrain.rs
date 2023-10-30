@@ -48,7 +48,7 @@ pub struct TerrainConfig {
     pub height: f32,
     /// The size of the smallest nodes (with lod 0).
     pub leaf_node_size: u32, // Todo: reconsider this
-    pub leaf_node_count: f32,
+    pub nodes_per_side: f32,
     /// The size of the terrain.
     pub terrain_size: f32, // Todo: reconsider this
     pub radius: f32,
