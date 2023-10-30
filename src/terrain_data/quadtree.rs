@@ -327,7 +327,7 @@ impl Quadtree {
                     }
 
                     // Todo: figure out whether to request or release the node based on viewer distance
-                    let new_state = RequestState::Requested; // request all nodes
+                    let new_state = RequestState::Requested;
 
                     // request or release node based on its distance to the view
                     match (node.state, new_state) {

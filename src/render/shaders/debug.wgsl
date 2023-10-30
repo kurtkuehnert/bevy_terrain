@@ -1,8 +1,8 @@
 #define_import_path bevy_terrain::debug
 
-#import bevy_terrain::types Tile
+#import bevy_terrain::types Tile, S2Coordinate
 #import bevy_terrain::bindings config, view_config
-#import bevy_terrain::functions morph, blend
+#import bevy_terrain::functions morph, blend, quadtree_lod, inside_rect, node_coordinate, s2_from_world_position
 #import bevy_pbr::mesh_view_bindings view
 
 fn index_color(index: u32) -> vec4<f32> {
@@ -57,4 +57,22 @@ fn show_lod(world_position: vec4<f32>) -> vec4<f32> {
     color.a = 1.0;
 
     return color;
+}
+
+fn quadtree_outlines(world_position: vec4<f32>, lod: u32) -> f32 {
+    let s2 = s2_from_world_position(world_position);
+    let coordinate = node_coordinate(s2.st, lod) % 1.0;
+
+    let thickness = 0.03;
+    let outer = inside_rect(coordinate, vec2<f32>(0.0)            , 1.0);
+    let inner = inside_rect(coordinate, vec2<f32>(0.0) + thickness, 1.0 - thickness);
+
+    return outer - inner;
+}
+
+fn show_quadtree(world_position: vec4<f32>) -> vec4<f32> {
+    let lod = quadtree_lod(world_position);
+    let is_outline = quadtree_outlines(world_position, lod);
+
+    return mix(index_color(lod), vec4<f32>(0.0), is_outline);
 }
