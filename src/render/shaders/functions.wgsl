@@ -182,6 +182,43 @@ fn s2_from_world_position(world_position: vec4<f32>) -> S2Coordinate {
     return S2Coordinate(side, st);
 }
 
+fn s2_to_world_position(s2: S2Coordinate) -> vec4<f32> {
+    var uv = vec2<f32>(0.0);
+
+    if (s2.st.x > 0.5) { uv.x =       (4.0 * pow(s2.st.x, 2.0) - 1.0) / 3.0; }
+    else               { uv.x = (1.0 - 4.0 * pow(1.0 - s2.st.x, 2.0)) / 3.0; }
+
+    if (s2.st.y > 0.5) { uv.y =       (4.0 * pow(s2.st.y, 2.0) - 1.0) / 3.0; }
+    else               { uv.y = (1.0 - 4.0 * pow(1.0 - s2.st.y, 2.0)) / 3.0; }
+
+    var local_position: vec3<f32>;
+
+    if (s2.side == 0u) {
+        local_position = vec3<f32>(-1.0, -uv.y, uv.x);
+    }
+    else if (s2.side == 1u) {
+        local_position = vec3<f32>(uv.x, -uv.y, 1.0);
+    }
+    else if (s2.side == 2u) {
+        local_position = vec3<f32>(uv.x, 1.0, uv.y);
+    }
+    else if (s2.side == 3u) {
+        local_position = vec3<f32>(1.0, -uv.x, uv.y);
+    }
+    else if (s2.side == 4u) {
+        local_position = vec3<f32>(uv.y, -uv.x, -1.0);
+    }
+    else if (s2.side == 5u) {
+        local_position = vec3<f32>(uv.y, -1.0, uv.x);
+    }
+
+    local_position = normalize(local_position);
+
+    let world_position = vec4<f32>(local_position * config.radius, 1.0);
+
+    return world_position;
+}
+
 fn s2_project_to_side(s2: S2Coordinate, side: u32) -> S2Coordinate {
     let F0 = 0u;
     let F1 = 1u;
