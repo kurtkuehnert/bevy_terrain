@@ -179,6 +179,12 @@ impl NodeAtlas {
                     node_coordinate,
                     atlas_index: node.atlas_index,
                 });
+
+                // unused_nodes.push_back(UnusedNode {
+                //     node_coordinate: NodeCoordinate::INVALID,
+                //     atlas_index: node.atlas_index,
+                // });
+                // nodes.remove(&node_coordinate);
             }
         }
 

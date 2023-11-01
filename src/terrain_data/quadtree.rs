@@ -103,6 +103,51 @@ impl S2Coordinate {
         Self { side, st }
     }
 
+    fn from_node_coordinate(node_coordinate: NodeCoordinate, nodes_per_side: f32) -> Self {
+        let st = (Vec2::new(
+            node_coordinate.x as f32 + 0.5,
+            node_coordinate.y as f32 + 0.5,
+        )) / nodes_per_side;
+
+        Self {
+            side: node_coordinate.side,
+            st,
+        }
+    }
+
+    fn to_world_position(self, radius: f32) -> Vec3 {
+        let uv: Vec2 = self
+            .st
+            .to_array()
+            .map(|f| {
+                if f > 0.5 {
+                    (4.0 * f.powi(2) - 1.0) / 3.0
+                } else {
+                    (1.0 - 4.0 * (1.0 - f).powi(2)) / 3.0
+                }
+            })
+            .into();
+
+        Self::uv_to_world_position(uv, self.side, radius)
+    }
+
+    fn uv_to_world_position(uv: Vec2, side: u32, radius: f32) -> Vec3 {
+        let local_position = match side {
+            0 => Vec3::new(-1.0, -uv.y, uv.x),
+            1 => Vec3::new(uv.x, -uv.y, 1.0),
+            2 => Vec3::new(uv.x, 1.0, uv.y),
+            3 => Vec3::new(1.0, -uv.x, uv.y),
+            4 => Vec3::new(uv.y, -uv.x, -1.0),
+            5 => Vec3::new(uv.y, -1.0, uv.x),
+            _ => unreachable!(),
+        }
+        .normalize();
+
+        let world_position = local_position * radius;
+
+        world_position
+    }
+
     fn project_to_side(self, side: u32) -> Self {
         let index = ((6 + side - self.side) % 6) as usize;
 
@@ -212,6 +257,7 @@ pub struct Quadtree {
     /// The count of nodes in x and y direction per layer.
     pub(crate) node_count: u32,
     nodes_per_side: f32,
+    radius: f32,
     /// The distance (measured in node sizes) until which to request nodes to be loaded.
     _load_distance: f32,
     _height: f32,
@@ -236,12 +282,14 @@ impl Quadtree {
         nodes_per_side: f32,
         load_distance: f32,
         height: f32,
+        radius: f32,
     ) -> Self {
         Self {
             handle,
             lod_count,
             node_count,
             nodes_per_side,
+            radius,
             _load_distance: load_distance,
             _height: height,
             _height_under_viewer: height / 2.0,
@@ -270,6 +318,7 @@ impl Quadtree {
             config.nodes_per_side,
             view_config.load_distance,
             config.height,
+            config.radius,
         )
     }
 
@@ -308,6 +357,22 @@ impl Quadtree {
                         y: quadtree_origin.y + y,
                     };
 
+                    // Todo: figure out whether to request or release the node based on viewer distance
+                    let s2 = S2Coordinate::from_node_coordinate(
+                        new_node_coordinate,
+                        self.nodes_per_side(lod),
+                    );
+                    let world_position = s2.to_world_position(self.radius);
+                    let distance = world_position.distance(view_position);
+
+                    let new_state = if distance < self._load_distance * 2.0_f32.powi(lod as i32) {
+                        RequestState::Requested
+                    } else {
+                        RequestState::Released
+                    };
+
+                    // let new_state = RequestState::Requested;
+
                     let node = &mut self.nodes[[
                         side as usize,
                         lod as usize,
@@ -325,9 +390,6 @@ impl Quadtree {
 
                         node.node_coordinate = new_node_coordinate;
                     }
-
-                    // Todo: figure out whether to request or release the node based on viewer distance
-                    let new_state = RequestState::Requested;
 
                     // request or release node based on its distance to the view
                     match (node.state, new_state) {
