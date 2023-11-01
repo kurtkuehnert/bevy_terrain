@@ -1,6 +1,6 @@
 #import bevy_terrain::types VertexInput, VertexOutput, FragmentInput, FragmentOutput, Tile, S2Coordinate
 #import bevy_terrain::bindings config, view_config, tiles, atlas_sampler
-#import bevy_terrain::functions vertex_local_position, approximate_world_position, s2_from_world_position, lookup_node, blend, nodes_per_side, s2_project_to_side, node_coordinate, quadtree_lod, inside_rect
+#import bevy_terrain::functions vertex_local_position, approximate_world_position, s2_from_world_position, lookup_node, blend, nodes_per_side, s2_project_to_side, node_coordinate, quadtree_lod, inside_rect, s2_to_world_position
 #import bevy_terrain::debug index_color, show_tiles, show_lod, quadtree_outlines, show_quadtree
 #import bevy_terrain::attachments height_atlas, HEIGHT_SIZE, HEIGHT_SCALE, HEIGHT_OFFSET
 #import bevy_pbr::mesh_view_bindings view
@@ -40,7 +40,7 @@ fn vertex(in: VertexInput) -> VertexOutput {
 
     let scale = 2.0 * textureSampleLevel(cube_map, atlas_sampler, s2.st, s2.side, 0.0).x - 1.0;
     //let height = 40.0 * sign(scale) * pow(abs(scale), 1.5);
-    let height = 0.0 * sign(scale) * pow(abs(scale), 1.5);
+    let height = 40.0 * sign(scale) * pow(abs(scale), 1.5);
 
     world_position = world_position + vec4<f32>(direction * height, 0.0);
 
@@ -63,7 +63,7 @@ fn fragment(in: FragmentInput) -> FragmentOutput {
 
     let blend = blend(in.world_position);
     var lod = blend.lod;
-    lod = quadtree_lod(in.world_position);
+    // lod = quadtree_lod(in.world_position);
 
     let s2 = s2_from_world_position(in.world_position);
 
@@ -79,11 +79,12 @@ fn fragment(in: FragmentInput) -> FragmentOutput {
     // color = terrain_color(cube_height);
     color = terrain_color(atlas_height);
 
-    // color = mix(color, 0.0 * index_color(lookup.atlas_lod), is_outline);
-    // color = show_lod(in.world_position);
-    // color = show_quadtree(in.world_position);
-
+    // color = mix(color, show_lod(in.world_position), 0.5);
     // color = index_color(lookup.atlas_lod);
+    // color = mix(color, show_quadtree(in.world_position), 1.0);
+
+    color = mix(color, 0.1 * index_color(lookup.atlas_lod), is_outline);
+
     // color = vec4<f32>(lookup.atlas_coordinate, 0.0, 1.0);
     // color = vec4<f32>(height);
     // color = lod_color(side);
