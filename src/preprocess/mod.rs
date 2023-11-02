@@ -115,7 +115,7 @@ impl Preprocessor {
 
         let height_directory = format_directory(&self.path, "height");
 
-        reset_directory(&height_directory);
+        // reset_directory(&height_directory);
 
         let temp = split_tiles(&height_directory, tile, &height_attachment);
 

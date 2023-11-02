@@ -46,10 +46,10 @@ fn show_lod(world_position: vec4<f32>) -> vec4<f32> {
     let viewer_distance = distance(view.world_position.xyz, world_position.xyz);
 
     for (var lod = 0u; lod < config.lod_count; lod = lod + 1u) {
-        let circle = f32(2u << lod) * 2.0 *  view_config.view_distance;
-        let thickness = 0.5 * f32(1u << lod);
+        let threshold_distance = f32(2u << lod) * view_config.blend_distance;
+        let thickness = f32(1u << lod);
 
-        if (viewer_distance < circle && circle - thickness < viewer_distance) {
+        if (viewer_distance < threshold_distance && threshold_distance - thickness < viewer_distance) {
             color = index_color(lod) * 0.1;
         }
     }

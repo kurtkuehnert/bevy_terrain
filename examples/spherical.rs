@@ -7,14 +7,25 @@ use bevy::{
 use bevy_terrain::prelude::*;
 use std::time::Duration;
 
-const TILE_SIZE: u32 = 4000;
+// const TILE_SIZE: u32 = 4000;
+// const TILE_FORMAT: FileFormat = FileFormat::PNG;
+// const RADIUS: f32 = 50.0;
+// const TEXTURE_SIZE: u32 = 128;
+// const MIP_LEVEL_COUNT: u32 = 1;
+// const LOD_COUNT: u32 = 6;
+// const HEIGHT: f32 = 200.0;
+// const NODE_ATLAS_SIZE: u32 = 2048;
+// const PATH: &str = "earth_4k";
+
+const TILE_SIZE: u32 = 30000;
+const TILE_FORMAT: FileFormat = FileFormat::TIF;
 const RADIUS: f32 = 50.0;
-const TEXTURE_SIZE: u32 = 128;
-const MIP_LEVEL_COUNT: u32 = 1;
-const LOD_COUNT: u32 = 6;
+const TEXTURE_SIZE: u32 = 512;
+const MIP_LEVEL_COUNT: u32 = 3;
+const LOD_COUNT: u32 = 8;
 const HEIGHT: f32 = 200.0;
 const NODE_ATLAS_SIZE: u32 = 2048;
-const PATH: &str = "earth";
+const PATH: &str = "earth_30k";
 
 #[derive(AsBindGroup, TypeUuid, TypePath, Clone)]
 #[uuid = "003e1d5d-241c-45a6-8c25-731dee22d820"]
@@ -79,9 +90,9 @@ fn setup(
         &plugin_config,
         TileConfig {
             side: 0,
-            path: "assets/earth/source/height".to_string(),
+            path: format!("assets/{PATH}/source/height"),
             size: TILE_SIZE,
-            file_format: FileFormat::PNG,
+            file_format: TILE_FORMAT,
         },
     );
 
@@ -102,11 +113,11 @@ fn setup(
 
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
     let view_config = TerrainViewConfig {
-        tile_scale: 16.0,
         grid_size: 16,
         node_count: 8,
-        load_distance: 16.0,
-        view_distance: 3.0,
+        load_distance: 12.0,
+        morph_distance: 8.0,
+        blend_distance: 2.0,
         ..default()
     };
 
