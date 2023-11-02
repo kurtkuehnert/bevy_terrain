@@ -28,11 +28,13 @@ impl Plugin for TerrainDebugPlugin {
 #[derive(Clone, Resource)]
 pub struct DebugTerrain {
     pub wireframe: bool,
-    pub show_tiles: bool,
     pub show_lod: bool,
     pub show_uv: bool,
-    pub show_nodes: bool,
+    pub show_tiles: bool,
+    pub show_quadtree: bool,
     pub mesh_morph: bool,
+    pub layer_blend: bool,
+    pub quadtree_lod: bool,
     pub albedo: bool,
     pub bright: bool,
     pub lighting: bool,
@@ -47,11 +49,13 @@ impl Default for DebugTerrain {
     fn default() -> Self {
         Self {
             wireframe: false,
-            show_tiles: false,
             show_lod: false,
             show_uv: false,
-            show_nodes: false,
+            show_tiles: false,
+            show_quadtree: false,
             mesh_morph: true,
+            layer_blend: true,
+            quadtree_lod: false,
             albedo: false,
             bright: false,
             lighting: true,
@@ -76,13 +80,6 @@ pub fn toggle_debug(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTerrain>)
             if debug.wireframe { "on" } else { "off" }
         )
     }
-    if input.just_pressed(KeyCode::P) {
-        debug.show_tiles = !debug.show_tiles;
-        println!(
-            "Toggled the tile view {}.",
-            if debug.show_tiles { "on" } else { "off" }
-        )
-    }
     if input.just_pressed(KeyCode::L) {
         debug.show_lod = !debug.show_lod;
         println!(
@@ -97,18 +94,39 @@ pub fn toggle_debug(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTerrain>)
             if debug.show_uv { "on" } else { "off" }
         )
     }
-    if input.just_pressed(KeyCode::C) {
-        debug.show_nodes = !debug.show_nodes;
+    if input.just_pressed(KeyCode::Y) {
+        debug.show_tiles = !debug.show_tiles;
         println!(
-            "Toggled the node view {}.",
-            if debug.show_nodes { "on" } else { "off" }
+            "Toggled the tile view {}.",
+            if debug.show_tiles { "on" } else { "off" }
         )
     }
-    if input.just_pressed(KeyCode::D) {
+    if input.just_pressed(KeyCode::Q) {
+        debug.show_quadtree = !debug.show_quadtree;
+        println!(
+            "Toggled the quadtree view {}.",
+            if debug.show_quadtree { "on" } else { "off" }
+        )
+    }
+    if input.just_pressed(KeyCode::M) {
         debug.mesh_morph = !debug.mesh_morph;
         println!(
             "Toggled the mesh morph {}.",
             if debug.mesh_morph { "on" } else { "off" }
+        )
+    }
+    if input.just_pressed(KeyCode::K) {
+        debug.layer_blend = !debug.layer_blend;
+        println!(
+            "Toggled the layer blend {}.",
+            if debug.layer_blend { "on" } else { "off" }
+        )
+    }
+    if input.just_pressed(KeyCode::H) {
+        debug.quadtree_lod = !debug.quadtree_lod;
+        println!(
+            "Toggled the quadtree lod {}.",
+            if debug.quadtree_lod { "on" } else { "off" }
         )
     }
     if input.just_pressed(KeyCode::A) {
@@ -174,10 +192,25 @@ pub fn change_config(
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
 ) {
     for view_config in &mut view_configs.0.values_mut() {
+        if input.just_pressed(KeyCode::N) {
+            view_config.blend_distance -= 0.25;
+            println!(
+                "Decreased the blend distance to {}.",
+                view_config.blend_distance
+            );
+        }
+        if input.just_pressed(KeyCode::E) {
+            view_config.blend_distance += 0.25;
+            println!(
+                "Increased the blend distance to {}.",
+                view_config.blend_distance
+            );
+        }
+
         if input.just_pressed(KeyCode::I) {
             view_config.morph_distance -= 0.25;
             println!(
-                "Decreased the view distance to {}.",
+                "Decreased the morph distance to {}.",
                 view_config.morph_distance
             );
         }
@@ -189,11 +222,11 @@ pub fn change_config(
             );
         }
 
-        if input.just_pressed(KeyCode::N) && view_config.grid_size > 2 {
+        if input.just_pressed(KeyCode::X) && view_config.grid_size > 2 {
             view_config.grid_size -= 2;
             println!("Decreased the grid size to {}.", view_config.grid_size);
         }
-        if input.just_pressed(KeyCode::E) {
+        if input.just_pressed(KeyCode::J) {
             view_config.grid_size += 2;
             println!("Increased the grid size to {}.", view_config.grid_size);
         }

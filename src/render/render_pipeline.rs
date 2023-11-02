@@ -72,18 +72,20 @@ bitflags::bitflags! {
         const NONE               = 0;
         const SPHERICAL          = (1 <<  0);
         const WIREFRAME          = (1 <<  1);
-        const SHOW_TILES         = (1 <<  2);
-        const SHOW_LOD           = (1 <<  3);
-        const SHOW_UV            = (1 <<  4);
-        const SHOW_NODES         = (1 <<  5);
+        const SHOW_LOD           = (1 <<  2);
+        const SHOW_UV            = (1 <<  3);
+        const SHOW_TILES         = (1 <<  4);
+        const SHOW_QUADTREE      = (1 <<  5);
         const MESH_MORPH         = (1 <<  6);
-        const ALBEDO             = (1 <<  7);
-        const BRIGHT             = (1 <<  8);
-        const LIGHTING           = (1 <<  9);
-        const SAMPLE_GRAD        = (1 << 10);
-        const TEST1              = (1 << 11);
-        const TEST2              = (1 << 12);
-        const TEST3              = (1 << 13);
+        const LAYER_BLEND        = (1 <<  7);
+        const QUADTREE_LOD       = (1 <<  8);
+        const ALBEDO             = (1 <<  9);
+        const BRIGHT             = (1 << 10);
+        const LIGHTING           = (1 << 11);
+        const SAMPLE_GRAD        = (1 << 12);
+        const TEST1              = (1 << 13);
+        const TEST2              = (1 << 14);
+        const TEST3              = (1 << 15);
 
         const MSAA_RESERVED_BITS = TerrainPipelineFlags::MSAA_MASK_BITS << TerrainPipelineFlags::MSAA_SHIFT_BITS;
     }
@@ -104,20 +106,26 @@ impl TerrainPipelineFlags {
         if debug.wireframe {
             key |= TerrainPipelineFlags::WIREFRAME;
         }
-        if debug.show_tiles {
-            key |= TerrainPipelineFlags::SHOW_TILES;
-        }
         if debug.show_lod {
             key |= TerrainPipelineFlags::SHOW_LOD;
         }
         if debug.show_uv {
             key |= TerrainPipelineFlags::SHOW_UV;
         }
-        if debug.show_nodes {
-            key |= TerrainPipelineFlags::SHOW_NODES;
+        if debug.show_tiles {
+            key |= TerrainPipelineFlags::SHOW_TILES;
+        }
+        if debug.show_quadtree {
+            key |= TerrainPipelineFlags::SHOW_QUADTREE;
         }
         if debug.mesh_morph {
             key |= TerrainPipelineFlags::MESH_MORPH;
+        }
+        if debug.layer_blend {
+            key |= TerrainPipelineFlags::LAYER_BLEND;
+        }
+        if debug.quadtree_lod {
+            key |= TerrainPipelineFlags::QUADTREE_LOD;
         }
         if debug.albedo {
             key |= TerrainPipelineFlags::ALBEDO;
@@ -161,20 +169,26 @@ impl TerrainPipelineFlags {
         if (self.bits() & TerrainPipelineFlags::SPHERICAL.bits()) != 0 {
             shader_defs.push("SPHERICAL".into());
         }
-        if (self.bits() & TerrainPipelineFlags::SHOW_TILES.bits()) != 0 {
-            shader_defs.push("SHOW_TILES".into());
-        }
         if (self.bits() & TerrainPipelineFlags::SHOW_LOD.bits()) != 0 {
             shader_defs.push("SHOW_LOD".into());
         }
         if (self.bits() & TerrainPipelineFlags::SHOW_UV.bits()) != 0 {
             shader_defs.push("SHOW_UV".into());
         }
-        if (self.bits() & TerrainPipelineFlags::SHOW_NODES.bits()) != 0 {
-            shader_defs.push("SHOW_NODES".into());
+        if (self.bits() & TerrainPipelineFlags::SHOW_TILES.bits()) != 0 {
+            shader_defs.push("SHOW_TILES".into());
+        }
+        if (self.bits() & TerrainPipelineFlags::SHOW_QUADTREE.bits()) != 0 {
+            shader_defs.push("SHOW_QUADTREE".into());
         }
         if (self.bits() & TerrainPipelineFlags::MESH_MORPH.bits()) != 0 {
             shader_defs.push("MESH_MORPH".into());
+        }
+        if (self.bits() & TerrainPipelineFlags::LAYER_BLEND.bits()) != 0 {
+            shader_defs.push("LAYER_BLEND".into());
+        }
+        if (self.bits() & TerrainPipelineFlags::QUADTREE_LOD.bits()) != 0 {
+            shader_defs.push("QUADTREE_LOD".into());
         }
         if (self.bits() & TerrainPipelineFlags::ALBEDO.bits()) != 0 {
             shader_defs.push("ALBEDO".into());
@@ -369,8 +383,8 @@ pub(crate) fn queue_terrain<M: Material>(
                     flags |= TerrainPipelineFlags::from_debug(debug);
                 } else {
                     flags |= TerrainPipelineFlags::LIGHTING
-                        | TerrainPipelineFlags::SHOW_NODES
                         | TerrainPipelineFlags::MESH_MORPH
+                        | TerrainPipelineFlags::LAYER_BLEND
                         | TerrainPipelineFlags::SAMPLE_GRAD;
                 }
 
