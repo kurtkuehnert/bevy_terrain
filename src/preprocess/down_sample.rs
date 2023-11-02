@@ -147,6 +147,10 @@ pub(crate) fn down_sample_layer(
 ) {
     first.product(last).for_each(|(x, y)| {
         for side in 0..6 {
+            println!(
+                "Down sampling node at layer{lod} on side {side}, at position ({x}/{}, {y}/{})",
+                last.x, last.y
+            );
             let node_coordinate = NodeCoordinate { side, lod, x, y };
             let node_path = format_node_path(directory, &node_coordinate);
             let mut node_image = load_or_create_node(&node_path, attachment);

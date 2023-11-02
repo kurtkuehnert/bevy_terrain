@@ -3,7 +3,7 @@ use crate::{
         INDIRECT_BUFFER_SIZE, PARAMETER_BUFFER_SIZE, PREPARE_INDIRECT_LAYOUT, REFINE_TILES_LAYOUT,
         TERRAIN_VIEW_CONFIG_SIZE, TERRAIN_VIEW_LAYOUT, TILE_SIZE,
     },
-    terrain::{Terrain, TerrainConfig},
+    terrain::Terrain,
     terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
 };
 use bevy::{
@@ -30,29 +30,27 @@ pub(crate) struct TerrainViewConfigUniform {
     node_count: u32,
     tile_count: u32,
     pub(crate) refinement_count: u32,
-    tile_scale: f32,
     grid_size: f32,
     vertices_per_row: u32,
     vertices_per_tile: u32,
-    view_distance: f32,
+    morph_distance: f32,
+    blend_distance: f32,
     morph_range: f32,
     blend_range: f32,
 }
 
 impl TerrainViewConfigUniform {
-    fn new(config: &TerrainConfig, view_config: &TerrainViewConfig) -> Self {
-        let view_distance = view_config.view_distance * config.leaf_node_size as f32;
-
+    fn new(view_config: &TerrainViewConfig) -> Self {
         TerrainViewConfigUniform {
             height_under_viewer: view_config.height_under_viewer,
             node_count: view_config.node_count,
             tile_count: view_config.tile_count,
             refinement_count: view_config.refinement_count,
-            tile_scale: view_config.tile_scale,
             grid_size: view_config.grid_size as f32,
             vertices_per_row: 2 * (view_config.grid_size + 2),
             vertices_per_tile: 2 * view_config.grid_size * (view_config.grid_size + 2),
-            view_distance: view_config.view_distance,
+            morph_distance: view_config.morph_distance,
+            blend_distance: view_config.blend_distance,
             morph_range: view_config.morph_range,
             blend_range: view_config.blend_range,
         }
@@ -218,15 +216,10 @@ pub(crate) fn initialize_terrain_view_data(
 
 pub(crate) fn extract_terrain_view_config(
     mut view_config_uniforms: ResMut<TerrainViewComponents<TerrainViewConfigUniform>>,
-    configs: Extract<Query<&TerrainConfig>>,
     view_configs: Extract<Res<TerrainViewComponents<TerrainViewConfig>>>,
 ) {
     for (&(terrain, view), view_config) in &view_configs.0 {
-        let config = configs.get(terrain).unwrap();
-        view_config_uniforms.insert(
-            (terrain, view),
-            TerrainViewConfigUniform::new(config, view_config),
-        )
+        view_config_uniforms.insert((terrain, view), TerrainViewConfigUniform::new(view_config))
     }
 }
 

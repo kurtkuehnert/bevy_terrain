@@ -26,9 +26,9 @@ var<storage, read_write> parameters: Parameters;
 // Todo: figure out how to remove this duplicate
 fn morph_threshold_distance(tile: Tile) -> f32 {
 #ifdef SPHERICAL
-    return tile.size * config.radius * view_config.view_distance;
+    return tile.size * config.radius * view_config.morph_distance;
 #else
-    return tile.size * config.terrain_size * view_config.view_distance;
+    return tile.size * config.terrain_size * view_config.morph_distance;
 #endif
 }
 

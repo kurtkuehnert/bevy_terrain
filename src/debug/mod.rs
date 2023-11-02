@@ -174,27 +174,18 @@ pub fn change_config(
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
 ) {
     for view_config in &mut view_configs.0.values_mut() {
-        if input.just_pressed(KeyCode::H) && view_config.tile_scale > 0.25 {
-            view_config.tile_scale /= 2.0;
-            println!("Decreased the tile scale to {}.", view_config.tile_scale);
-        }
-        if input.just_pressed(KeyCode::J) {
-            view_config.tile_scale *= 2.0;
-            println!("Increased the tile scale to {}.", view_config.tile_scale)
-        }
-
         if input.just_pressed(KeyCode::I) {
-            view_config.view_distance -= 0.25;
+            view_config.morph_distance -= 0.25;
             println!(
                 "Decreased the view distance to {}.",
-                view_config.view_distance
+                view_config.morph_distance
             );
         }
         if input.just_pressed(KeyCode::O) {
-            view_config.view_distance += 0.25;
+            view_config.morph_distance += 0.25;
             println!(
                 "Increased the view distance to {}.",
-                view_config.view_distance
+                view_config.morph_distance
             );
         }
 

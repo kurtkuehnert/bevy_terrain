@@ -259,7 +259,7 @@ pub struct Quadtree {
     nodes_per_side: f32,
     radius: f32,
     /// The distance (measured in node sizes) until which to request nodes to be loaded.
-    _load_distance: f32,
+    load_distance: f32,
     _height: f32,
     _height_under_viewer: f32,
     /// The internal node states of the quadtree.
@@ -290,7 +290,7 @@ impl Quadtree {
             node_count,
             nodes_per_side,
             radius,
-            _load_distance: load_distance,
+            load_distance,
             _height: height,
             _height_under_viewer: height / 2.0,
             data: Array3::default((
@@ -365,7 +365,7 @@ impl Quadtree {
                     let world_position = s2.to_world_position(self.radius);
                     let distance = world_position.distance(view_position);
 
-                    let new_state = if distance < self._load_distance * 2.0_f32.powi(lod as i32) {
+                    let new_state = if distance < self.load_distance * 2.0_f32.powi(lod as i32) {
                         RequestState::Requested
                     } else {
                         RequestState::Released
