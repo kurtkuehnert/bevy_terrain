@@ -305,6 +305,10 @@ fn quadtree_lod(world_position: vec4<f32>) -> u32 {
 }
 
 fn lookup_node(world_position: vec4<f32>, lod: u32) -> NodeLookup {
+#ifdef QUADTREE_LOD
+    let lod = quadtree_lod(world_position);
+#endif
+
     let s2 = s2_from_world_position(world_position);
 
     let quadtree_lod        = min(lod, config.lod_count - 1u);

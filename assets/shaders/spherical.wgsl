@@ -45,19 +45,19 @@ fn vertex(in: VertexInput) -> VertexOutput {
     let local_position = vertex_local_position(tile, grid_index);
     var world_position = approximate_world_position(local_position);
 
+#ifdef TEST1
     // sample cube map
     let s2 = s2_from_world_position(world_position);
     let cube_height = textureSampleLevel(cube_map, atlas_sampler, s2.st, s2.side, 0.0).x;
-
+    world_position = terrain_world_position(cube_height, local_position);
+#else
     // sample chunked clipmap
     var lod = blend(world_position).lod;
-    // lod = quadtree_lod(world_position);
     let lookup = lookup_node(world_position, lod);
     let height_coordinate = lookup.atlas_coordinate * HEIGHT_SCALE + HEIGHT_OFFSET;
     let atlas_height = textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0).x;
-
-    world_position = terrain_world_position(cube_height, local_position);
     world_position = terrain_world_position(atlas_height, local_position);
+#endif
 
     var color: vec4<f32>;
     color = show_tiles(tile, world_position);
@@ -76,13 +76,8 @@ fn vertex(in: VertexInput) -> VertexOutput {
 fn fragment(in: FragmentInput) -> FragmentOutput {
     var height: f32;
 
-    // sample cube map
-    let s2 = s2_from_world_position(in.world_position);
-    let cube_height = textureSampleLevel(cube_map, atlas_sampler, s2.st, s2.side, 0.0).x;
-
     // sample chunked clipmap
-    var lod = blend(in.world_position).lod;
-    // lod = quadtree_lod(in.world_position);
+    let lod = blend(in.world_position).lod;
     let lookup = lookup_node(in.world_position, lod);
     let height_coordinate = lookup.atlas_coordinate * HEIGHT_SCALE + HEIGHT_OFFSET;
     let atlas_height = textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0).x;
@@ -90,21 +85,29 @@ fn fragment(in: FragmentInput) -> FragmentOutput {
     let is_outline = quadtree_outlines(in.world_position, lod);
 
     var color: vec4<f32>;
-    // color = terrain_color(cube_height);
+    let opacity = 0.8;
+
+#ifdef TEST1
+    // sample cube map
+    let s2 = s2_from_world_position(in.world_position);
+    let cube_height = textureSampleLevel(cube_map, atlas_sampler, s2.st, s2.side, 0.0).x;
+    color = terrain_color(cube_height);
+#else
     color = terrain_color(atlas_height);
+#endif
 
-    // color = mix(color, show_lod(in.world_position), 0.5);
-    // color = index_color(lookup.atlas_lod);
-    // color = mix(color, show_quadtree(in.world_position), 1.0);
-
-    // color = mix(color, 0.1 * index_color(lookup.atlas_lod), is_outline);
-
-    // color = vec4<f32>(lookup.atlas_coordinate, 0.0, 1.0);
-    // color = vec4<f32>(height);
-    // color = lod_color(side);
-    // color = vec4<f32>(st.x, st.y, 0.0, 1.0);
-    // color = vec4<f32>(height_coordinate.x, height_coordinate.y, 0.0, 1.0);
-    // color = in.debug_color;
+#ifdef SHOW_LOD
+    color = mix(color, show_lod(in.world_position, lookup.atlas_lod), opacity);
+#endif
+#ifdef SHOW_UV
+    color = mix(color, vec4<f32>(lookup.atlas_coordinate, 0.0, 1.0), opacity);
+#endif
+#ifdef SHOW_TILES
+    color = mix(color, in.debug_color, opacity);
+#endif
+#ifdef SHOW_QUADTREE
+    color = mix(color, show_quadtree(in.world_position), opacity);
+#endif
 
     return FragmentOutput(color);
 }

@@ -37,24 +37,16 @@ fn show_tiles(tile: Tile, world_position: vec4<f32>) -> vec4<f32> {
     return color;
 }
 
-fn show_lod(world_position: vec4<f32>) -> vec4<f32> {
+fn show_lod(world_position: vec4<f32>, atlas_lod: u32) -> vec4<f32> {
+#ifdef QUADTREE_LOD
+    let is_outline = quadtree_outlines(world_position, atlas_lod);
+    let color = mix(index_color(atlas_lod), vec4<f32>(0.0), is_outline);
+#else
     let blend = blend(world_position);
-    let lod = blend.lod;
-
-    var color = index_color(lod);
-
-    let viewer_distance = distance(view.world_position.xyz, world_position.xyz);
-
-    for (var lod = 0u; lod < config.lod_count; lod = lod + 1u) {
-        let threshold_distance = f32(2u << lod) * view_config.blend_distance;
-        let thickness = f32(1u << lod);
-
-        if (viewer_distance < threshold_distance && threshold_distance - thickness < viewer_distance) {
-            color = index_color(lod) * 0.1;
-        }
-    }
-
-    color.a = 1.0;
+    let is_outline = quadtree_outlines(world_position, blend.lod);
+    var color = mix(index_color(blend.lod), vec4<f32>(1.0), 1.0 - blend.ratio);
+    color = mix(color, 0.1 * color, is_outline);
+#endif
 
     return color;
 }

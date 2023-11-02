@@ -53,6 +53,7 @@ fn main() {
     // bevy_terrain::preprocess::cube_map::create_cube_map();
 
     App::new()
+        .insert_resource(ClearColor(Color::rgb_u8(43, 44, 47)))
         .add_plugins((
             DefaultPlugins.set(AssetPlugin {
                 watch_for_changes: ChangeWatcher::with_delay(Duration::from_millis(200)), // enable hot reloading for shader easy customization
@@ -135,7 +136,13 @@ fn setup(
         .spawn((
             TerrainView,
             DebugCamera::default(),
-            Camera3dBundle::default(),
+            Camera3dBundle {
+                projection: Projection::Perspective(PerspectiveProjection {
+                    near: 0.001,
+                    ..default()
+                }),
+                ..default()
+            },
         ))
         .id();
 
