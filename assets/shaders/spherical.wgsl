@@ -10,6 +10,17 @@ var cube_map: texture_2d_array<f32>;
 @group(3) @binding(1)
 var gradient: texture_1d<f32>;
 
+fn terrain_world_position(height: f32, local_position: vec3<f32>) -> vec4<f32> {
+    let scale = 2.0 * height - 1.0;
+
+    let height = 2.0 * scale;
+
+    let direction = normalize(local_position);
+    let local_position = local_position + vec3<f32>(direction * height);
+
+    return vec4<f32>(local_position, 1.0);
+}
+
 fn terrain_color(height: f32) -> vec4<f32> {
     let scale = 2.0 * height - 1.0;
 
@@ -34,15 +45,19 @@ fn vertex(in: VertexInput) -> VertexOutput {
     let local_position = vertex_local_position(tile, grid_index);
     var world_position = approximate_world_position(local_position);
 
-    let direction = normalize(local_position);
-
+    // sample cube map
     let s2 = s2_from_world_position(world_position);
+    let cube_height = textureSampleLevel(cube_map, atlas_sampler, s2.st, s2.side, 0.0).x;
 
-    let scale = 2.0 * textureSampleLevel(cube_map, atlas_sampler, s2.st, s2.side, 0.0).x - 1.0;
-    //let height = 40.0 * sign(scale) * pow(abs(scale), 1.5);
-    let height = 40.0 * sign(scale) * pow(abs(scale), 1.5);
+    // sample chunked clipmap
+    var lod = blend(world_position).lod;
+    // lod = quadtree_lod(world_position);
+    let lookup = lookup_node(world_position, lod);
+    let height_coordinate = lookup.atlas_coordinate * HEIGHT_SCALE + HEIGHT_OFFSET;
+    let atlas_height = textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0).x;
 
-    world_position = world_position + vec4<f32>(direction * height, 0.0);
+    world_position = terrain_world_position(cube_height, local_position);
+    world_position = terrain_world_position(atlas_height, local_position);
 
     var color: vec4<f32>;
     color = show_tiles(tile, world_position);
@@ -61,14 +76,13 @@ fn vertex(in: VertexInput) -> VertexOutput {
 fn fragment(in: FragmentInput) -> FragmentOutput {
     var height: f32;
 
-    let blend = blend(in.world_position);
-    var lod = blend.lod;
-    // lod = quadtree_lod(in.world_position);
-
+    // sample cube map
     let s2 = s2_from_world_position(in.world_position);
-
     let cube_height = textureSampleLevel(cube_map, atlas_sampler, s2.st, s2.side, 0.0).x;
 
+    // sample chunked clipmap
+    var lod = blend(in.world_position).lod;
+    // lod = quadtree_lod(in.world_position);
     let lookup = lookup_node(in.world_position, lod);
     let height_coordinate = lookup.atlas_coordinate * HEIGHT_SCALE + HEIGHT_OFFSET;
     let atlas_height = textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0).x;
@@ -83,7 +97,7 @@ fn fragment(in: FragmentInput) -> FragmentOutput {
     // color = index_color(lookup.atlas_lod);
     // color = mix(color, show_quadtree(in.world_position), 1.0);
 
-    color = mix(color, 0.1 * index_color(lookup.atlas_lod), is_outline);
+    // color = mix(color, 0.1 * index_color(lookup.atlas_lod), is_outline);
 
     // color = vec4<f32>(lookup.atlas_coordinate, 0.0, 1.0);
     // color = vec4<f32>(height);

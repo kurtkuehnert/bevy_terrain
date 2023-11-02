@@ -138,6 +138,10 @@ pub(crate) fn stitch_layer(
 
     for (x, y) in first.product(last) {
         for side in 0..6 {
+            println!(
+                "Stitching node at layer{lod} on side {side}, at position ({x}/{}, {y}/{})",
+                last.x, last.y
+            );
             let node_coordinate = NodeCoordinate { side, lod, x, y };
             let node_path = format_node_path(directory, &node_coordinate);
             let mut node_image = skip_none!(load_image(&node_path, attachment.file_format));

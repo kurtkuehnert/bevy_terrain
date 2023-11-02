@@ -79,9 +79,9 @@ fn tile_local_position(tile: Tile, uv_offset: vec2<f32>) -> vec3<f32> {
 
 fn morph_threshold_distance(tile: Tile) -> f32 {
 #ifdef SPHERICAL
-    return tile.size * config.radius * view_config.view_distance;
+    return tile.size * config.radius * view_config.morph_distance;
 #else
-    return tile.size * config.terrain_size * view_config.view_distance;
+    return tile.size * config.terrain_size * view_config.morph_distance;
 #endif
 }
 
@@ -95,8 +95,7 @@ fn morph(tile: Tile, world_position: vec4<f32>) -> f32 {
 
 fn blend(world_position: vec4<f32>) -> Blend {
     let viewer_distance = distance(world_position.xyz, view.world_position.xyz);
-    let threshold_distance = 2.0 * view_config.view_distance;
-    let log_distance = max(log2(viewer_distance / threshold_distance), 0.0);
+    let log_distance = max(log2(viewer_distance / view_config.blend_distance), 0.0);
     let ratio = (1.0 - log_distance % 1.0) / view_config.blend_range;
 
     return Blend(u32(log_distance), ratio);

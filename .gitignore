@@ -2,4 +2,5 @@
 target
 assets/*/data/*
 assets/*/config.tc
+assets/earth_30k
 Cargo.lock

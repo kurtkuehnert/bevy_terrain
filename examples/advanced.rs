@@ -108,7 +108,7 @@ fn setup(
         grid_size: 4,
         node_count: 10,
         load_distance: 5.0,
-        view_distance: 4.0,
+        morph_distance: 4.0,
         ..default()
     };
 
