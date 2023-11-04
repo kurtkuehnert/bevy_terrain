@@ -13,7 +13,7 @@ var gradient: texture_1d<f32>;
 fn terrain_world_position(height: f32, local_position: vec3<f32>) -> vec4<f32> {
     let scale = 2.0 * height - 1.0;
 
-    let height = 2.0 * scale;
+    let height = config.height * scale;
 
     let direction = normalize(local_position);
     let local_position = local_position + vec3<f32>(direction * height);
@@ -74,8 +74,6 @@ fn vertex(in: VertexInput) -> VertexOutput {
 
 @fragment
 fn fragment(in: FragmentInput) -> FragmentOutput {
-    var height: f32;
-
     // sample chunked clipmap
     let lod = blend(in.world_position).lod;
     let lookup = lookup_node(in.world_position, lod);

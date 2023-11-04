@@ -1,31 +1,46 @@
 use bevy::{
+    asset::ChangeWatcher,
     prelude::*,
     reflect::{TypePath, TypeUuid},
     render::render_resource::*,
 };
 use bevy_terrain::prelude::*;
+use std::time::Duration;
 
+const TILE_SIZE: u32 = 1024;
+const TILE_FORMAT: FileFormat = FileFormat::PNG;
 const TERRAIN_SIZE: f32 = 1024.0;
-const TEXTURE_SIZE: u32 = 512;
+const TEXTURE_SIZE: u32 = 64;
 const MIP_LEVEL_COUNT: u32 = 1;
-const LOD_COUNT: u32 = 4;
+const LOD_COUNT: u32 = 8;
 const HEIGHT: f32 = 200.0;
-const NODE_ATLAS_SIZE: u32 = 100;
+const NODE_ATLAS_SIZE: u32 = 1024;
 const PATH: &str = "terrain";
 
 #[derive(AsBindGroup, TypeUuid, TypePath, Clone)]
 #[uuid = "003e1d5d-241c-45a6-8c25-731dee22d820"]
 pub struct TerrainMaterial {}
 
-impl Material for TerrainMaterial {}
+impl Material for TerrainMaterial {
+    fn vertex_shader() -> ShaderRef {
+        "shaders/basic.wgsl".into()
+    }
+    fn fragment_shader() -> ShaderRef {
+        "shaders/basic.wgsl".into()
+    }
+}
 
 fn main() {
     let config =
         TerrainPluginConfig::with_base_attachment(BaseConfig::new(TEXTURE_SIZE, MIP_LEVEL_COUNT));
 
     App::new()
+        .insert_resource(ClearColor(Color::rgb_u8(43, 44, 47)))
         .add_plugins((
-            DefaultPlugins,
+            DefaultPlugins.set(AssetPlugin {
+                watch_for_changes: ChangeWatcher::with_delay(Duration::from_millis(200)), // enable hot reloading for shader easy customization
+                ..default()
+            }),
             TerrainPlugin { config },
             TerrainDebugPlugin, // enable debug settings and controls
             TerrainMaterialPlugin::<TerrainMaterial>::default(),
@@ -47,9 +62,10 @@ fn setup(
     loader.add_base_attachment(
         &plugin_config,
         TileConfig {
-            path: "assets/terrain/source/height".to_string(),
-            size: TERRAIN_SIZE as u32,
-            file_format: FileFormat::PNG,
+            side: 0,
+            path: format!("assets/{PATH}/source/height"),
+            size: TILE_SIZE,
+            file_format: TILE_FORMAT,
         },
     );
 
@@ -59,8 +75,8 @@ fn setup(
 
     // Configure all the important properties of the terrain, as well as its attachments.
     let config = plugin_config.configure_terrain(
+        TILE_SIZE as f32 / plugin_config.leaf_node_size as f32,
         TERRAIN_SIZE,
-        0.0,
         LOD_COUNT,
         HEIGHT,
         NODE_ATLAS_SIZE,
@@ -69,11 +85,11 @@ fn setup(
 
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
     let view_config = TerrainViewConfig {
-        tile_scale: 4.0,
-        grid_size: 4,
-        node_count: 10,
-        load_distance: 5.0,
-        morph_distance: 4.0,
+        grid_size: 16,
+        node_count: 8,
+        load_distance: 500.0,
+        morph_distance: 8.0,
+        blend_distance: 50.0,
         ..default()
     };
 

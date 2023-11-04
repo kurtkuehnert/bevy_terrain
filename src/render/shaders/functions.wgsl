@@ -6,7 +6,7 @@
 #import bevy_pbr::mesh_view_bindings view
 
 fn calculate_plane_position(coordinate: vec3<f32>) -> vec3<f32> {
-    let p = coordinate - 0.5;
+    let p = coordinate - 0.5; // [-0.5, 0.5]
 
     return p * config.terrain_size;
 }
@@ -21,8 +21,6 @@ fn calculate_sphere_position(coordinate: vec3<f32>) -> vec3<f32> {
 	let ry = p.y * sqrt(1.0 - (x2 + z2) / 2.0 + x2 * z2 / 3.0);
 	let rz = p.z * sqrt(1.0 - (x2 + y2) / 2.0 + x2 * y2 / 3.0);
 
-    // let r = p;
-    // let r = normalize(p);
     let r = vec3<f32>(rx, ry, rz);
 
     return r * config.radius;
@@ -33,6 +31,7 @@ fn approximate_world_position(local_position: vec3<f32>) -> vec4<f32> {
 }
 
 fn tile_coordinate(tile: Tile, uv_offset: vec2<f32>) -> vec3<f32> {
+#ifdef SPHERICAL
     var COORDINATE_ARRAY = array<vec3<f32>, 6u>(
         vec3<f32>(0.0, 1.0, 0.0),
         vec3<f32>(0.0, 0.0, 0.0),
@@ -60,9 +59,18 @@ fn tile_coordinate(tile: Tile, uv_offset: vec2<f32>) -> vec3<f32> {
         vec3<f32>(1.0, 0.0, 0.0),
     );
 
+    let coordinate = COORDINATE_ARRAY[tile.side];
+    let u          = U_ARRAY[tile.side];
+    let v          = V_ARRAY[tile.side];
+#else
+    let coordinate = vec3<f32>(0.0, 0.5, 0.0);
+    let u          = vec3<f32>(1.0, 0.0, 0.0);
+    let v          = vec3<f32>(0.0, 0.0, 1.0);
+#endif
+
     let uv = tile.uv + tile.size * uv_offset;
 
-    return COORDINATE_ARRAY[tile.side] + uv.x * U_ARRAY[tile.side] + uv.y * V_ARRAY[tile.side];
+    return coordinate + uv.x * u + uv.y * v;
 }
 
 fn tile_local_position(tile: Tile, uv_offset: vec2<f32>) -> vec3<f32> {
@@ -115,7 +123,7 @@ fn vertex_local_position(tile: Tile, grid_index: u32) -> vec3<f32> {
     var local_position = tile_local_position(tile, grid_uv);
 
     #ifdef MESH_MORPH
-        let world_position = vec4<f32>(local_position, 1.0);
+        let world_position = approximate_world_position(local_position);
         let morph = morph(tile, world_position);
 
         let even_grid_offset = grid_offset & vec2<u32>(4294967294u); // set last bit to zero
@@ -131,6 +139,7 @@ fn vertex_local_position(tile: Tile, grid_index: u32) -> vec3<f32> {
 // https://docs.s2cell.aliddell.com/en/stable/s2_concepts.html#lat-lon-to-s2-cell-id
 // uses adjusted logic to match bevys coordinate system
 fn s2_from_world_position(world_position: vec4<f32>) -> S2Coordinate {
+#ifdef SPHERICAL
     let local_position = world_position.xyz;
 
     let direction = normalize(local_position);
@@ -179,6 +188,13 @@ fn s2_from_world_position(world_position: vec4<f32>) -> S2Coordinate {
     else            { st.y = 1.0 - 0.5 * sqrt(1.0 - 3.0 * uv.y); }
 
     return S2Coordinate(side, st);
+#else
+    let local_position = world_position.xyz;
+
+    let st = local_position.xz / config.terrain_size + 0.5;
+
+    return S2Coordinate(0u, st);
+#endif
 }
 
 fn s2_to_world_position(s2: S2Coordinate) -> vec4<f32> {
@@ -323,43 +339,6 @@ fn lookup_node(world_position: vec4<f32>, lod: u32) -> NodeLookup {
 
     return NodeLookup(atlas_index, atlas_lod, atlas_coordinate);
 }
-
-/*
-fn node_size(lod: u32) -> f32 {
-    return f32(config.leaf_node_size * (1u << lod));
-}
-
-// Looks up the best availale node in the node atlas from the viewers point of view.
-// This is done by sampling the viewers quadtree at the caluclated coordinate.
-fn lookup_node(lod: u32, local_position: vec3<f32>) -> NodeLookup {
-#ifdef SHOW_NODES
-    var quadtree_lod = 0u;
-    for (; quadtree_lod < config.lod_count; quadtree_lod = quadtree_lod + 1u) {
-        let coordinate = local_position.xz / node_size(quadtree_lod);
-        let grid_coordinate = floor(view.world_position.xz / node_size(quadtree_lod) + 0.5 - f32(view_config.node_count >> 1u));
-
-        let grid = step(grid_coordinate, coordinate) * (1.0 - step(grid_coordinate + f32(view_config.node_count), coordinate));
-
-        if (grid.x * grid.y == 1.0) {
-            break;
-        }
-    }
-#else
-    let quadtree_lod = min(lod, config.lod_count - 1u);
-#endif
-
-    let quadtree_coords = vec2<i32>((local_position.xz / node_size(quadtree_lod)) % f32(view_config.node_count));
-    let lookup = textureLoad(quadtree, quadtree_coords, i32(quadtree_lod), 0);
-
-    let atlas_index = i32(lookup.x);
-    let atlas_lod   = lookup.y;
-    let atlas_coords = (local_position.xz / node_size(atlas_lod)) % 1.0;
-
-    return NodeLookup(atlas_lod, atlas_index, atlas_coords);
-}
-*/
-
-
 
 fn calculate_normal(coords: vec2<f32>, atlas_index: i32, atlas_lod: u32, ddx: vec2<f32>, ddy: vec2<f32>) -> vec3<f32> {
 #ifdef SAMPLE_GRAD

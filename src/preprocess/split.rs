@@ -53,9 +53,7 @@ fn tile_to_node(
 }
 
 fn split_tile(directory: &str, tile: &TileConfig, attachment: &AttachmentConfig, offset: UVec2) {
-    dbg!("loading tile");
     let tile_image = load_image(&tile.path, tile.file_format).expect("Could not load tile.");
-    dbg!("finished loading tile");
 
     // first and last node coordinate
     let first = offset.div_floor(attachment.center_size);
@@ -68,7 +66,9 @@ fn split_tile(directory: &str, tile: &TileConfig, attachment: &AttachmentConfig,
             x,
             y,
         };
-        dbg!(node_coordinate);
+
+        println!("Splitting node: {node_coordinate}");
+
         let node_path = format_node_path(directory, &node_coordinate);
 
         let mut node_image = load_or_create_node(&node_path, attachment);
@@ -112,9 +112,7 @@ pub(crate) fn split_tiles(
                 ..*tile
             };
 
-            if side != 0 && side != 1 && side != 2 {
-                split_tile(directory, &tile, attachment, coord * tile.size);
-            }
+            split_tile(directory, &tile, attachment, coord * tile.size);
 
             min_pos = min_pos.min(coord);
             max_pos = max_pos.max(coord);
