@@ -340,20 +340,11 @@ fn lookup_node(world_position: vec4<f32>, lod: u32) -> NodeLookup {
     return NodeLookup(atlas_index, atlas_lod, atlas_coordinate);
 }
 
-fn calculate_normal(coords: vec2<f32>, atlas_index: i32, atlas_lod: u32, ddx: vec2<f32>, ddy: vec2<f32>) -> vec3<f32> {
-#ifdef SAMPLE_GRAD
-    let offset = 1.0 / HEIGHT_SIZE;
-    let left  = textureSampleGrad(height_atlas, atlas_sampler, coords + vec2<f32>(-offset,     0.0), atlas_index, ddx, ddy).x;
-    let up    = textureSampleGrad(height_atlas, atlas_sampler, coords + vec2<f32>(    0.0, -offset), atlas_index, ddx, ddy).x;
-    let right = textureSampleGrad(height_atlas, atlas_sampler, coords + vec2<f32>( offset,     0.0), atlas_index, ddx, ddy).x;
-    let down  = textureSampleGrad(height_atlas, atlas_sampler, coords + vec2<f32>(    0.0,  offset), atlas_index, ddx, ddy).x;
-#else
+fn calculate_normal(coords: vec2<f32>, atlas_index: u32, atlas_lod: u32) -> vec3<f32> {
     let left  = textureSampleLevel(height_atlas, atlas_sampler, coords, atlas_index, 0.0, vec2<i32>(-1,  0)).x;
     let up    = textureSampleLevel(height_atlas, atlas_sampler, coords, atlas_index, 0.0, vec2<i32>( 0, -1)).x;
     let right = textureSampleLevel(height_atlas, atlas_sampler, coords, atlas_index, 0.0, vec2<i32>( 1,  0)).x;
     let down  = textureSampleLevel(height_atlas, atlas_sampler, coords, atlas_index, 0.0, vec2<i32>( 0,  1)).x;
-
-#endif
 
     return normalize(vec3<f32>(right - left, f32(2u << atlas_lod) / config.height, down - up));
 }
