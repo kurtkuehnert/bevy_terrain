@@ -45,7 +45,8 @@ struct S2Coordinate {
 }
 
 impl S2Coordinate {
-    fn from_world_position(world_position: Vec3) -> Self {
+    #[cfg(feature = "spherical")]
+    fn from_world_position(world_position: Vec3, _quadtree: &Quadtree) -> Self {
         let local_position = world_position.xyz();
 
         let direction = local_position.normalize();
@@ -103,6 +104,15 @@ impl S2Coordinate {
         Self { side, st }
     }
 
+    #[cfg(not(feature = "spherical"))]
+    fn from_world_position(world_position: Vec3, quadtree: &Quadtree) -> Self {
+        let local_position = world_position.xyz();
+
+        let st = local_position.xz() / quadtree.terrain_size + 0.5;
+
+        Self { side: 0, st }
+    }
+
     fn from_node_coordinate(node_coordinate: NodeCoordinate, nodes_per_side: f32) -> Self {
         let st = (Vec2::new(
             node_coordinate.x as f32 + 0.5,
@@ -115,7 +125,8 @@ impl S2Coordinate {
         }
     }
 
-    fn to_world_position(self, radius: f32) -> Vec3 {
+    #[cfg(feature = "spherical")]
+    fn to_world_position(self, quadtree: &Quadtree) -> Vec3 {
         let uv: Vec2 = self
             .st
             .to_array()
@@ -128,10 +139,19 @@ impl S2Coordinate {
             })
             .into();
 
-        Self::uv_to_world_position(uv, self.side, radius)
+        Self::uv_to_world_position(uv, self.side, quadtree)
     }
 
-    fn uv_to_world_position(uv: Vec2, side: u32, radius: f32) -> Vec3 {
+    #[cfg(not(feature = "spherical"))]
+    fn to_world_position(self, quadtree: &Quadtree) -> Vec3 {
+        let local_position = (self.st - 0.5) * quadtree.terrain_size;
+
+        let world_position = Vec3::new(local_position.x, 0.0, local_position.y);
+
+        world_position
+    }
+
+    fn uv_to_world_position(uv: Vec2, side: u32, quadtree: &Quadtree) -> Vec3 {
         let local_position = match side {
             0 => Vec3::new(-1.0, -uv.y, uv.x),
             1 => Vec3::new(uv.x, -uv.y, 1.0),
@@ -143,7 +163,7 @@ impl S2Coordinate {
         }
         .normalize();
 
-        let world_position = local_position * radius;
+        let world_position = local_position * quadtree.radius;
 
         world_position
     }
@@ -257,6 +277,7 @@ pub struct Quadtree {
     /// The count of nodes in x and y direction per layer.
     pub(crate) node_count: u32,
     nodes_per_side: f32,
+    terrain_size: f32,
     radius: f32,
     /// The distance (measured in node sizes) until which to request nodes to be loaded.
     load_distance: f32,
@@ -282,6 +303,7 @@ impl Quadtree {
         nodes_per_side: f32,
         load_distance: f32,
         height: f32,
+        terrain_size: f32,
         radius: f32,
     ) -> Self {
         Self {
@@ -289,6 +311,7 @@ impl Quadtree {
             lod_count,
             node_count,
             nodes_per_side,
+            terrain_size,
             radius,
             load_distance,
             _height: height,
@@ -318,6 +341,7 @@ impl Quadtree {
             config.nodes_per_side,
             view_config.load_distance,
             config.height,
+            config.terrain_size,
             config.radius,
         )
     }
@@ -341,7 +365,7 @@ impl Quadtree {
     }
 
     pub(crate) fn compute_requests(&mut self, view_position: Vec3) {
-        let view_s2 = S2Coordinate::from_world_position(view_position);
+        let view_s2 = S2Coordinate::from_world_position(view_position, self);
 
         for side in 0..SIDE_COUNT {
             let quadtree_s2 = view_s2.project_to_side(side);
@@ -362,7 +386,7 @@ impl Quadtree {
                         new_node_coordinate,
                         self.nodes_per_side(lod),
                     );
-                    let world_position = s2.to_world_position(self.radius);
+                    let world_position = s2.to_world_position(self);
                     let distance = world_position.distance(view_position);
 
                     let new_state = if distance < self.load_distance * 2.0_f32.powi(lod as i32) {

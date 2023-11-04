@@ -24,7 +24,10 @@ pub mod gpu_quadtree;
 pub mod node_atlas;
 pub mod quadtree;
 
+#[cfg(feature = "spherical")]
 pub const SIDE_COUNT: u32 = 6;
+#[cfg(not(feature = "spherical"))]
+pub const SIDE_COUNT: u32 = 1;
 
 /// The global coordinate and identifier of a node.
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Encode, Decode)]

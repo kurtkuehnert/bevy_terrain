@@ -1,3 +1,4 @@
+use crate::terrain_data::SIDE_COUNT;
 use crate::{
     preprocess::{
         file_io::{format_node_path, load_image, save_image},
@@ -137,12 +138,11 @@ pub(crate) fn stitch_layer(
     }
 
     for (x, y) in first.product(last) {
-        for side in 0..6 {
-            println!(
-                "Stitching node at layer{lod} on side {side}, at position ({x}/{}, {y}/{})",
-                last.x, last.y
-            );
+        for side in 0..SIDE_COUNT {
             let node_coordinate = NodeCoordinate { side, lod, x, y };
+
+            println!("Stitching node: {node_coordinate}");
+
             let node_path = format_node_path(directory, &node_coordinate);
             let mut node_image = skip_none!(load_image(&node_path, attachment.file_format));
 

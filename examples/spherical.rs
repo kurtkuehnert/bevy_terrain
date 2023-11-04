@@ -23,7 +23,7 @@ const RADIUS: f32 = 50.0;
 const TEXTURE_SIZE: u32 = 512;
 const MIP_LEVEL_COUNT: u32 = 3;
 const LOD_COUNT: u32 = 8;
-const HEIGHT: f32 = 200.0;
+const HEIGHT: f32 = 2.0;
 const NODE_ATLAS_SIZE: u32 = 2048;
 const PATH: &str = "earth_30k";
 
@@ -103,7 +103,6 @@ fn setup(
 
     // Configure all the important properties of the terrain, as well as its attachments.
     let config = plugin_config.configure_terrain(
-        0.0,
         TILE_SIZE as f32 / plugin_config.leaf_node_size as f32,
         RADIUS,
         LOD_COUNT,
@@ -118,7 +117,7 @@ fn setup(
         node_count: 8,
         load_distance: 12.0,
         morph_distance: 8.0,
-        blend_distance: 2.0,
+        blend_distance: 1.5,
         ..default()
     };
 
