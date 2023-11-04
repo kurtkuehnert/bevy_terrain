@@ -55,9 +55,9 @@ impl TerrainPluginConfig {
         self
     }
 
+    #[cfg(feature = "spherical")]
     pub fn configure_terrain(
         &self,
-        terrain_size: f32,
         nodes_per_side: f32,
         radius: f32,
         lod_count: u32,
@@ -79,8 +79,41 @@ impl TerrainPluginConfig {
             height,
             leaf_node_size: self.leaf_node_size,
             nodes_per_side,
-            terrain_size,
+            terrain_size: 0.0,
             radius,
+            node_atlas_size,
+            path,
+            attachments,
+            nodes,
+        }
+    }
+
+    #[cfg(not(feature = "spherical"))]
+    pub fn configure_terrain(
+        &self,
+        nodes_per_side: f32,
+        terrain_size: f32,
+        lod_count: u32,
+        height: f32,
+        node_atlas_size: u32,
+        path: String,
+    ) -> TerrainConfig {
+        let attachments = self
+            .attachments
+            .clone()
+            .into_iter()
+            .map(AttachmentConfig::into)
+            .collect();
+
+        let nodes = load_node_config(&path);
+
+        TerrainConfig {
+            lod_count,
+            height,
+            leaf_node_size: self.leaf_node_size,
+            nodes_per_side,
+            terrain_size,
+            radius: 0.0,
             node_atlas_size,
             path,
             attachments,
