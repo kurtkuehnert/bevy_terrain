@@ -30,9 +30,7 @@ const PATH: &str = "earth_30k";
 #[derive(AsBindGroup, TypeUuid, TypePath, Clone)]
 #[uuid = "003e1d5d-241c-45a6-8c25-731dee22d820"]
 pub struct TerrainMaterial {
-    #[texture(0, dimension = "2d_array")]
-    cube_map: Handle<Image>,
-    #[texture(1, dimension = "1d")]
+    #[texture(0, dimension = "1d")]
     gradient: Handle<Image>,
 }
 
@@ -77,12 +75,10 @@ fn setup(
     mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
 ) {
-    let cube_map = asset_server.load("textures/earth_cube.png");
     let gradient = asset_server.load("textures/gradient.png");
 
     commands.insert_resource(LoadingTextures {
         is_loaded: false,
-        cube_map: cube_map.clone(),
         gradient: gradient.clone(),
     });
 
@@ -126,7 +122,7 @@ fn setup(
         .spawn((
             TerrainBundle::new(config.clone()),
             loader,
-            materials.add(TerrainMaterial { cube_map, gradient }),
+            materials.add(TerrainMaterial { gradient }),
         ))
         .id();
 
@@ -191,7 +187,6 @@ fn toggle_camera(input: Res<Input<KeyCode>>, mut camera_query: Query<&mut DebugC
 #[derive(Resource)]
 struct LoadingTextures {
     is_loaded: bool,
-    cube_map: Handle<Image>,
     gradient: Handle<Image>,
 }
 
@@ -201,26 +196,12 @@ fn create_array_texture(
     mut images: ResMut<Assets<Image>>,
 ) {
     if loading_textures.is_loaded
-        || asset_server.get_load_state(loading_textures.cube_map.clone()) != LoadState::Loaded
         || asset_server.get_load_state(loading_textures.gradient.clone()) != LoadState::Loaded
     {
         return;
     }
 
     loading_textures.is_loaded = true;
-
-    let image = images.get_mut(&loading_textures.cube_map).unwrap();
-
-    image.texture_descriptor.format = TextureFormat::R16Unorm;
-
-    image.texture_view_descriptor = Some(TextureViewDescriptor {
-        dimension: Some(TextureViewDimension::D2Array),
-        ..default()
-    });
-
-    // Create a new array texture asset from the loaded texture.
-    let array_layers = 6;
-    image.reinterpret_stacked_2d_as_array(array_layers);
 
     let image = images.get_mut(&loading_textures.gradient).unwrap();
     image.texture_descriptor.dimension = TextureDimension::D1;
