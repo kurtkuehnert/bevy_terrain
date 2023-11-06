@@ -31,6 +31,7 @@ const PATH: &str = "earth_30k";
 #[uuid = "003e1d5d-241c-45a6-8c25-731dee22d820"]
 pub struct TerrainMaterial {
     #[texture(0, dimension = "1d")]
+    #[sampler(1)]
     gradient: Handle<Image>,
 }
 
