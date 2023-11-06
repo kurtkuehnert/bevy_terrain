@@ -1,8 +1,8 @@
 #define_import_path bevy_terrain::debug
 
-#import bevy_terrain::types Tile, S2Coordinate
-#import bevy_terrain::bindings config, view_config
-#import bevy_terrain::functions morph, blend, quadtree_lod, inside_rect, node_coordinate, s2_from_world_position
+#import bevy_terrain::types S2Coordinate
+#import bevy_terrain::bindings config, view_config, tiles
+#import bevy_terrain::functions morph, blend, quadtree_lod, inside_square, node_coordinate, s2_from_local_position
 #import bevy_pbr::mesh_view_bindings view
 
 fn index_color(index: u32) -> vec4<f32> {
@@ -18,7 +18,10 @@ fn index_color(index: u32) -> vec4<f32> {
     return COLOR_ARRAY[index % 6u];
 }
 
-fn show_tiles(tile: Tile, world_position: vec4<f32>) -> vec4<f32> {
+fn show_tiles(vertex_index: u32, world_position: vec4<f32>) -> vec4<f32> {
+    let tile_index = vertex_index / view_config.vertices_per_tile;
+    let tile = tiles.data[tile_index];
+
     var color: vec4<f32>;
 
     let is_even = u32((tile.uv.x + tile.uv.y) / tile.size) % 2u == 0u;
@@ -34,16 +37,20 @@ fn show_tiles(tile: Tile, world_position: vec4<f32>) -> vec4<f32> {
     color = mix(color, vec4<f32>(1.0), 0.3 * morph);
 #endif
 
+#ifdef SPHERICAL
+    color = mix(color, index_color(tile.side), 0.5);
+#endif
+
     return color;
 }
 
-fn show_lod(world_position: vec4<f32>, atlas_lod: u32) -> vec4<f32> {
+fn show_lod(local_position: vec3<f32>, world_position: vec4<f32>, atlas_lod: u32) -> vec4<f32> {
 #ifdef QUADTREE_LOD
-    let is_outline = quadtree_outlines(world_position, atlas_lod);
+    let is_outline = quadtree_outlines(local_position, atlas_lod);
     let color = mix(index_color(atlas_lod), vec4<f32>(0.0), is_outline);
 #else
     let blend = blend(world_position);
-    let is_outline = quadtree_outlines(world_position, blend.lod);
+    let is_outline = quadtree_outlines(local_position, blend.lod);
     var color = mix(index_color(blend.lod), vec4<f32>(1.0), 1.0 - blend.ratio);
     color = mix(color, 0.1 * color, is_outline);
 #endif
@@ -51,20 +58,20 @@ fn show_lod(world_position: vec4<f32>, atlas_lod: u32) -> vec4<f32> {
     return color;
 }
 
-fn quadtree_outlines(world_position: vec4<f32>, lod: u32) -> f32 {
-    let s2 = s2_from_world_position(world_position);
+fn quadtree_outlines(local_position: vec3<f32>, lod: u32) -> f32 {
+    let s2 = s2_from_local_position(local_position);
     let coordinate = node_coordinate(s2.st, lod) % 1.0;
 
     let thickness = 0.03;
-    let outer = inside_rect(coordinate, vec2<f32>(0.0)            , 1.0);
-    let inner = inside_rect(coordinate, vec2<f32>(0.0) + thickness, 1.0 - thickness);
+    let outer = inside_square(coordinate, vec2<f32>(0.0)            , 1.0);
+    let inner = inside_square(coordinate, vec2<f32>(0.0) + thickness, 1.0 - thickness);
 
     return outer - inner;
 }
 
-fn show_quadtree(world_position: vec4<f32>) -> vec4<f32> {
-    let lod = quadtree_lod(world_position);
-    let is_outline = quadtree_outlines(world_position, lod);
+fn show_quadtree(local_position: vec3<f32>) -> vec4<f32> {
+    let lod = quadtree_lod(local_position);
+    let is_outline = quadtree_outlines(local_position, lod);
 
     return mix(index_color(lod), vec4<f32>(0.0), is_outline);
 }

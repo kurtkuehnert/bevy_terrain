@@ -31,7 +31,7 @@ fn prepare_root() {
 #else
     parameters.tile_count = 1u;
 
-    temporary_tiles.data[0] = Tile(vec2<f32>(0.0), 1.0, 0u); // Todo: fix 2D
+    temporary_tiles.data[0] = Tile(vec2<f32>(0.0), 1.0, 0u);
 #endif
 
     indirect_buffer.workgroup_count = vec3<u32>(1u, 1u, 1u);
