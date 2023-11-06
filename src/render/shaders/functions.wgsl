@@ -340,11 +340,20 @@ fn lookup_node(world_position: vec4<f32>, lod: u32) -> NodeLookup {
     return NodeLookup(atlas_index, atlas_lod, atlas_coordinate);
 }
 
-fn calculate_normal(coords: vec2<f32>, atlas_index: u32, atlas_lod: u32) -> vec3<f32> {
-    let left  = textureSampleLevel(height_atlas, atlas_sampler, coords, atlas_index, 0.0, vec2<i32>(-1,  0)).x;
-    let up    = textureSampleLevel(height_atlas, atlas_sampler, coords, atlas_index, 0.0, vec2<i32>( 0, -1)).x;
-    let right = textureSampleLevel(height_atlas, atlas_sampler, coords, atlas_index, 0.0, vec2<i32>( 1,  0)).x;
-    let down  = textureSampleLevel(height_atlas, atlas_sampler, coords, atlas_index, 0.0, vec2<i32>( 0,  1)).x;
+// Todo: fix this faulty implementation
+fn calculate_normal(world_position: vec4<f32>, height_coordinate: vec2<f32>, atlas_index: u32, atlas_lod: u32) -> vec3<f32> {
+    let local_position = world_position.xyz;
+    let normal = normalize(local_position);
+    let tangent = cross(vec3(0.0, 1.0, 0.0), normal);
+    let bitangent = -cross(tangent, normal);
+    let TBN = mat3x3<f32>(tangent, bitangent, normal);
 
-    return normalize(vec3<f32>(right - left, f32(2u << atlas_lod) / config.height, down - up));
+    let left  = 2.0 * textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, atlas_index, 0.0, vec2<i32>(-1,  0)).x - 1.0;
+    let up    = 2.0 * textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, atlas_index, 0.0, vec2<i32>( 0, -1)).x - 1.0;
+    let right = 2.0 * textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, atlas_index, 0.0, vec2<i32>( 1,  0)).x - 1.0;
+    let down  = 2.0 * textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, atlas_index, 0.0, vec2<i32>( 0,  1)).x - 1.0;
+
+    let surface_normal = normalize(vec3<f32>(right - left, down - up, f32(2u << atlas_lod) / 300.0));
+
+    return normalize(TBN * surface_normal);
 }

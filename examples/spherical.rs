@@ -152,12 +152,22 @@ fn setup(
     quadtrees.insert((terrain, view), quadtree);
 
     // Create a sunlight for the physical based lighting.
+    let light_direction = Vec3::new(-1.0, 0.0, 0.0);
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
             illuminance: 20000.0,
             ..default()
         },
-        transform: Transform::from_xyz(1.0, 1.0, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
+        transform: Transform::from_translation(light_direction).looking_at(Vec3::ZERO, Vec3::Y),
+        ..default()
+    });
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Mesh::from(shape::UVSphere {
+            radius: 50.0,
+            sectors: 50,
+            stacks: 10,
+        })),
+        transform: Transform::from_translation(light_direction * 1000.0),
         ..default()
     });
     commands.insert_resource(AmbientLight {
