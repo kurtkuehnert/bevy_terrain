@@ -1,9 +1,10 @@
 #import bevy_terrain::types VertexInput, VertexOutput, FragmentInput, FragmentOutput, Tile, S2Coordinate
 #import bevy_terrain::bindings config, view_config, tiles, atlas_sampler
-#import bevy_terrain::functions vertex_local_position, approximate_world_position, s2_from_world_position, lookup_node, blend, nodes_per_side, s2_project_to_side, node_coordinate, quadtree_lod, inside_rect, s2_to_world_position
+#import bevy_terrain::functions vertex_local_position, approximate_world_position, s2_from_world_position, lookup_node, blend, nodes_per_side, s2_project_to_side, node_coordinate, quadtree_lod, inside_rect, s2_to_world_position, calculate_normal
 #import bevy_terrain::debug index_color, show_tiles, show_lod, quadtree_outlines, show_quadtree
 #import bevy_terrain::attachments height_atlas, HEIGHT_SIZE, HEIGHT_SCALE, HEIGHT_OFFSET
 #import bevy_pbr::mesh_view_bindings view
+#import bevy_pbr::pbr_functions PbrInput, pbr_input_new, calculate_view, pbr
 
 @group(3) @binding(0)
 var cube_map: texture_2d_array<f32>;
@@ -79,6 +80,7 @@ fn fragment(in: FragmentInput) -> FragmentOutput {
     let lookup = lookup_node(in.world_position, lod);
     let height_coordinate = lookup.atlas_coordinate * HEIGHT_SCALE + HEIGHT_OFFSET;
     let atlas_height = textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0).x;
+    let normal = calculate_normal(in.world_position, height_coordinate, lookup.atlas_index, lookup.atlas_lod);
 
     let is_outline = quadtree_outlines(in.world_position, lod);
 
@@ -105,6 +107,19 @@ fn fragment(in: FragmentInput) -> FragmentOutput {
 #endif
 #ifdef SHOW_QUADTREE
     color = mix(color, show_quadtree(in.world_position), opacity);
+#endif
+#ifdef LIGHTING
+    var pbr_input: PbrInput = pbr_input_new();
+    pbr_input.material.base_color = color;
+    pbr_input.material.perceptual_roughness = 1.0;
+    pbr_input.material.reflectance = 0.0;
+    pbr_input.frag_coord = in.frag_coord;
+    pbr_input.world_position = in.world_position;
+    pbr_input.world_normal = normal;
+    pbr_input.is_orthographic = view.projection[3].w == 1.0;
+    pbr_input.N = normal;
+    pbr_input.V = calculate_view(in.world_position, pbr_input.is_orthographic);
+    color = pbr(pbr_input);
 #endif
 
     return FragmentOutput(color);
