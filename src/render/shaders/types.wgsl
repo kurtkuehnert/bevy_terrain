@@ -45,6 +45,15 @@ struct S2Coordinate {
     st: vec2<f32>,
 }
 
+struct Morph {
+    ratio: f32,
+}
+
+struct Blend {
+    lod: u32,
+    ratio: f32,
+}
+
 // A lookup of a node inside the node atlas based on the view of a quadtree.
 struct NodeLookup {
     atlas_index: u32,
@@ -58,7 +67,7 @@ struct VertexInput {
 }
 
 struct VertexOutput {
-    @builtin(position)       frag_coord: vec4<f32>,
+    @builtin(position)       fragment_position: vec4<f32>,
     @location(0)             local_position: vec3<f32>,
     @location(1)             world_position: vec4<f32>,
     @location(2)             debug_color: vec4<f32>,
@@ -66,7 +75,7 @@ struct VertexOutput {
 
 struct FragmentInput {
     @builtin(front_facing)   is_front: bool,
-    @builtin(position)       frag_coord: vec4<f32>,
+    @builtin(position)       fragment_position: vec4<f32>,
     @location(0)             local_position: vec3<f32>,
     @location(1)             world_position: vec4<f32>,
     @location(2)             debug_color: vec4<f32>,
@@ -74,15 +83,4 @@ struct FragmentInput {
 
 struct FragmentOutput {
     @location(0)             color: vec4<f32>
-}
-
-// The processed fragment consisting of the color and a flag whether or not to discard this fragment.
-struct Fragment {
-    color: vec4<f32>,
-    do_discard: bool,
-}
-
-struct Blend {
-    lod: u32,
-    ratio: f32,
 }
