@@ -1,5 +1,5 @@
 #import bevy_terrain::types TerrainConfig, TerrainViewConfig, Tile, TileList, Parameters, NodeLookup
-#import bevy_terrain::functions calculate_sphere_position, approximate_world_position, tile_coordinate, tile_local_position
+#import bevy_terrain::functions local_to_world_position, tile_local_position
 #import bevy_terrain::bindings config
 
 struct CullingData {
@@ -49,7 +49,7 @@ fn should_be_divided(tile: Tile) -> bool {
 
     for (var i: u32 = 0u; i < 4u; i = i + 1u) {
         let local_position = tile_local_position(tile, vec2<f32>(f32(i & 1u), f32(i >> 1u & 1u)));
-        let world_position = approximate_world_position(local_position);
+        let world_position = local_to_world_position(local_position, view_config.approximate_height);
         let viewer_distance = distance(world_position.xyz, view.world_position.xyz);
 
         minimal_viewer_distance = min(minimal_viewer_distance, viewer_distance);

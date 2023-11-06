@@ -1,125 +1,106 @@
-#import bevy_terrain::types VertexInput, VertexOutput, FragmentInput, FragmentOutput, Tile, S2Coordinate
-#import bevy_terrain::bindings config, view_config, tiles, atlas_sampler
-#import bevy_terrain::functions vertex_local_position, approximate_world_position, s2_from_world_position, lookup_node, blend, nodes_per_side, s2_project_to_side, node_coordinate, quadtree_lod, inside_rect, s2_to_world_position, calculate_normal
+#import bevy_terrain::types VertexInput, VertexOutput, FragmentInput, FragmentOutput, Tile, S2Coordinate, NodeLookup
+#import bevy_terrain::bindings config, atlas_sampler
+#import bevy_terrain::functions vertex_local_position, vertex_blend, lookup_node, blend, local_to_world_position
 #import bevy_terrain::debug index_color, show_tiles, show_lod, quadtree_outlines, show_quadtree
 #import bevy_terrain::attachments height_atlas, HEIGHT_SIZE, HEIGHT_SCALE, HEIGHT_OFFSET
 #import bevy_pbr::mesh_view_bindings view
 #import bevy_pbr::pbr_functions PbrInput, pbr_input_new, calculate_view, pbr
 
 @group(3) @binding(0)
-var cube_map: texture_2d_array<f32>;
-@group(3) @binding(1)
 var gradient: texture_1d<f32>;
 
-fn terrain_world_position(height: f32, local_position: vec3<f32>) -> vec4<f32> {
-    let scale = 2.0 * height - 1.0;
+fn terrain_height(lookup: NodeLookup) -> f32 {
+    let height_coordinate = lookup.atlas_coordinate * HEIGHT_SCALE + HEIGHT_OFFSET;
+    let height = 2.0 * textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0).x - 1.0;
 
-    let height = config.height * scale;
-
-    let direction = normalize(local_position);
-    let local_position = local_position + vec3<f32>(direction * height);
-
-    return vec4<f32>(local_position, 1.0);
+    return config.height * height;
 }
 
-fn terrain_color(height: f32) -> vec4<f32> {
-    let scale = 2.0 * height - 1.0;
+// Todo: fix this faulty implementation
+fn terrain_normal(lookup: NodeLookup, local_position: vec3<f32>) -> vec3<f32> {
+    let normal = normalize(local_position);
+    let tangent = cross(vec3(0.0, 1.0, 0.0), normal);
+    let bitangent = -cross(tangent, normal);
+    let TBN = mat3x3<f32>(tangent, bitangent, normal);
 
-    let sample_ocean = textureSample(gradient, atlas_sampler, mix(0.0, 0.075, pow(-scale, 0.25)));
-    let sample_land = textureSample(gradient, atlas_sampler, mix(0.09, 1.0, pow(scale * 6.0, 1.75)));
+    let height_coordinate = lookup.atlas_coordinate * HEIGHT_SCALE + HEIGHT_OFFSET;
 
-    if (scale < 0.0) {
-        return sample_ocean;
+    let left  = 2.0 * textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0, vec2<i32>(-1,  0)).x - 1.0;
+    let up    = 2.0 * textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0, vec2<i32>( 0, -1)).x - 1.0;
+    let right = 2.0 * textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0, vec2<i32>( 1,  0)).x - 1.0;
+    let down  = 2.0 * textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0, vec2<i32>( 0,  1)).x - 1.0;
+
+    let surface_normal = normalize(vec3<f32>(right - left, down - up, f32(2u << lookup.atlas_lod) / 300.0));
+
+    return normalize(TBN * surface_normal);
+}
+
+fn terrain_color(lookup: NodeLookup) -> vec4<f32> {
+    let height_coordinate = lookup.atlas_coordinate * HEIGHT_SCALE + HEIGHT_OFFSET;
+    let height = 2.0 * textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0).x - 1.0;
+
+    if (height < 0.0) {
+        return textureSampleLevel(gradient, atlas_sampler, mix(0.0, 0.075, pow(-height, 0.25)), 0.0);
     }
     else {
-        return sample_land;
+        return textureSampleLevel(gradient, atlas_sampler, mix(0.09, 1.0, pow(height * 6.0, 1.75)), 0.0);
     }
 }
 
 @vertex
-fn vertex(in: VertexInput) -> VertexOutput {
-    let tile_index = in.vertex_index / view_config.vertices_per_tile;
-    let grid_index = in.vertex_index % view_config.vertices_per_tile;
+fn vertex(input: VertexInput) -> VertexOutput {
+    let local_position = vertex_local_position(input.vertex_index);
+    let blend = vertex_blend(local_position);
 
-    let tile = tiles.data[tile_index];
+    let lookup = lookup_node(local_position, blend.lod);
+    let height = terrain_height(lookup);
 
-    let local_position = vertex_local_position(tile, grid_index);
-    var world_position = approximate_world_position(local_position);
-
-#ifdef TEST1
-    // sample cube map
-    let s2 = s2_from_world_position(world_position);
-    let cube_height = textureSampleLevel(cube_map, atlas_sampler, s2.st, s2.side, 0.0).x;
-    world_position = terrain_world_position(cube_height, local_position);
-#else
-    // sample chunked clipmap
-    var lod = blend(world_position).lod;
-    let lookup = lookup_node(world_position, lod);
-    let height_coordinate = lookup.atlas_coordinate * HEIGHT_SCALE + HEIGHT_OFFSET;
-    let atlas_height = textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0).x;
-    world_position = terrain_world_position(atlas_height, local_position);
-#endif
-
-    var color: vec4<f32>;
-    color = show_tiles(tile, world_position);
-    color = mix(color, index_color(tile.side), 0.5);
+    let world_position = local_to_world_position(local_position, height);
 
     var output: VertexOutput;
     output.frag_coord = view.view_proj * world_position;
     output.local_position = local_position;
     output.world_position = world_position;
-    output.debug_color = color;
+    output.debug_color = show_tiles(input.vertex_index, world_position);
 
     return output;
 }
 
 @fragment
-fn fragment(in: FragmentInput) -> FragmentOutput {
-    // sample chunked clipmap
-    let lod = blend(in.world_position).lod;
-    let lookup = lookup_node(in.world_position, lod);
-    let height_coordinate = lookup.atlas_coordinate * HEIGHT_SCALE + HEIGHT_OFFSET;
-    let atlas_height = textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0).x;
-    let normal = calculate_normal(in.world_position, height_coordinate, lookup.atlas_index, lookup.atlas_lod);
+fn fragment(input: FragmentInput) -> FragmentOutput {
+    let blend = blend(input.world_position);
 
-    let is_outline = quadtree_outlines(in.world_position, lod);
+    let lookup = lookup_node(input.local_position, blend.lod);
+    let height       = terrain_height(lookup);
+    let world_normal = terrain_normal(lookup, input.local_position);
+    var color        = terrain_color(lookup);
 
-    var color: vec4<f32>;
     let opacity = 0.8;
 
-#ifdef TEST1
-    // sample cube map
-    let s2 = s2_from_world_position(in.world_position);
-    let cube_height = textureSampleLevel(cube_map, atlas_sampler, s2.st, s2.side, 0.0).x;
-    color = terrain_color(cube_height);
-#else
-    color = terrain_color(atlas_height);
-#endif
-
-#ifdef SHOW_LOD
-    color = mix(color, show_lod(in.world_position, lookup.atlas_lod), opacity);
-#endif
-#ifdef SHOW_UV
-    color = mix(color, vec4<f32>(lookup.atlas_coordinate, 0.0, 1.0), opacity);
-#endif
-#ifdef SHOW_TILES
-    color = mix(color, in.debug_color, opacity);
-#endif
-#ifdef SHOW_QUADTREE
-    color = mix(color, show_quadtree(in.world_position), opacity);
-#endif
 #ifdef LIGHTING
     var pbr_input: PbrInput = pbr_input_new();
     pbr_input.material.base_color = color;
     pbr_input.material.perceptual_roughness = 1.0;
     pbr_input.material.reflectance = 0.0;
-    pbr_input.frag_coord = in.frag_coord;
-    pbr_input.world_position = in.world_position;
-    pbr_input.world_normal = normal;
+    pbr_input.frag_coord = input.frag_coord;
+    pbr_input.world_position = input.world_position;
+    pbr_input.world_normal = world_normal;
     pbr_input.is_orthographic = view.projection[3].w == 1.0;
-    pbr_input.N = normal;
-    pbr_input.V = calculate_view(in.world_position, pbr_input.is_orthographic);
+    pbr_input.N = world_normal;
+    pbr_input.V = calculate_view(input.world_position, pbr_input.is_orthographic);
     color = pbr(pbr_input);
+#endif
+#ifdef SHOW_LOD
+    color = mix(color, show_lod(input.local_position, input.world_position, lookup.atlas_lod), opacity);
+#endif
+#ifdef SHOW_UV
+    color = mix(color, vec4<f32>(lookup.atlas_coordinate, 0.0, 1.0), opacity);
+#endif
+#ifdef SHOW_TILES
+    color = mix(color, input.debug_color, opacity);
+#endif
+#ifdef SHOW_QUADTREE
+    color = mix(color, show_quadtree(input.local_position), opacity);
 #endif
 
     return FragmentOutput(color);

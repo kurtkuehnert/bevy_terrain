@@ -53,7 +53,7 @@ struct NodeLookup {
 }
 
 struct VertexInput {
-    @builtin(instance_index) instance: u32,
+    @builtin(instance_index) instance_index: u32,
     @builtin(vertex_index)   vertex_index: u32,
 }
 
@@ -86,4 +86,3 @@ struct Blend {
     lod: u32,
     ratio: f32,
 }
-
