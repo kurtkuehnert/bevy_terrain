@@ -217,7 +217,7 @@ pub fn change_config(
         if input.just_pressed(KeyCode::O) {
             view_config.morph_distance += 0.25;
             println!(
-                "Increased the view distance to {}.",
+                "Increased the morph distance to {}.",
                 view_config.morph_distance
             );
         }

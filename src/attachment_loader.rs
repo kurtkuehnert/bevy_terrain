@@ -38,6 +38,7 @@ pub struct AttachmentFromDiskLoader {
     handle_mapping: HashMap<HandleId, (NodeCoordinate, AttachmentIndex)>,
     preprocessor: Preprocessor,
     path: String,
+    attachment_index: usize,
 }
 
 impl AttachmentFromDiskLoader {
@@ -47,28 +48,28 @@ impl AttachmentFromDiskLoader {
             handle_mapping: Default::default(),
             preprocessor: Preprocessor::new(lod_count, path.clone()),
             path,
+            attachment_index: 0,
         }
     }
 
     pub fn add_base_attachment(&mut self, plugin_config: &TerrainPluginConfig, tile: TileConfig) {
+        let attachment = &plugin_config.attachments[self.attachment_index];
+
         self.attachments.insert(
-            0,
-            AttachmentFromDisk::new(&plugin_config.base.height_attachment(), &self.path),
+            self.attachment_index,
+            AttachmentFromDisk::new(attachment, &self.path),
         );
+
+        self.attachment_index += 1;
 
         self.preprocessor.base = Some((tile, plugin_config.base));
     }
 
-    pub fn add_attachment(
-        &mut self,
-        plugin_config: &TerrainPluginConfig,
-        tile: TileConfig,
-        attachment_index: usize,
-    ) {
-        let attachment = plugin_config.attachments[attachment_index].clone();
+    pub fn add_attachment(&mut self, plugin_config: &TerrainPluginConfig, tile: TileConfig) {
+        let attachment = plugin_config.attachments[self.attachment_index].clone();
 
         self.attachments.insert(
-            attachment_index,
+            self.attachment_index,
             AttachmentFromDisk::new(&attachment, &self.path),
         );
 

@@ -9,16 +9,18 @@
 
 @group(3) @binding(0)
 var gradient: texture_1d<f32>;
+@group(3) @binding(1)
+var gradient_sampler: sampler;
 
 fn sample_color(lookup: NodeLookup) -> vec4<f32> {
     let height_coordinate = lookup.atlas_coordinate * HEIGHT_SCALE + HEIGHT_OFFSET;
     let height = 2.0 * textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0).x - 1.0;
 
     if (height < 0.0) {
-        return textureSampleLevel(gradient, atlas_sampler, mix(0.0, 0.075, pow(-height, 0.25)), 0.0);
+        return textureSampleLevel(gradient, gradient_sampler, mix(0.0, 0.075, pow(-height, 0.25)), 0.0);
     }
     else {
-        return textureSampleLevel(gradient, atlas_sampler, mix(0.09, 1.0, pow(height * 6.0, 1.75)), 0.0);
+        return textureSampleLevel(gradient, gradient_sampler, mix(0.09, 1.0, pow(height * 6.0, 1.75)), 0.0);
     }
 }
 

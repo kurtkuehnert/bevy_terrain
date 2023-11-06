@@ -2,25 +2,27 @@ use bevy::{
     asset::{ChangeWatcher, LoadState},
     prelude::*,
     reflect::{TypePath, TypeUuid},
-    render::{render_resource::*, texture::ImageSampler},
+    render::render_resource::*,
 };
 use bevy_terrain::prelude::*;
 use std::time::Duration;
 
+const TILE_SIZE: u32 = 1024;
+const TILE_FORMAT: FileFormat = FileFormat::PNG;
 const TERRAIN_SIZE: f32 = 1024.0;
-const TEXTURE_SIZE: u32 = 512;
+const TEXTURE_SIZE: u32 = 256;
 const MIP_LEVEL_COUNT: u32 = 1;
 const LOD_COUNT: u32 = 4;
-const HEIGHT: f32 = 200.0;
-const NODE_ATLAS_SIZE: u32 = 100;
-const PATH: &str = "terrain";
+const HEIGHT: f32 = 100.0;
+const NODE_ATLAS_SIZE: u32 = 1024;
+const PATH: &str = "terrains/advanced";
 
 #[derive(AsBindGroup, TypeUuid, TypePath, Clone)]
 #[uuid = "4ccc53dd-2cfd-48ba-b659-c0e1a9bc0bdb"]
 pub struct TerrainMaterial {
-    #[texture(0, dimension = "2d_array")]
+    #[texture(0, dimension = "1d")]
     #[sampler(1)]
-    array_texture: Handle<Image>,
+    gradient: Handle<Image>,
 }
 
 impl Material for TerrainMaterial {
@@ -41,13 +43,14 @@ fn main() {
             ));
 
     App::new()
+        .insert_resource(ClearColor(Color::rgb_u8(43, 44, 47)))
         .add_plugins((
             DefaultPlugins.set(AssetPlugin {
                 watch_for_changes: ChangeWatcher::with_delay(Duration::from_millis(200)), // enable hot reloading for shader easy customization
                 ..default()
             }),
             TerrainPlugin { config },
-            TerrainDebugPlugin,
+            TerrainDebugPlugin, // enable debug settings and controls
             TerrainMaterialPlugin::<TerrainMaterial>::default(),
         ))
         .add_systems(Startup, setup)
@@ -63,29 +66,30 @@ fn setup(
     mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
 ) {
-    let texture = asset_server.load("textures/array_texture.png");
+    let gradient = asset_server.load("textures/gradient.png");
     commands.insert_resource(LoadingTexture {
         is_loaded: false,
-        handle: texture.clone(),
+        gradient: gradient.clone(),
     });
 
     let mut loader = AttachmentFromDiskLoader::new(LOD_COUNT, PATH.to_string());
     loader.add_base_attachment(
         &plugin_config,
         TileConfig {
-            path: "assets/terrain/source/height".to_string(),
-            size: TERRAIN_SIZE as u32,
-            file_format: FileFormat::PNG,
+            side: 0,
+            path: format!("assets/{PATH}/source/height"),
+            size: TILE_SIZE,
+            file_format: TILE_FORMAT,
         },
     );
     loader.add_attachment(
         &plugin_config,
         TileConfig {
-            path: "assets/terrain/source/albedo.png".to_string(),
-            size: TERRAIN_SIZE as u32,
-            file_format: FileFormat::PNG,
+            side: 0,
+            path: format!("assets/{PATH}/source/albedo.png"),
+            size: TILE_SIZE,
+            file_format: TILE_FORMAT,
         },
-        2,
     );
 
     // Preprocesses the terrain data.
@@ -94,8 +98,8 @@ fn setup(
 
     // Configure all the important properties of the terrain, as well as its attachments.
     let config = plugin_config.configure_terrain(
+        TILE_SIZE as f32 / plugin_config.leaf_node_size as f32,
         TERRAIN_SIZE,
-        0.0,
         LOD_COUNT,
         HEIGHT,
         NODE_ATLAS_SIZE,
@@ -104,11 +108,11 @@ fn setup(
 
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
     let view_config = TerrainViewConfig {
-        tile_scale: 4.0,
-        grid_size: 4,
-        node_count: 10,
-        load_distance: 5.0,
-        morph_distance: 4.0,
+        grid_size: 16,
+        node_count: 8,
+        load_distance: 500.0,
+        morph_distance: 8.0,
+        blend_distance: 100.0,
         ..default()
     };
 
@@ -117,9 +121,7 @@ fn setup(
         .spawn((
             TerrainBundle::new(config.clone()),
             loader,
-            materials.add(TerrainMaterial {
-                array_texture: texture,
-            }),
+            materials.add(TerrainMaterial { gradient }),
         ))
         .id();
 
@@ -163,7 +165,7 @@ fn toggle_camera(input: Res<Input<KeyCode>>, mut camera_query: Query<&mut DebugC
 #[derive(Resource)]
 struct LoadingTexture {
     is_loaded: bool,
-    handle: Handle<Image>,
+    gradient: Handle<Image>,
 }
 
 fn create_array_texture(
@@ -172,25 +174,13 @@ fn create_array_texture(
     mut images: ResMut<Assets<Image>>,
 ) {
     if loading_texture.is_loaded
-        || asset_server.get_load_state(loading_texture.handle.clone()) != LoadState::Loaded
+        || asset_server.get_load_state(loading_texture.gradient.clone()) != LoadState::Loaded
     {
         return;
     }
 
     loading_texture.is_loaded = true;
-    let image = images.get_mut(&loading_texture.handle).unwrap();
-    image.sampler_descriptor = ImageSampler::Descriptor(SamplerDescriptor {
-        label: None,
-        address_mode_u: AddressMode::Repeat,
-        address_mode_v: AddressMode::Repeat,
-        address_mode_w: AddressMode::Repeat,
-        mag_filter: FilterMode::Linear,
-        min_filter: FilterMode::Linear,
-        mipmap_filter: FilterMode::Linear,
-        ..default()
-    });
 
-    // Create a new array texture asset from the loaded texture.
-    let array_layers = 4;
-    image.reinterpret_stacked_2d_as_array(array_layers);
+    let image = images.get_mut(&loading_texture.gradient).unwrap();
+    image.texture_descriptor.dimension = TextureDimension::D1;
 }
