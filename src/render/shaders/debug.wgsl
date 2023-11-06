@@ -1,8 +1,7 @@
 #define_import_path bevy_terrain::debug
 
-#import bevy_terrain::types S2Coordinate
 #import bevy_terrain::bindings config, view_config, tiles
-#import bevy_terrain::functions morph, blend, quadtree_lod, inside_square, node_coordinate, s2_from_local_position
+#import bevy_terrain::functions compute_morph, compute_blend, quadtree_lod, inside_square, node_coordinate, s2_from_local_position
 #import bevy_pbr::mesh_view_bindings view
 
 fn index_color(index: u32) -> vec4<f32> {
@@ -33,8 +32,8 @@ fn show_tiles(vertex_index: u32, world_position: vec4<f32>) -> vec4<f32> {
     color = mix(color, index_color(lod), 0.5);
 
 #ifdef MESH_MORPH
-    let morph = morph(tile, world_position);
-    color = mix(color, vec4<f32>(1.0), 0.3 * morph);
+    let morph = compute_morph(tile, world_position);
+    color = mix(color, vec4<f32>(1.0), 0.3 * morph.ratio);
 #endif
 
 #ifdef SPHERICAL
@@ -49,7 +48,7 @@ fn show_lod(local_position: vec3<f32>, world_position: vec4<f32>, atlas_lod: u32
     let is_outline = quadtree_outlines(local_position, atlas_lod);
     let color = mix(index_color(atlas_lod), vec4<f32>(0.0), is_outline);
 #else
-    let blend = blend(world_position);
+    let blend = compute_blend(world_position);
     let is_outline = quadtree_outlines(local_position, blend.lod);
     var color = mix(index_color(blend.lod), vec4<f32>(1.0), 1.0 - blend.ratio);
     color = mix(color, 0.1 * color, is_outline);

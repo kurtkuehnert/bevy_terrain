@@ -1,8 +1,7 @@
 #define_import_path bevy_terrain::functions
 
-#import bevy_terrain::bindings config, view_config, tiles, quadtree, atlas_sampler
-#import bevy_terrain::types Tile, NodeLookup, Blend, S2Coordinate
-#import bevy_terrain::attachments height_atlas, HEIGHT_SIZE,
+#import bevy_terrain::bindings config, view_config, tiles, quadtree
+#import bevy_terrain::types Tile, NodeLookup, Morph, Blend, S2Coordinate
 #import bevy_pbr::mesh_view_bindings view
 
 fn morph_threshold_distance(tile: Tile) -> f32 {
@@ -13,15 +12,15 @@ fn morph_threshold_distance(tile: Tile) -> f32 {
 #endif
 }
 
-fn morph(tile: Tile, world_position: vec4<f32>) -> f32 {
+fn compute_morph(tile: Tile, world_position: vec4<f32>) -> Morph {
     let viewer_distance = distance(world_position.xyz, view.world_position.xyz);
     let threshold_distance = 2.0 * morph_threshold_distance(tile);
     let ratio = clamp(1.0 - (1.0 - viewer_distance / threshold_distance) / view_config.morph_range, 0.0, 1.0);
 
-    return ratio;
+    return Morph(ratio);
 }
 
-fn blend(world_position: vec4<f32>) -> Blend {
+fn compute_blend(world_position: vec4<f32>) -> Blend {
     let viewer_distance = distance(world_position.xyz, view.world_position.xyz);
     let log_distance = max(log2(viewer_distance / view_config.blend_distance), 0.0);
     let ratio = (1.0 - log_distance % 1.0) / view_config.blend_range;
@@ -90,20 +89,20 @@ fn vertex_local_position(vertex_index: u32) -> vec3<f32> {
 
 #ifdef MESH_MORPH
     let world_position = local_to_world_position(local_position, view_config.approximate_height);
-    let morph_ratio = morph(tile, world_position);
+    let morph = compute_morph(tile, world_position);
 
     let even_grid_offset = grid_offset & vec2<u32>(4294967294u); // set last bit to zero
     let even_grid_uv = vec2<f32>(even_grid_offset) / view_config.grid_size;
     let even_local_position = tile_local_position(tile, even_grid_uv);
 
-    local_position = mix(local_position, even_local_position, morph_ratio);
+    local_position = mix(local_position, even_local_position, morph.ratio);
 #endif
 
     return local_position;
 }
 
 fn vertex_blend(local_position: vec3<f32>) -> Blend {
-    return blend(local_to_world_position(local_position, view_config.approximate_height));
+    return compute_blend(local_to_world_position(local_position, view_config.approximate_height));
 }
 
 fn local_to_world_position(local_position: vec3<f32>, height: f32) -> vec4<f32> {
@@ -310,5 +309,3 @@ fn lookup_node(local_position: vec3<f32>, lod: u32) -> NodeLookup {
 
     return NodeLookup(atlas_index, atlas_lod, atlas_coordinate);
 }
-
-
