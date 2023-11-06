@@ -23,7 +23,7 @@ fn compute_morph(tile: Tile, world_position: vec4<f32>) -> Morph {
 fn compute_blend(world_position: vec4<f32>) -> Blend {
     let viewer_distance = distance(world_position.xyz, view.world_position.xyz);
     let log_distance = max(log2(viewer_distance / view_config.blend_distance), 0.0);
-    let ratio = (1.0 - log_distance % 1.0) / view_config.blend_range;
+    let ratio = 1.0 - (1.0 - log_distance % 1.0) / view_config.blend_range;
 
     return Blend(u32(log_distance), ratio);
 }
@@ -171,6 +171,7 @@ fn s2_from_local_position(local_position: vec3<f32>) -> S2Coordinate {
 }
 
 fn s2_to_local_position(s2: S2Coordinate) -> vec3<f32> {
+#ifdef SPHERICAL
     var uv = vec2<f32>(0.0);
 
     if (s2.st.x > 0.5) { uv.x =       (4.0 * pow(s2.st.x, 2.0) - 1.0) / 3.0; }
@@ -201,6 +202,9 @@ fn s2_to_local_position(s2: S2Coordinate) -> vec3<f32> {
     }
 
     return normalize(local_position);
+#else
+    return s2.st - 0.5;
+#endif
 }
 
 fn s2_project_to_side(s2: S2Coordinate, side: u32) -> S2Coordinate {

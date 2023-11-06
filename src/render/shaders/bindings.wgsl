@@ -13,5 +13,3 @@ var<storage> tiles: TileList;
 // terrain bindings
 @group(2) @binding(1)
 var<uniform> config: TerrainConfig;
-@group(2) @binding(2)
-var atlas_sampler: sampler;

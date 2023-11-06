@@ -60,27 +60,3 @@ struct NodeLookup {
     atlas_lod: u32,
     atlas_coordinate: vec2<f32>,
 }
-
-struct VertexInput {
-    @builtin(instance_index) instance_index: u32,
-    @builtin(vertex_index)   vertex_index: u32,
-}
-
-struct VertexOutput {
-    @builtin(position)       fragment_position: vec4<f32>,
-    @location(0)             local_position: vec3<f32>,
-    @location(1)             world_position: vec4<f32>,
-    @location(2)             debug_color: vec4<f32>,
-}
-
-struct FragmentInput {
-    @builtin(front_facing)   is_front: bool,
-    @builtin(position)       fragment_position: vec4<f32>,
-    @location(0)             local_position: vec3<f32>,
-    @location(1)             world_position: vec4<f32>,
-    @location(2)             debug_color: vec4<f32>,
-}
-
-struct FragmentOutput {
-    @location(0)             color: vec4<f32>
-}

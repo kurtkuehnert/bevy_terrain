@@ -1,6 +1,5 @@
 use crate::plugin::TerrainPluginConfig;
-use bevy::asset::load_internal_asset;
-use bevy::{prelude::*, reflect::TypeUuid};
+use bevy::{asset::load_internal_asset, prelude::*, reflect::TypeUuid};
 
 const TYPES_SHADER: HandleUntyped =
     HandleUntyped::weak_from_u64(Shader::TYPE_UUID, 907665645684322571);
@@ -77,15 +76,19 @@ pub(crate) fn generate_attachment_shader(plugin_config: &TerrainPluginConfig) ->
         let attachment_offset = attachment.border_size as f32 / attachment.texture_size as f32;
 
         source.push_str(&format!(
-            include_str!("attachments.wgsl"),
-            binding = binding,
-            attachment_name_lower = attachment_name_lower,
-            attachment_name_upper = attachment_name_upper,
-            attachment_size = attachment_size,
-            attachment_scale = attachment_scale,
-            attachment_offset = attachment_offset
+            "
+                const {attachment_name_upper}_SIZE  : f32 = {attachment_size:.10};
+                const {attachment_name_upper}_SCALE : f32 = {attachment_scale:.10};
+                const {attachment_name_upper}_OFFSET: f32 = {attachment_offset:.10};
+
+                @group(2) @binding({binding})
+                var {attachment_name_lower}_atlas: texture_2d_array<f32>;
+
+            "
         ));
     }
+
+    source.push_str(include_str!("attachments.wgsl"));
 
     Shader::from_wgsl(
         source,
