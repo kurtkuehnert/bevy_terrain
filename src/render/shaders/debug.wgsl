@@ -50,7 +50,7 @@ fn show_lod(local_position: vec3<f32>, world_position: vec4<f32>, atlas_lod: u32
 #else
     let blend = compute_blend(world_position);
     let is_outline = quadtree_outlines(local_position, blend.lod);
-    var color = mix(index_color(blend.lod), vec4<f32>(1.0), 1.0 - blend.ratio);
+    var color = mix(index_color(blend.lod), vec4<f32>(1.0), blend.ratio);
     color = mix(color, 0.1 * color, is_outline);
 #endif
 

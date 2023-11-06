@@ -1,6 +1,6 @@
 #import bevy_terrain::types TerrainConfig, TerrainViewConfig, Tile, TileList, Parameters, NodeLookup
-#import bevy_terrain::functions local_to_world_position, tile_local_position
 #import bevy_terrain::bindings config
+#import bevy_terrain::functions local_to_world_position, tile_local_position
 
 struct CullingData {
     world_position: vec4<f32>,
