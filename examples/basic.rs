@@ -13,22 +13,15 @@ const TERRAIN_SIZE: f32 = 1024.0;
 const TEXTURE_SIZE: u32 = 64;
 const MIP_LEVEL_COUNT: u32 = 1;
 const LOD_COUNT: u32 = 8;
-const HEIGHT: f32 = 200.0;
+const HEIGHT: f32 = 100.0;
 const NODE_ATLAS_SIZE: u32 = 1024;
-const PATH: &str = "terrain";
+const PATH: &str = "terrains/basic";
 
 #[derive(AsBindGroup, TypeUuid, TypePath, Clone)]
 #[uuid = "003e1d5d-241c-45a6-8c25-731dee22d820"]
 pub struct TerrainMaterial {}
 
-impl Material for TerrainMaterial {
-    // fn vertex_shader() -> ShaderRef {
-    //     "shaders/basic.wgsl".into()
-    // }
-    // fn fragment_shader() -> ShaderRef {
-    //     "shaders/basic.wgsl".into()
-    // }
-}
+impl Material for TerrainMaterial {}
 
 fn main() {
     let config =
@@ -53,7 +46,6 @@ fn main() {
 fn setup(
     mut commands: Commands,
     plugin_config: Res<TerrainPluginConfig>,
-    mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<TerrainMaterial>>,
     mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
@@ -63,7 +55,7 @@ fn setup(
         &plugin_config,
         TileConfig {
             side: 0,
-            path: format!("assets/{PATH}/source/height"),
+            path: format!("assets/{PATH}/source/height.png"),
             size: TILE_SIZE,
             file_format: TILE_FORMAT,
         },
@@ -128,11 +120,6 @@ fn setup(
     });
     commands.insert_resource(AmbientLight {
         brightness: 0.2,
-        ..default()
-    });
-
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Cube { size: 5.0 })),
         ..default()
     });
 }
