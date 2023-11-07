@@ -27,7 +27,7 @@ fn sample_color(lookup: NodeLookup) -> vec4<f32> {
 @vertex
 fn vertex(input: VertexInput) -> VertexOutput {
     let local_position = vertex_local_position(input.vertex_index);
-    let blend = vertex_blend(local_position);
+    let blend = compute_blend(local_position);
 
     let lookup = lookup_node(local_position, blend.lod);
     var height = sample_height(lookup);
@@ -37,14 +37,14 @@ fn vertex(input: VertexInput) -> VertexOutput {
         height      = mix(height, sample_height(lookup2), blend.ratio);
     }
 
-    let world_position = local_to_world_position(local_position, height);
+    // Todo: adjust local_position with height
 
-    return vertex_output(input, local_position, world_position);
+    return vertex_output(input, local_position, height);
 }
 
 @fragment
 fn fragment(input: FragmentInput) -> FragmentOutput {
-    let blend = compute_blend(input.world_position);
+    let blend = compute_blend(input.local_position);
 
     let lookup = lookup_node(input.local_position, blend.lod);
     var height = sample_height(lookup);

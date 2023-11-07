@@ -1,9 +1,9 @@
 #import bevy_terrain::types TerrainConfig, TerrainViewConfig, Tile, TileList, Parameters, NodeLookup
 #import bevy_terrain::bindings config
-#import bevy_terrain::functions local_to_world_position, tile_local_position
+#import bevy_terrain::functions world_to_local_position, tile_local_position
 
 struct CullingData {
-    world_position: vec4<f32>,
+    world_position: vec3<f32>,
     view_proj: mat4x4<f32>,
     model: mat4x4<f32>,
     planes: array<vec4<f32>, 5>,
@@ -25,11 +25,9 @@ var<storage, read_write> parameters: Parameters;
 
 // Todo: figure out how to remove this duplicate
 fn morph_threshold_distance(tile: Tile) -> f32 {
-#ifdef SPHERICAL
-    return tile.size * config.radius * view_config.morph_distance;
-#else
-    return tile.size * config.terrain_size * view_config.morph_distance;
-#endif
+    let tile_count = 1.0 / tile.size;
+
+    return view_config.morph_distance / tile_count;
 }
 
 fn child_index() -> i32 {
@@ -45,17 +43,18 @@ fn final_index() -> i32 {
 }
 
 fn should_be_divided(tile: Tile) -> bool {
-    var minimal_viewer_distance = 3.40282347E+38; // f32::MAX
+    var min_view_distance = 3.40282347E+38; // f32::MAX
+
+    let view_local_position = world_to_local_position(view.world_position);
 
     for (var i: u32 = 0u; i < 4u; i = i + 1u) {
         let local_position = tile_local_position(tile, vec2<f32>(f32(i & 1u), f32(i >> 1u & 1u)));
-        let world_position = local_to_world_position(local_position, view_config.approximate_height);
-        let viewer_distance = distance(world_position.xyz, view.world_position.xyz);
+        let view_distance = distance(local_position, view_local_position);
 
-        minimal_viewer_distance = min(minimal_viewer_distance, viewer_distance);
+        min_view_distance = min(min_view_distance, view_distance);
     }
 
-    return minimal_viewer_distance < morph_threshold_distance(tile);
+    return min_view_distance < morph_threshold_distance(tile);
 }
 
 fn subdivide(tile: Tile) {

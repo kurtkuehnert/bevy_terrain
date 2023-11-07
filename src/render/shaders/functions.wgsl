@@ -5,31 +5,29 @@
 #import bevy_pbr::mesh_view_bindings view
 
 fn morph_threshold_distance(tile: Tile) -> f32 {
-#ifdef SPHERICAL
-    return tile.size * config.radius * view_config.morph_distance;
-#else
-    return tile.size * config.terrain_size * view_config.morph_distance;
-#endif
+    let tile_count = 1.0 / tile.size;
+
+    return view_config.morph_distance / tile_count;
 }
 
 fn blend_threshold_distance() -> f32 {
-#ifdef SPHERICAL
-    return view_config.blend_distance;
-#else
-    return view_config.blend_distance;
-#endif
+    return view_config.blend_distance / config.leaf_node_count;
 }
 
-fn compute_morph(tile: Tile, world_position: vec4<f32>) -> Morph {
-    let view_distance = distance(world_position.xyz, view.world_position.xyz);
+fn compute_morph(tile: Tile, local_position: vec3<f32>) -> Morph {
+    let view_local_position = world_to_local_position(view.world_position);
+
+    let view_distance = distance(local_position, view_local_position);
     let threshold_distance = 2.0 * morph_threshold_distance(tile);
     let ratio = clamp(1.0 - (1.0 - view_distance / threshold_distance) / view_config.morph_range, 0.0, 1.0);
 
     return Morph(ratio);
 }
 
-fn compute_blend(world_position: vec4<f32>) -> Blend {
-    let view_distance = distance(world_position.xyz, view.world_position.xyz);
+fn compute_blend(local_position: vec3<f32>) -> Blend {
+    let view_local_position = world_to_local_position(view.world_position);
+
+    let view_distance = distance(local_position, view_local_position);
     let log_distance = max(log2(view_distance / blend_threshold_distance()), 0.0);
     let ratio = 1.0 - (1.0 - log_distance % 1.0) / view_config.blend_range;
 
@@ -65,9 +63,9 @@ fn tile_local_position(tile: Tile, uv_offset: vec2<f32>) -> vec3<f32> {
                                                 vec3<f32>( 0.0,  2.0,  0.0),
                                                 vec3<f32>( 2.0,  0.0,  0.0));
 #else
-    var COORDINATE_ARRAY = array<vec3<f32>, 1u>(vec3<f32>(-0.5,  0.0, -0.5));
-    var U_ARRAY          = array<vec3<f32>, 1u>(vec3<f32>( 1.0,  0.0,  0.0));
-    var V_ARRAY          = array<vec3<f32>, 1u>(vec3<f32>( 0.0,  0.0,  1.0));
+    var COORDINATE_ARRAY = array<vec3<f32>, 1u>(vec3<f32>(-1.0,  0.0, -1.0));
+    var U_ARRAY          = array<vec3<f32>, 1u>(vec3<f32>( 2.0,  0.0,  0.0));
+    var V_ARRAY          = array<vec3<f32>, 1u>(vec3<f32>( 0.0,  0.0,  2.0));
 #endif
 
     let uv = tile.uv + tile.size * uv_offset;
@@ -96,8 +94,7 @@ fn vertex_local_position(vertex_index: u32) -> vec3<f32> {
     var local_position = tile_local_position(tile, grid_uv);
 
 #ifdef MESH_MORPH
-    let world_position = local_to_world_position(local_position, view_config.approximate_height);
-    let morph = compute_morph(tile, world_position);
+    let morph = compute_morph(tile, local_position);
 
     let even_grid_offset = grid_offset & vec2<u32>(4294967294u); // set last bit to zero
     let even_grid_uv = vec2<f32>(even_grid_offset) / view_config.grid_size;
@@ -107,10 +104,6 @@ fn vertex_local_position(vertex_index: u32) -> vec3<f32> {
 #endif
 
     return local_position;
-}
-
-fn vertex_blend(local_position: vec3<f32>) -> Blend {
-    return compute_blend(local_to_world_position(local_position, view_config.approximate_height));
 }
 
 fn local_to_world_position(local_position: vec3<f32>, height: f32) -> vec4<f32> {
@@ -123,9 +116,9 @@ fn local_to_world_position(local_position: vec3<f32>, height: f32) -> vec4<f32> 
 
 fn world_to_local_position(world_position: vec3<f32>) -> vec3<f32> {
 #ifdef SPHERICAL
-    return normalize(world_position);
+    return world_position / config.radius;
 #else
-    return vec3<f32>(world_position.x, 0.0, world_position.z) / config.terrain_size;
+    return world_position / config.terrain_size;
 #endif
 }
 
@@ -180,7 +173,7 @@ fn s2_from_local_position(local_position: vec3<f32>) -> S2Coordinate {
 
     return S2Coordinate(side, st);
 #else
-    let st = local_position.xz + 0.5;
+    let st = 0.5 * local_position.xz + 0.5;
 
     return S2Coordinate(0u, st);
 #endif
@@ -219,7 +212,7 @@ fn s2_to_local_position(s2: S2Coordinate) -> vec3<f32> {
 
     return normalize(local_position);
 #else
-    return vec3<f32>(s2.st.x - 0.5, 0.0, s2.st.y - 0.5);
+    return vec3<f32>(2.0 * s2.st.x - 1.0, 0.0, 2.0 * s2.st.y - 1.0);
 #endif
 }
 
@@ -303,7 +296,7 @@ fn inside_quadtree(view_s2: S2Coordinate, frag_s2: S2Coordinate, lod: u32) -> f3
 }
 
 fn quadtree_lod(frag_local_position: vec3<f32>) -> u32 {
-    let view_local_position = world_to_local_position(view.world_position);
+    let view_local_position = world_to_local_position(view.world_position); // Todo: adjust for new world_to_local funktion
     let view_s2 = s2_from_local_position(view_local_position);
     let frag_s2 = s2_from_local_position(frag_local_position);
 

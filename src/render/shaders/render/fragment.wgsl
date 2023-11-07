@@ -25,7 +25,7 @@ fn fragment_output(input: FragmentInput, color: vec4<f32>, lookup: NodeLookup) -
     output.color = color;
 
 #ifdef SHOW_LOD
-    output.color = show_lod(input.local_position, input.world_position, lookup.atlas_lod);
+    output.color = show_lod(input.local_position, lookup.atlas_lod);
 #endif
 #ifdef SHOW_UV
     output.color = vec4<f32>(lookup.atlas_coordinate, 0.0, 1.0);
@@ -42,7 +42,7 @@ fn fragment_output(input: FragmentInput, color: vec4<f32>, lookup: NodeLookup) -
 
 @fragment
 fn default_fragment(input: FragmentInput) -> FragmentOutput {
-    let blend = compute_blend(input.world_position);
+    let blend = compute_blend(input.local_position);
 
     let lookup = lookup_node(input.local_position, blend.lod);
     var normal = sample_normal(lookup, input.local_position);

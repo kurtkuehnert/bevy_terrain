@@ -6,7 +6,7 @@ use crate::{
     },
     terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
 };
-use bevy::{math::Vec3Swizzles, prelude::*};
+use bevy::prelude::*;
 use bytemuck::{Pod, Zeroable};
 use itertools::iproduct;
 use ndarray::{Array3, Array4};
@@ -73,7 +73,7 @@ impl S2Coordinate {
         #[cfg(not(feature = "spherical"))]
         return Self {
             side: 0,
-            st: local_position.xz() + 0.5,
+            st: Vec2::new(0.5 * local_position.x + 0.5, 0.5 * local_position.z + 0.5),
         };
     }
 
@@ -105,7 +105,7 @@ impl S2Coordinate {
         }
 
         #[cfg(not(feature = "spherical"))]
-        return Vec3::new(self.st.x - 0.5, 0.0, self.st.y - 0.5);
+        return Vec3::new(2.0 * self.st.x - 1.0, 0.0, 2.0 * self.st.y - 1.0);
     }
 
     #[cfg(feature = "spherical")]
@@ -245,6 +245,7 @@ pub struct Quadtree {
     /// The count of nodes in x and y direction per layer.
     pub(crate) quadtree_size: u32,
     leaf_node_count: f32,
+    leaf_node_size: f32,
     terrain_size: f32,
     radius: f32,
     /// The distance (measured in node sizes) until which to request nodes to be loaded.
@@ -268,7 +269,8 @@ impl Quadtree {
         handle: Handle<Image>,
         lod_count: u32,
         quadtree_size: u32,
-        node_count: f32,
+        leaf_node_count: f32,
+        leaf_node_size: f32,
         load_distance: f32,
         height: f32,
         terrain_size: f32,
@@ -278,7 +280,8 @@ impl Quadtree {
             handle,
             lod_count,
             quadtree_size,
-            leaf_node_count: node_count,
+            leaf_node_count,
+            leaf_node_size,
             terrain_size,
             radius,
             load_distance,
@@ -307,6 +310,7 @@ impl Quadtree {
             config.lod_count,
             view_config.quadtree_size,
             config.leaf_node_count,
+            config.leaf_node_size,
             view_config.load_distance,
             config.height,
             config.terrain_size,
@@ -317,6 +321,11 @@ impl Quadtree {
     #[inline]
     fn node_count(&self, lod: u32) -> f32 {
         self.leaf_node_count / (1 << lod) as f32
+    }
+
+    #[inline]
+    fn node_size(&self, lod: u32) -> f32 {
+        self.leaf_node_size / (1 << lod) as f32
     }
 
     fn origin(&self, quadtree_s2: S2Coordinate, lod: u32) -> UVec2 {
@@ -330,20 +339,12 @@ impl Quadtree {
         quadtree_origin.as_uvec2()
     }
 
-    fn local_to_world_position(&self, local_position: Vec3, height: f32) -> Vec3 {
-        #[cfg(feature = "spherical")]
-        return local_position * (self.radius + height);
-
-        #[cfg(not(feature = "spherical"))]
-        return local_position * self.terrain_size + Vec3::new(0.0, height, 0.0);
-    }
-
     fn world_to_local_position(&self, world_position: Vec3) -> Vec3 {
         #[cfg(feature = "spherical")]
-        return world_position.normalize();
+        return world_position / self.radius;
 
         #[cfg(not(feature = "spherical"))]
-        return Vec3::new(world_position.x, 0.0, world_position.z) / self.terrain_size;
+        return world_position / self.terrain_size;
     }
 
     pub(crate) fn compute_requests(&mut self, view_world_position: Vec3) {
@@ -358,6 +359,7 @@ impl Quadtree {
             let quadtree_s2 = view_s2;
 
             for lod in 0..self.lod_count {
+                let node_count = self.node_count(lod);
                 let quadtree_origin: UVec2 = self.origin(quadtree_s2, lod);
 
                 for (x, y) in iproduct!(0..self.quadtree_size, 0..self.quadtree_size) {
@@ -368,21 +370,17 @@ impl Quadtree {
                         y: quadtree_origin.y + y,
                     };
 
-                    let node_s2 =
-                        S2Coordinate::from_node_coordinate(node_coordinate, self.node_count(lod));
+                    let node_s2 = S2Coordinate::from_node_coordinate(node_coordinate, node_count);
                     let node_local_position = node_s2.to_local_position();
-                    let node_world_position =
-                        self.local_to_world_position(node_local_position, 0.0);
 
-                    let distance = node_world_position.distance(view_world_position);
+                    let distance = node_local_position.distance(view_local_position);
+                    let node_distance = 0.5 * distance * node_count;
 
-                    let state = if distance < self.load_distance * 2.0_f32.powi(lod as i32) {
+                    let state = if node_distance < self.load_distance {
                         RequestState::Requested
                     } else {
                         RequestState::Released
                     };
-
-                    // let new_state = RequestState::Requested;
 
                     let node = &mut self.nodes[[
                         side as usize,
