@@ -3,7 +3,6 @@ use crate::{
     terrain_view::{TerrainView, TerrainViewComponents},
 };
 use bevy::{
-    math::Vec3Swizzles,
     prelude::*,
     render::{
         render_asset::RenderAssets, render_resource::*, renderer::RenderDevice,
@@ -30,7 +29,7 @@ pub fn planes(view_projection: &Mat4) -> [Vec4; 5] {
 #[derive(Copy, Clone, Debug, Default, AsBindGroup)]
 pub struct CullingData {
     #[uniform(0)]
-    world_position: Vec4,
+    world_position: Vec3,
     #[uniform(0)]
     view_proj: Mat4,
     #[uniform(0)]
@@ -42,7 +41,7 @@ pub struct CullingData {
 impl From<&ExtractedView> for CullingData {
     fn from(view: &ExtractedView) -> Self {
         let view_proj = view.projection * view.transform.compute_matrix().inverse();
-        let world_position = view.transform.translation().xyzx();
+        let world_position = view.transform.translation();
         let planes = planes(&view_proj);
 
         Self {

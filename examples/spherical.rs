@@ -111,9 +111,9 @@ fn setup(
     let view_config = TerrainViewConfig {
         grid_size: 16,
         quadtree_size: 8,
-        load_distance: 12.0,
-        morph_distance: 8.0,
-        blend_distance: 1.5,
+        load_distance: 3.0,  // measured in nodes
+        morph_distance: 8.0, // measured in tiles
+        blend_distance: 1.5, // measured in nodes
         ..default()
     };
 
