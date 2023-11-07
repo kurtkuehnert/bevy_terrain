@@ -19,23 +19,23 @@ use bevy::{
 /// The terrain config data that is available in shaders.
 #[derive(Clone, Default, ShaderType)]
 struct TerrainConfigUniform {
-    lod_count: u32,
-    height: f32,
-    nodes_per_side: f32,
-    leaf_node_size: u32,
     terrain_size: f32,
     radius: f32,
+    lod_count: u32,
+    height: f32,
+    leaf_node_count: f32,
+    leaf_node_size: f32,
 }
 
 impl From<&TerrainConfig> for TerrainConfigUniform {
     fn from(config: &TerrainConfig) -> Self {
         Self {
-            lod_count: config.lod_count,
-            height: config.height,
-            nodes_per_side: config.nodes_per_side,
-            leaf_node_size: config.leaf_node_size,
             terrain_size: config.terrain_size,
             radius: config.radius,
+            lod_count: config.lod_count,
+            height: config.height,
+            leaf_node_count: config.leaf_node_count,
+            leaf_node_size: config.leaf_node_size,
         }
     }
 }

@@ -27,7 +27,7 @@ use bevy::{
 #[derive(Clone, Default, ShaderType)]
 pub(crate) struct TerrainViewConfigUniform {
     height_under_viewer: f32,
-    node_count: u32,
+    quadtree_size: u32,
     tile_count: u32,
     pub(crate) refinement_count: u32,
     grid_size: f32,
@@ -43,7 +43,7 @@ impl TerrainViewConfigUniform {
     fn new(view_config: &TerrainViewConfig) -> Self {
         TerrainViewConfigUniform {
             height_under_viewer: view_config.height_under_viewer,
-            node_count: view_config.node_count,
+            quadtree_size: view_config.quadtree_size,
             tile_count: view_config.tile_count,
             refinement_count: view_config.refinement_count,
             grid_size: view_config.grid_size as f32,
