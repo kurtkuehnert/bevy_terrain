@@ -36,7 +36,6 @@ use bevy::{
 
 #[derive(Clone, Resource)]
 pub struct TerrainPluginConfig {
-    pub leaf_node_size: u32,
     pub base: BaseConfig,
     pub attachments: Vec<AttachmentConfig>,
 }
@@ -44,7 +43,6 @@ pub struct TerrainPluginConfig {
 impl TerrainPluginConfig {
     pub fn with_base_attachment(base: BaseConfig) -> Self {
         Self {
-            leaf_node_size: base.texture_size - 2 * base.border_size,
             base,
             attachments: vec![base.height_attachment()],
         }
@@ -55,16 +53,19 @@ impl TerrainPluginConfig {
         self
     }
 
-    #[cfg(feature = "spherical")]
     pub fn configure_terrain(
         &self,
-        nodes_per_side: f32,
-        radius: f32,
+        side_length: f32,
         lod_count: u32,
         height: f32,
         node_atlas_size: u32,
         path: String,
     ) -> TerrainConfig {
+        let terrain_size = side_length;
+        let radius = 50.0; // side_length / 2.0;
+        let leaf_node_size = (self.base.texture_size - 2 * self.base.border_size) as f32;
+        let leaf_node_count = side_length / leaf_node_size;
+
         let attachments = self
             .attachments
             .clone()
@@ -75,45 +76,12 @@ impl TerrainPluginConfig {
         let nodes = load_node_config(&path);
 
         TerrainConfig {
-            lod_count,
-            height,
-            leaf_node_size: self.leaf_node_size,
-            nodes_per_side,
-            terrain_size: 0.0,
-            radius,
-            node_atlas_size,
-            path,
-            attachments,
-            nodes,
-        }
-    }
-
-    #[cfg(not(feature = "spherical"))]
-    pub fn configure_terrain(
-        &self,
-        nodes_per_side: f32,
-        terrain_size: f32,
-        lod_count: u32,
-        height: f32,
-        node_atlas_size: u32,
-        path: String,
-    ) -> TerrainConfig {
-        let attachments = self
-            .attachments
-            .clone()
-            .into_iter()
-            .map(AttachmentConfig::into)
-            .collect();
-
-        let nodes = load_node_config(&path);
-
-        TerrainConfig {
-            lod_count,
-            height,
-            leaf_node_size: self.leaf_node_size,
-            nodes_per_side,
             terrain_size,
-            radius: 0.0,
+            radius,
+            lod_count,
+            height,
+            leaf_node_size,
+            leaf_node_count,
             node_atlas_size,
             path,
             attachments,

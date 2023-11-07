@@ -67,7 +67,6 @@ fn setup(
 
     // Configure all the important properties of the terrain, as well as its attachments.
     let config = plugin_config.configure_terrain(
-        TILE_SIZE as f32 / plugin_config.leaf_node_size as f32,
         TERRAIN_SIZE,
         LOD_COUNT,
         HEIGHT,
@@ -78,7 +77,7 @@ fn setup(
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
     let view_config = TerrainViewConfig {
         grid_size: 16,
-        node_count: 8,
+        quadtree_size: 8,
         load_distance: 500.0,
         morph_distance: 8.0,
         blend_distance: 50.0,

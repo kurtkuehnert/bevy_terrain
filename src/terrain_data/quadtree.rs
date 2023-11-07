@@ -12,112 +12,17 @@ use itertools::iproduct;
 use ndarray::{Array3, Array4};
 
 #[derive(Clone, Copy)]
-enum SideInfo {
-    Fixed0,
-    Fixed1,
-    PositiveS,
-    PositiveT,
-}
-
-impl SideInfo {
-    const EVEN_LIST: [[SideInfo; 2]; 6] = [
-        [SideInfo::PositiveS, SideInfo::PositiveT],
-        [SideInfo::Fixed0, SideInfo::PositiveT],
-        [SideInfo::Fixed0, SideInfo::PositiveS],
-        [SideInfo::PositiveT, SideInfo::PositiveS],
-        [SideInfo::PositiveT, SideInfo::Fixed0],
-        [SideInfo::PositiveS, SideInfo::Fixed0],
-    ];
-    const ODD_LIST: [[SideInfo; 2]; 6] = [
-        [SideInfo::PositiveS, SideInfo::PositiveT],
-        [SideInfo::PositiveS, SideInfo::Fixed1],
-        [SideInfo::PositiveT, SideInfo::Fixed1],
-        [SideInfo::PositiveT, SideInfo::PositiveS],
-        [SideInfo::Fixed1, SideInfo::PositiveS],
-        [SideInfo::Fixed1, SideInfo::PositiveT],
-    ];
-}
-
-#[derive(Clone, Copy)]
 struct S2Coordinate {
     side: u32,
     st: Vec2,
 }
 
 impl S2Coordinate {
-    #[cfg(feature = "spherical")]
-    fn from_world_position(world_position: Vec3, _quadtree: &Quadtree) -> Self {
-        let local_position = world_position.xyz();
-
-        let direction = local_position.normalize();
-        let abs_direction = direction.abs();
-
-        let (side, uv) = if abs_direction.x > abs_direction.y && abs_direction.x > abs_direction.z {
-            if direction.x < 0.0 {
-                (
-                    0,
-                    Vec2::new(-direction.z / direction.x, direction.y / direction.x),
-                )
-            } else {
-                (
-                    3,
-                    Vec2::new(-direction.y / direction.x, direction.z / direction.x),
-                )
-            }
-        } else if abs_direction.z > abs_direction.y {
-            if direction.z > 0.0 {
-                (
-                    1,
-                    Vec2::new(direction.x / direction.z, -direction.y / direction.z),
-                )
-            } else {
-                (
-                    4,
-                    Vec2::new(direction.y / direction.z, -direction.x / direction.z),
-                )
-            }
-        } else {
-            if direction.y > 0.0 {
-                (
-                    2,
-                    Vec2::new(direction.x / direction.y, direction.z / direction.y),
-                )
-            } else {
-                (
-                    5,
-                    Vec2::new(-direction.z / direction.y, -direction.x / direction.y),
-                )
-            }
-        };
-
-        let st = uv
-            .to_array()
-            .map(|f| {
-                if f > 0.0 {
-                    0.5 * (1.0 + 3.0 * f).sqrt()
-                } else {
-                    1.0 - 0.5 * (1.0 - 3.0 * f).sqrt()
-                }
-            })
-            .into();
-
-        Self { side, st }
-    }
-
-    #[cfg(not(feature = "spherical"))]
-    fn from_world_position(world_position: Vec3, quadtree: &Quadtree) -> Self {
-        let local_position = world_position.xyz();
-
-        let st = local_position.xz() / quadtree.terrain_size + 0.5;
-
-        Self { side: 0, st }
-    }
-
-    fn from_node_coordinate(node_coordinate: NodeCoordinate, nodes_per_side: f32) -> Self {
+    fn from_node_coordinate(node_coordinate: NodeCoordinate, node_count: f32) -> Self {
         let st = (Vec2::new(
             node_coordinate.x as f32 + 0.5,
             node_coordinate.y as f32 + 0.5,
-        )) / nodes_per_side;
+        )) / node_count;
 
         Self {
             side: node_coordinate.side,
@@ -125,50 +30,113 @@ impl S2Coordinate {
         }
     }
 
-    #[cfg(feature = "spherical")]
-    fn to_world_position(self, quadtree: &Quadtree) -> Vec3 {
-        let uv: Vec2 = self
-            .st
-            .to_array()
-            .map(|f| {
-                if f > 0.5 {
-                    (4.0 * f.powi(2) - 1.0) / 3.0
+    fn from_local_position(local_position: Vec3) -> Self {
+        #[cfg(feature = "spherical")]
+        {
+            let normal = local_position.normalize();
+            let abs_normal = normal.abs();
+
+            let (side, uv) = if abs_normal.x > abs_normal.y && abs_normal.x > abs_normal.z {
+                if normal.x < 0.0 {
+                    (0, Vec2::new(-normal.z / normal.x, normal.y / normal.x))
                 } else {
-                    (1.0 - 4.0 * (1.0 - f).powi(2)) / 3.0
+                    (3, Vec2::new(-normal.y / normal.x, normal.z / normal.x))
                 }
-            })
-            .into();
+            } else if abs_normal.z > abs_normal.y {
+                if normal.z > 0.0 {
+                    (1, Vec2::new(normal.x / normal.z, -normal.y / normal.z))
+                } else {
+                    (4, Vec2::new(normal.y / normal.z, -normal.x / normal.z))
+                }
+            } else {
+                if normal.y > 0.0 {
+                    (2, Vec2::new(normal.x / normal.y, normal.z / normal.y))
+                } else {
+                    (5, Vec2::new(-normal.z / normal.y, -normal.x / normal.y))
+                }
+            };
 
-        Self::uv_to_world_position(uv, self.side, quadtree)
-    }
+            let st = uv
+                .to_array()
+                .map(|f| {
+                    if f > 0.0 {
+                        0.5 * (1.0 + 3.0 * f).sqrt()
+                    } else {
+                        1.0 - 0.5 * (1.0 - 3.0 * f).sqrt()
+                    }
+                })
+                .into();
 
-    #[cfg(not(feature = "spherical"))]
-    fn to_world_position(self, quadtree: &Quadtree) -> Vec3 {
-        let local_position = (self.st - 0.5) * quadtree.terrain_size;
-
-        let world_position = Vec3::new(local_position.x, 0.0, local_position.y);
-
-        world_position
-    }
-
-    fn uv_to_world_position(uv: Vec2, side: u32, quadtree: &Quadtree) -> Vec3 {
-        let local_position = match side {
-            0 => Vec3::new(-1.0, -uv.y, uv.x),
-            1 => Vec3::new(uv.x, -uv.y, 1.0),
-            2 => Vec3::new(uv.x, 1.0, uv.y),
-            3 => Vec3::new(1.0, -uv.x, uv.y),
-            4 => Vec3::new(uv.y, -uv.x, -1.0),
-            5 => Vec3::new(uv.y, -1.0, uv.x),
-            _ => unreachable!(),
+            Self { side, st }
         }
-        .normalize();
 
-        let world_position = local_position * quadtree.radius;
-
-        world_position
+        #[cfg(not(feature = "spherical"))]
+        return Self {
+            side: 0,
+            st: local_position.xz() + 0.5,
+        };
     }
 
+    fn to_local_position(self) -> Vec3 {
+        #[cfg(feature = "spherical")]
+        {
+            let uv: Vec2 = self
+                .st
+                .to_array()
+                .map(|f| {
+                    if f > 0.5 {
+                        (4.0 * f.powi(2) - 1.0) / 3.0
+                    } else {
+                        (1.0 - 4.0 * (1.0 - f).powi(2)) / 3.0
+                    }
+                })
+                .into();
+
+            match self.side {
+                0 => Vec3::new(-1.0, -uv.y, uv.x),
+                1 => Vec3::new(uv.x, -uv.y, 1.0),
+                2 => Vec3::new(uv.x, 1.0, uv.y),
+                3 => Vec3::new(1.0, -uv.x, uv.y),
+                4 => Vec3::new(uv.y, -uv.x, -1.0),
+                5 => Vec3::new(uv.y, -1.0, uv.x),
+                _ => unreachable!(),
+            }
+            .normalize()
+        }
+
+        #[cfg(not(feature = "spherical"))]
+        return Vec3::new(self.st.x - 0.5, 0.0, self.st.y - 0.5);
+    }
+
+    #[cfg(feature = "spherical")]
     fn project_to_side(self, side: u32) -> Self {
+        #[derive(Clone, Copy)]
+        enum SideInfo {
+            Fixed0,
+            Fixed1,
+            PositiveS,
+            PositiveT,
+        }
+
+        impl SideInfo {
+            const EVEN_LIST: [[SideInfo; 2]; 6] = [
+                [SideInfo::PositiveS, SideInfo::PositiveT],
+                [SideInfo::Fixed0, SideInfo::PositiveT],
+                [SideInfo::Fixed0, SideInfo::PositiveS],
+                [SideInfo::PositiveT, SideInfo::PositiveS],
+                [SideInfo::PositiveT, SideInfo::Fixed0],
+                [SideInfo::PositiveS, SideInfo::Fixed0],
+            ];
+            const ODD_LIST: [[SideInfo; 2]; 6] = [
+                [SideInfo::PositiveS, SideInfo::PositiveT],
+                [SideInfo::PositiveS, SideInfo::Fixed1],
+                [SideInfo::PositiveT, SideInfo::Fixed1],
+                [SideInfo::PositiveT, SideInfo::PositiveS],
+                [SideInfo::Fixed1, SideInfo::PositiveS],
+                [SideInfo::Fixed1, SideInfo::PositiveT],
+            ];
+        }
+
         let index = ((6 + side - self.side) % 6) as usize;
 
         let info = if self.side % 2 == 0 {
@@ -252,9 +220,9 @@ impl Default for QuadtreeEntry {
 /// Each view (camera, shadow-casting light) that should consider the terrain has to
 /// have an associated quadtree.
 ///
-/// This quadtree is a "cube" with a size of (`node_count`x`node_count`x`lod_count`), where each layer
-/// corresponds to a lod. These layers are wrapping (modulo `node_count`), that means that
-/// the quadtree is always centered under the viewer and only considers `node_count` / 2 nodes
+/// This quadtree is a "cube" with a size of (`quadtree_size`x`quadtree_size`x`lod_count`), where each layer
+/// corresponds to a lod. These layers are wrapping (modulo `quadtree_size`), that means that
+/// the quadtree is always centered under the viewer and only considers `quadtree_size` / 2 nodes
 /// in each direction.
 ///
 /// Each frame the quadtree determines the state of each node via the
@@ -275,8 +243,8 @@ pub struct Quadtree {
     /// The count of level of detail layers.
     pub(crate) lod_count: u32,
     /// The count of nodes in x and y direction per layer.
-    pub(crate) node_count: u32,
-    nodes_per_side: f32,
+    pub(crate) quadtree_size: u32,
+    leaf_node_count: f32,
     terrain_size: f32,
     radius: f32,
     /// The distance (measured in node sizes) until which to request nodes to be loaded.
@@ -292,15 +260,15 @@ impl Quadtree {
     ///
     /// * `handle` - The handle of the quadtree texture.
     /// * `lod_count` - The count of level of detail layers.
-    /// * `node_count` - The count of nodes in x and y direction per layer.
-    /// * `leaf_node_size` - The size of the smallest nodes (with lod 0).
+    /// * `quadtree_size` - The count of nodes in x and y direction per layer.
+    /// * `node_size` - The size of the smallest nodes (with lod 0).
     /// * `load_distance` - The distance (measured in node sizes) until which to request nodes to be loaded.
     /// * `height` - The height of the terrain.
     pub fn new(
         handle: Handle<Image>,
         lod_count: u32,
-        node_count: u32,
-        nodes_per_side: f32,
+        quadtree_size: u32,
+        node_count: f32,
         load_distance: f32,
         height: f32,
         terrain_size: f32,
@@ -309,8 +277,8 @@ impl Quadtree {
         Self {
             handle,
             lod_count,
-            node_count,
-            nodes_per_side,
+            quadtree_size,
+            leaf_node_count: node_count,
             terrain_size,
             radius,
             load_distance,
@@ -318,14 +286,14 @@ impl Quadtree {
             _height_under_viewer: height / 2.0,
             data: Array3::default((
                 SIDE_COUNT as usize * lod_count as usize,
-                node_count as usize,
-                node_count as usize,
+                quadtree_size as usize,
+                quadtree_size as usize,
             )),
             nodes: Array4::default((
                 SIDE_COUNT as usize,
                 lod_count as usize,
-                node_count as usize,
-                node_count as usize,
+                quadtree_size as usize,
+                quadtree_size as usize,
             )),
             released_nodes: default(),
             requested_nodes: default(),
@@ -337,8 +305,8 @@ impl Quadtree {
         Self::new(
             view_config.quadtree_handle.clone(),
             config.lod_count,
-            view_config.node_count,
-            config.nodes_per_side,
+            view_config.quadtree_size,
+            config.leaf_node_count,
             view_config.load_distance,
             config.height,
             config.terrain_size,
@@ -347,49 +315,68 @@ impl Quadtree {
     }
 
     #[inline]
-    fn nodes_per_side(&self, lod: u32) -> f32 {
-        self.nodes_per_side / (1 << lod) as f32
+    fn node_count(&self, lod: u32) -> f32 {
+        self.leaf_node_count / (1 << lod) as f32
     }
 
     fn origin(&self, quadtree_s2: S2Coordinate, lod: u32) -> UVec2 {
-        let nodes_per_side = self.nodes_per_side(lod);
-        let origin_node_coordinate = quadtree_s2.st * nodes_per_side;
-        let quadtree_size = self.node_count as f32;
-        let max_size = nodes_per_side.ceil() - quadtree_size;
+        let origin_node_coordinate = quadtree_s2.st * self.node_count(lod);
+        let max_offset = self.node_count(lod).ceil() - self.quadtree_size as f32;
 
-        let quadtree_origin = (origin_node_coordinate - 0.5 * quadtree_size)
+        let quadtree_origin = (origin_node_coordinate - 0.5 * self.quadtree_size as f32)
             .round()
-            .clamp(Vec2::splat(0.0), Vec2::splat(max_size));
+            .clamp(Vec2::splat(0.0), Vec2::splat(max_offset));
 
         quadtree_origin.as_uvec2()
     }
 
-    pub(crate) fn compute_requests(&mut self, view_position: Vec3) {
-        let view_s2 = S2Coordinate::from_world_position(view_position, self);
+    fn local_to_world_position(&self, local_position: Vec3, height: f32) -> Vec3 {
+        #[cfg(feature = "spherical")]
+        return local_position * (self.radius + height);
+
+        #[cfg(not(feature = "spherical"))]
+        return local_position * self.terrain_size + Vec3::new(0.0, height, 0.0);
+    }
+
+    fn world_to_local_position(&self, world_position: Vec3) -> Vec3 {
+        #[cfg(feature = "spherical")]
+        return world_position.normalize();
+
+        #[cfg(not(feature = "spherical"))]
+        return Vec3::new(world_position.x, 0.0, world_position.z) / self.terrain_size;
+    }
+
+    pub(crate) fn compute_requests(&mut self, view_world_position: Vec3) {
+        let view_local_position = self.world_to_local_position(view_world_position);
+        let view_s2 = S2Coordinate::from_local_position(view_local_position);
 
         for side in 0..SIDE_COUNT {
+            #[cfg(feature = "spherical")]
             let quadtree_s2 = view_s2.project_to_side(side);
+
+            #[cfg(not(feature = "spherical"))]
+            let quadtree_s2 = view_s2;
 
             for lod in 0..self.lod_count {
                 let quadtree_origin: UVec2 = self.origin(quadtree_s2, lod);
 
-                for (x, y) in iproduct!(0..self.node_count, 0..self.node_count) {
-                    let new_node_coordinate = NodeCoordinate {
+                for (x, y) in iproduct!(0..self.quadtree_size, 0..self.quadtree_size) {
+                    let node_coordinate = NodeCoordinate {
                         side,
                         lod,
                         x: quadtree_origin.x + x,
                         y: quadtree_origin.y + y,
                     };
 
-                    // Todo: figure out whether to request or release the node based on viewer distance
-                    let s2 = S2Coordinate::from_node_coordinate(
-                        new_node_coordinate,
-                        self.nodes_per_side(lod),
-                    );
-                    let world_position = s2.to_world_position(self);
-                    let distance = world_position.distance(view_position);
+                    let node_s2 =
+                        S2Coordinate::from_node_coordinate(node_coordinate, self.node_count(lod));
+                    let node_local_position = node_s2.to_local_position();
+                    let node_world_position =
+                        self.local_to_world_position(node_local_position, 0.0);
 
-                    let new_state = if distance < self.load_distance * 2.0_f32.powi(lod as i32) {
+                    let distance = node_world_position.distance(view_world_position);
+
+                    let state = if distance < self.load_distance * 2.0_f32.powi(lod as i32) {
                         RequestState::Requested
                     } else {
                         RequestState::Released
@@ -400,23 +387,23 @@ impl Quadtree {
                     let node = &mut self.nodes[[
                         side as usize,
                         lod as usize,
-                        (new_node_coordinate.x % self.node_count) as usize,
-                        (new_node_coordinate.y % self.node_count) as usize,
+                        (node_coordinate.x % self.quadtree_size) as usize,
+                        (node_coordinate.y % self.quadtree_size) as usize,
                     ]];
 
                     // check if quadtree slot refers to a new node
-                    if new_node_coordinate != node.node_coordinate {
+                    if node_coordinate != node.node_coordinate {
                         // release old node
                         if node.state == RequestState::Requested {
                             node.state = RequestState::Released;
                             self.released_nodes.push(node.node_coordinate);
                         }
 
-                        node.node_coordinate = new_node_coordinate;
+                        node.node_coordinate = node_coordinate;
                     }
 
                     // request or release node based on its distance to the view
-                    match (node.state, new_state) {
+                    match (node.state, state) {
                         (RequestState::Released, RequestState::Requested) => {
                             node.state = RequestState::Requested;
                             self.requested_nodes.push(node.node_coordinate);
@@ -534,10 +521,10 @@ fn height_under_viewer(
     viewer_position: Vec2,
 ) -> f32 {
     let coordinate =
-        (viewer_position / quadtree.leaf_node_size as f32).as_uvec2() % quadtree.node_count;
+        (viewer_position / quadtree.node_size as f32).as_uvec2() % quadtree.quadtree_size;
 
     let node = &quadtree.data[[0, coordinate.y as usize, coordinate.x as usize]];
-    let atlas_coords = (viewer_position / quadtree.leaf_node_size as f32) % 1.0;
+    let atlas_coords = (viewer_position / quadtree.node_size as f32) % 1.0;
 
     if node.atlas_index == INVALID_ATLAS_INDEX {
         return 0.0;

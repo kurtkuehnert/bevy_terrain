@@ -45,7 +45,7 @@ pub struct TerrainViewConfig {
     /// The current height under the viewer.
     pub height_under_viewer: f32,
     /// The count of nodes in x and y direction per quadtree layer.
-    pub node_count: u32,
+    pub quadtree_size: u32,
     /// The size of the tile buffer.
     pub tile_count: u32,
     /// The amount of steps the tile list will be refined.
@@ -71,7 +71,7 @@ impl Default for TerrainViewConfig {
             )
             .typed(), // Todo: fix this awful hack
             height_under_viewer: 0.0,
-            node_count: 10,
+            quadtree_size: 10,
             tile_count: 1000000,
             refinement_count: 20,
             grid_size: 8,

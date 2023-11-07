@@ -12,17 +12,25 @@ fn morph_threshold_distance(tile: Tile) -> f32 {
 #endif
 }
 
+fn blend_threshold_distance() -> f32 {
+#ifdef SPHERICAL
+    return view_config.blend_distance;
+#else
+    return view_config.blend_distance;
+#endif
+}
+
 fn compute_morph(tile: Tile, world_position: vec4<f32>) -> Morph {
-    let viewer_distance = distance(world_position.xyz, view.world_position.xyz);
+    let view_distance = distance(world_position.xyz, view.world_position.xyz);
     let threshold_distance = 2.0 * morph_threshold_distance(tile);
-    let ratio = clamp(1.0 - (1.0 - viewer_distance / threshold_distance) / view_config.morph_range, 0.0, 1.0);
+    let ratio = clamp(1.0 - (1.0 - view_distance / threshold_distance) / view_config.morph_range, 0.0, 1.0);
 
     return Morph(ratio);
 }
 
 fn compute_blend(world_position: vec4<f32>) -> Blend {
-    let viewer_distance = distance(world_position.xyz, view.world_position.xyz);
-    let log_distance = max(log2(viewer_distance / view_config.blend_distance), 0.0);
+    let view_distance = distance(world_position.xyz, view.world_position.xyz);
+    let log_distance = max(log2(view_distance / blend_threshold_distance()), 0.0);
     let ratio = 1.0 - (1.0 - log_distance % 1.0) / view_config.blend_range;
 
     return Blend(u32(log_distance), ratio);
@@ -110,6 +118,14 @@ fn local_to_world_position(local_position: vec3<f32>, height: f32) -> vec4<f32> 
     return vec4<f32>(local_position * (config.radius + height), 1.0);
 #else
     return vec4<f32>(local_position * config.terrain_size + vec3<f32>(0.0, height, 0.0), 1.0);
+#endif
+}
+
+fn world_to_local_position(world_position: vec3<f32>) -> vec3<f32> {
+#ifdef SPHERICAL
+    return normalize(world_position);
+#else
+    return vec3<f32>(world_position.x, 0.0, world_position.z) / config.terrain_size;
 #endif
 }
 
@@ -203,7 +219,7 @@ fn s2_to_local_position(s2: S2Coordinate) -> vec3<f32> {
 
     return normalize(local_position);
 #else
-    return s2.st - 0.5;
+    return vec3<f32>(s2.st.x - 0.5, 0.0, s2.st.y - 0.5);
 #endif
 }
 
@@ -251,12 +267,16 @@ fn s2_project_to_side(s2: S2Coordinate, side: u32) -> S2Coordinate {
     return S2Coordinate(side, st);
 }
 
-fn nodes_per_side(lod: u32) -> f32 {
-    return config.nodes_per_side / f32(1u << lod);
+fn node_size(lod: u32) -> f32 {
+    return config.leaf_node_size * f32(1u << lod);
+}
+
+fn node_count(lod: u32) -> f32 {
+    return config.leaf_node_count / f32(1u << lod);
 }
 
 fn node_coordinate(st: vec2<f32>, lod: u32) -> vec2<f32> {
-    return st * nodes_per_side(lod);
+    return st * node_count(lod);
 }
 
 fn inside_square(position: vec2<f32>, origin: vec2<f32>, size: f32) -> f32 {
@@ -266,20 +286,24 @@ fn inside_square(position: vec2<f32>, origin: vec2<f32>, size: f32) -> f32 {
 }
 
 fn inside_quadtree(view_s2: S2Coordinate, frag_s2: S2Coordinate, lod: u32) -> f32 {
-    let frag_coordinate = node_coordinate(frag_s2.st, lod);
-
+#ifdef SPHERICAL
     let quadtree_s2 = s2_project_to_side(view_s2, frag_s2.side);
-    let quadtree_coordinate = node_coordinate(quadtree_s2.st, lod);
-    let max_offset = ceil(nodes_per_side(lod)) - f32(view_config.node_count);
-    let quadtree_origin_coordinate = clamp(round(quadtree_coordinate - 0.5 * f32(view_config.node_count)), vec2<f32>(0.0), vec2<f32>(max_offset));
+#else
+    let quadtree_s2 = view_s2;
+#endif
+
+    let frag_coordinate            = node_coordinate(frag_s2.st,     lod);
+    let quadtree_coordinate        = node_coordinate(quadtree_s2.st, lod);
+    let max_offset                 = ceil(node_count(lod)) - f32(view_config.quadtree_size);
+    let quadtree_origin_coordinate = clamp(round(quadtree_coordinate - 0.5 * f32(view_config.quadtree_size)), vec2<f32>(0.0), vec2<f32>(max_offset));
 
     let dist = floor(frag_coordinate) - floor(quadtree_origin_coordinate);
 
-    return inside_square(dist, vec2<f32>(0.0), f32(view_config.node_count - 1u));
+    return inside_square(dist, vec2<f32>(0.0), f32(view_config.quadtree_size - 1u));
 }
 
 fn quadtree_lod(frag_local_position: vec3<f32>) -> u32 {
-    let view_local_position = view.world_position;
+    let view_local_position = world_to_local_position(view.world_position);
     let view_s2 = s2_from_local_position(view_local_position);
     let frag_s2 = s2_from_local_position(frag_local_position);
 
@@ -303,7 +327,7 @@ fn lookup_node(local_position: vec3<f32>, lod: u32) -> NodeLookup {
 
     let quadtree_lod        = min(lod, config.lod_count - 1u);
     let quadtree_index      = s2.side * config.lod_count + quadtree_lod;
-    let quadtree_coordinate = vec2<u32>(node_coordinate(s2.st, quadtree_lod)) % view_config.node_count;
+    let quadtree_coordinate = vec2<u32>(node_coordinate(s2.st, quadtree_lod)) % view_config.quadtree_size;
 
     let lookup = textureLoad(quadtree, quadtree_coordinate, quadtree_index, 0);
 
