@@ -17,7 +17,7 @@ fn index_color(index: u32) -> vec4<f32> {
     return COLOR_ARRAY[index % 6u];
 }
 
-fn show_tiles(vertex_index: u32, world_position: vec4<f32>) -> vec4<f32> {
+fn show_tiles(vertex_index: u32, local_position: vec3<f32>) -> vec4<f32> {
     let tile_index = vertex_index / view_config.vertices_per_tile;
     let tile = tiles.data[tile_index];
 
@@ -32,7 +32,7 @@ fn show_tiles(vertex_index: u32, world_position: vec4<f32>) -> vec4<f32> {
     color = mix(color, index_color(lod), 0.5);
 
 #ifdef MESH_MORPH
-    let morph = compute_morph(tile, world_position);
+    let morph = compute_morph(tile, local_position);
     color = mix(color, vec4<f32>(1.0), 0.3 * morph.ratio);
 #endif
 
@@ -43,12 +43,12 @@ fn show_tiles(vertex_index: u32, world_position: vec4<f32>) -> vec4<f32> {
     return color;
 }
 
-fn show_lod(local_position: vec3<f32>, world_position: vec4<f32>, atlas_lod: u32) -> vec4<f32> {
+fn show_lod(local_position: vec3<f32>, atlas_lod: u32) -> vec4<f32> {
 #ifdef QUADTREE_LOD
     let is_outline = quadtree_outlines(local_position, atlas_lod);
     let color = mix(index_color(atlas_lod), vec4<f32>(0.0), is_outline);
 #else
-    let blend = compute_blend(world_position);
+    let blend = compute_blend(local_position);
     let is_outline = quadtree_outlines(local_position, blend.lod);
     var color = mix(index_color(blend.lod), vec4<f32>(1.0), blend.ratio);
     color = mix(color, 0.1 * color, is_outline);
