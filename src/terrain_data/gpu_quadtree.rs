@@ -30,7 +30,7 @@ pub struct GpuQuadtree {
     /// The count of level of detail layers.
     lod_count: u32,
     /// The count of nodes in x and y direction per layer.
-    node_count: u32,
+    quadtree_size: u32,
 }
 
 impl GpuQuadtree {
@@ -44,8 +44,8 @@ impl GpuQuadtree {
         let texture = device.create_texture(&TextureDescriptor {
             label: "quadtree_texture".into(),
             size: Extent3d {
-                width: quadtree.node_count,
-                height: quadtree.node_count,
+                width: quadtree.quadtree_size,
+                height: quadtree.quadtree_size,
                 depth_or_array_layers: quadtree.lod_count * SIDE_COUNT,
             },
             mip_level_count: 1,
@@ -63,7 +63,7 @@ impl GpuQuadtree {
                 texture,
                 texture_format: Self::FORMAT,
                 sampler: device.create_sampler(&SamplerDescriptor::default()),
-                size: Vec2::splat(quadtree.node_count as f32),
+                size: Vec2::splat(quadtree.quadtree_size as f32),
                 mip_level_count: 1,
             },
         );
@@ -72,7 +72,7 @@ impl GpuQuadtree {
             handle: quadtree.handle.clone(),
             data: default(),
             lod_count: quadtree.lod_count,
-            node_count: quadtree.node_count,
+            quadtree_size: quadtree.quadtree_size,
         }
     }
 
@@ -90,12 +90,12 @@ impl GpuQuadtree {
             cast_slice(self.data.as_slice().unwrap()),
             ImageDataLayout {
                 offset: 0,
-                bytes_per_row: Some(self.node_count * 4),
-                rows_per_image: Some(self.node_count),
+                bytes_per_row: Some(self.quadtree_size * 4),
+                rows_per_image: Some(self.quadtree_size),
             },
             Extent3d {
-                width: self.node_count,
-                height: self.node_count,
+                width: self.quadtree_size,
+                height: self.quadtree_size,
                 depth_or_array_layers: self.lod_count * SIDE_COUNT,
             },
         );

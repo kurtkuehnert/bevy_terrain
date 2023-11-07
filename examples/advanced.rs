@@ -109,7 +109,7 @@ fn setup(
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
     let view_config = TerrainViewConfig {
         grid_size: 16,
-        node_count: 8,
+        quadtree_size: 8,
         load_distance: 500.0,
         morph_distance: 8.0,
         blend_distance: 100.0,

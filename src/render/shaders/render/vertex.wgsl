@@ -17,7 +17,7 @@ struct VertexOutput {
     @location(2)             debug_color: vec4<f32>,
 }
 
-fn vertex_output(intput: VertexInput, local_position: vec3<f32>, world_position: vec4<f32>) -> VertexOutput {
+fn vertex_output(input: VertexInput, local_position: vec3<f32>, world_position: vec4<f32>) -> VertexOutput {
     var output: VertexOutput;
     output.fragment_position = view.view_proj * world_position;
     output.local_position    = local_position;

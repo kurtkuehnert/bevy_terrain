@@ -1,17 +1,17 @@
 #define_import_path bevy_terrain::types
 
 struct TerrainConfig {
-    lod_count: u32,
-    height: f32,
-    nodes_per_side: f32,
-    leaf_node_size: u32,
     terrain_size: f32,
     radius: f32,
+    lod_count: u32,
+    height: f32,
+    leaf_node_count: f32,
+    leaf_node_size: f32,
 }
 
 struct TerrainViewConfig {
     approximate_height: f32,
-    node_count: u32,
+    quadtree_size: u32,
     tile_count: u32,
     refinement_count: u32,
     grid_size: f32,
