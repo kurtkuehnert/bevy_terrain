@@ -13,7 +13,7 @@ const TERRAIN_SIZE: f32 = 1024.0;
 const TEXTURE_SIZE: u32 = 64;
 const MIP_LEVEL_COUNT: u32 = 1;
 const LOD_COUNT: u32 = 8;
-const HEIGHT: f32 = 100.0;
+const HEIGHT: f32 = 200.0 / TERRAIN_SIZE;
 const NODE_ATLAS_SIZE: u32 = 1024;
 const PATH: &str = "terrains/basic";
 
@@ -87,7 +87,7 @@ fn setup(
     // Create the terrain.
     let terrain = commands
         .spawn((
-            TerrainBundle::new(config.clone()),
+            TerrainBundle::new(config.clone(), Vec3::new(20.0, -30.0, -100.0), TERRAIN_SIZE),
             loader,
             materials.add(TerrainMaterial {}),
         ))

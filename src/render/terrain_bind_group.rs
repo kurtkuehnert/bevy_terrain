@@ -4,7 +4,7 @@ use bevy::{
         query::ROQueryItem,
         system::{lifetimeless::SRes, SystemParamItem},
     },
-    pbr::MeshUniform,
+    pbr::{MeshUniform, PreviousGlobalTransform},
     prelude::*,
     render::{
         render_asset::RenderAssets,
@@ -19,23 +19,17 @@ use bevy::{
 /// The terrain config data that is available in shaders.
 #[derive(Clone, Default, ShaderType)]
 struct TerrainConfigUniform {
-    terrain_size: f32,
-    radius: f32,
     lod_count: u32,
     height: f32,
     leaf_node_count: f32,
-    leaf_node_size: f32,
 }
 
 impl From<&TerrainConfig> for TerrainConfigUniform {
     fn from(config: &TerrainConfig) -> Self {
         Self {
-            terrain_size: config.terrain_size,
-            radius: config.radius,
             lod_count: config.lod_count,
             height: config.height,
             leaf_node_count: config.leaf_node_count,
-            leaf_node_size: config.leaf_node_size,
         }
     }
 }
@@ -43,7 +37,7 @@ impl From<&TerrainConfig> for TerrainConfigUniform {
 #[derive(AsBindGroup)]
 struct TerrainData {
     #[uniform(0, visibility(all))]
-    mesh: MeshUniform,
+    mesh_uniform: MeshUniform,
     #[uniform(1, visibility(all))]
     config: TerrainConfigUniform,
     #[sampler(2, visibility(all))]
@@ -70,22 +64,15 @@ pub struct TerrainBindGroup(PreparedBindGroup<()>);
 impl TerrainBindGroup {
     fn new(
         config: &TerrainConfig,
+        mesh_uniform: MeshUniform,
         device: &RenderDevice,
         images: &RenderAssets<Image>,
         fallback_image: &FallbackImage,
     ) -> Self {
-        // Todo: pipe this properly
-        let mesh = MeshUniform {
-            transform: Default::default(),
-            previous_transform: Default::default(),
-            inverse_transpose_model: Default::default(),
-            flags: 0,
-        };
-
         let attachments = &config.attachments;
 
         let terrain_data = TerrainData {
-            mesh,
+            mesh_uniform,
             attachment_1: attachments.get(0).map(|a| a.handle.clone()),
             attachment_2: attachments.get(1).map(|a| a.handle.clone()),
             attachment_3: attachments.get(2).map(|a| a.handle.clone()),
@@ -121,10 +108,31 @@ pub(crate) fn initialize_terrain_bind_group(
     images: Res<RenderAssets<Image>>,
     fallback_image: Res<FallbackImage>,
     mut terrain_bind_groups: ResMut<TerrainComponents<TerrainBindGroup>>,
-    terrain_query: Extract<Query<(Entity, &TerrainConfig), Added<Terrain>>>,
+    terrain_query: Extract<
+        Query<
+            (
+                Entity,
+                &TerrainConfig,
+                &GlobalTransform,
+                Option<&PreviousGlobalTransform>,
+            ),
+            Added<Terrain>,
+        >,
+    >,
 ) {
-    for (terrain, config) in terrain_query.iter() {
-        let terrain_bind_group = TerrainBindGroup::new(config, &device, &images, &fallback_image);
+    for (terrain, config, transform, previous_transform) in terrain_query.iter() {
+        let transform = transform.compute_matrix();
+        let previous_transform = previous_transform.map(|t| t.0).unwrap_or(transform);
+
+        let mesh_uniform = MeshUniform {
+            flags: 0, // Todo: we should probably set them correctly
+            transform,
+            previous_transform,
+            inverse_transpose_model: transform.inverse(), // Todo: hack we store the inverse instead of the inverse transpose
+        };
+
+        let terrain_bind_group =
+            TerrainBindGroup::new(config, mesh_uniform, &device, &images, &fallback_image);
 
         terrain_bind_groups.insert(terrain, terrain_bind_group);
     }

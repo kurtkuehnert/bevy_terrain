@@ -25,7 +25,7 @@ fn sample_color(lookup: NodeLookup) -> vec4<f32> {
 
 @fragment
 fn fragment(input: FragmentInput) -> FragmentOutput {
-    let blend = compute_blend(input.world_position);
+    let blend = compute_blend(input.local_position);
 
     let lookup = lookup_node(input.local_position, blend.lod);
     var normal = sample_normal(lookup, input.local_position);
