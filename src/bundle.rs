@@ -20,12 +20,16 @@ pub struct TerrainBundle {
 
 impl TerrainBundle {
     /// Creates a new terrain bundle from the config.
-    pub fn new(config: TerrainConfig) -> Self {
+    pub fn new(config: TerrainConfig, translation: Vec3, scale: f32) -> Self {
         Self {
             terrain: Terrain,
             node_atlas: NodeAtlas::from_config(&config),
             config,
-            transform: default(),
+            transform: Transform {
+                translation,
+                scale: Vec3::splat(scale),
+                ..default()
+            },
             global_transform: default(),
             visibility_bundle: default(),
             no_frustum_culling: NoFrustumCulling,

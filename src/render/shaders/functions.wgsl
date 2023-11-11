@@ -3,6 +3,7 @@
 #import bevy_terrain::bindings config, view_config, tiles, quadtree
 #import bevy_terrain::types Tile, NodeLookup, Morph, Blend, S2Coordinate
 #import bevy_pbr::mesh_view_bindings view
+#import bevy_pbr::mesh_bindings mesh
 
 fn morph_threshold_distance(tile: Tile) -> f32 {
     let tile_count = 1.0 / tile.size;
@@ -106,20 +107,20 @@ fn vertex_local_position(vertex_index: u32) -> vec3<f32> {
     return local_position;
 }
 
-fn local_to_world_position(local_position: vec3<f32>, height: f32) -> vec4<f32> {
+fn local_position_apply_height(local_position: vec3<f32>, height: f32) -> vec3<f32> {
 #ifdef SPHERICAL
-    return vec4<f32>(local_position * (config.radius + height), 1.0);
+    return local_position * (1.0 + height);
 #else
-    return vec4<f32>(local_position * config.terrain_size + vec3<f32>(0.0, height, 0.0), 1.0);
+    return local_position + vec3<f32>(0.0, height, 0.0);
 #endif
 }
 
+fn local_to_world_position(local_position: vec3<f32>) -> vec4<f32> {
+    return mesh.model * vec4<f32>(local_position, 1.0);
+}
+
 fn world_to_local_position(world_position: vec3<f32>) -> vec3<f32> {
-#ifdef SPHERICAL
-    return world_position / config.radius;
-#else
-    return world_position / config.terrain_size;
-#endif
+    return (mesh.inverse_transpose_model * vec4<f32>(world_position, 1.0)).xyz;
 }
 
 // https://docs.s2cell.aliddell.com/en/stable/s2_concepts.html#lat-lon-to-s2-cell-id
@@ -258,10 +259,6 @@ fn s2_project_to_side(s2: S2Coordinate, side: u32) -> S2Coordinate {
     else if (info.y == PT) { st.y = s2.st.y; }
 
     return S2Coordinate(side, st);
-}
-
-fn node_size(lod: u32) -> f32 {
-    return config.leaf_node_size * f32(1u << lod);
 }
 
 fn node_count(lod: u32) -> f32 {

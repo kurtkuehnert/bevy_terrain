@@ -61,8 +61,6 @@ impl TerrainPluginConfig {
         node_atlas_size: u32,
         path: String,
     ) -> TerrainConfig {
-        let terrain_size = side_length;
-        let radius = 50.0; // side_length / 2.0;
         let leaf_node_size = (self.base.texture_size - 2 * self.base.border_size) as f32;
         let leaf_node_count = side_length / leaf_node_size;
 
@@ -76,11 +74,8 @@ impl TerrainPluginConfig {
         let nodes = load_node_config(&path);
 
         TerrainConfig {
-            terrain_size,
-            radius,
             lod_count,
             height,
-            leaf_node_size,
             leaf_node_count,
             node_atlas_size,
             path,

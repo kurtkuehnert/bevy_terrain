@@ -1,6 +1,6 @@
 #define_import_path bevy_terrain::vertex
 
-#import bevy_terrain::functions vertex_local_position, compute_blend, lookup_node, local_to_world_position
+#import bevy_terrain::functions vertex_local_position, compute_blend, lookup_node, local_to_world_position, local_position_apply_height
 #import bevy_terrain::attachments sample_height
 #import bevy_terrain::debug show_tiles
 #import bevy_pbr::mesh_view_bindings view
@@ -18,7 +18,8 @@ struct VertexOutput {
 }
 
 fn vertex_output(input: VertexInput, local_position: vec3<f32>, height: f32) -> VertexOutput {
-    let world_position = local_to_world_position(local_position, height);
+    let local_position = local_position_apply_height(local_position, height);
+    let world_position = local_to_world_position(local_position);
 
     var output: VertexOutput;
     output.fragment_position = view.view_proj * world_position;
