@@ -42,18 +42,12 @@ pub struct Terrain;
 /// Here you can define all fundamental parameters of the terrain.
 #[derive(Clone, Component)]
 pub struct TerrainConfig {
-    /// The size of the terrain.
-    pub terrain_size: f32,
-    /// The radius of the terrain.
-    pub radius: f32,
     /// The count of level of detail layers.
     pub lod_count: u32,
     /// The maximum height of the terrain. // Todo: reconsider this
     pub height: f32,
     /// The count in x and y direction of the smallest nodes (with lod 0) on each side the terrain.
     pub leaf_node_count: f32,
-    /// The size of the smallest nodes (with lod 0).
-    pub leaf_node_size: f32,
     /// The amount of nodes the can be loaded simultaneously in the node atlas.
     pub node_atlas_size: u32,
     /// The path to the terrain folder inside the assets directory.

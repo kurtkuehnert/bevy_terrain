@@ -23,7 +23,7 @@ const RADIUS: f32 = 50.0;
 const TEXTURE_SIZE: u32 = 512;
 const MIP_LEVEL_COUNT: u32 = 3;
 const LOD_COUNT: u32 = 8;
-const HEIGHT: f32 = 2.0;
+const HEIGHT: f32 = 4.0 / RADIUS;
 const NODE_ATLAS_SIZE: u32 = 2048;
 const PATH: &str = "earth_30k";
 
@@ -120,9 +120,11 @@ fn setup(
     // Create the terrain.
     let terrain = commands
         .spawn((
-            TerrainBundle::new(config.clone()),
+            TerrainBundle::new(config.clone(), Vec3::new(20.0, 30.0, -100.0), RADIUS),
             loader,
-            materials.add(TerrainMaterial { gradient }),
+            materials.add(TerrainMaterial {
+                gradient: gradient.clone(),
+            }),
         ))
         .id();
 
@@ -144,7 +146,7 @@ fn setup(
     // Store the quadtree and the view config for the terrain and view.
     // This will hopefully be way nicer once the ECS can handle relations.
     let quadtree = Quadtree::from_configs(&config, &view_config);
-    view_configs.insert((terrain, view), view_config);
+    view_configs.insert((terrain, view), view_config.clone());
     quadtrees.insert((terrain, view), quadtree);
 
     // Create a sunlight for the physical based lighting.

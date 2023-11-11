@@ -1,7 +1,7 @@
 #import bevy_terrain::types NodeLookup
 #import bevy_terrain::bindings config
-#import bevy_terrain::functions vertex_local_position, vertex_blend, lookup_node, compute_blend, local_to_world_position, vertex_output, fragment_output
-#import bevy_terrain::attachments atlas_sampler, height_atlas, HEIGHT_SCALE, HEIGHT_OFFSET, sample_height, sample_normal
+#import bevy_terrain::functions vertex_local_position, vertex_blend, lookup_node, compute_blend, local_to_world_position, vertex_output, fragment_output, node_count
+#import bevy_terrain::attachments atlas_sampler, height_atlas, HEIGHT_SCALE, HEIGHT_OFFSET, HEIGHT_SIZE, sample_height, sample_normal
 #import bevy_terrain::vertex VertexInput, VertexOutput, vertex_output
 #import bevy_terrain::fragment FragmentInput, FragmentOutput, fragment_output
 #import bevy_pbr::mesh_view_bindings view
@@ -37,8 +37,6 @@ fn vertex(input: VertexInput) -> VertexOutput {
         height      = mix(height, sample_height(lookup2), blend.ratio);
     }
 
-    // Todo: adjust local_position with height
-
     return vertex_output(input, local_position, height);
 }
 
@@ -47,13 +45,11 @@ fn fragment(input: FragmentInput) -> FragmentOutput {
     let blend = compute_blend(input.local_position);
 
     let lookup = lookup_node(input.local_position, blend.lod);
-    var height = sample_height(lookup);
     var normal = sample_normal(lookup, input.local_position);
     var color  = sample_color(lookup);
 
     if (blend.ratio > 0.0) {
         let lookup2 = lookup_node(input.local_position, blend.lod + 1u);
-        height      = mix(height, sample_height(lookup2),                       blend.ratio);
         normal      = mix(normal, sample_normal(lookup2, input.local_position), blend.ratio);
         color       = mix(color,  sample_color(lookup2),                        blend.ratio);
     }

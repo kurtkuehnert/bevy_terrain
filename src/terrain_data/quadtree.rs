@@ -6,7 +6,7 @@ use crate::{
     },
     terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
 };
-use bevy::prelude::*;
+use bevy::{math::Vec4Swizzles, prelude::*};
 use bytemuck::{Pod, Zeroable};
 use itertools::iproduct;
 use ndarray::{Array3, Array4};
@@ -245,9 +245,6 @@ pub struct Quadtree {
     /// The count of nodes in x and y direction per layer.
     pub(crate) quadtree_size: u32,
     leaf_node_count: f32,
-    leaf_node_size: f32,
-    terrain_size: f32,
-    radius: f32,
     /// The distance (measured in node sizes) until which to request nodes to be loaded.
     load_distance: f32,
     _height: f32,
@@ -270,20 +267,14 @@ impl Quadtree {
         lod_count: u32,
         quadtree_size: u32,
         leaf_node_count: f32,
-        leaf_node_size: f32,
         load_distance: f32,
         height: f32,
-        terrain_size: f32,
-        radius: f32,
     ) -> Self {
         Self {
             handle,
             lod_count,
             quadtree_size,
             leaf_node_count,
-            leaf_node_size,
-            terrain_size,
-            radius,
             load_distance,
             _height: height,
             _height_under_viewer: height / 2.0,
@@ -310,22 +301,14 @@ impl Quadtree {
             config.lod_count,
             view_config.quadtree_size,
             config.leaf_node_count,
-            config.leaf_node_size,
             view_config.load_distance,
             config.height,
-            config.terrain_size,
-            config.radius,
         )
     }
 
     #[inline]
     fn node_count(&self, lod: u32) -> f32 {
         self.leaf_node_count / (1 << lod) as f32
-    }
-
-    #[inline]
-    fn node_size(&self, lod: u32) -> f32 {
-        self.leaf_node_size / (1 << lod) as f32
     }
 
     fn origin(&self, quadtree_s2: S2Coordinate, lod: u32) -> UVec2 {
@@ -339,16 +322,20 @@ impl Quadtree {
         quadtree_origin.as_uvec2()
     }
 
-    fn world_to_local_position(&self, world_position: Vec3) -> Vec3 {
-        #[cfg(feature = "spherical")]
-        return world_position / self.radius;
+    fn world_to_local_position(&self, transform: &GlobalTransform, world_position: Vec3) -> Vec3 {
+        let transform = transform.compute_matrix();
+        let inverse_model = transform.inverse();
 
-        #[cfg(not(feature = "spherical"))]
-        return world_position / self.terrain_size;
+        return (inverse_model * world_position.extend(1.0)).xyz();
     }
 
-    pub(crate) fn compute_requests(&mut self, view_world_position: Vec3) {
-        let view_local_position = self.world_to_local_position(view_world_position);
+    pub(crate) fn compute_requests(
+        &mut self,
+        terrain_transform: &GlobalTransform,
+        view_world_position: Vec3,
+    ) {
+        let view_local_position =
+            self.world_to_local_position(terrain_transform, view_world_position);
         let view_s2 = S2Coordinate::from_local_position(view_local_position);
 
         for side in 0..SIDE_COUNT {
@@ -459,12 +446,12 @@ pub(crate) fn compute_quadtree_request(
     terrain_query: Query<(Entity, &GlobalTransform), With<Terrain>>,
 ) {
     // Todo: properly take the terrain transform into account
-    for (terrain, _terrain_transform) in terrain_query.iter() {
+    for (terrain, terrain_transform) in terrain_query.iter() {
         for (view, view_transform) in view_query.iter() {
             let view_position = view_transform.translation();
             let quadtree = quadtrees.get_mut(&(terrain, view)).unwrap();
 
-            quadtree.compute_requests(view_position);
+            quadtree.compute_requests(terrain_transform, view_position);
         }
     }
 }

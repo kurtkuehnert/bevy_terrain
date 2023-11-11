@@ -13,7 +13,7 @@ const TERRAIN_SIZE: f32 = 1024.0;
 const TEXTURE_SIZE: u32 = 256;
 const MIP_LEVEL_COUNT: u32 = 1;
 const LOD_COUNT: u32 = 4;
-const HEIGHT: f32 = 100.0;
+const HEIGHT: f32 = 300.0 / TERRAIN_SIZE;
 const NODE_ATLAS_SIZE: u32 = 1024;
 const PATH: &str = "terrains/advanced";
 
@@ -98,7 +98,6 @@ fn setup(
 
     // Configure all the important properties of the terrain, as well as its attachments.
     let config = plugin_config.configure_terrain(
-        TILE_SIZE as f32 / plugin_config.leaf_node_size as f32,
         TERRAIN_SIZE,
         LOD_COUNT,
         HEIGHT,
@@ -119,7 +118,7 @@ fn setup(
     // Create the terrain.
     let terrain = commands
         .spawn((
-            TerrainBundle::new(config.clone()),
+            TerrainBundle::new(config.clone(), default(), TERRAIN_SIZE),
             loader,
             materials.add(TerrainMaterial { gradient }),
         ))
