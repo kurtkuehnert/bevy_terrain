@@ -2,5 +2,11 @@
 target
 assets/**/data/*
 assets/**/config.tc
-assets/earth_30k
 Cargo.lock
+
+assets/earth_30k
+assets/terrains/los/*
+assets/terrains/epsg/*
+assets/terrains/utsira/*
+assets/shaders/argeo.wgsl
+examples/argeo.rs
