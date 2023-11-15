@@ -20,7 +20,8 @@ use bevy::{
 #[derive(Clone, Default, ShaderType)]
 struct TerrainConfigUniform {
     lod_count: u32,
-    height: f32,
+    min_height: f32,
+    max_height: f32,
     leaf_node_count: f32,
 }
 
@@ -28,7 +29,8 @@ impl From<&TerrainConfig> for TerrainConfigUniform {
     fn from(config: &TerrainConfig) -> Self {
         Self {
             lod_count: config.lod_count,
-            height: config.height,
+            min_height: config.min_height,
+            max_height: config.max_height,
             leaf_node_count: config.leaf_node_count,
         }
     }
