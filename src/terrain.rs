@@ -44,8 +44,10 @@ pub struct Terrain;
 pub struct TerrainConfig {
     /// The count of level of detail layers.
     pub lod_count: u32,
-    /// The maximum height of the terrain. // Todo: reconsider this
-    pub height: f32,
+    /// The minimum height of the terrain.
+    pub min_height: f32,
+    /// The maximum height of the terrain.
+    pub max_height: f32,
     /// The count in x and y direction of the smallest nodes (with lod 0) on each side the terrain.
     pub leaf_node_count: f32,
     /// The amount of nodes the can be loaded simultaneously in the node atlas.

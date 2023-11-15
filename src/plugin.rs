@@ -57,7 +57,8 @@ impl TerrainPluginConfig {
         &self,
         side_length: f32,
         lod_count: u32,
-        height: f32,
+        min_height: f32,
+        max_height: f32,
         node_atlas_size: u32,
         path: String,
     ) -> TerrainConfig {
@@ -75,7 +76,8 @@ impl TerrainPluginConfig {
 
         TerrainConfig {
             lod_count,
-            height,
+            min_height,
+            max_height,
             leaf_node_count,
             node_atlas_size,
             path,
