@@ -302,7 +302,7 @@ impl Quadtree {
             view_config.quadtree_size,
             config.leaf_node_count,
             view_config.load_distance,
-            config.height,
+            config.max_height,
         )
     }
 

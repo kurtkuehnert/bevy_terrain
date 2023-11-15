@@ -102,6 +102,7 @@ fn setup(
     let config = plugin_config.configure_terrain(
         TILE_SIZE as f32,
         LOD_COUNT,
+        -HEIGHT,
         HEIGHT,
         NODE_ATLAS_SIZE,
         PATH.to_string(),

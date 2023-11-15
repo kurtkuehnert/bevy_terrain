@@ -7,9 +7,9 @@ var atlas_sampler: sampler;
 
 fn sample_height(lookup: NodeLookup) -> f32 {
     let height_coordinate = lookup.atlas_coordinate * HEIGHT_SCALE + HEIGHT_OFFSET;
-    let height = 2.0 * textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0).x - 1.0;
+    let height = textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0).x;
 
-    return config.height * height;
+    return mix(config.min_height, config.max_height, height);
 }
 
 // Todo: fix this faulty implementation
@@ -31,12 +31,12 @@ fn sample_normal(lookup: NodeLookup, local_position: vec3<f32>) -> vec3<f32> {
 
     let height_coordinate = lookup.atlas_coordinate * HEIGHT_SCALE + HEIGHT_OFFSET;
 
-    let left  = 2.0 * textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0, vec2<i32>(-1,  0)).x - 1.0;
-    let up    = 2.0 * textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0, vec2<i32>( 0, -1)).x - 1.0;
-    let right = 2.0 * textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0, vec2<i32>( 1,  0)).x - 1.0;
-    let down  = 2.0 * textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0, vec2<i32>( 0,  1)).x - 1.0;
+    let left  = mix(config.min_height, config.max_height, textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0, vec2<i32>(-1,  0)).x);
+    let up    = mix(config.min_height, config.max_height, textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0, vec2<i32>( 0, -1)).x);
+    let right = mix(config.min_height, config.max_height, textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0, vec2<i32>( 1,  0)).x);
+    let down  = mix(config.min_height, config.max_height, textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0, vec2<i32>( 0,  1)).x);
 
-    let surface_normal = normalize(vec3<f32>(right - left, down - up, 2.0 / config.height * distance_between_samples));
+    let surface_normal = normalize(vec3<f32>(right - left, down - up, distance_between_samples));
 
     return normalize(TBN * surface_normal);
 }
