@@ -123,6 +123,7 @@ pub(crate) fn split_tiles(
 
         (offset, size)
     } else {
+        println!("Splitting tile: {}", tile.path);
         split_tile(directory, tile, attachment, UVec2::splat(0));
 
         (UVec2::splat(0), UVec2::splat(tile.size))

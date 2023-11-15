@@ -45,5 +45,5 @@ fn sample_color(lookup: NodeLookup) -> vec4<f32> {
     let height_coordinate = lookup.atlas_coordinate * HEIGHT_SCALE + HEIGHT_OFFSET;
     let height = textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0).x;
 
-    return vec4<f32>(height);
+    return vec4<f32>(height * 0.5);
 }
