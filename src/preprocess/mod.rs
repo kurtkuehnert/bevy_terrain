@@ -1,6 +1,5 @@
 //! Contains the implementation for preprocessing source tiles into streamable nodes.
 
-pub mod cube_map;
 pub mod down_sample;
 pub mod file_io;
 pub mod split;
@@ -117,9 +116,7 @@ impl Preprocessor {
 
         reset_directory(&height_directory);
 
-        let temp = split_tiles(&height_directory, tile, &height_attachment);
-
-        let (mut first, mut last) = temp;
+        let (mut first, mut last) = split_tiles(&height_directory, tile, &height_attachment);
 
         for lod in 1..self.lod_count {
             first = first.div_floor(2);

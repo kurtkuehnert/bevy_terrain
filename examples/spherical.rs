@@ -10,12 +10,12 @@ use std::time::Duration;
 // const TILE_SIZE: u32 = 4000;
 // const TILE_FORMAT: FileFormat = FileFormat::PNG;
 // const RADIUS: f32 = 50.0;
-// const TEXTURE_SIZE: u32 = 128;
+// const TEXTURE_SIZE: u32 = 512;
 // const MIP_LEVEL_COUNT: u32 = 1;
 // const LOD_COUNT: u32 = 6;
-// const HEIGHT: f32 = 200.0;
+// const HEIGHT: f32 = 4.0 / RADIUS;
 // const NODE_ATLAS_SIZE: u32 = 2048;
-// const PATH: &str = "earth_4k";
+// const PATH: &str = "terrains/earth_4k";
 
 const TILE_SIZE: u32 = 30000;
 const TILE_FORMAT: FileFormat = FileFormat::TIF;
@@ -48,8 +48,7 @@ fn main() {
     let config =
         TerrainPluginConfig::with_base_attachment(BaseConfig::new(TEXTURE_SIZE, MIP_LEVEL_COUNT));
 
-    // Use   magick mogrify -resize 1000x1000 -quality 100 -path ../earth_1k -format png *.tif
-    // bevy_terrain::preprocess::cube_map::create_cube_map();
+    // Use magick mogrify -resize 1000x1000 -quality 100 -path ../earth_1k -format png *.tif
 
     App::new()
         .insert_resource(ClearColor(Color::rgb_u8(43, 44, 47)))

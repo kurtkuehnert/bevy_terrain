@@ -69,6 +69,7 @@ fn setup(
     let config = plugin_config.configure_terrain(
         TERRAIN_SIZE,
         LOD_COUNT,
+        0.0,
         HEIGHT,
         NODE_ATLAS_SIZE,
         PATH.to_string(),

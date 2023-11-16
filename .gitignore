@@ -5,8 +5,9 @@ assets/**/config.tc
 Cargo.lock
 
 assets/earth_30k
-assets/terrains/los/*
-assets/terrains/epsg/*
-assets/terrains/utsira/*
+assets/terrains/los
+assets/terrains/epsg
+assets/terrains/utsira
+assets/terrains/earth_4k
 assets/shaders/argeo.wgsl
 examples/argeo.rs
