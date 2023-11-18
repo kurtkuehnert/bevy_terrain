@@ -1,4 +1,4 @@
-#import bevy_terrain::types TerrainViewConfig, Tile, TileList, Parameters
+#import bevy_terrain::types::{TerrainViewConfig, Tile, TileList, Parameters}
 
 struct IndirectBuffer {
     workgroup_count: vec3<u32>,

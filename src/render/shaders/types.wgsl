@@ -8,6 +8,7 @@ struct TerrainConfig {
 }
 
 struct TerrainViewConfig {
+    view_local_position: vec3<f32>,
     approximate_height: f32,
     quadtree_size: u32,
     tile_count: u32,

@@ -1,11 +1,11 @@
-#import bevy_terrain::types NodeLookup
-#import bevy_terrain::bindings config
-#import bevy_terrain::functions vertex_local_position, vertex_blend, lookup_node, compute_blend, local_to_world_position, vertex_output, fragment_output, node_count
-#import bevy_terrain::attachments atlas_sampler, height_atlas, HEIGHT_SCALE, HEIGHT_OFFSET, HEIGHT_SIZE, sample_height, sample_normal
-#import bevy_terrain::vertex VertexInput, VertexOutput, vertex_output
-#import bevy_terrain::fragment FragmentInput, FragmentOutput, fragment_output
-#import bevy_pbr::mesh_view_bindings view
-#import bevy_pbr::pbr_functions PbrInput, pbr_input_new, calculate_view, pbr
+#import bevy_terrain::types::NodeLookup
+#import bevy_terrain::bindings::config
+#import bevy_terrain::functions::{vertex_local_position, lookup_node, compute_blend}
+#import bevy_terrain::attachments::{atlas_sampler, height_atlas, HEIGHT_SCALE, HEIGHT_OFFSET, HEIGHT_SIZE, sample_height, sample_normal}
+#import bevy_terrain::vertex::{VertexInput, VertexOutput, vertex_output}
+#import bevy_terrain::fragment::{FragmentInput, FragmentOutput, fragment_output}
+#import bevy_pbr::pbr_types::{PbrInput, pbr_input_new}
+#import bevy_pbr::pbr_functions::{calculate_view, apply_pbr_lighting}
 
 @group(3) @binding(0)
 var gradient: texture_1d<f32>;
@@ -62,10 +62,9 @@ fn fragment(input: FragmentInput) -> FragmentOutput {
     pbr_input.frag_coord                    = input.fragment_position;
     pbr_input.world_position                = input.world_position;
     pbr_input.world_normal                  = normal;
-    pbr_input.is_orthographic               = view.projection[3].w == 1.0;
     pbr_input.N                             = normal;
     pbr_input.V                             = calculate_view(input.world_position, pbr_input.is_orthographic);
-    color = pbr(pbr_input);
+    color = apply_pbr_lighting(pbr_input);
 #endif
 
     return fragment_output(input, color, lookup);

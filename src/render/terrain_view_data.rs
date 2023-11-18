@@ -26,6 +26,7 @@ use bevy::{
 
 #[derive(Clone, Default, ShaderType)]
 pub(crate) struct TerrainViewConfigUniform {
+    view_local_position: Vec3,
     height_under_viewer: f32,
     quadtree_size: u32,
     tile_count: u32,
@@ -37,11 +38,13 @@ pub(crate) struct TerrainViewConfigUniform {
     blend_distance: f32,
     morph_range: f32,
     blend_range: f32,
+    _padding: Vec2,
 }
 
 impl TerrainViewConfigUniform {
-    fn new(view_config: &TerrainViewConfig) -> Self {
+    fn new(view_config: &TerrainViewConfig, view_local_position: Vec3) -> Self {
         TerrainViewConfigUniform {
+            view_local_position,
             height_under_viewer: view_config.height_under_viewer,
             quadtree_size: view_config.quadtree_size,
             tile_count: view_config.tile_count,
@@ -53,6 +56,7 @@ impl TerrainViewConfigUniform {
             blend_distance: view_config.blend_distance,
             morph_range: view_config.morph_range,
             blend_range: view_config.blend_range,
+            _padding: Vec2::ZERO,
         }
     }
 }
@@ -79,58 +83,32 @@ impl TerrainViewData {
 
         let quadtree = images.get(&view_config.quadtree_handle).unwrap();
 
-        let prepare_indirect_bind_group = device.create_bind_group(&BindGroupDescriptor {
-            label: "prepare_indirect_bind_group".into(),
-            entries: &[BindGroupEntry {
-                binding: 0,
-                resource: indirect_buffer.as_entire_binding(),
-            }],
-            layout: &device.create_bind_group_layout(&PREPARE_INDIRECT_LAYOUT),
-        });
-        let refine_tiles_bind_group = device.create_bind_group(&BindGroupDescriptor {
-            label: "refine_tiles_bind_group".into(),
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: view_config_buffer.as_entire_binding(),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: BindingResource::TextureView(&quadtree.texture_view),
-                },
-                BindGroupEntry {
-                    binding: 2,
-                    resource: final_tile_buffer.as_entire_binding(),
-                },
-                BindGroupEntry {
-                    binding: 3,
-                    resource: temporary_tile_buffer.as_entire_binding(),
-                },
-                BindGroupEntry {
-                    binding: 4,
-                    resource: parameter_buffer.as_entire_binding(),
-                },
-            ],
-            layout: &device.create_bind_group_layout(&REFINE_TILES_LAYOUT),
-        });
-        let terrain_view_bind_group = device.create_bind_group(&BindGroupDescriptor {
-            label: "terrain_view_bind_group".into(),
-            entries: &[
-                BindGroupEntry {
-                    binding: 0,
-                    resource: view_config_buffer.as_entire_binding(),
-                },
-                BindGroupEntry {
-                    binding: 1,
-                    resource: BindingResource::TextureView(&quadtree.texture_view),
-                },
-                BindGroupEntry {
-                    binding: 2,
-                    resource: final_tile_buffer.as_entire_binding(),
-                },
-            ],
-            layout: &device.create_bind_group_layout(&TERRAIN_VIEW_LAYOUT),
-        });
+        let prepare_indirect_bind_group = device.create_bind_group(
+            "prepare_indirect_bind_group",
+            &device.create_bind_group_layout(&PREPARE_INDIRECT_LAYOUT),
+            &BindGroupEntries::single(indirect_buffer.as_entire_binding()),
+        );
+        let refine_tiles_bind_group = device.create_bind_group(
+            "refine_tiles_bind_group",
+            &device.create_bind_group_layout(&REFINE_TILES_LAYOUT),
+            &BindGroupEntries::sequential((
+                view_config_buffer.as_entire_binding(),
+                &quadtree.texture_view,
+                final_tile_buffer.as_entire_binding(),
+                temporary_tile_buffer.as_entire_binding(),
+                parameter_buffer.as_entire_binding(),
+            )),
+        );
+
+        let terrain_view_bind_group = device.create_bind_group(
+            "terrain_view_bind_group",
+            &device.create_bind_group_layout(&TERRAIN_VIEW_LAYOUT),
+            &BindGroupEntries::sequential((
+                view_config_buffer.as_entire_binding(),
+                &quadtree.texture_view,
+                final_tile_buffer.as_entire_binding(),
+            )),
+        );
 
         Self {
             indirect_buffer,
@@ -217,9 +195,20 @@ pub(crate) fn initialize_terrain_view_data(
 pub(crate) fn extract_terrain_view_config(
     mut view_config_uniforms: ResMut<TerrainViewComponents<TerrainViewConfigUniform>>,
     view_configs: Extract<Res<TerrainViewComponents<TerrainViewConfig>>>,
+    view_query: Extract<Query<&GlobalTransform, With<TerrainView>>>,
+    terrain_query: Extract<Query<&GlobalTransform, With<Terrain>>>,
 ) {
     for (&(terrain, view), view_config) in &view_configs.0 {
-        view_config_uniforms.insert((terrain, view), TerrainViewConfigUniform::new(view_config))
+        let view_world_position = view_query.get(view).unwrap().translation();
+        let terrain_transform = terrain_query.get(terrain).unwrap();
+        let model = terrain_transform.compute_matrix();
+        let inverse_model = model.inverse();
+
+        let view_local_position = (inverse_model * view_world_position.extend(1.0)).xyz();
+        view_config_uniforms.insert(
+            (terrain, view),
+            TerrainViewConfigUniform::new(view_config, view_local_position),
+        )
     }
 }
 

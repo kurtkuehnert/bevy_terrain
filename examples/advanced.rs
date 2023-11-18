@@ -1,11 +1,10 @@
 use bevy::{
-    asset::{ChangeWatcher, LoadState},
+    asset::LoadState,
     prelude::*,
     reflect::{TypePath, TypeUuid},
     render::render_resource::*,
 };
 use bevy_terrain::prelude::*;
-use std::time::Duration;
 
 const TILE_SIZE: u32 = 1024;
 const TILE_FORMAT: FileFormat = FileFormat::PNG;
@@ -13,11 +12,11 @@ const TERRAIN_SIZE: f32 = 1024.0;
 const TEXTURE_SIZE: u32 = 256;
 const MIP_LEVEL_COUNT: u32 = 1;
 const LOD_COUNT: u32 = 4;
-const HEIGHT: f32 = 300.0 / TERRAIN_SIZE;
+const HEIGHT: f32 = 400.0 / TERRAIN_SIZE;
 const NODE_ATLAS_SIZE: u32 = 1024;
 const PATH: &str = "terrains/advanced";
 
-#[derive(AsBindGroup, TypeUuid, TypePath, Clone)]
+#[derive(Asset, AsBindGroup, TypeUuid, TypePath, Clone)]
 #[uuid = "4ccc53dd-2cfd-48ba-b659-c0e1a9bc0bdb"]
 pub struct TerrainMaterial {
     #[texture(0, dimension = "1d")]
@@ -45,10 +44,7 @@ fn main() {
     App::new()
         .insert_resource(ClearColor(Color::rgb_u8(43, 44, 47)))
         .add_plugins((
-            DefaultPlugins.set(AssetPlugin {
-                watch_for_changes: ChangeWatcher::with_delay(Duration::from_millis(200)), // enable hot reloading for shader easy customization
-                ..default()
-            }),
+            DefaultPlugins,
             TerrainPlugin { config },
             TerrainDebugPlugin, // enable debug settings and controls
             TerrainMaterialPlugin::<TerrainMaterial>::default(),
@@ -100,6 +96,7 @@ fn setup(
     let config = plugin_config.configure_terrain(
         TERRAIN_SIZE,
         LOD_COUNT,
+        0.0,
         HEIGHT,
         NODE_ATLAS_SIZE,
         PATH.to_string(),
@@ -173,7 +170,7 @@ fn create_array_texture(
     mut images: ResMut<Assets<Image>>,
 ) {
     if loading_texture.is_loaded
-        || asset_server.get_load_state(loading_texture.gradient.clone()) != LoadState::Loaded
+        || asset_server.load_state(loading_texture.gradient.clone()) != LoadState::Loaded
     {
         return;
     }

@@ -1,6 +1,6 @@
-#import bevy_terrain::types TerrainConfig, TerrainViewConfig, Tile, TileList, Parameters, NodeLookup
-#import bevy_terrain::bindings config
-#import bevy_terrain::functions world_to_local_position, tile_local_position
+#import bevy_terrain::types::{TerrainConfig, TerrainViewConfig, Tile, TileList, Parameters, NodeLookup}
+#import bevy_terrain::bindings::config
+#import bevy_terrain::functions::tile_local_position
 
 struct CullingData {
     world_position: vec3<f32>,
@@ -45,11 +45,9 @@ fn final_index() -> i32 {
 fn should_be_divided(tile: Tile) -> bool {
     var min_view_distance = 3.40282347E+38; // f32::MAX
 
-    let view_local_position = world_to_local_position(view.world_position);
-
     for (var i: u32 = 0u; i < 4u; i = i + 1u) {
         let local_position = tile_local_position(tile, vec2<f32>(f32(i & 1u), f32(i >> 1u & 1u)));
-        let view_distance = distance(local_position, view_local_position);
+        let view_distance = distance(local_position, view_config.view_local_position);
 
         min_view_distance = min(min_view_distance, view_distance);
     }

@@ -8,7 +8,7 @@ use crate::{
     },
 };
 use bevy::{
-    asset::{AssetServer, HandleId, LoadState},
+    asset::{AssetId, AssetServer, LoadState},
     prelude::*,
     render::render_resource::*,
     utils::HashMap,
@@ -35,7 +35,7 @@ impl AttachmentFromDisk {
 pub struct AttachmentFromDiskLoader {
     pub(crate) attachments: HashMap<AttachmentIndex, AttachmentFromDisk>,
     /// Maps the id of an asset to the corresponding node coordinate.
-    handle_mapping: HashMap<HandleId, (NodeCoordinate, AttachmentIndex)>,
+    id_mapping: HashMap<AssetId<Image>, (NodeCoordinate, AttachmentIndex)>,
     preprocessor: Preprocessor,
     path: String,
     attachment_index: usize,
@@ -45,7 +45,7 @@ impl AttachmentFromDiskLoader {
     pub fn new(lod_count: u32, path: String) -> Self {
         Self {
             attachments: Default::default(),
-            handle_mapping: Default::default(),
+            id_mapping: Default::default(),
             preprocessor: Preprocessor::new(lod_count, path.clone()),
             path,
             attachment_index: 0,
@@ -94,7 +94,7 @@ pub(crate) fn start_loading_attachment_from_disk(
 
         let AttachmentFromDiskLoader {
             ref mut attachments,
-            ref mut handle_mapping,
+            id_mapping: ref mut handle_mapping,
             ..
         } = config.as_mut();
 
@@ -115,7 +115,7 @@ pub(crate) fn start_loading_attachment_from_disk(
                     file_format.extension()
                 ));
 
-                if asset_server.get_load_state(handle.clone()) == LoadState::Loaded {
+                if asset_server.load_state(&handle) == LoadState::Loaded {
                     node.loaded(*attachment_index);
                 } else {
                     handle_mapping.insert(handle.id(), (node_coordinate, *attachment_index));
@@ -132,13 +132,11 @@ pub(crate) fn finish_loading_attachment_from_disk(
     mut images: ResMut<Assets<Image>>,
     mut terrain_query: Query<(&mut NodeAtlas, &mut AttachmentFromDiskLoader)>,
 ) {
-    for event in asset_events.iter() {
-        if let AssetEvent::Created { handle } = event {
+    for &event in asset_events.read() {
+        if let AssetEvent::LoadedWithDependencies { id } = event {
             for (mut node_atlas, mut config) in terrain_query.iter_mut() {
-                if let Some((node_coordinate, attachment_index)) =
-                    config.handle_mapping.remove(&handle.id())
-                {
-                    let image = images.get_mut(handle).unwrap();
+                if let Some((node_coordinate, attachment_index)) = config.id_mapping.remove(&id) {
+                    let image = images.get_mut(id).unwrap();
                     let attachment = config.attachments.get(&attachment_index).unwrap();
 
                     image.texture_descriptor.format = attachment.format;
