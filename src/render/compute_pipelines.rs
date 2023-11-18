@@ -87,8 +87,8 @@ impl FromWorld for TerrainComputePipelines {
         let culling_data_layout = CullingBindGroup::layout(device);
         let terrain_layout = TerrainBindGroup::layout(device);
 
-        let prepare_indirect_shader = PREPARE_INDIRECT_SHADER.typed();
-        let refine_tiles_shader = REFINE_TILES_SHADER.typed();
+        let prepare_indirect_shader = PREPARE_INDIRECT_SHADER;
+        let refine_tiles_shader = REFINE_TILES_SHADER;
 
         TerrainComputePipelines {
             prepare_indirect_layout,

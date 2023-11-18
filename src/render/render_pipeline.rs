@@ -6,18 +6,18 @@ use crate::{
         terrain_view_data::{DrawTerrainCommand, SetTerrainViewBindGroup},
         TERRAIN_VIEW_LAYOUT,
     },
-    terrain::Terrain,
 };
 use bevy::{
     core_pipeline::core_3d::Opaque3d,
     pbr::{
         extract_materials, prepare_materials, ExtractedMaterials, MaterialPipeline, MeshPipeline,
-        RenderMaterials, SetMaterialBindGroup, SetMeshViewBindGroup,
+        MeshPipelineViewLayoutKey, RenderMaterialInstances, RenderMaterials, SetMaterialBindGroup,
+        SetMeshViewBindGroup,
     },
     prelude::*,
     render::{
-        extract_component::ExtractComponentPlugin,
-        render_asset::PrepareAssetSet,
+        extract_instances::ExtractInstancesPlugin,
+        render_asset::prepare_assets,
         render_phase::{AddRenderCommand, DrawFunctions, RenderPhase, SetItemPipeline},
         render_resource::*,
         renderer::RenderDevice,
@@ -235,20 +235,24 @@ impl<M: Material> FromWorld for TerrainRenderPipeline<M> {
         let asset_server = world.resource::<AssetServer>();
         let mesh_pipeline = world.resource::<MeshPipeline>();
 
-        let view_layout = mesh_pipeline.view_layout.clone();
-        let view_layout_multisampled = mesh_pipeline.view_layout_multisampled.clone();
+        let view_layout = mesh_pipeline
+            .get_view_layout(MeshPipelineViewLayoutKey::empty())
+            .clone();
+        let view_layout_multisampled = mesh_pipeline
+            .get_view_layout(MeshPipelineViewLayoutKey::MULTISAMPLED)
+            .clone();
         let terrain_layout = TerrainBindGroup::layout(device);
         let terrain_view_layout = device.create_bind_group_layout(&TERRAIN_VIEW_LAYOUT);
         let material_layout = M::bind_group_layout(device);
 
         let vertex_shader = match M::vertex_shader() {
-            ShaderRef::Default => DEFAULT_SHADER.typed(),
+            ShaderRef::Default => DEFAULT_SHADER,
             ShaderRef::Handle(handle) => handle,
             ShaderRef::Path(path) => asset_server.load(path),
         };
 
         let fragment_shader = match M::fragment_shader() {
-            ShaderRef::Default => DEFAULT_SHADER.typed(),
+            ShaderRef::Default => DEFAULT_SHADER,
             ShaderRef::Handle(handle) => handle,
             ShaderRef::Path(path) => asset_server.load(path),
         };
@@ -363,15 +367,15 @@ pub(crate) fn queue_terrain<M: Material>(
     pipeline_cache: Res<PipelineCache>,
     mut pipelines: ResMut<SpecializedRenderPipelines<TerrainRenderPipeline<M>>>,
     mut view_query: Query<&mut RenderPhase<Opaque3d>>,
-    terrain_query: Query<(Entity, &Handle<M>), With<Terrain>>,
+    render_material_instances: Res<RenderMaterialInstances<M>>,
 ) where
     M::Data: PartialEq + Eq + Hash + Clone,
 {
     let draw_function = draw_functions.read().get_id::<DrawTerrain<M>>().unwrap();
 
     for mut opaque_phase in view_query.iter_mut() {
-        for (entity, material) in terrain_query.iter() {
-            if let Some(material) = render_materials.get(material) {
+        for (&entity, id) in render_material_instances.iter() {
+            if let Some(material) = render_materials.get(id) {
                 let mut flags = TerrainPipelineFlags::from_msaa_samples(msaa.samples());
 
                 #[cfg(feature = "spherical")]
@@ -398,8 +402,10 @@ pub(crate) fn queue_terrain<M: Material>(
                 opaque_phase.add(Opaque3d {
                     entity,
                     pipeline: pipeline_id,
+                    batch_range: 0..1,
                     draw_function,
                     distance: f32::MIN, // draw terrain first
+                    dynamic_offset: None,
                 });
             }
         }
@@ -422,8 +428,8 @@ where
     M::Data: PartialEq + Eq + Hash + Clone,
 {
     fn build(&self, app: &mut App) {
-        app.add_asset::<M>()
-            .add_plugins(ExtractComponentPlugin::<Handle<M>>::extract_visible());
+        app.init_asset::<M>()
+            .add_plugins(ExtractInstancesPlugin::<AssetId<M>>::extract_visible());
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
@@ -435,9 +441,9 @@ where
                     Render,
                     (
                         prepare_materials::<M>
-                            .in_set(RenderSet::Prepare)
-                            .after(PrepareAssetSet::PreAssetPrepare),
-                        queue_terrain::<M>.in_set(RenderSet::Queue),
+                            .in_set(RenderSet::PrepareAssets)
+                            .after(prepare_assets::<Image>),
+                        queue_terrain::<M>.in_set(RenderSet::QueueMeshes),
                     ),
                 );
         }

@@ -1,5 +1,5 @@
-#import bevy_terrain::vertex VertexInput, VertexOutput, default_vertex
-#import bevy_terrain::fragment FragmentInput, FragmentOutput, default_fragment
+#import bevy_terrain::vertex::{VertexInput, VertexOutput, default_vertex}
+#import bevy_terrain::fragment::{FragmentInput, FragmentOutput, default_fragment}
 
 @vertex
 fn vertex(input: VertexInput) -> VertexOutput {

@@ -11,6 +11,7 @@ use bytemuck::{Pod, Zeroable};
 use itertools::iproduct;
 use ndarray::{Array3, Array4};
 
+#[allow(dead_code)]
 #[derive(Clone, Copy)]
 struct S2Coordinate {
     side: u32,

@@ -1,9 +1,18 @@
 #define_import_path bevy_terrain::functions
 
-#import bevy_terrain::bindings config, view_config, tiles, quadtree
-#import bevy_terrain::types Tile, NodeLookup, Morph, Blend, S2Coordinate
-#import bevy_pbr::mesh_view_bindings view
-#import bevy_pbr::mesh_bindings mesh
+#import bevy_terrain::bindings::{config, view_config, tiles, quadtree}
+#import bevy_terrain::types::{Tile, NodeLookup, Morph, Blend, S2Coordinate}
+#import bevy_pbr::mesh_view_bindings::view
+#import bevy_pbr::mesh_bindings::mesh
+#import bevy_render::maths::affine_to_square
+
+fn local_to_world_position(local_position: vec3<f32>) -> vec4<f32> {
+    return affine_to_square(mesh[0].model) * vec4<f32>(local_position, 1.0);
+}
+
+fn world_to_clip_position(world_position: vec4<f32>) -> vec4<f32> {
+    return view.view_proj * world_position;
+}
 
 fn morph_threshold_distance(tile: Tile) -> f32 {
     let tile_count = 1.0 / tile.size;
@@ -16,9 +25,7 @@ fn blend_threshold_distance() -> f32 {
 }
 
 fn compute_morph(tile: Tile, local_position: vec3<f32>) -> Morph {
-    let view_local_position = world_to_local_position(view.world_position);
-
-    let view_distance = distance(local_position, view_local_position);
+    let view_distance = distance(local_position, view_config.view_local_position);
     let threshold_distance = 2.0 * morph_threshold_distance(tile);
     let ratio = clamp(1.0 - (1.0 - view_distance / threshold_distance) / view_config.morph_range, 0.0, 1.0);
 
@@ -26,9 +33,7 @@ fn compute_morph(tile: Tile, local_position: vec3<f32>) -> Morph {
 }
 
 fn compute_blend(local_position: vec3<f32>) -> Blend {
-    let view_local_position = world_to_local_position(view.world_position);
-
-    let view_distance = distance(local_position, view_local_position);
+    let view_distance = distance(local_position, view_config.view_local_position);
     let log_distance = max(log2(view_distance / blend_threshold_distance()), 0.0);
     let ratio = 1.0 - (1.0 - log_distance % 1.0) / view_config.blend_range;
 
@@ -113,14 +118,6 @@ fn local_position_apply_height(local_position: vec3<f32>, height: f32) -> vec3<f
 #else
     return local_position + vec3<f32>(0.0, height, 0.0);
 #endif
-}
-
-fn local_to_world_position(local_position: vec3<f32>) -> vec4<f32> {
-    return mesh.model * vec4<f32>(local_position, 1.0);
-}
-
-fn world_to_local_position(world_position: vec3<f32>) -> vec3<f32> {
-    return (mesh.inverse_transpose_model * vec4<f32>(world_position, 1.0)).xyz;
 }
 
 // https://docs.s2cell.aliddell.com/en/stable/s2_concepts.html#lat-lon-to-s2-cell-id
@@ -293,8 +290,7 @@ fn inside_quadtree(view_s2: S2Coordinate, frag_s2: S2Coordinate, lod: u32) -> f3
 }
 
 fn quadtree_lod(frag_local_position: vec3<f32>) -> u32 {
-    let view_local_position = world_to_local_position(view.world_position); // Todo: adjust for new world_to_local funktion
-    let view_s2 = s2_from_local_position(view_local_position);
+    let view_s2 = s2_from_local_position(view_config.view_local_position);
     let frag_s2 = s2_from_local_position(frag_local_position);
 
     var lod = 0u;
@@ -309,13 +305,13 @@ fn quadtree_lod(frag_local_position: vec3<f32>) -> u32 {
 }
 
 fn lookup_node(local_position: vec3<f32>, lod: u32) -> NodeLookup {
-#ifdef QUADTREE_LOD
-    let lod = quadtree_lod(local_position);
-#endif
-
     let s2 = s2_from_local_position(local_position);
 
+#ifdef QUADTREE_LOD
+    let quadtree_lod        = quadtree_lod(local_position);
+#else
     let quadtree_lod        = min(lod, config.lod_count - 1u);
+#endif
     let quadtree_index      = s2.side * config.lod_count + quadtree_lod;
     let quadtree_coordinate = vec2<u32>(node_coordinate(s2.st, quadtree_lod)) % view_config.quadtree_size;
 

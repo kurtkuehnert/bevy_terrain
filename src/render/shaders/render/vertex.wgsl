@@ -1,9 +1,8 @@
 #define_import_path bevy_terrain::vertex
 
-#import bevy_terrain::functions vertex_local_position, compute_blend, lookup_node, local_to_world_position, local_position_apply_height
-#import bevy_terrain::attachments sample_height
-#import bevy_terrain::debug show_tiles
-#import bevy_pbr::mesh_view_bindings view
+#import bevy_terrain::functions::{vertex_local_position, compute_blend, lookup_node, local_to_world_position, local_position_apply_height, world_to_clip_position}
+#import bevy_terrain::attachments::sample_height
+#import bevy_terrain::debug::show_tiles
 
 struct VertexInput {
     @builtin(instance_index) instance_index: u32,
@@ -18,16 +17,14 @@ struct VertexOutput {
 }
 
 fn vertex_output(input: VertexInput, local_position: vec3<f32>, height: f32) -> VertexOutput {
-    let local_position = local_position_apply_height(local_position, height);
-    let world_position = local_to_world_position(local_position);
-
     var output: VertexOutput;
-    output.fragment_position = view.view_proj * world_position;
-    output.local_position    = local_position;
-    output.world_position    = world_position;
+
+    output.local_position    = local_position_apply_height(local_position, height);
+    output.world_position    = local_to_world_position(output.local_position);
+    output.fragment_position = world_to_clip_position(output.world_position);
 
 #ifdef SHOW_TILES
-    output.debug_color       = show_tiles(input.vertex_index, local_position);
+    output.debug_color       = show_tiles(input.vertex_index, output.local_position);
 #endif
 
     return output;

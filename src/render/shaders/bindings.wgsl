@@ -1,6 +1,6 @@
 #define_import_path bevy_terrain::bindings
 
-#import bevy_terrain::types TerrainViewConfig, TerrainConfig, TileList
+#import bevy_terrain::types::{TerrainViewConfig, TerrainConfig, TileList}
 
 // terrain view bindings
 @group(1) @binding(0)

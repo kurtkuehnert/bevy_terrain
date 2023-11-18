@@ -1,11 +1,11 @@
 #define_import_path bevy_terrain::fragment
 
-#import bevy_terrain::types NodeLookup
-#import bevy_terrain::functions compute_blend, lookup_node
-#import bevy_terrain::attachments sample_normal, sample_color
-#import bevy_terrain::debug show_lod, show_quadtree
-#import bevy_pbr::mesh_view_bindings view
-#import bevy_pbr::pbr_functions PbrInput, pbr_input_new, calculate_view, pbr
+#import bevy_terrain::types::NodeLookup
+#import bevy_terrain::functions::{compute_blend, lookup_node}
+#import bevy_terrain::attachments::{sample_normal, sample_color}
+#import bevy_terrain::debug::{show_lod, show_quadtree}
+#import bevy_pbr::pbr_types::{PbrInput, pbr_input_new}
+#import bevy_pbr::pbr_functions::{calculate_view, apply_pbr_lighting}
 
 struct FragmentInput {
     @builtin(front_facing)   is_front: bool,
@@ -62,10 +62,9 @@ fn default_fragment(input: FragmentInput) -> FragmentOutput {
     pbr_input.frag_coord                    = input.fragment_position;
     pbr_input.world_position                = input.world_position;
     pbr_input.world_normal                  = normal;
-    pbr_input.is_orthographic               = view.projection[3].w == 1.0;
     pbr_input.N                             = normal;
     pbr_input.V                             = calculate_view(input.world_position, pbr_input.is_orthographic);
-    color = pbr(pbr_input);
+    color = apply_pbr_lighting(pbr_input);
 #endif
 
     return fragment_output(input, color, lookup);

@@ -1,11 +1,10 @@
 use bevy::{
-    asset::{ChangeWatcher, LoadState},
+    asset::LoadState,
     prelude::*,
     reflect::{TypePath, TypeUuid},
     render::render_resource::*,
 };
 use bevy_terrain::prelude::*;
-use std::time::Duration;
 
 // const TILE_SIZE: u32 = 4000;
 // const TILE_FORMAT: FileFormat = FileFormat::PNG;
@@ -27,7 +26,7 @@ const HEIGHT: f32 = 4.0 / RADIUS;
 const NODE_ATLAS_SIZE: u32 = 2048;
 const PATH: &str = "earth_30k";
 
-#[derive(AsBindGroup, TypeUuid, TypePath, Clone)]
+#[derive(Asset, AsBindGroup, TypeUuid, TypePath, Clone)]
 #[uuid = "003e1d5d-241c-45a6-8c25-731dee22d820"]
 pub struct TerrainMaterial {
     #[texture(0, dimension = "1d")]
@@ -53,10 +52,7 @@ fn main() {
     App::new()
         .insert_resource(ClearColor(Color::rgb_u8(43, 44, 47)))
         .add_plugins((
-            DefaultPlugins.set(AssetPlugin {
-                watch_for_changes: ChangeWatcher::with_delay(Duration::from_millis(200)), // enable hot reloading for shader easy customization
-                ..default()
-            }),
+            DefaultPlugins,
             TerrainPlugin { config },
             TerrainDebugPlugin, // enable debug settings and controls
             TerrainMaterialPlugin::<TerrainMaterial>::default(),
@@ -198,7 +194,7 @@ fn create_array_texture(
     mut images: ResMut<Assets<Image>>,
 ) {
     if loading_textures.is_loaded
-        || asset_server.get_load_state(loading_textures.gradient.clone()) != LoadState::Loaded
+        || asset_server.load_state(&loading_textures.gradient) != LoadState::Loaded
     {
         return;
     }
