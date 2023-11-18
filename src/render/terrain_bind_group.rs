@@ -1,4 +1,5 @@
 use crate::terrain::{Terrain, TerrainComponents, TerrainConfig};
+use bevy::pbr::MeshTransforms;
 use bevy::{
     ecs::{
         query::ROQueryItem,
@@ -38,7 +39,7 @@ impl From<&TerrainConfig> for TerrainConfigUniform {
 
 #[derive(AsBindGroup)]
 struct TerrainData {
-    #[uniform(0, visibility(all))]
+    #[storage(0, visibility(all))]
     mesh_uniform: MeshUniform,
     #[uniform(1, visibility(all))]
     config: TerrainConfigUniform,
@@ -123,15 +124,14 @@ pub(crate) fn initialize_terrain_bind_group(
     >,
 ) {
     for (terrain, config, transform, previous_transform) in terrain_query.iter() {
-        let transform = transform.compute_matrix();
+        let transform = transform.affine();
         let previous_transform = previous_transform.map(|t| t.0).unwrap_or(transform);
-
-        let mesh_uniform = MeshUniform {
-            flags: 0, // Todo: we should probably set them correctly
-            transform,
-            previous_transform,
-            inverse_transpose_model: transform.inverse(), // Todo: hack we store the inverse instead of the inverse transpose
+        let transforms = MeshTransforms {
+            transform: (&transform).into(),
+            previous_transform: (&previous_transform).into(),
+            flags: 0,
         };
+        let mesh_uniform = (&transforms).into();
 
         let terrain_bind_group =
             TerrainBindGroup::new(config, mesh_uniform, &device, &images, &fallback_image);

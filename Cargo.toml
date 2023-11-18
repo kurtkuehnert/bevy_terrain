@@ -15,13 +15,13 @@ repository = "https://github.com/kurtkuehnert/bevy_terrain"
 spherical = []
 
 [dependencies]
-bevy = "0.11.2"
+bevy = { version = "0.12.0", features = ["embedded_watcher"] }
 dtm = "0.1"
 rapid-qoi = "0.6"
 ndarray = "0.15"
-itertools = "0.11.0"
+itertools = "0.12.0"
 image = "0.24"
-lru = "0.11.1"
+lru = "0.12.0"
 bitflags = "2.4.0"
 strum = "0.25.0"
 strum_macros = "0.25.2"

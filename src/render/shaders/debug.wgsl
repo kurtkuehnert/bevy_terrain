@@ -1,8 +1,7 @@
 #define_import_path bevy_terrain::debug
 
-#import bevy_terrain::bindings config, view_config, tiles
-#import bevy_terrain::functions compute_morph, compute_blend, quadtree_lod, inside_square, node_coordinate, s2_from_local_position
-#import bevy_pbr::mesh_view_bindings view
+#import bevy_terrain::bindings::{config, view_config, tiles}
+#import bevy_terrain::functions::{compute_morph, compute_blend, quadtree_lod, inside_square, node_coordinate, s2_from_local_position}
 
 fn index_color(index: u32) -> vec4<f32> {
     var COLOR_ARRAY = array<vec4<f32>, 6u>(
