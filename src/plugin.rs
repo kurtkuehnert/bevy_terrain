@@ -1,3 +1,4 @@
+use crate::preprocess_gpu::shaders::load_preprocess_shaders;
 use crate::{
     attachment_loader::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk},
     formats::{tc::load_node_config, TDFPlugin},
@@ -150,6 +151,7 @@ impl Plugin for TerrainPlugin {
     }
 
     fn finish(&self, app: &mut App) {
+        load_preprocess_shaders(app);
         load_terrain_shaders(app, &self.config);
 
         let render_app = app

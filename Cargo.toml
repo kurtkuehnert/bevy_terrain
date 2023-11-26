@@ -30,6 +30,7 @@ bytemuck = "1.10"
 anyhow = "1.0"
 bincode = "2.0.0-rc.1"
 dolly = "0.4"
+async-channel = "2.1.0"
 
 [[example]]
 name = "basic"

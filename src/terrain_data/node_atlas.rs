@@ -149,6 +149,29 @@ impl NodeAtlas {
         )
     }
 
+    pub fn allocate(&mut self, node_coordinate: NodeCoordinate) -> AtlasIndex {
+        let NodeAtlas {
+            unused_nodes,
+            nodes,
+            ..
+        } = self;
+
+        // remove least recently used node and reuse its atlas index
+        let unused_node = unused_nodes.pop_front().expect("Atlas out of indices");
+
+        nodes.remove(&unused_node.node_coordinate);
+        nodes.insert(
+            node_coordinate,
+            AtlasNode {
+                requests: 1,
+                state: LoadingState::Loaded,
+                atlas_index: unused_node.atlas_index,
+            },
+        );
+
+        unused_node.atlas_index
+    }
+
     /// Adjusts the node atlas according to the requested and released nodes of the [`Quadtree`]
     /// and starts loading not already present nodes.
     fn fulfill_request(&mut self, quadtree: &mut Quadtree) {

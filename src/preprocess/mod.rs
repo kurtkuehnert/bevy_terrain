@@ -65,7 +65,7 @@ impl BaseConfig {
 }
 
 /// The configuration of the source tile(s) of an attachment.
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct TileConfig {
     /// The path to the tile/directory of tiles.
     pub path: String,
