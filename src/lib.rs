@@ -49,6 +49,7 @@ pub mod debug;
 pub mod formats;
 pub mod plugin;
 pub mod preprocess;
+pub mod preprocess_gpu;
 pub mod render;
 pub mod terrain;
 pub mod terrain_data;

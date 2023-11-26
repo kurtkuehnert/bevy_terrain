@@ -24,7 +24,7 @@ impl AttachmentFromDisk {
     pub(crate) fn new(attachment: &AttachmentConfig, path: &str) -> Self {
         Self {
             path: format!("{}/data/{}", path, attachment.name),
-            format: attachment.format.into(),
+            format: attachment.format.sample_format(),
             file_format: attachment.file_format,
         }
     }

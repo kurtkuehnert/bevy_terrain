@@ -30,7 +30,7 @@ pub const SIDE_COUNT: u32 = 6;
 pub const SIDE_COUNT: u32 = 1;
 
 /// The global coordinate and identifier of a node.
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Encode, Decode)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, ShaderType, Encode, Decode)]
 pub struct NodeCoordinate {
     /// The side of the cube sphere the node is located on.
     pub side: u32,
@@ -94,13 +94,21 @@ pub enum AttachmentFormat {
     Rg16,
 }
 
-impl From<AttachmentFormat> for TextureFormat {
-    fn from(format: AttachmentFormat) -> Self {
-        match format {
+impl AttachmentFormat {
+    pub(crate) fn sample_format(self) -> TextureFormat {
+        match self {
             AttachmentFormat::Rgb8 => TextureFormat::Rgba8UnormSrgb,
             AttachmentFormat::Rgba8 => TextureFormat::Rgba8UnormSrgb,
             AttachmentFormat::R16 => TextureFormat::R16Unorm,
             AttachmentFormat::Rg16 => TextureFormat::Rg16Unorm,
+        }
+    }
+    pub(crate) fn storage_format(self) -> TextureFormat {
+        match self {
+            AttachmentFormat::Rgb8 => TextureFormat::Rgba8Uint,
+            AttachmentFormat::Rgba8 => TextureFormat::Rgba8Uint,
+            AttachmentFormat::R16 => TextureFormat::R16Uint,
+            AttachmentFormat::Rg16 => TextureFormat::Rg16Uint,
         }
     }
 }
@@ -180,9 +188,10 @@ pub struct AtlasAttachment {
     /// The name of the attachment.
     pub(crate) name: String,
     pub(crate) texture_size: u32,
+    pub(crate) border_size: u32,
     pub mip_level_count: u32,
     /// The format of the attachment.
-    pub(crate) format: TextureFormat,
+    pub(crate) format: AttachmentFormat,
 }
 
 impl From<AttachmentConfig> for AtlasAttachment {
@@ -194,8 +203,9 @@ impl From<AttachmentConfig> for AtlasAttachment {
             handle,
             name: config.name,
             texture_size: config.texture_size,
+            border_size: config.border_size,
             mip_level_count: config.mip_level_count,
-            format: config.format.into(),
+            format: config.format,
         }
     }
 }

@@ -5,26 +5,27 @@ use bevy::{
     render::render_resource::*,
 };
 use bevy_terrain::prelude::*;
+use bevy_terrain::preprocess_gpu::{NewPreprocessor, TerrainPreprocessPlugin};
 
-// const TILE_SIZE: u32 = 4000;
-// const TILE_FORMAT: FileFormat = FileFormat::PNG;
+const TILE_SIZE: u32 = 4096;
+const TILE_FORMAT: FileFormat = FileFormat::PNG;
+const RADIUS: f32 = 50.0;
+const TEXTURE_SIZE: u32 = 512 + 4;
+const MIP_LEVEL_COUNT: u32 = 1;
+const LOD_COUNT: u32 = 6;
+const HEIGHT: f32 = 4.0 / RADIUS;
+const NODE_ATLAS_SIZE: u32 = 512;
+const PATH: &str = "terrains/earth_4k";
+
+// const TILE_SIZE: u32 = 30000;
+// const TILE_FORMAT: FileFormat = FileFormat::TIF;
 // const RADIUS: f32 = 50.0;
 // const TEXTURE_SIZE: u32 = 512;
-// const MIP_LEVEL_COUNT: u32 = 1;
-// const LOD_COUNT: u32 = 6;
+// const MIP_LEVEL_COUNT: u32 = 3;
+// const LOD_COUNT: u32 = 8;
 // const HEIGHT: f32 = 4.0 / RADIUS;
 // const NODE_ATLAS_SIZE: u32 = 2048;
-// const PATH: &str = "terrains/earth_4k";
-
-const TILE_SIZE: u32 = 30000;
-const TILE_FORMAT: FileFormat = FileFormat::TIF;
-const RADIUS: f32 = 50.0;
-const TEXTURE_SIZE: u32 = 512;
-const MIP_LEVEL_COUNT: u32 = 3;
-const LOD_COUNT: u32 = 8;
-const HEIGHT: f32 = 4.0 / RADIUS;
-const NODE_ATLAS_SIZE: u32 = 2048;
-const PATH: &str = "earth_30k";
+// const PATH: &str = "earth_30k";
 
 #[derive(Asset, AsBindGroup, TypeUuid, TypePath, Clone)]
 #[uuid = "003e1d5d-241c-45a6-8c25-731dee22d820"]
@@ -50,10 +51,10 @@ fn main() {
     // Use magick mogrify -resize 1000x1000 -quality 100 -path ../earth_1k -format png *.tif
 
     App::new()
-        .insert_resource(ClearColor(Color::rgb_u8(43, 44, 47)))
         .add_plugins((
             DefaultPlugins,
             TerrainPlugin { config },
+            TerrainPreprocessPlugin,
             TerrainDebugPlugin, // enable debug settings and controls
             TerrainMaterialPlugin::<TerrainMaterial>::default(),
         ))
@@ -113,10 +114,27 @@ fn setup(
         ..default()
     };
 
+    let mut terrain_bundle =
+        TerrainBundle::new(config.clone(), Vec3::new(20.0, 30.0, -100.0), RADIUS);
+
+    let mut preprocessor = NewPreprocessor::new();
+
+    preprocessor.preprocess_tile(
+        TileConfig {
+            side: 0,
+            path: format!("assets/{PATH}/source/height/earth_0_0_0.png"),
+            size: TILE_SIZE,
+            file_format: TILE_FORMAT,
+        },
+        &asset_server,
+        &mut terrain_bundle.node_atlas,
+    );
+
     // Create the terrain.
     let terrain = commands
         .spawn((
-            TerrainBundle::new(config.clone(), Vec3::new(20.0, 30.0, -100.0), RADIUS),
+            terrain_bundle,
+            preprocessor,
             loader,
             materials.add(TerrainMaterial {
                 gradient: gradient.clone(),

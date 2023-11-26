@@ -76,6 +76,7 @@ impl TerrainBindGroup {
 
         let terrain_data = TerrainData {
             mesh_uniform,
+            config: config.into(),
             attachment_1: attachments.get(0).map(|a| a.handle.clone()),
             attachment_2: attachments.get(1).map(|a| a.handle.clone()),
             attachment_3: attachments.get(2).map(|a| a.handle.clone()),
@@ -84,7 +85,6 @@ impl TerrainBindGroup {
             attachment_6: attachments.get(5).map(|a| a.handle.clone()),
             attachment_7: attachments.get(6).map(|a| a.handle.clone()),
             attachment_8: attachments.get(7).map(|a| a.handle.clone()),
-            config: config.into(),
         };
 
         let layout = Self::layout(&device);
