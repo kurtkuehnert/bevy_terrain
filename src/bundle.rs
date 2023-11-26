@@ -9,13 +9,13 @@ use bevy::{prelude::*, render::view::NoFrustumCulling};
 /// Does not include loader(s) and a material.
 #[derive(Bundle)]
 pub struct TerrainBundle {
-    terrain: Terrain,
-    node_atlas: NodeAtlas,
-    config: TerrainConfig,
-    transform: Transform,
-    global_transform: GlobalTransform,
-    visibility_bundle: VisibilityBundle,
-    no_frustum_culling: NoFrustumCulling,
+    pub terrain: Terrain,
+    pub node_atlas: NodeAtlas,
+    pub config: TerrainConfig,
+    pub transform: Transform,
+    pub global_transform: GlobalTransform,
+    pub visibility_bundle: VisibilityBundle,
+    pub no_frustum_culling: NoFrustumCulling,
 }
 
 impl TerrainBundle {
