@@ -63,7 +63,7 @@ pub mod prelude {
         bundle::TerrainBundle,
         debug::{camera::DebugCamera, TerrainDebugPlugin},
         plugin::{TerrainPlugin, TerrainPluginConfig},
-        preprocess::{BaseConfig, Preprocessor, TileConfig},
+        preprocess::{BaseConfig, OldPreprocessor, TileConfig},
         render::render_pipeline::TerrainMaterialPlugin,
         terrain::{Terrain, TerrainConfig},
         terrain_data::{

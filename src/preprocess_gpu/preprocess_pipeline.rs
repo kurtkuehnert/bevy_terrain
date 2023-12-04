@@ -1,14 +1,18 @@
-use crate::preprocess::R16Image;
-use crate::preprocess_gpu::preprocess_data::{PreprocessData, PREPROCESS_LAYOUT};
-use crate::preprocess_gpu::shaders::SPLIT_TILE_SHADER;
-use crate::terrain::{Terrain, TerrainComponents};
-use crate::terrain_data::gpu_node_atlas::{align_byte_size, GpuNodeAtlas, ATTACHMENT_LAYOUT};
-use async_channel;
-use bevy::render::render_asset::RenderAssets;
-use bevy::tasks::AsyncComputeTaskPool;
+use crate::{
+    preprocess_gpu::{
+        gpu_preprocessor::{GpuPreprocessor, PREPROCESS_LAYOUT},
+        shaders::SPLIT_TILE_SHADER,
+    },
+    terrain::{Terrain, TerrainComponents},
+    terrain_data::{
+        gpu_atlas_attachment::{GpuAtlasAttachment, ATTACHMENT_LAYOUT},
+        gpu_node_atlas::GpuNodeAtlas,
+    },
+};
 use bevy::{
     prelude::*,
     render::{
+        render_asset::RenderAssets,
         render_graph::{self},
         render_resource::*,
         renderer::{RenderContext, RenderDevice},
@@ -91,6 +95,30 @@ pub struct TerrainPreprocessNode {
     terrain_query: QueryState<Entity, With<Terrain>>,
 }
 
+impl TerrainPreprocessNode {
+    fn split_tile(
+        command_encoder: &mut CommandEncoder,
+        pipelines: &[&ComputePipeline],
+        attachment: &GpuAtlasAttachment,
+        preprocess_data: &GpuPreprocessor,
+    ) {
+        // dispatch shader
+        let mut pass = command_encoder.begin_compute_pass(&ComputePassDescriptor::default());
+        pass.set_pipeline(pipelines[TerrainPreprocessPipelineId::SplitTile as usize]);
+        pass.set_bind_group(0, &attachment.bind_group, &[]);
+        pass.set_bind_group(
+            1,
+            preprocess_data.preprocess_bind_group.as_ref().unwrap(),
+            &[],
+        );
+        pass.dispatch_workgroups(
+            attachment.workgroup_count.x,
+            attachment.workgroup_count.y,
+            1,
+        );
+    }
+}
+
 impl FromWorld for TerrainPreprocessNode {
     fn from_world(world: &mut World) -> Self {
         Self {
@@ -112,7 +140,7 @@ impl render_graph::Node for TerrainPreprocessNode {
     ) -> Result<(), render_graph::NodeRunError> {
         let preprocess_pipelines = world.resource::<TerrainPreprocessPipelines>();
         let pipeline_cache = world.resource::<PipelineCache>();
-        let preprocess_data = world.resource::<TerrainComponents<PreprocessData>>();
+        let preprocess_data = world.resource::<TerrainComponents<GpuPreprocessor>>();
         let gpu_node_atlases = world.resource::<TerrainComponents<GpuNodeAtlas>>();
 
         let images = world.resource::<RenderAssets<Image>>();
@@ -136,103 +164,29 @@ impl render_graph::Node for TerrainPreprocessNode {
 
                 let attachment = &gpu_node_atlas.attachments[0];
 
-                // decide which nodes to process this frame
-                let atlas_indices = 0..1;
+                let nodes = &preprocess_data.affected_nodes[0..1];
+                let read_back_buffer = preprocess_data.read_back_buffer.as_ref().unwrap();
 
-                attachment.copy_atlas_to_rw_nodes(
-                    &mut context.command_encoder(),
-                    images,
-                    atlas_indices.clone(),
+                attachment.copy_nodes_to_write_section(context.command_encoder(), images, nodes);
+
+                TerrainPreprocessNode::split_tile(
+                    context.command_encoder(),
+                    pipelines,
+                    attachment,
+                    preprocess_data,
                 );
 
-                {
-                    // dispatch shader
-                    let pass = &mut context
-                        .command_encoder()
-                        .begin_compute_pass(&ComputePassDescriptor::default());
-                    pass.set_pipeline(pipelines[TerrainPreprocessPipelineId::SplitTile as usize]);
-                    pass.set_bind_group(0, &attachment.bind_group, &[]);
-                    pass.set_bind_group(
-                        1,
-                        preprocess_data.preprocess_bind_group.as_ref().unwrap(),
-                        &[],
-                    );
-                    pass.dispatch_workgroups(
-                        attachment.workgroup_count.x,
-                        attachment.workgroup_count.y,
-                        1,
-                    );
-                }
+                attachment.copy_nodes_from_write_section(context.command_encoder(), images, nodes);
 
-                attachment.copy_rw_nodes_to_atlas(
-                    &mut context.command_encoder(),
-                    images,
-                    atlas_indices,
-                );
-
-                attachment.read_back_node(
+                attachment.download_nodes(
                     context.command_encoder(),
                     images,
-                    preprocess_data.read_back_buffer.as_ref().unwrap(),
-                    0,
+                    read_back_buffer,
+                    nodes,
                 );
             }
         }
 
         Ok(())
     }
-}
-
-pub(crate) fn save_node(read_back_buffer: Buffer) {
-    let width = 512;
-    let height = 512;
-    let pixel_size = 2;
-
-    let finish = async move {
-        let (tx, rx) = async_channel::bounded(1);
-        let buffer_slice = read_back_buffer.slice(..);
-        // The polling for this map call is done every frame when the command queue is submitted.
-        buffer_slice.map_async(MapMode::Read, move |result| {
-            let err = result.err();
-            if err.is_some() {
-                panic!("{}", err.unwrap().to_string());
-            }
-            tx.try_send(()).unwrap();
-        });
-        rx.recv().await.unwrap();
-        let data = buffer_slice.get_mapped_range();
-        // we immediately move the data to CPU memory to avoid holding the mapped view for long
-        let mut result = Vec::from(&*data);
-        drop(data);
-        drop(read_back_buffer);
-
-        if result.len() != ((width * height) as usize * pixel_size) {
-            // Our buffer has been padded because we needed to align to a multiple of 256.
-            // We remove this padding here
-            let initial_row_bytes = width as usize * pixel_size;
-            let buffered_row_bytes = align_byte_size(width * pixel_size as u32) as usize;
-
-            let mut take_offset = buffered_row_bytes;
-            let mut place_offset = initial_row_bytes;
-            for _ in 1..height {
-                result.copy_within(take_offset..take_offset + buffered_row_bytes, place_offset);
-                take_offset += buffered_row_bytes;
-                place_offset += initial_row_bytes;
-            }
-            result.truncate(initial_row_bytes * height as usize);
-        }
-
-        let result: Vec<u16> = result
-            .chunks_exact(2)
-            .map(|pixel| u16::from_le_bytes(pixel.try_into().unwrap()))
-            .collect();
-
-        let image = R16Image::from_raw(width, height, result).unwrap();
-
-        image.save("test.png").unwrap();
-
-        dbg!("node data has been retreived from the GPU");
-    };
-
-    AsyncComputeTaskPool::get().spawn(finish).detach();
 }
