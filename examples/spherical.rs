@@ -5,7 +5,6 @@ use bevy::{
     render::render_resource::*,
 };
 use bevy_terrain::prelude::*;
-use bevy_terrain::preprocess_gpu::{NewPreprocessor, TerrainPreprocessPlugin};
 
 const TILE_SIZE: u32 = 4096;
 const TILE_FORMAT: FileFormat = FileFormat::PNG;
@@ -54,7 +53,6 @@ fn main() {
         .add_plugins((
             DefaultPlugins,
             TerrainPlugin { config },
-            TerrainPreprocessPlugin,
             TerrainDebugPlugin, // enable debug settings and controls
             TerrainMaterialPlugin::<TerrainMaterial>::default(),
         ))
@@ -114,27 +112,10 @@ fn setup(
         ..default()
     };
 
-    let mut terrain_bundle =
-        TerrainBundle::new(config.clone(), Vec3::new(20.0, 30.0, -100.0), RADIUS);
-
-    let mut preprocessor = NewPreprocessor::new();
-
-    preprocessor.preprocess_tile(
-        TileConfig {
-            side: 0,
-            path: format!("assets/{PATH}/source/height/earth_0_0_0.png"),
-            size: TILE_SIZE,
-            file_format: TILE_FORMAT,
-        },
-        &asset_server,
-        &mut terrain_bundle.node_atlas,
-    );
-
     // Create the terrain.
     let terrain = commands
         .spawn((
-            terrain_bundle,
-            preprocessor,
+            TerrainBundle::new(config.clone(), Vec3::new(20.0, 30.0, -100.0), RADIUS),
             loader,
             materials.add(TerrainMaterial {
                 gradient: gradient.clone(),

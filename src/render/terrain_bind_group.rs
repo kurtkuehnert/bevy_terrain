@@ -104,39 +104,39 @@ impl TerrainBindGroup {
     pub(crate) fn layout(device: &RenderDevice) -> BindGroupLayout {
         TerrainData::bind_group_layout(device)
     }
-}
 
-pub(crate) fn initialize_terrain_bind_group(
-    device: Res<RenderDevice>,
-    images: Res<RenderAssets<Image>>,
-    fallback_image: Res<FallbackImage>,
-    mut terrain_bind_groups: ResMut<TerrainComponents<TerrainBindGroup>>,
-    terrain_query: Extract<
-        Query<
-            (
-                Entity,
-                &TerrainConfig,
-                &GlobalTransform,
-                Option<&PreviousGlobalTransform>,
-            ),
-            Added<Terrain>,
+    pub(crate) fn initialize(
+        device: Res<RenderDevice>,
+        images: Res<RenderAssets<Image>>,
+        fallback_image: Res<FallbackImage>,
+        mut terrain_bind_groups: ResMut<TerrainComponents<TerrainBindGroup>>,
+        terrain_query: Extract<
+            Query<
+                (
+                    Entity,
+                    &TerrainConfig,
+                    &GlobalTransform,
+                    Option<&PreviousGlobalTransform>,
+                ),
+                Added<Terrain>,
+            >,
         >,
-    >,
-) {
-    for (terrain, config, transform, previous_transform) in terrain_query.iter() {
-        let transform = transform.affine();
-        let previous_transform = previous_transform.map(|t| t.0).unwrap_or(transform);
-        let transforms = MeshTransforms {
-            transform: (&transform).into(),
-            previous_transform: (&previous_transform).into(),
-            flags: 0,
-        };
-        let mesh_uniform = (&transforms).into();
+    ) {
+        for (terrain, config, transform, previous_transform) in terrain_query.iter() {
+            let transform = transform.affine();
+            let previous_transform = previous_transform.map(|t| t.0).unwrap_or(transform);
+            let transforms = MeshTransforms {
+                transform: (&transform).into(),
+                previous_transform: (&previous_transform).into(),
+                flags: 0,
+            };
+            let mesh_uniform = (&transforms).into();
 
-        let terrain_bind_group =
-            TerrainBindGroup::new(config, mesh_uniform, &device, &images, &fallback_image);
+            let terrain_bind_group =
+                TerrainBindGroup::new(config, mesh_uniform, &device, &images, &fallback_image);
 
-        terrain_bind_groups.insert(terrain, terrain_bind_group);
+            terrain_bind_groups.insert(terrain, terrain_bind_group);
+        }
     }
 }
 

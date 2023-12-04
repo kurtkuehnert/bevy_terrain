@@ -19,6 +19,7 @@ use bevy::{prelude::*, render::render_resource::*};
 use bincode::{Decode, Encode};
 use std::{fmt, str::FromStr};
 
+pub mod gpu_atlas_attachment;
 pub mod gpu_node_atlas;
 pub mod gpu_quadtree;
 pub mod node_atlas;

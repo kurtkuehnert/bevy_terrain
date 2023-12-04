@@ -79,14 +79,14 @@ pub struct TileConfig {
 /// The preprocessor converts attachments from source data to streamable nodes.
 ///
 /// It gathers all configurations of the attachments and then optionally processes them.
-pub struct Preprocessor {
+pub struct OldPreprocessor {
     lod_count: u32,
     path: String,
     pub(crate) base: Option<(TileConfig, BaseConfig)>,
     pub(crate) attachments: Vec<(TileConfig, AttachmentConfig)>,
 }
 
-impl Preprocessor {
+impl OldPreprocessor {
     pub fn new(lod_count: u32, path: String) -> Self {
         Self {
             lod_count,

@@ -1,26 +1,19 @@
-use crate::preprocess_gpu::shaders::load_preprocess_shaders;
 use crate::{
     attachment_loader::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk},
     formats::{tc::load_node_config, TDFPlugin},
     preprocess::BaseConfig,
+    preprocess_gpu::shaders::load_preprocess_shaders,
     render::{
-        compute_pipelines::{
-            queue_terrain_compute_pipelines, TerrainComputeNode, TerrainComputePipelines,
-        },
-        culling_bind_group::{prepare_culling_bind_group, CullingBindGroup},
+        compute_pipelines::{TerrainComputeNode, TerrainComputePipelines},
+        culling_bind_group::CullingBindGroup,
         shaders::load_terrain_shaders,
-        terrain_bind_group::{initialize_terrain_bind_group, TerrainBindGroup},
-        terrain_view_data::{
-            extract_terrain_view_config, initialize_terrain_view_data, prepare_terrain_view_config,
-            TerrainViewConfigUniform, TerrainViewData,
-        },
+        terrain_bind_group::TerrainBindGroup,
+        terrain_view_data::{TerrainViewConfigUniform, TerrainViewData},
     },
     terrain::{Terrain, TerrainComponents, TerrainConfig},
     terrain_data::{
-        gpu_node_atlas::{
-            extract_node_atlas, initialize_gpu_node_atlas, prepare_node_atlas, GpuNodeAtlas,
-        },
-        gpu_quadtree::{extract_quadtree, initialize_gpu_quadtree, prepare_quadtree, GpuQuadtree},
+        gpu_node_atlas::GpuNodeAtlas,
+        gpu_quadtree::GpuQuadtree,
         node_atlas::update_node_atlas,
         quadtree::{adjust_quadtree, compute_quadtree_request, Quadtree},
         AttachmentConfig,
@@ -125,28 +118,27 @@ impl Plugin for TerrainPlugin {
             .add_systems(
                 ExtractSchedule,
                 (
-                    extract_terrain_view_config,
-                    initialize_gpu_node_atlas,
-                    initialize_gpu_quadtree,
-                    initialize_terrain_bind_group.after(initialize_gpu_node_atlas),
-                    initialize_terrain_view_data.after(initialize_gpu_quadtree),
-                    extract_node_atlas.after(initialize_gpu_node_atlas),
-                    extract_quadtree.after(initialize_gpu_quadtree),
+                    GpuNodeAtlas::initialize,
+                    GpuQuadtree::initialize,
+                    TerrainBindGroup::initialize.after(GpuNodeAtlas::initialize),
+                    TerrainViewData::initialize.after(GpuQuadtree::initialize),
+                    GpuNodeAtlas::extract.after(GpuNodeAtlas::initialize),
+                    GpuQuadtree::extract.after(GpuQuadtree::initialize),
+                    TerrainViewData::extract.after(TerrainViewData::initialize),
                 ),
             )
             .add_systems(
                 Render,
-                queue_terrain_compute_pipelines.in_set(RenderSet::Queue),
-            )
-            .add_systems(
-                Render,
                 (
-                    prepare_quadtree,
-                    prepare_node_atlas,
-                    prepare_terrain_view_config,
-                    prepare_culling_bind_group,
-                )
-                    .in_set(RenderSet::Prepare),
+                    (
+                        GpuQuadtree::prepare,
+                        GpuNodeAtlas::prepare,
+                        TerrainViewData::prepare,
+                        CullingBindGroup::prepare,
+                    )
+                        .in_set(RenderSet::Prepare),
+                    TerrainComputePipelines::queue.in_set(RenderSet::Queue),
+                ),
             );
     }
 

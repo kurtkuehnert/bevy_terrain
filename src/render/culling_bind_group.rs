@@ -82,24 +82,24 @@ impl CullingBindGroup {
     pub(crate) fn layout(device: &RenderDevice) -> BindGroupLayout {
         CullingData::bind_group_layout(device)
     }
-}
 
-pub(crate) fn prepare_culling_bind_group(
-    device: Res<RenderDevice>,
-    images: Res<RenderAssets<Image>>,
-    fallback_image: Res<FallbackImage>,
-    mut culling_bind_groups: ResMut<TerrainViewComponents<CullingBindGroup>>,
-    terrain_query: Query<Entity, With<Terrain>>,
-    view_query: Query<(Entity, &ExtractedView), With<TerrainView>>,
-) {
-    for (view, extracted_view) in view_query.iter() {
-        // todo: save per view not per terrain
+    pub(crate) fn prepare(
+        device: Res<RenderDevice>,
+        images: Res<RenderAssets<Image>>,
+        fallback_image: Res<FallbackImage>,
+        mut culling_bind_groups: ResMut<TerrainViewComponents<CullingBindGroup>>,
+        terrain_query: Query<Entity, With<Terrain>>,
+        view_query: Query<(Entity, &ExtractedView), With<TerrainView>>,
+    ) {
+        for (view, extracted_view) in view_query.iter() {
+            // todo: save per view not per terrain
 
-        for terrain in terrain_query.iter() {
-            let culling_bind_group =
-                CullingBindGroup::new(extracted_view, &device, &images, &fallback_image);
+            for terrain in terrain_query.iter() {
+                let culling_bind_group =
+                    CullingBindGroup::new(extracted_view, &device, &images, &fallback_image);
 
-            culling_bind_groups.insert((terrain, view), culling_bind_group);
+                culling_bind_groups.insert((terrain, view), culling_bind_group);
+            }
         }
     }
 }

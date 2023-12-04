@@ -170,56 +170,56 @@ impl TerrainViewData {
         buffer.write(view_config_uniform).unwrap();
         queue.write_buffer(&self.view_config_buffer, 0, &buffer.into_inner());
     }
-}
 
-pub(crate) fn initialize_terrain_view_data(
-    device: Res<RenderDevice>,
-    images: Res<RenderAssets<Image>>,
-    mut terrain_view_data: ResMut<TerrainViewComponents<TerrainViewData>>,
-    view_configs: Extract<Res<TerrainViewComponents<TerrainViewConfig>>>,
-    view_query: Extract<Query<Entity, With<TerrainView>>>,
-    terrain_query: Extract<Query<Entity, Added<Terrain>>>,
-) {
-    for terrain in terrain_query.iter() {
-        for view in view_query.iter() {
-            let view_config = view_configs.get(&(terrain, view)).unwrap();
+    pub(crate) fn initialize(
+        device: Res<RenderDevice>,
+        images: Res<RenderAssets<Image>>,
+        mut terrain_view_data: ResMut<TerrainViewComponents<TerrainViewData>>,
+        view_configs: Extract<Res<TerrainViewComponents<TerrainViewConfig>>>,
+        view_query: Extract<Query<Entity, With<TerrainView>>>,
+        terrain_query: Extract<Query<Entity, Added<Terrain>>>,
+    ) {
+        for terrain in terrain_query.iter() {
+            for view in view_query.iter() {
+                let view_config = view_configs.get(&(terrain, view)).unwrap();
 
-            terrain_view_data.insert(
-                (terrain, view),
-                TerrainViewData::new(&device, &images, view_config),
-            );
+                terrain_view_data.insert(
+                    (terrain, view),
+                    TerrainViewData::new(&device, &images, view_config),
+                );
+            }
         }
     }
-}
 
-pub(crate) fn extract_terrain_view_config(
-    mut view_config_uniforms: ResMut<TerrainViewComponents<TerrainViewConfigUniform>>,
-    view_configs: Extract<Res<TerrainViewComponents<TerrainViewConfig>>>,
-    view_query: Extract<Query<&GlobalTransform, With<TerrainView>>>,
-    terrain_query: Extract<Query<&GlobalTransform, With<Terrain>>>,
-) {
-    for (&(terrain, view), view_config) in &view_configs.0 {
-        let view_world_position = view_query.get(view).unwrap().translation();
-        let terrain_transform = terrain_query.get(terrain).unwrap();
-        let model = terrain_transform.compute_matrix();
-        let inverse_model = model.inverse();
+    pub(crate) fn extract(
+        mut view_config_uniforms: ResMut<TerrainViewComponents<TerrainViewConfigUniform>>,
+        view_configs: Extract<Res<TerrainViewComponents<TerrainViewConfig>>>,
+        view_query: Extract<Query<&GlobalTransform, With<TerrainView>>>,
+        terrain_query: Extract<Query<&GlobalTransform, With<Terrain>>>,
+    ) {
+        for (&(terrain, view), view_config) in &view_configs.0 {
+            let view_world_position = view_query.get(view).unwrap().translation();
+            let terrain_transform = terrain_query.get(terrain).unwrap();
+            let model = terrain_transform.compute_matrix();
+            let inverse_model = model.inverse();
 
-        let view_local_position = (inverse_model * view_world_position.extend(1.0)).xyz();
-        view_config_uniforms.insert(
-            (terrain, view),
-            TerrainViewConfigUniform::new(view_config, view_local_position),
-        )
+            let view_local_position = (inverse_model * view_world_position.extend(1.0)).xyz();
+            view_config_uniforms.insert(
+                (terrain, view),
+                TerrainViewConfigUniform::new(view_config, view_local_position),
+            )
+        }
     }
-}
 
-pub(crate) fn prepare_terrain_view_config(
-    queue: Res<RenderQueue>,
-    mut terrain_view_data: ResMut<TerrainViewComponents<TerrainViewData>>,
-    view_config_uniforms: Res<TerrainViewComponents<TerrainViewConfigUniform>>,
-) {
-    for (&(terrain, view), data) in &mut terrain_view_data.0 {
-        let view_config_uniform = view_config_uniforms.get(&(terrain, view)).unwrap();
-        data.update(&queue, view_config_uniform)
+    pub(crate) fn prepare(
+        queue: Res<RenderQueue>,
+        mut terrain_view_data: ResMut<TerrainViewComponents<TerrainViewData>>,
+        view_config_uniforms: Res<TerrainViewComponents<TerrainViewConfigUniform>>,
+    ) {
+        for (&(terrain, view), data) in &mut terrain_view_data.0 {
+            let view_config_uniform = view_config_uniforms.get(&(terrain, view)).unwrap();
+            data.update(&queue, view_config_uniform)
+        }
     }
 }
 

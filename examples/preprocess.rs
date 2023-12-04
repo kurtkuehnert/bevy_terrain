@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use bevy_terrain::prelude::*;
-use bevy_terrain::preprocess_gpu::{NewPreprocessor, TerrainPreprocessPlugin};
+use bevy_terrain::preprocess_gpu::preprocessor::Preprocessor;
+use bevy_terrain::preprocess_gpu::TerrainPreprocessPlugin;
 
 const TILE_SIZE: u32 = 1024;
 const TILE_FORMAT: FileFormat = FileFormat::PNG;
@@ -43,7 +44,7 @@ fn setup(
     let mut terrain_bundle =
         TerrainBundle::new(config.clone(), Vec3::new(20.0, -30.0, -100.0), TERRAIN_SIZE);
 
-    let mut preprocessor = NewPreprocessor::new();
+    let mut preprocessor = Preprocessor::new();
 
     preprocessor.preprocess_tile(
         TileConfig {

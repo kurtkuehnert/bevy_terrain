@@ -78,6 +78,31 @@ pub struct TerrainComputePipelines {
     pipelines: [Option<CachedComputePipelineId>; TerrainComputePipelineId::COUNT],
 }
 
+impl TerrainComputePipelines {
+    pub(crate) fn queue(
+        debug: Option<Res<DebugTerrain>>,
+        pipeline_cache: Res<PipelineCache>,
+        mut compute_pipelines: ResMut<TerrainComputePipelines>,
+        mut pipelines: ResMut<SpecializedComputePipelines<TerrainComputePipelines>>,
+    ) {
+        let mut flags = TerrainComputePipelineFlags::NONE;
+
+        #[cfg(feature = "spherical")]
+        {
+            flags |= TerrainComputePipelineFlags::SPHERICAL;
+        }
+
+        if let Some(debug) = &debug {
+            flags |= TerrainComputePipelineFlags::from_debug(debug);
+        }
+
+        for id in TerrainComputePipelineId::iter() {
+            compute_pipelines.pipelines[id as usize] =
+                Some(pipelines.specialize(&pipeline_cache, &compute_pipelines, (id, flags)));
+        }
+    }
+}
+
 impl FromWorld for TerrainComputePipelines {
     fn from_world(world: &mut World) -> Self {
         let device = world.resource::<RenderDevice>();
@@ -274,28 +299,5 @@ impl render_graph::Node for TerrainComputeNode {
         }
 
         Ok(())
-    }
-}
-
-pub(crate) fn queue_terrain_compute_pipelines(
-    debug: Option<Res<DebugTerrain>>,
-    pipeline_cache: Res<PipelineCache>,
-    mut compute_pipelines: ResMut<TerrainComputePipelines>,
-    mut pipelines: ResMut<SpecializedComputePipelines<TerrainComputePipelines>>,
-) {
-    let mut flags = TerrainComputePipelineFlags::NONE;
-
-    #[cfg(feature = "spherical")]
-    {
-        flags |= TerrainComputePipelineFlags::SPHERICAL;
-    }
-
-    if let Some(debug) = &debug {
-        flags |= TerrainComputePipelineFlags::from_debug(debug);
-    }
-
-    for id in TerrainComputePipelineId::iter() {
-        compute_pipelines.pipelines[id as usize] =
-            Some(pipelines.specialize(&pipeline_cache, &compute_pipelines, (id, flags)));
     }
 }
