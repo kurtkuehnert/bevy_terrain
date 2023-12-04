@@ -2,7 +2,7 @@
 
 use crate::{
     plugin::TerrainPluginConfig,
-    preprocess::{Preprocessor, TileConfig},
+    preprocess::{OldPreprocessor, TileConfig},
     terrain_data::{
         node_atlas::NodeAtlas, AttachmentConfig, AttachmentIndex, FileFormat, NodeCoordinate,
     },
@@ -36,7 +36,7 @@ pub struct AttachmentFromDiskLoader {
     pub(crate) attachments: HashMap<AttachmentIndex, AttachmentFromDisk>,
     /// Maps the id of an asset to the corresponding node coordinate.
     id_mapping: HashMap<AssetId<Image>, (NodeCoordinate, AttachmentIndex)>,
-    preprocessor: Preprocessor,
+    preprocessor: OldPreprocessor,
     path: String,
     attachment_index: usize,
 }
@@ -46,7 +46,7 @@ impl AttachmentFromDiskLoader {
         Self {
             attachments: Default::default(),
             id_mapping: Default::default(),
-            preprocessor: Preprocessor::new(lod_count, path.clone()),
+            preprocessor: OldPreprocessor::new(lod_count, path.clone()),
             path,
             attachment_index: 0,
         }

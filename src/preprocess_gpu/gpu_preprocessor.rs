@@ -1,7 +1,7 @@
 use crate::preprocess::TileConfig;
-use crate::preprocess_gpu::preprocess_pipeline::save_node;
-use crate::preprocess_gpu::NewPreprocessor;
+use crate::preprocess_gpu::preprocessor::Preprocessor;
 use crate::terrain::{Terrain, TerrainComponents};
+use crate::terrain_data::gpu_atlas_attachment::save_node;
 use crate::terrain_data::NodeCoordinate;
 use bevy::prelude::*;
 use bevy::render::render_asset::RenderAssets;
@@ -9,6 +9,7 @@ use bevy::render::render_resource::*;
 use bevy::render::renderer::{RenderDevice, RenderQueue};
 use bevy::render::Extract;
 
+// Todo: this does not belong here
 #[derive(Clone, ShaderType)]
 pub(crate) struct NodeMeta {
     pub(crate) atlas_index: u32,
@@ -50,17 +51,17 @@ pub(crate) const PREPROCESS_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutD
     ],
 };
 
-pub(crate) struct PreprocessData {
+pub(crate) struct GpuPreprocessor {
     _tile_config: Option<TileConfig>,
     tile_handle: Option<Handle<Image>>,
-    affected_nodes: Vec<NodeMeta>,
+    pub(crate) affected_nodes: Vec<NodeMeta>,
     pub(crate) is_ready: bool,
     pub(crate) preprocess_bind_group: Option<BindGroup>,
     pub(crate) read_back_buffer: Option<Buffer>,
 }
 
-impl PreprocessData {
-    pub(crate) fn extract(preprocessor: &NewPreprocessor) -> Self {
+impl GpuPreprocessor {
+    pub(crate) fn new(preprocessor: &Preprocessor) -> Self {
         Self {
             _tile_config: preprocessor.tile_config.clone(),
             tile_handle: preprocessor.tile_handle.clone(),
@@ -71,7 +72,7 @@ impl PreprocessData {
         }
     }
 
-    pub(crate) fn prepare(
+    pub(crate) fn update(
         &mut self,
         device: &RenderDevice,
         queue: &RenderQueue,
@@ -95,7 +96,7 @@ impl PreprocessData {
 
             self.read_back_buffer = Some(device.create_buffer(&BufferDescriptor {
                 label: Some("read_back_buffer"),
-                size: 512 * 512 * 2,
+                size: 512 * 512 * 2 * 4,
                 usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
                 mapped_at_creation: false,
             }));
@@ -103,29 +104,29 @@ impl PreprocessData {
             self.preprocess_bind_group = Some(preprocess_bind_group);
         }
     }
-}
 
-pub(crate) fn extract_terrain_preprocessor(
-    mut preprocess_data: ResMut<TerrainComponents<PreprocessData>>,
-    terrain_query: Extract<Query<(Entity, &NewPreprocessor), With<Terrain>>>,
-) {
-    for (entity, preprocessor) in terrain_query.iter() {
-        if let Some(data) = preprocess_data.get(&entity) {
-            if data.is_ready {
-                save_node(data.read_back_buffer.clone().unwrap());
+    pub(crate) fn extract(
+        mut preprocess_data: ResMut<TerrainComponents<GpuPreprocessor>>,
+        terrain_query: Extract<Query<(Entity, &Preprocessor), With<Terrain>>>,
+    ) {
+        for (entity, preprocessor) in terrain_query.iter() {
+            if let Some(data) = preprocess_data.get(&entity) {
+                if data.is_ready {
+                    save_node(data.read_back_buffer.clone().unwrap());
+                }
             }
+            preprocess_data.insert(entity, GpuPreprocessor::new(&preprocessor));
         }
-        preprocess_data.insert(entity, PreprocessData::extract(&preprocessor));
     }
-}
 
-pub(crate) fn prepare_terrain_preprocessor(
-    device: Res<RenderDevice>,
-    queue: Res<RenderQueue>,
-    images: Res<RenderAssets<Image>>,
-    mut preprocess_data: ResMut<TerrainComponents<PreprocessData>>,
-) {
-    for data in preprocess_data.0.values_mut() {
-        data.prepare(&device, &queue, &images);
+    pub(crate) fn prepare(
+        device: Res<RenderDevice>,
+        queue: Res<RenderQueue>,
+        images: Res<RenderAssets<Image>>,
+        mut preprocess_data: ResMut<TerrainComponents<GpuPreprocessor>>,
+    ) {
+        for data in preprocess_data.0.values_mut() {
+            data.update(&device, &queue, &images);
+        }
     }
 }
