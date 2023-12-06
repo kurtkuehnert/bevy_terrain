@@ -85,12 +85,12 @@ impl TerrainViewData {
 
         let prepare_indirect_bind_group = device.create_bind_group(
             "prepare_indirect_bind_group",
-            &device.create_bind_group_layout(&PREPARE_INDIRECT_LAYOUT),
+            &device.create_bind_group_layout(None, &PREPARE_INDIRECT_LAYOUT),
             &BindGroupEntries::single(indirect_buffer.as_entire_binding()),
         );
         let refine_tiles_bind_group = device.create_bind_group(
             "refine_tiles_bind_group",
-            &device.create_bind_group_layout(&REFINE_TILES_LAYOUT),
+            &device.create_bind_group_layout(None, &REFINE_TILES_LAYOUT),
             &BindGroupEntries::sequential((
                 view_config_buffer.as_entire_binding(),
                 &quadtree.texture_view,
@@ -102,7 +102,7 @@ impl TerrainViewData {
 
         let terrain_view_bind_group = device.create_bind_group(
             "terrain_view_bind_group",
-            &device.create_bind_group_layout(&TERRAIN_VIEW_LAYOUT),
+            &device.create_bind_group_layout(None, &TERRAIN_VIEW_LAYOUT),
             &BindGroupEntries::sequential((
                 view_config_buffer.as_entire_binding(),
                 &quadtree.texture_view,

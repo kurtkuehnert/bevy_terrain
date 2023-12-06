@@ -1,55 +1,40 @@
-use crate::preprocess::TileConfig;
-use crate::preprocess_gpu::preprocessor::Preprocessor;
-use crate::terrain::{Terrain, TerrainComponents};
-use crate::terrain_data::gpu_atlas_attachment::save_node;
-use crate::terrain_data::NodeCoordinate;
-use bevy::prelude::*;
-use bevy::render::render_asset::RenderAssets;
-use bevy::render::render_resource::*;
-use bevy::render::renderer::{RenderDevice, RenderQueue};
-use bevy::render::Extract;
+use crate::{
+    preprocess::TileConfig,
+    preprocess_gpu::preprocessor::Preprocessor,
+    terrain::{Terrain, TerrainComponents},
+    terrain_data::{gpu_node_atlas::GpuNodeAtlas, NodeCoordinate},
+};
+use bevy::{
+    prelude::*,
+    render::{
+        render_asset::RenderAssets,
+        render_resource::{binding_types::*, *},
+        renderer::{RenderDevice, RenderQueue},
+        Extract,
+    },
+};
 
 // Todo: this does not belong here
-#[derive(Clone, ShaderType)]
+#[derive(Clone, Debug, ShaderType)]
 pub(crate) struct NodeMeta {
     pub(crate) atlas_index: u32,
+    pub(crate) _padding: u32,
     pub(crate) node_coordinate: NodeCoordinate,
 }
 
-pub(crate) const PREPROCESS_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
-    label: None,
-    entries: &[
-        // tile
-        BindGroupLayoutEntry {
-            binding: 0,
-            visibility: ShaderStages::COMPUTE,
-            ty: BindingType::Texture {
-                sample_type: TextureSampleType::Float { filterable: true },
-                view_dimension: TextureViewDimension::D2,
-                multisampled: false,
-            },
-            count: None,
-        },
-        // tile_sampler
-        BindGroupLayoutEntry {
-            binding: 1,
-            visibility: ShaderStages::COMPUTE,
-            ty: BindingType::Sampler(SamplerBindingType::Filtering),
-            count: None,
-        },
-        // node_meta_list
-        BindGroupLayoutEntry {
-            binding: 2,
-            visibility: ShaderStages::COMPUTE,
-            ty: BindingType::Buffer {
-                ty: BufferBindingType::Storage { read_only: true },
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        },
-    ],
-};
+pub(crate) fn create_preprocess_layout(device: &RenderDevice) -> BindGroupLayout {
+    device.create_bind_group_layout(
+        None,
+        &BindGroupLayoutEntries::sequential(
+            ShaderStages::COMPUTE,
+            (
+                texture_2d(TextureSampleType::Float { filterable: true }), // tile
+                sampler(SamplerBindingType::Filtering),                    // tile_sampler
+                storage_buffer_read_only::<NodeMeta>(false),               // node_meta_list
+            ),
+        ),
+    )
+}
 
 pub(crate) struct GpuPreprocessor {
     _tile_config: Option<TileConfig>,
@@ -57,7 +42,6 @@ pub(crate) struct GpuPreprocessor {
     pub(crate) affected_nodes: Vec<NodeMeta>,
     pub(crate) is_ready: bool,
     pub(crate) preprocess_bind_group: Option<BindGroup>,
-    pub(crate) read_back_buffer: Option<Buffer>,
 }
 
 impl GpuPreprocessor {
@@ -68,7 +52,6 @@ impl GpuPreprocessor {
             affected_nodes: preprocessor.affected_nodes.clone(),
             is_ready: preprocessor.is_ready,
             preprocess_bind_group: None,
-            read_back_buffer: None,
         }
     }
 
@@ -86,7 +69,7 @@ impl GpuPreprocessor {
 
             let preprocess_bind_group = device.create_bind_group(
                 "preprocess_bind_group",
-                &device.create_bind_group_layout(&PREPROCESS_LAYOUT),
+                &create_preprocess_layout(device),
                 &BindGroupEntries::sequential((
                     &tile.texture_view,
                     &tile.sampler,
@@ -94,28 +77,27 @@ impl GpuPreprocessor {
                 )),
             );
 
-            self.read_back_buffer = Some(device.create_buffer(&BufferDescriptor {
-                label: Some("read_back_buffer"),
-                size: 512 * 512 * 2 * 4,
-                usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
-                mapped_at_creation: false,
-            }));
-
             self.preprocess_bind_group = Some(preprocess_bind_group);
         }
     }
 
     pub(crate) fn extract(
         mut preprocess_data: ResMut<TerrainComponents<GpuPreprocessor>>,
+        gpu_node_atlases: Res<TerrainComponents<GpuNodeAtlas>>,
         terrain_query: Extract<Query<(Entity, &Preprocessor), With<Terrain>>>,
     ) {
-        for (entity, preprocessor) in terrain_query.iter() {
-            if let Some(data) = preprocess_data.get(&entity) {
+        for (terrain, preprocessor) in terrain_query.iter() {
+            if let Some(data) = preprocess_data.get(&terrain) {
                 if data.is_ready {
-                    save_node(data.read_back_buffer.clone().unwrap());
+                    let gpu_node_atlas = gpu_node_atlases.get(&terrain).unwrap();
+                    let attachment = &gpu_node_atlas.attachments[0];
+
+                    let nodes = &data.affected_nodes[0..4];
+
+                    attachment.save_nodes(nodes);
                 }
             }
-            preprocess_data.insert(entity, GpuPreprocessor::new(&preprocessor));
+            preprocess_data.insert(terrain, GpuPreprocessor::new(&preprocessor));
         }
     }
 

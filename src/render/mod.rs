@@ -22,119 +22,110 @@ pub(crate) const TILE_SIZE: BufferAddress = 16 * 4;
 pub(crate) const INDIRECT_BUFFER_SIZE: BufferAddress = 5 * 4;
 pub(crate) const PARAMETER_BUFFER_SIZE: BufferAddress = 7 * 4;
 
-pub(crate) const PREPARE_INDIRECT_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
-    label: None,
-    entries: &[
-        // indirect buffer
-        BindGroupLayoutEntry {
-            binding: 0,
-            visibility: ShaderStages::COMPUTE,
-            ty: BindingType::Buffer {
-                ty: BufferBindingType::Storage { read_only: false },
-                has_dynamic_offset: false,
-                min_binding_size: BufferSize::new(INDIRECT_BUFFER_SIZE),
-            },
-            count: None,
+pub(crate) const PREPARE_INDIRECT_LAYOUT: [BindGroupLayoutEntry; 1] = [
+    // indirect buffer
+    BindGroupLayoutEntry {
+        binding: 0,
+        visibility: ShaderStages::COMPUTE,
+        ty: BindingType::Buffer {
+            ty: BufferBindingType::Storage { read_only: false },
+            has_dynamic_offset: false,
+            min_binding_size: BufferSize::new(INDIRECT_BUFFER_SIZE),
         },
-    ],
-};
+        count: None,
+    },
+];
 
-pub(crate) const REFINE_TILES_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
-    label: None,
-    entries: &[
-        // view config
-        BindGroupLayoutEntry {
-            binding: 0,
-            visibility: ShaderStages::COMPUTE,
-            ty: BindingType::Buffer {
-                ty: BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
+pub(crate) const REFINE_TILES_LAYOUT: [BindGroupLayoutEntry; 5] = [
+    // view config
+    BindGroupLayoutEntry {
+        binding: 0,
+        visibility: ShaderStages::COMPUTE,
+        ty: BindingType::Buffer {
+            ty: BufferBindingType::Uniform,
+            has_dynamic_offset: false,
+            min_binding_size: None,
         },
-        // quadtree
-        BindGroupLayoutEntry {
-            binding: 1,
-            visibility: ShaderStages::COMPUTE,
-            ty: BindingType::Texture {
-                sample_type: TextureSampleType::Uint,
-                view_dimension: TextureViewDimension::D2Array,
-                multisampled: false,
-            },
-            count: None,
+        count: None,
+    },
+    // quadtree
+    BindGroupLayoutEntry {
+        binding: 1,
+        visibility: ShaderStages::COMPUTE,
+        ty: BindingType::Texture {
+            sample_type: TextureSampleType::Uint,
+            view_dimension: TextureViewDimension::D2Array,
+            multisampled: false,
         },
-        // final tiles
-        BindGroupLayoutEntry {
-            binding: 2,
-            visibility: ShaderStages::COMPUTE,
-            ty: BindingType::Buffer {
-                ty: BufferBindingType::Storage { read_only: false },
-                has_dynamic_offset: false,
-                min_binding_size: BufferSize::new(32 + TILE_SIZE),
-            },
-            count: None,
+        count: None,
+    },
+    // final tiles
+    BindGroupLayoutEntry {
+        binding: 2,
+        visibility: ShaderStages::COMPUTE,
+        ty: BindingType::Buffer {
+            ty: BufferBindingType::Storage { read_only: false },
+            has_dynamic_offset: false,
+            min_binding_size: BufferSize::new(32 + TILE_SIZE),
         },
-        // temporary tiles
-        BindGroupLayoutEntry {
-            binding: 3,
-            visibility: ShaderStages::COMPUTE,
-            ty: BindingType::Buffer {
-                ty: BufferBindingType::Storage { read_only: false },
-                has_dynamic_offset: false,
-                min_binding_size: BufferSize::new(32 + TILE_SIZE),
-            },
-            count: None,
+        count: None,
+    },
+    // temporary tiles
+    BindGroupLayoutEntry {
+        binding: 3,
+        visibility: ShaderStages::COMPUTE,
+        ty: BindingType::Buffer {
+            ty: BufferBindingType::Storage { read_only: false },
+            has_dynamic_offset: false,
+            min_binding_size: BufferSize::new(32 + TILE_SIZE),
         },
-        // parameters
-        BindGroupLayoutEntry {
-            binding: 4,
-            visibility: ShaderStages::COMPUTE,
-            ty: BindingType::Buffer {
-                ty: BufferBindingType::Storage { read_only: false },
-                has_dynamic_offset: false,
-                min_binding_size: BufferSize::new(PARAMETER_BUFFER_SIZE),
-            },
-            count: None,
+        count: None,
+    },
+    // parameters
+    BindGroupLayoutEntry {
+        binding: 4,
+        visibility: ShaderStages::COMPUTE,
+        ty: BindingType::Buffer {
+            ty: BufferBindingType::Storage { read_only: false },
+            has_dynamic_offset: false,
+            min_binding_size: BufferSize::new(PARAMETER_BUFFER_SIZE),
         },
-    ],
-};
+        count: None,
+    },
+];
 
-pub(crate) const TERRAIN_VIEW_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
-    label: None,
-    entries: &[
-        // view config
-        BindGroupLayoutEntry {
-            binding: 0,
-            visibility: ShaderStages::VERTEX_FRAGMENT,
-            ty: BindingType::Buffer {
-                ty: BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
+pub(crate) const TERRAIN_VIEW_LAYOUT: [BindGroupLayoutEntry; 3] = [
+    // view config
+    BindGroupLayoutEntry {
+        binding: 0,
+        visibility: ShaderStages::VERTEX_FRAGMENT,
+        ty: BindingType::Buffer {
+            ty: BufferBindingType::Uniform,
+            has_dynamic_offset: false,
+            min_binding_size: None,
         },
-        // quadtree
-        BindGroupLayoutEntry {
-            binding: 1,
-            visibility: ShaderStages::VERTEX_FRAGMENT,
-            ty: BindingType::Texture {
-                sample_type: TextureSampleType::Uint,
-                view_dimension: TextureViewDimension::D2Array,
-                multisampled: false,
-            },
-            count: None,
+        count: None,
+    },
+    // quadtree
+    BindGroupLayoutEntry {
+        binding: 1,
+        visibility: ShaderStages::VERTEX_FRAGMENT,
+        ty: BindingType::Texture {
+            sample_type: TextureSampleType::Uint,
+            view_dimension: TextureViewDimension::D2Array,
+            multisampled: false,
         },
-        // tiles
-        BindGroupLayoutEntry {
-            binding: 2,
-            visibility: ShaderStages::VERTEX,
-            ty: BindingType::Buffer {
-                ty: BufferBindingType::Storage { read_only: true },
-                has_dynamic_offset: false,
-                min_binding_size: BufferSize::new(32 + TILE_SIZE),
-            },
-            count: None,
+        count: None,
+    },
+    // tiles
+    BindGroupLayoutEntry {
+        binding: 2,
+        visibility: ShaderStages::VERTEX,
+        ty: BindingType::Buffer {
+            ty: BufferBindingType::Storage { read_only: true },
+            has_dynamic_offset: false,
+            min_binding_size: BufferSize::new(32 + TILE_SIZE),
         },
-    ],
-};
+        count: None,
+    },
+];
