@@ -3,6 +3,7 @@
 
 struct NodeMeta {
     atlas_index: u32,
+   _padding: u32,
     node_coordinate: NodeCoordinate,
 }
 
@@ -53,8 +54,16 @@ fn sample_tile(s2: S2Coordinate) -> vec4<u32> {
     return vec4<u32>(60000u);
 }
 
-fn tile_value(pixel_coords: vec2<u32>, pixel_offset: u32) -> f32 {
-    let tile_coords = vec2<f32>(pixel_coords + vec2<u32>(pixel_offset, 0u)) / f32(attachment.node_size);
+fn tile_value(pixel_coords: vec2<u32>, pixel_offset: u32, node_meta: NodeMeta) -> f32 {
+    let node_coordinate = node_meta.node_coordinate;
+
+    let lod_count = 2u;
+
+    let node_scale = f32(1u << (lod_count - node_coordinate.lod - 1u));
+    let node_coords = vec2<f32>(pixel_coords + vec2<u32>(pixel_offset, 0u)) / f32(attachment.node_size);
+    let node_offset =  vec2<f32>(node_coordinate.xy);
+
+    let tile_coords = (node_offset + node_coords) / node_scale;
 
     return textureSampleLevel(tile, tile_sampler, tile_coords, 0.0).x;
 }
@@ -69,8 +78,10 @@ fn split_tile(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
         return;
     }
 
-    let value = pack2x16unorm(vec2<f32>(tile_value(pixel_coords, 0u),
-                                        tile_value(pixel_coords, 1u)));
+    let node_meta = node_meta_list.data[node_index];
+
+    let value = pack2x16unorm(vec2<f32>(tile_value(pixel_coords, 0u, node_meta),
+                                        tile_value(pixel_coords, 1u, node_meta)));
 
     let section_coords = pixel_coords + vec2<u32>(attachment.border_size);
     let section_index = (node_index * attachment.texture_size * attachment.texture_size +

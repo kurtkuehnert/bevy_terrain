@@ -1,5 +1,5 @@
 use crate::{
-    preprocess::R16Image,
+    preprocess::{file_io::format_node_path, R16Image},
     preprocess_gpu::gpu_preprocessor::NodeMeta,
     terrain_data::{AtlasAttachment, AtlasIndex},
 };
@@ -7,18 +7,61 @@ use bevy::{
     prelude::*,
     render::{
         render_asset::RenderAssets,
-        render_resource::*,
+        render_resource::{binding_types::*, *},
         renderer::{RenderDevice, RenderQueue},
         texture::{GpuImage, TextureFormatPixelInfo},
     },
     tasks::AsyncComputeTaskPool,
 };
+use std::path::Path;
 
-pub const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
+const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
 
-pub(crate) fn align_byte_size(value: u32) -> u32 {
+fn align_byte_size(value: u32) -> u32 {
     // only works for non zero values
     value - 1 - (value - 1) % COPY_BYTES_PER_ROW_ALIGNMENT + COPY_BYTES_PER_ROW_ALIGNMENT
+}
+
+async fn read_buffer(
+    read_back_buffer: Buffer,
+    texture_size: usize,
+    pixel_size: usize,
+    layer_count: usize,
+) -> Vec<u8> {
+    let (tx, rx) = async_channel::bounded(1);
+    let buffer_slice = read_back_buffer.slice(..);
+    // The polling for this map call is done every frame when the command queue is submitted.
+    buffer_slice.map_async(MapMode::Read, move |result| {
+        let err = result.err();
+        if err.is_some() {
+            panic!("{}", err.unwrap().to_string());
+        }
+        tx.try_send(()).unwrap();
+    });
+    rx.recv().await.unwrap();
+    let data = buffer_slice.get_mapped_range();
+    // we immediately move the data to CPU memory to avoid holding the mapped view for long
+    let mut result = Vec::from(&*data);
+    drop(data);
+    drop(read_back_buffer);
+
+    if result.len() != (texture_size * texture_size * pixel_size * layer_count) {
+        // Our buffer has been padded because we needed to align to a multiple of 256.
+        // We remove this padding here
+        let initial_row_bytes = texture_size * pixel_size;
+        let buffered_row_bytes = align_byte_size((texture_size * pixel_size) as u32) as usize;
+
+        let mut take_offset = buffered_row_bytes;
+        let mut place_offset = initial_row_bytes;
+        for _ in 1..texture_size * layer_count {
+            result.copy_within(take_offset..take_offset + buffered_row_bytes, place_offset);
+            take_offset += buffered_row_bytes;
+            place_offset += initial_row_bytes;
+        }
+        result.truncate(initial_row_bytes * texture_size);
+    }
+
+    return result;
 }
 
 #[derive(Clone, ShaderType)]
@@ -29,55 +72,25 @@ pub(crate) struct AttachmentMeta {
     pub(crate) pixels_per_section_entry: u32,
 }
 
-pub(crate) const ATTACHMENT_LAYOUT: BindGroupLayoutDescriptor = BindGroupLayoutDescriptor {
-    label: None,
-    entries: &[
-        // atlas_write_section
-        BindGroupLayoutEntry {
-            binding: 0,
-            visibility: ShaderStages::COMPUTE,
-            ty: BindingType::Buffer {
-                ty: BufferBindingType::Storage { read_only: false },
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        },
-        // atlas
-        BindGroupLayoutEntry {
-            binding: 1,
-            visibility: ShaderStages::COMPUTE,
-            ty: BindingType::Texture {
-                sample_type: TextureSampleType::Float { filterable: true },
-                view_dimension: TextureViewDimension::D2Array,
-                multisampled: false,
-            },
-            count: None,
-        },
-        // atlas sampler
-        BindGroupLayoutEntry {
-            binding: 2,
-            visibility: ShaderStages::COMPUTE,
-            ty: BindingType::Sampler(SamplerBindingType::Filtering),
-            count: None,
-        },
-        // attachment meta
-        BindGroupLayoutEntry {
-            binding: 3,
-            visibility: ShaderStages::COMPUTE,
-            ty: BindingType::Buffer {
-                ty: BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        },
-    ],
-};
+pub(crate) fn create_attachment_layout(device: &RenderDevice) -> BindGroupLayout {
+    device.create_bind_group_layout(
+        None,
+        &BindGroupLayoutEntries::sequential(
+            ShaderStages::COMPUTE,
+            (
+                storage_buffer::<u32>(false), // atlas_write_section
+                texture_2d_array(TextureSampleType::Float { filterable: true }), // atlas
+                sampler(SamplerBindingType::Filtering), // atlas sampler
+                uniform_buffer::<AttachmentMeta>(false), // attachment meta
+            ),
+        ),
+    )
+}
 
 pub(crate) struct GpuAtlasAttachment {
     pub(crate) atlas_handle: Handle<Image>,
     pub(crate) atlas_write_section: Buffer,
+    pub(crate) read_back_buffer: Option<Buffer>,
     pub(crate) bind_group: BindGroup,
     pub(crate) format: TextureFormat,
     pub(crate) texture_size: u32,
@@ -159,17 +172,32 @@ impl GpuAtlasAttachment {
 
         let atlas_view = atlas_texture.create_view(&default());
 
-        let section_slots = 1;
-        let section_size = attachment.texture_size
+        let slots = 4;
+
+        let section_size = slots
             * attachment.texture_size
-            * section_slots
+            * attachment.texture_size
             * attachment.format.storage_format().pixel_size() as u32;
+
         let atlas_write_section = device.create_buffer(&BufferDescriptor {
             label: Some(&(attachment.name.to_string() + "_atlas_write_section")),
-            size: section_size as u64,
+            size: section_size as BufferAddress,
             usage: BufferUsages::COPY_DST | BufferUsages::COPY_SRC | BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
+
+        let read_back_size = slots
+            * align_byte_size(
+                attachment.texture_size * attachment.format.storage_format().pixel_size() as u32,
+            )
+            * attachment.texture_size;
+
+        let read_back_buffer = Some(device.create_buffer(&BufferDescriptor {
+            label: Some("read_back_buffer"),
+            size: read_back_size as BufferAddress,
+            usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        }));
 
         // Todo: adjust this code for pixel sizes larger than a u32
         let pixels_per_section_entry = std::mem::size_of::<u32>() as u32
@@ -186,7 +214,7 @@ impl GpuAtlasAttachment {
 
         let bind_group = device.create_bind_group(
             "attachment_bind_group",
-            &device.create_bind_group_layout(&ATTACHMENT_LAYOUT),
+            &create_attachment_layout(&device),
             &BindGroupEntries::sequential((
                 atlas_write_section.as_entire_binding(),
                 &atlas_view,
@@ -210,6 +238,7 @@ impl GpuAtlasAttachment {
         Self {
             atlas_handle: attachment.handle.clone(),
             atlas_write_section,
+            read_back_buffer,
             bind_group,
             format: attachment.format.storage_format(),
             texture_size: attachment.texture_size,
@@ -255,24 +284,6 @@ impl GpuAtlasAttachment {
         }
     }
 
-    pub(crate) fn download_nodes(
-        &self,
-        command_encoder: &mut CommandEncoder,
-        images: &RenderAssets<Image>,
-        read_back_buffer: &Buffer,
-        nodes: &[NodeMeta],
-    ) {
-        let atlas = images.get(&self.atlas_handle).unwrap();
-
-        for (read_back_index, node_meta) in nodes.iter().enumerate() {
-            command_encoder.copy_texture_to_buffer(
-                self.image_copy_texture(&atlas.texture, node_meta.atlas_index as u32, 0),
-                self.image_copy_buffer(read_back_buffer, read_back_index as u32),
-                self.image_copy_size(0),
-            );
-        }
-    }
-
     pub(crate) fn upload_node(
         &self,
         command_encoder: &mut CommandEncoder,
@@ -294,58 +305,67 @@ impl GpuAtlasAttachment {
             error!("Something went wrong, attachment is not available!")
         }
     }
-}
 
-pub(crate) fn save_node(read_back_buffer: Buffer) {
-    let width = 512;
-    let height = 512;
-    let pixel_size = 2;
+    pub(crate) fn download_nodes(
+        &self,
+        command_encoder: &mut CommandEncoder,
+        images: &RenderAssets<Image>,
+        nodes: &[NodeMeta],
+    ) {
+        let atlas = images.get(&self.atlas_handle).unwrap();
 
-    let finish = async move {
-        let (tx, rx) = async_channel::bounded(1);
-        let buffer_slice = read_back_buffer.slice(..);
-        // The polling for this map call is done every frame when the command queue is submitted.
-        buffer_slice.map_async(MapMode::Read, move |result| {
-            let err = result.err();
-            if err.is_some() {
-                panic!("{}", err.unwrap().to_string());
-            }
-            tx.try_send(()).unwrap();
-        });
-        rx.recv().await.unwrap();
-        let data = buffer_slice.get_mapped_range();
-        // we immediately move the data to CPU memory to avoid holding the mapped view for long
-        let mut result = Vec::from(&*data);
-        drop(data);
-        drop(read_back_buffer);
-
-        if result.len() != ((width * height) as usize * pixel_size) {
-            // Our buffer has been padded because we needed to align to a multiple of 256.
-            // We remove this padding here
-            let initial_row_bytes = width as usize * pixel_size;
-            let buffered_row_bytes = align_byte_size(width * pixel_size as u32) as usize;
-
-            let mut take_offset = buffered_row_bytes;
-            let mut place_offset = initial_row_bytes;
-            for _ in 1..height {
-                result.copy_within(take_offset..take_offset + buffered_row_bytes, place_offset);
-                take_offset += buffered_row_bytes;
-                place_offset += initial_row_bytes;
-            }
-            result.truncate(initial_row_bytes * height as usize);
+        for (read_back_index, node_meta) in nodes.iter().enumerate() {
+            command_encoder.copy_texture_to_buffer(
+                self.image_copy_texture(&atlas.texture, node_meta.atlas_index as u32, 0),
+                self.image_copy_buffer(
+                    self.read_back_buffer.as_ref().unwrap(),
+                    read_back_index as u32,
+                ),
+                self.image_copy_size(0),
+            );
         }
+    }
 
-        let result: Vec<u16> = result
-            .chunks_exact(2)
-            .map(|pixel| u16::from_le_bytes(pixel.try_into().unwrap()))
-            .collect();
+    pub(crate) fn save_nodes(&self, nodes: &[NodeMeta]) {
+        let texture_size = self.texture_size as usize;
+        let pixel_size = self.format.pixel_size();
+        let layer_count = 4;
 
-        let image = R16Image::from_raw(width, height, result).unwrap();
+        let read_back_buffer = self.read_back_buffer.clone().unwrap();
+        let nodes = nodes.to_vec();
 
-        image.save("test.png").unwrap();
+        let finish = async move {
+            let data = read_buffer(read_back_buffer, texture_size, pixel_size, layer_count).await;
 
-        dbg!("node data has been retreived from the GPU");
-    };
+            let image_size = texture_size * texture_size * pixel_size;
 
-    AsyncComputeTaskPool::get().spawn(finish).detach();
+            for (image_data, node_meta) in data
+                .chunks_exact(image_size)
+                .map(|slice| {
+                    slice
+                        .chunks_exact(2)
+                        .map(|pixel| u16::from_le_bytes(pixel.try_into().unwrap()))
+                        .collect::<Vec<u16>>()
+                })
+                .zip(nodes.iter())
+            {
+                let path = format_node_path("assets/test", &node_meta.node_coordinate);
+                let path = Path::new(&path);
+                let path = path.with_extension("png");
+                let path = path.to_str().unwrap();
+
+                dbg!(path);
+
+                let image =
+                    R16Image::from_raw(texture_size as u32, texture_size as u32, image_data)
+                        .unwrap();
+
+                image.save(path).unwrap();
+
+                dbg!("node data has been retreived from the GPU");
+            }
+        };
+
+        AsyncComputeTaskPool::get().spawn(finish).detach();
+    }
 }

@@ -1,11 +1,11 @@
 use crate::{
     preprocess_gpu::{
-        gpu_preprocessor::{GpuPreprocessor, PREPROCESS_LAYOUT},
+        gpu_preprocessor::{create_preprocess_layout, GpuPreprocessor},
         shaders::SPLIT_TILE_SHADER,
     },
     terrain::{Terrain, TerrainComponents},
     terrain_data::{
-        gpu_atlas_attachment::{GpuAtlasAttachment, ATTACHMENT_LAYOUT},
+        gpu_atlas_attachment::{create_attachment_layout, GpuAtlasAttachment},
         gpu_node_atlas::GpuNodeAtlas,
     },
 };
@@ -39,8 +39,8 @@ impl FromWorld for TerrainPreprocessPipelines {
     fn from_world(world: &mut World) -> Self {
         let device = world.resource::<RenderDevice>();
 
-        let attachment_layout = device.create_bind_group_layout(&ATTACHMENT_LAYOUT);
-        let preprocess_layout = device.create_bind_group_layout(&PREPROCESS_LAYOUT);
+        let attachment_layout = create_attachment_layout(&device);
+        let preprocess_layout = create_preprocess_layout(&device);
 
         let mut preprocess_pipelines = TerrainPreprocessPipelines {
             attachment_layout,
@@ -101,6 +101,7 @@ impl TerrainPreprocessNode {
         pipelines: &[&ComputePipeline],
         attachment: &GpuAtlasAttachment,
         preprocess_data: &GpuPreprocessor,
+        node_count: u32,
     ) {
         // dispatch shader
         let mut pass = command_encoder.begin_compute_pass(&ComputePassDescriptor::default());
@@ -114,7 +115,7 @@ impl TerrainPreprocessNode {
         pass.dispatch_workgroups(
             attachment.workgroup_count.x,
             attachment.workgroup_count.y,
-            1,
+            node_count,
         );
     }
 }
@@ -164,8 +165,7 @@ impl render_graph::Node for TerrainPreprocessNode {
 
                 let attachment = &gpu_node_atlas.attachments[0];
 
-                let nodes = &preprocess_data.affected_nodes[0..1];
-                let read_back_buffer = preprocess_data.read_back_buffer.as_ref().unwrap();
+                let nodes = &preprocess_data.affected_nodes[0..4];
 
                 attachment.copy_nodes_to_write_section(context.command_encoder(), images, nodes);
 
@@ -174,16 +174,12 @@ impl render_graph::Node for TerrainPreprocessNode {
                     pipelines,
                     attachment,
                     preprocess_data,
+                    nodes.len() as u32,
                 );
 
                 attachment.copy_nodes_from_write_section(context.command_encoder(), images, nodes);
 
-                attachment.download_nodes(
-                    context.command_encoder(),
-                    images,
-                    read_back_buffer,
-                    nodes,
-                );
+                attachment.download_nodes(context.command_encoder(), images, nodes);
             }
         }
 

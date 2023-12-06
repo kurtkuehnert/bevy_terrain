@@ -242,7 +242,7 @@ impl<M: Material> FromWorld for TerrainRenderPipeline<M> {
             .get_view_layout(MeshPipelineViewLayoutKey::MULTISAMPLED)
             .clone();
         let terrain_layout = TerrainBindGroup::layout(device);
-        let terrain_view_layout = device.create_bind_group_layout(&TERRAIN_VIEW_LAYOUT);
+        let terrain_view_layout = device.create_bind_group_layout(None, &TERRAIN_VIEW_LAYOUT);
         let material_layout = M::bind_group_layout(device);
 
         let vertex_shader = match M::vertex_shader() {

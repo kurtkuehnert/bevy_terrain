@@ -50,6 +50,7 @@ impl Preprocessor {
 
                 self.affected_nodes.push(NodeMeta {
                     atlas_index: atlas_index as u32,
+                    _padding: 0,
                     node_coordinate,
                 });
             }

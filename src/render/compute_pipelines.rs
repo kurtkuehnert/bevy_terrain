@@ -107,8 +107,9 @@ impl FromWorld for TerrainComputePipelines {
     fn from_world(world: &mut World) -> Self {
         let device = world.resource::<RenderDevice>();
 
-        let prepare_indirect_layout = device.create_bind_group_layout(&PREPARE_INDIRECT_LAYOUT);
-        let refine_tiles_layout = device.create_bind_group_layout(&REFINE_TILES_LAYOUT);
+        let prepare_indirect_layout =
+            device.create_bind_group_layout(None, &PREPARE_INDIRECT_LAYOUT);
+        let refine_tiles_layout = device.create_bind_group_layout(None, &REFINE_TILES_LAYOUT);
         let culling_data_layout = CullingBindGroup::layout(device);
         let terrain_layout = TerrainBindGroup::layout(device);
 
