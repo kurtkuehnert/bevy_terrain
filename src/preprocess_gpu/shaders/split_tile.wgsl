@@ -57,7 +57,7 @@ fn sample_tile(s2: S2Coordinate) -> vec4<u32> {
 fn tile_value(pixel_coords: vec2<u32>, pixel_offset: u32, node_meta: NodeMeta) -> f32 {
     let node_coordinate = node_meta.node_coordinate;
 
-    let lod_count = 2u;
+    let lod_count = 3u;
 
     let node_scale = f32(1u << (lod_count - node_coordinate.lod - 1u));
     let node_coords = vec2<f32>(pixel_coords + vec2<u32>(pixel_offset, 0u)) / f32(attachment.node_size);
