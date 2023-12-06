@@ -43,6 +43,13 @@ pub struct NodeCoordinate {
     /// The y position of the node in node sizes.
     pub y: u32,
 }
+
+impl NodeCoordinate {
+    pub fn new(side: u32, lod: u32, x: u32, y: u32) -> Self {
+        Self { side, lod, x, y }
+    }
+}
+
 impl fmt::Display for NodeCoordinate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(f, "{}_{}_{}_{}", self.side, self.lod, self.x, self.y)

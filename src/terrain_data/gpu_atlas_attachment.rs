@@ -1,8 +1,10 @@
+use crate::preprocess_gpu::preprocessor::PreprocessTask;
 use crate::{
     preprocess::{file_io::format_node_path, R16Image},
     preprocess_gpu::gpu_preprocessor::NodeMeta,
     terrain_data::{AtlasAttachment, AtlasIndex},
 };
+use bevy::tasks::Task;
 use bevy::{
     prelude::*,
     render::{
@@ -42,7 +44,9 @@ async fn read_buffer(
     let data = buffer_slice.get_mapped_range();
     // we immediately move the data to CPU memory to avoid holding the mapped view for long
     let mut result = Vec::from(&*data);
+
     drop(data);
+    read_back_buffer.unmap();
     drop(read_back_buffer);
 
     if result.len() != (texture_size * texture_size * pixel_size * layer_count) {
@@ -326,15 +330,14 @@ impl GpuAtlasAttachment {
         }
     }
 
-    pub(crate) fn save_nodes(&self, nodes: &[NodeMeta]) {
+    pub(crate) fn save_nodes(&self, tasks: Vec<PreprocessTask>) -> Task<Vec<PreprocessTask>> {
         let texture_size = self.texture_size as usize;
         let pixel_size = self.format.pixel_size();
         let layer_count = 4;
 
         let read_back_buffer = self.read_back_buffer.clone().unwrap();
-        let nodes = nodes.to_vec();
 
-        let finish = async move {
+        AsyncComputeTaskPool::get().spawn(async move {
             let data = read_buffer(read_back_buffer, texture_size, pixel_size, layer_count).await;
 
             let image_size = texture_size * texture_size * pixel_size;
@@ -347,14 +350,12 @@ impl GpuAtlasAttachment {
                         .map(|pixel| u16::from_le_bytes(pixel.try_into().unwrap()))
                         .collect::<Vec<u16>>()
                 })
-                .zip(nodes.iter())
+                .zip(tasks.iter().map(|task| task.node.clone()))
             {
                 let path = format_node_path("assets/test", &node_meta.node_coordinate);
                 let path = Path::new(&path);
                 let path = path.with_extension("png");
                 let path = path.to_str().unwrap();
-
-                dbg!(path);
 
                 let image =
                     R16Image::from_raw(texture_size as u32, texture_size as u32, image_data)
@@ -362,10 +363,10 @@ impl GpuAtlasAttachment {
 
                 image.save(path).unwrap();
 
-                dbg!("node data has been retreived from the GPU");
+                println!("Finished saving node: {path}");
             }
-        };
 
-        AsyncComputeTaskPool::get().spawn(finish).detach();
+            return tasks;
+        })
     }
 }

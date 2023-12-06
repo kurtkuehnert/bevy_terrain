@@ -2,7 +2,7 @@ use crate::{
     preprocess_gpu::{
         gpu_preprocessor::GpuPreprocessor,
         preprocess_pipeline::{TerrainPreprocessNode, TerrainPreprocessPipelines},
-        preprocessor::preprocessor_is_ready,
+        preprocessor::{preprocessor_load_tile, select_ready_tasks},
     },
     terrain::TerrainComponents,
 };
@@ -23,12 +23,18 @@ pub struct TerrainPreprocessPlugin;
 
 impl Plugin for TerrainPreprocessPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, preprocessor_is_ready);
+        app.add_systems(Update, (select_ready_tasks, preprocessor_load_tile));
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
                 .init_resource::<TerrainComponents<GpuPreprocessor>>()
-                .add_systems(ExtractSchedule, GpuPreprocessor::extract)
+                .add_systems(
+                    ExtractSchedule,
+                    (
+                        GpuPreprocessor::initialize,
+                        GpuPreprocessor::extract.after(GpuPreprocessor::initialize),
+                    ),
+                )
                 .add_systems(
                     Render,
                     GpuPreprocessor::prepare.in_set(RenderSet::PrepareAssets),

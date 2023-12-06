@@ -160,14 +160,18 @@ impl render_graph::Node for TerrainPreprocessNode {
             let preprocess_data = preprocess_data.get(&terrain).unwrap();
             let gpu_node_atlas = gpu_node_atlases.get(&terrain).unwrap();
 
-            if preprocess_data.is_ready {
+            if !preprocess_data.processing_tasks.is_empty() {
                 dbg!("running Pipeline");
 
                 let attachment = &gpu_node_atlas.attachments[0];
 
-                let nodes = &preprocess_data.affected_nodes[0..4];
+                let nodes = preprocess_data
+                    .processing_tasks
+                    .iter()
+                    .map(|task| task.node.clone())
+                    .collect::<Vec<_>>();
 
-                attachment.copy_nodes_to_write_section(context.command_encoder(), images, nodes);
+                attachment.copy_nodes_to_write_section(context.command_encoder(), images, &nodes);
 
                 TerrainPreprocessNode::split_tile(
                     context.command_encoder(),
@@ -177,9 +181,11 @@ impl render_graph::Node for TerrainPreprocessNode {
                     nodes.len() as u32,
                 );
 
-                attachment.copy_nodes_from_write_section(context.command_encoder(), images, nodes);
+                attachment.copy_nodes_from_write_section(context.command_encoder(), images, &nodes);
 
-                attachment.download_nodes(context.command_encoder(), images, nodes);
+                attachment.download_nodes(context.command_encoder(), images, &nodes);
+
+                dbg!("finished Pipeline");
             }
         }
 
