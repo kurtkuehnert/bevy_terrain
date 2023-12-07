@@ -161,9 +161,11 @@ impl render_graph::Node for TerrainPreprocessNode {
             let gpu_node_atlas = gpu_node_atlases.get(&terrain).unwrap();
 
             if !preprocess_data.processing_tasks.is_empty() {
-                dbg!("running Pipeline");
-
                 let attachment = &gpu_node_atlas.attachments[0];
+
+                let device = world.resource::<RenderDevice>();
+
+                attachment.create_read_back_buffer(device);
 
                 let nodes = preprocess_data
                     .processing_tasks
@@ -185,7 +187,7 @@ impl render_graph::Node for TerrainPreprocessNode {
 
                 attachment.download_nodes(context.command_encoder(), images, &nodes);
 
-                dbg!("finished Pipeline");
+                println!("Ran preprocessing pipeline with {} nodes.", nodes.len())
             }
         }
 

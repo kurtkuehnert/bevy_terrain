@@ -1,6 +1,6 @@
 use crate::{
     prelude::{NodeAtlas, TileConfig},
-    preprocess_gpu::gpu_preprocessor::NodeMeta,
+    preprocess_gpu::gpu_preprocessor::{NodeMeta, ReadBackNode},
     terrain::Terrain,
     terrain_data::NodeCoordinate,
 };
@@ -8,14 +8,16 @@ use bevy::{
     asset::LoadState,
     prelude::*,
     render::{render_resource::TextureFormat, texture::ImageSampler},
+    tasks::{futures_lite::future, Task},
 };
 use itertools::iproduct;
-use std::collections::VecDeque;
-use std::mem;
-use std::ops::DerefMut;
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::VecDeque,
+    ops::DerefMut,
+    sync::{Arc, Mutex},
+};
 
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub(crate) enum PreprocessTaskType {
     SplitTile { tile: Handle<Image> },
     Stitch,
@@ -35,8 +37,9 @@ pub struct Preprocessor {
     pub(crate) tile_handle: Option<Handle<Image>>,
     pub(crate) task_queue: VecDeque<PreprocessTask>,
     pub(crate) ready_tasks: Vec<PreprocessTask>,
-    pub(crate) finished_tasks: Arc<Mutex<Vec<PreprocessTask>>>,
-    pub(crate) blocked: bool,
+    pub(crate) read_back_tasks: Arc<Mutex<Vec<Task<Vec<ReadBackNode>>>>>,
+    pub(crate) saving_tasks: Vec<Task<()>>,
+    pub(crate) slots: u32,
 }
 
 impl Preprocessor {
@@ -44,9 +47,10 @@ impl Preprocessor {
         Self {
             tile_handle: None,
             task_queue: default(),
-            ready_tasks: vec![],
-            finished_tasks: Arc::new(Mutex::new(vec![])),
-            blocked: false,
+            ready_tasks: default(),
+            read_back_tasks: default(),
+            saving_tasks: default(),
+            slots: 8,
         }
     }
 
@@ -100,32 +104,60 @@ pub(crate) fn select_ready_tasks(
     mut terrain_query: Query<&mut Preprocessor, With<Terrain>>,
 ) {
     for mut preprocessor in terrain_query.iter_mut() {
-        preprocessor.ready_tasks = vec![];
+        let Preprocessor {
+            task_queue,
+            ready_tasks,
+            read_back_tasks,
+            saving_tasks,
+            slots,
+            ..
+        } = preprocessor.deref_mut();
 
-        let finished_tasks = mem::take(preprocessor.finished_tasks.lock().unwrap().deref_mut());
-
-        if !finished_tasks.is_empty() {
-            preprocessor.blocked = false;
-        }
-
-        // Todo: loop multiple times
-        let ready = if let Some(task) = preprocessor.task_queue.front() {
-            match &task.task_type {
-                PreprocessTaskType::SplitTile { tile } => {
-                    asset_server.load_state(tile) == LoadState::Loaded
-                }
-                PreprocessTaskType::Stitch => false,
-                PreprocessTaskType::Downsample => false,
+        saving_tasks.retain_mut(|task| {
+            if future::block_on(future::poll_once(task)).is_some() {
+                *slots += 1;
+                false
+            } else {
+                true
             }
-        } else {
-            false
-        };
+        });
 
-        if ready && !preprocessor.blocked {
-            let task = preprocessor.task_queue.pop_front().unwrap();
+        read_back_tasks
+            .lock()
+            .unwrap()
+            .deref_mut()
+            .retain_mut(|task| {
+                if let Some(nodes) = future::block_on(future::poll_once(task)) {
+                    for node in nodes {
+                        saving_tasks.push(node.start_saving());
+                    }
+                    false
+                } else {
+                    true
+                }
+            });
 
-            preprocessor.ready_tasks.push(task);
-            preprocessor.blocked = true;
+        ready_tasks.clear();
+
+        while *slots > 0 {
+            let ready = task_queue
+                .front()
+                .map_or(false, |task| match &task.task_type {
+                    PreprocessTaskType::SplitTile { tile } => {
+                        asset_server.load_state(tile) == LoadState::Loaded
+                    }
+                    PreprocessTaskType::Stitch => false,
+                    PreprocessTaskType::Downsample => false,
+                });
+
+            if ready {
+                let task = task_queue.pop_front().unwrap();
+
+                ready_tasks.push(task);
+                *slots -= 1;
+            } else {
+                break;
+            }
         }
     }
 }
