@@ -37,7 +37,12 @@ impl Plugin for TerrainPreprocessPlugin {
                 )
                 .add_systems(
                     Render,
-                    GpuPreprocessor::prepare.in_set(RenderSet::PrepareAssets),
+                    (
+                        GpuPreprocessor::prepare.in_set(RenderSet::PrepareAssets),
+                        GpuPreprocessor::cleanup
+                            .in_set(RenderSet::Cleanup)
+                            .before(World::clear_entities),
+                    ),
                 );
         }
     }

@@ -1,8 +1,11 @@
+use crate::preprocess::file_io::format_node_path;
+use crate::preprocess::R16Image;
 use crate::{
     preprocess_gpu::preprocessor::{PreprocessTask, PreprocessTaskType, Preprocessor},
     terrain::{Terrain, TerrainComponents},
     terrain_data::{gpu_node_atlas::GpuNodeAtlas, NodeCoordinate},
 };
+use bevy::utils::dbg;
 use bevy::{
     prelude::*,
     render::{
@@ -11,10 +14,12 @@ use bevy::{
         renderer::{RenderDevice, RenderQueue},
         Extract,
     },
-    tasks::{futures_lite::future, Task},
+    tasks::{AsyncComputeTaskPool, Task},
 };
+use std::collections::VecDeque;
 use std::{
     mem,
+    path::Path,
     sync::{Arc, Mutex},
 };
 
@@ -24,6 +29,40 @@ pub(crate) struct NodeMeta {
     pub(crate) atlas_index: u32,
     pub(crate) _padding: u32,
     pub(crate) node_coordinate: NodeCoordinate,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct ReadBackNode {
+    pub(crate) data: Vec<u8>,
+    pub(crate) texture_size: u32,
+    pub(crate) format: TextureFormat,
+    pub(crate) meta: NodeMeta,
+}
+
+impl ReadBackNode {
+    pub(crate) fn start_saving(self) -> Task<()> {
+        AsyncComputeTaskPool::get().spawn(async move {
+            let image_data = self
+                .data
+                .chunks_exact(2)
+                .map(|pixel| u16::from_le_bytes(pixel.try_into().unwrap()))
+                .collect::<Vec<u16>>();
+
+            let path = format_node_path("assets/test", &self.meta.node_coordinate);
+            let path = Path::new(&path);
+            let path = path.with_extension("png");
+            let path = path.to_str().unwrap();
+
+            let image =
+                R16Image::from_raw(self.texture_size, self.texture_size, image_data).unwrap();
+
+            image.save(path).unwrap();
+
+            println!("Finished saving node: {path}");
+
+            ()
+        })
+    }
 }
 
 pub(crate) fn create_preprocess_layout(device: &RenderDevice) -> BindGroupLayout {
@@ -41,84 +80,19 @@ pub(crate) fn create_preprocess_layout(device: &RenderDevice) -> BindGroupLayout
 }
 
 pub(crate) struct GpuPreprocessor {
-    pub(crate) ready_tasks: Vec<PreprocessTask>,
+    pub(crate) ready_tasks: VecDeque<PreprocessTask>,
     pub(crate) processing_tasks: Vec<PreprocessTask>,
-    pub(crate) saving_task: Option<Task<Vec<PreprocessTask>>>,
-    pub(crate) finished_tasks: Arc<Mutex<Vec<PreprocessTask>>>,
+    pub(crate) read_back_tasks: Arc<Mutex<Vec<Task<Vec<ReadBackNode>>>>>,
     pub(crate) preprocess_bind_group: Option<BindGroup>,
 }
 
 impl GpuPreprocessor {
     pub(crate) fn new(preprocessor: &Preprocessor) -> Self {
         Self {
-            ready_tasks: vec![],
+            ready_tasks: default(),
             processing_tasks: vec![],
-            saving_task: None,
-            finished_tasks: preprocessor.finished_tasks.clone(),
+            read_back_tasks: preprocessor.read_back_tasks.clone(),
             preprocess_bind_group: None,
-        }
-    }
-
-    pub(crate) fn update(
-        &mut self,
-        device: &RenderDevice,
-        queue: &RenderQueue,
-        images: &RenderAssets<Image>,
-        gpu_node_atlas: &GpuNodeAtlas,
-    ) {
-        if let Some(task) = &mut self.saving_task {
-            if let Some(mut finished_tasks) = future::block_on(future::poll_once(task)) {
-                self.finished_tasks
-                    .lock()
-                    .unwrap()
-                    .append(&mut finished_tasks);
-                self.saving_task = None;
-            }
-        }
-
-        if !self.processing_tasks.is_empty() {
-            let attachment = &gpu_node_atlas.attachments[0];
-
-            let tasks = mem::take(&mut self.processing_tasks);
-
-            self.saving_task = Some(attachment.save_nodes(tasks));
-        }
-
-        if !self.ready_tasks.is_empty() {
-            let node_meta_list = self
-                .ready_tasks
-                .iter()
-                .map(|task| task.node.clone())
-                .collect::<Vec<_>>();
-            let mut nodes_meta_buffer = StorageBuffer::from(node_meta_list);
-            nodes_meta_buffer.write_buffer(device, queue);
-
-            let task = self.ready_tasks.remove(0);
-
-            match &task.task_type {
-                PreprocessTaskType::SplitTile { tile } => {
-                    let tile = images.get(tile).unwrap();
-
-                    let preprocess_bind_group = device.create_bind_group(
-                        "preprocess_bind_group",
-                        &create_preprocess_layout(device),
-                        &BindGroupEntries::sequential((
-                            &tile.texture_view,
-                            &tile.sampler,
-                            nodes_meta_buffer.binding().unwrap(),
-                        )),
-                    );
-
-                    self.preprocess_bind_group = Some(preprocess_bind_group);
-                    self.processing_tasks.push(task);
-                }
-                PreprocessTaskType::Stitch => {
-                    todo!()
-                }
-                PreprocessTaskType::Downsample => {
-                    todo!()
-                }
-            }
         }
     }
 
@@ -138,7 +112,9 @@ impl GpuPreprocessor {
         for (terrain, preprocessor) in terrain_query.iter() {
             let gpu_preprocessor = gpu_preprocessors.get_mut(&terrain).unwrap();
 
-            gpu_preprocessor.ready_tasks = preprocessor.ready_tasks.clone();
+            gpu_preprocessor
+                .ready_tasks
+                .extend(preprocessor.ready_tasks.clone().into_iter());
         }
     }
 
@@ -146,6 +122,65 @@ impl GpuPreprocessor {
         device: Res<RenderDevice>,
         queue: Res<RenderQueue>,
         images: Res<RenderAssets<Image>>,
+        mut gpu_preprocessors: ResMut<TerrainComponents<GpuPreprocessor>>,
+        terrain_query: Query<Entity, With<Terrain>>,
+    ) {
+        for terrain in terrain_query.iter() {
+            let gpu_preprocessor = gpu_preprocessors.get_mut(&terrain).unwrap();
+
+            if !gpu_preprocessor.ready_tasks.is_empty() {
+                let task_type = gpu_preprocessor
+                    .ready_tasks
+                    .front()
+                    .unwrap()
+                    .task_type
+                    .clone();
+                let mut node_meta_list = vec![];
+
+                // Todo: take slots amount of compatible ready task
+
+                for _ in 0..4 {
+                    if let Some(task) = gpu_preprocessor.ready_tasks.pop_back() {
+                        if task.task_type == task_type {
+                            node_meta_list.push(task.node.clone());
+                            gpu_preprocessor.processing_tasks.push(task);
+                        }
+                    } else {
+                        break;
+                    }
+                }
+
+                let mut nodes_meta_buffer = StorageBuffer::from(node_meta_list);
+                nodes_meta_buffer.write_buffer(&device, &queue);
+
+                match &task_type {
+                    PreprocessTaskType::SplitTile { tile } => {
+                        let tile = images.get(tile).unwrap();
+
+                        let preprocess_bind_group = device.create_bind_group(
+                            "preprocess_bind_group",
+                            &create_preprocess_layout(&device),
+                            &BindGroupEntries::sequential((
+                                &tile.texture_view,
+                                &tile.sampler,
+                                nodes_meta_buffer.binding().unwrap(),
+                            )),
+                        );
+
+                        gpu_preprocessor.preprocess_bind_group = Some(preprocess_bind_group);
+                    }
+                    PreprocessTaskType::Stitch => {
+                        todo!()
+                    }
+                    PreprocessTaskType::Downsample => {
+                        todo!()
+                    }
+                }
+            }
+        }
+    }
+
+    pub(crate) fn cleanup(
         gpu_node_atlases: Res<TerrainComponents<GpuNodeAtlas>>,
         mut gpu_preprocessors: ResMut<TerrainComponents<GpuPreprocessor>>,
         terrain_query: Query<Entity, With<Terrain>>,
@@ -154,7 +189,18 @@ impl GpuPreprocessor {
             let gpu_preprocessor = gpu_preprocessors.get_mut(&terrain).unwrap();
             let gpu_node_atlas = gpu_node_atlases.get(&terrain).unwrap();
 
-            gpu_preprocessor.update(&device, &queue, &images, &gpu_node_atlas);
+            // Todo: start reading back all nodes, processed this frame
+            if !gpu_preprocessor.processing_tasks.is_empty() {
+                let attachment = &gpu_node_atlas.attachments[0];
+
+                let tasks = mem::take(&mut gpu_preprocessor.processing_tasks);
+
+                gpu_preprocessor
+                    .read_back_tasks
+                    .lock()
+                    .unwrap()
+                    .push(attachment.start_reading_back_nodes(tasks));
+            }
         }
     }
 }
