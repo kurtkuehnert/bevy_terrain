@@ -31,7 +31,7 @@ pub const SIDE_COUNT: u32 = 6;
 pub const SIDE_COUNT: u32 = 1;
 
 /// The global coordinate and identifier of a node.
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, ShaderType, Encode, Decode)]
+#[derive(Copy, Clone, Default, Debug, Hash, Eq, PartialEq, ShaderType, Encode, Decode)]
 pub struct NodeCoordinate {
     /// The side of the cube sphere the node is located on.
     pub side: u32,
@@ -81,7 +81,7 @@ impl NodeCoordinate {
 }
 
 /// Identifier of a node (and its attachments) inside the node atlas.
-pub type AtlasIndex = u16;
+pub type AtlasIndex = u16; // Todo: change to u32
 pub const INVALID_ATLAS_INDEX: AtlasIndex = AtlasIndex::MAX;
 
 pub const INVALID_LOD: u16 = u16::MAX;

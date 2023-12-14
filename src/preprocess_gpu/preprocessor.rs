@@ -17,10 +17,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone)]
 pub(crate) enum PreprocessTaskType {
     SplitTile { tile: Handle<Image> },
-    Stitch,
+    Stitch { neighbour_nodes: [NodeMeta; 8] },
     Downsample,
 }
 
@@ -50,7 +50,7 @@ impl Preprocessor {
             ready_tasks: default(),
             read_back_tasks: default(),
             saving_tasks: default(),
-            slots: 8,
+            slots: 1,
         }
     }
 
@@ -62,14 +62,16 @@ impl Preprocessor {
     ) {
         self.tile_handle = Some(asset_server.load(tile_config.path));
 
-        for (x, y) in iproduct!(0..4, 0..4) {
+        let node_width = 2;
+        let node_height = 2;
+
+        for (x, y) in iproduct!(0..node_width, 0..node_height) {
             let node_coordinate = NodeCoordinate::new(0, 0, x, y);
 
-            let atlas_index = node_atlas.allocate(node_coordinate.clone());
+            let atlas_index = node_atlas.get_or_allocate(node_coordinate.clone());
 
             let node = NodeMeta {
                 atlas_index: atlas_index as u32,
-                _padding: 0,
                 node_coordinate,
             };
 
@@ -81,21 +83,61 @@ impl Preprocessor {
             });
         }
 
-        // for (x, y) in iproduct!(0..2, 0..2) {
-        //     let node_coordinate = NodeCoordinate::new(0, 0, x, y);
-        //     let atlas_index = 0; // Todo: get from node_atlas
-        //
-        //     let node = NodeMeta {
-        //         atlas_index: atlas_index as u32,
-        //         _padding: 0,
-        //         node_coordinate,
-        //     };
-        //
-        //     self.task_queue.push_back(PreprocessTask {
-        //         task_type: PreprocessTaskType::Stitch,
-        //         node,
-        //     });
-        // }
+        for (x, y) in iproduct!(0..node_width, 0..node_height) {
+            let node_coordinate = NodeCoordinate::new(0, 0, x, y);
+            let atlas_index = node_atlas.get_or_allocate(node_coordinate) as u32;
+
+            let node = NodeMeta {
+                atlas_index,
+                node_coordinate,
+            };
+
+            let offsets = [
+                IVec2::new(0, -1),
+                IVec2::new(1, 0),
+                IVec2::new(0, 1),
+                IVec2::new(-1, 0),
+                IVec2::new(-1, -1),
+                IVec2::new(1, -1),
+                IVec2::new(1, 1),
+                IVec2::new(-1, 1),
+            ];
+
+            let node_position = IVec2::new(x as i32, y as i32);
+
+            let mut neighbour_nodes = [NodeMeta::default(); 8];
+
+            for (index, &offset) in offsets.iter().enumerate() {
+                let neighbour_node_position = node_position + offset;
+
+                let neighbour_node_coordinate = NodeCoordinate::new(
+                    node_coordinate.side,
+                    node_coordinate.lod,
+                    neighbour_node_position.x as u32,
+                    neighbour_node_position.y as u32,
+                );
+
+                let neighbour_atlas_index = if neighbour_node_position.x < 0
+                    || neighbour_node_position.y < 0
+                    || neighbour_node_position.x >= node_width as i32
+                    || neighbour_node_position.y >= node_height as i32
+                {
+                    u32::MAX
+                } else {
+                    node_atlas.get_or_allocate(neighbour_node_coordinate) as u32
+                };
+
+                neighbour_nodes[index] = NodeMeta {
+                    node_coordinate: neighbour_node_coordinate,
+                    atlas_index: neighbour_atlas_index,
+                };
+            }
+
+            self.task_queue.push_back(PreprocessTask {
+                task_type: PreprocessTaskType::Stitch { neighbour_nodes },
+                node,
+            });
+        }
     }
 }
 
@@ -146,7 +188,7 @@ pub(crate) fn select_ready_tasks(
                     PreprocessTaskType::SplitTile { tile } => {
                         asset_server.load_state(tile) == LoadState::Loaded
                     }
-                    PreprocessTaskType::Stitch => false,
+                    PreprocessTaskType::Stitch { .. } => true,
                     PreprocessTaskType::Downsample => false,
                 });
 
