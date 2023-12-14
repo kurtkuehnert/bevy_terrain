@@ -5,6 +5,7 @@ use crate::{
     terrain::{Terrain, TerrainComponents},
     terrain_data::{gpu_node_atlas::GpuNodeAtlas, NodeCoordinate},
 };
+use bevy::render::Render;
 use bevy::{
     prelude::*,
     render::{
@@ -49,6 +50,13 @@ struct StitchNodeData {
     node_index: u32,
 }
 
+#[derive(Clone, Debug, ShaderType)]
+struct DownsampleData {
+    node: NodeMeta,
+    parent_nodes: [NodeMeta; 4],
+    node_index: u32,
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct ReadBackNode {
     pub(crate) data: Vec<u8>,
@@ -66,7 +74,10 @@ impl ReadBackNode {
                 .map(|pixel| u16::from_le_bytes(pixel.try_into().unwrap()))
                 .collect::<Vec<u16>>();
 
-            let path = format_node_path("assets/test", &self.meta.node_coordinate);
+            let path = format_node_path(
+                "assets/terrains/basic/data/height",
+                &self.meta.node_coordinate,
+            );
             let path = Path::new(&path);
             let path = path.with_extension("png");
             let path = path.to_str().unwrap();
@@ -103,6 +114,16 @@ pub(crate) fn create_stitch_node_layout(device: &RenderDevice) -> BindGroupLayou
         &BindGroupLayoutEntries::single(
             ShaderStages::COMPUTE,
             uniform_buffer::<StitchNodeData>(false),
+        ),
+    )
+}
+
+pub(crate) fn create_downsample_layout(device: &RenderDevice) -> BindGroupLayout {
+    device.create_bind_group_layout(
+        None,
+        &BindGroupLayoutEntries::single(
+            ShaderStages::COMPUTE,
+            uniform_buffer::<DownsampleData>(false),
         ),
     )
 }
@@ -199,7 +220,25 @@ impl GpuPreprocessor {
                                     ),
                                 ))
                             }
-                            PreprocessTaskType::Downsample => None,
+                            PreprocessTaskType::Downsample { parent_nodes } => {
+                                let downsample_data = DownsampleData {
+                                    node: task.node,
+                                    parent_nodes: parent_nodes.clone(),
+                                    node_index,
+                                };
+
+                                let mut downsample_data_buffer =
+                                    UniformBuffer::from(downsample_data);
+                                downsample_data_buffer.write_buffer(&device, &queue);
+
+                                Some(device.create_bind_group(
+                                    "downsample_bind_group",
+                                    &create_downsample_layout(&device),
+                                    &BindGroupEntries::single(
+                                        downsample_data_buffer.binding().unwrap(),
+                                    ),
+                                ))
+                            }
                         };
 
                         gpu_preprocessor

@@ -1,6 +1,8 @@
-use crate::preprocess_gpu::gpu_preprocessor::create_stitch_node_layout;
+use crate::preprocess_gpu::gpu_preprocessor::{
+    create_downsample_layout, create_stitch_node_layout,
+};
 use crate::preprocess_gpu::preprocessor::PreprocessTaskType;
-use crate::preprocess_gpu::shaders::STITCH_NODES_SHADER;
+use crate::preprocess_gpu::shaders::{DOWNSAMPLE_SHADER, STITCH_NODES_SHADER};
 use crate::{
     preprocess_gpu::{
         gpu_preprocessor::{create_split_tile_layout, GpuPreprocessor},
@@ -27,6 +29,7 @@ type TerrainPreprocessPipelineKey = TerrainPreprocessPipelineId;
 pub enum TerrainPreprocessPipelineId {
     SplitTile,
     StitchNodes,
+    Downsample,
 }
 
 #[derive(Resource)]
@@ -34,6 +37,7 @@ pub struct TerrainPreprocessPipelines {
     attachment_layout: BindGroupLayout,
     split_tile_layout: BindGroupLayout,
     stitch_node_layout: BindGroupLayout,
+    downsample_layout: BindGroupLayout,
     pipelines: Vec<CachedComputePipelineId>,
 }
 
@@ -44,11 +48,13 @@ impl FromWorld for TerrainPreprocessPipelines {
         let attachment_layout = create_attachment_layout(&device);
         let split_tile_layout = create_split_tile_layout(&device);
         let stitch_node_layout = create_stitch_node_layout(&device);
+        let downsample_layout = create_downsample_layout(&device);
 
         let mut preprocess_pipelines = TerrainPreprocessPipelines {
             attachment_layout,
             split_tile_layout,
             stitch_node_layout,
+            downsample_layout,
             pipelines: vec![],
         };
 
@@ -89,6 +95,14 @@ impl SpecializedComputePipeline for TerrainPreprocessPipelines {
                 ];
                 shader = STITCH_NODES_SHADER;
                 entry_point = "stitch_nodes".into();
+            }
+            TerrainPreprocessPipelineId::Downsample => {
+                layout = vec![
+                    self.attachment_layout.clone(),
+                    self.downsample_layout.clone(),
+                ];
+                shader = DOWNSAMPLE_SHADER;
+                entry_point = "downsample".into();
             }
         }
 
@@ -188,7 +202,13 @@ impl render_graph::Node for TerrainPreprocessNode {
                                 pipelines[TerrainPreprocessPipelineId::StitchNodes as usize],
                             );
                         }
-                        PreprocessTaskType::Downsample => {}
+                        PreprocessTaskType::Downsample { .. } => {
+                            dbg!("running downsample shader");
+
+                            pass.set_pipeline(
+                                pipelines[TerrainPreprocessPipelineId::Downsample as usize],
+                            );
+                        }
                     }
 
                     pass.set_bind_group(1, task.bind_group.as_ref().unwrap(), &[]);
