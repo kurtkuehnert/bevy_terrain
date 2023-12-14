@@ -1,8 +1,5 @@
 use crate::{
-    preprocess_gpu::{
-        gpu_preprocessor::{NodeMeta, ReadBackNode},
-        preprocessor::PreprocessTask,
-    },
+    preprocess_gpu::{gpu_preprocessor::ReadBackNode, preprocessor::PreprocessTask},
     terrain_data::{AtlasAttachment, AtlasIndex},
 };
 use bevy::{
@@ -34,7 +31,9 @@ pub(crate) struct AttachmentMeta {
     pub(crate) texture_size: u32,
     pub(crate) border_size: u32,
     pub(crate) node_size: u32,
-    pub(crate) pixels_per_section_entry: u32,
+    pub(crate) pixels_per_entry: u32,
+    pub(crate) entries_per_side: u32,
+    pub(crate) entries_per_node: u32,
 }
 
 pub(crate) fn create_attachment_layout(device: &RenderDevice) -> BindGroupLayout {
@@ -60,7 +59,7 @@ pub(crate) struct GpuAtlasAttachment {
     pub(crate) format: TextureFormat,
     pub(crate) texture_size: u32,
     pub(crate) mip_level_count: u32,
-    pub(crate) workgroup_count: UVec2,
+    pub(crate) workgroup_count: UVec3,
 }
 
 impl GpuAtlasAttachment {
@@ -137,6 +136,13 @@ impl GpuAtlasAttachment {
 
         let atlas_view = atlas_texture.create_view(&default());
 
+        // Todo: adjust this code for pixel sizes larger than a u32
+
+        let pixels_per_entry =
+            mem::size_of::<u32>() as u32 / attachment.format.storage_format().pixel_size() as u32;
+        let entries_per_side = attachment.texture_size / pixels_per_entry; // has to be aligned to 256
+        let entries_per_node = entries_per_side * attachment.texture_size;
+
         let slots = 4;
 
         let section_size = slots
@@ -151,14 +157,13 @@ impl GpuAtlasAttachment {
             mapped_at_creation: false,
         });
 
-        // Todo: adjust this code for pixel sizes larger than a u32
-        let pixels_per_section_entry = std::mem::size_of::<u32>() as u32
-            / attachment.format.storage_format().pixel_size() as u32;
         let attachment_meta = AttachmentMeta {
             texture_size: attachment.texture_size,
             border_size: attachment.border_size,
             node_size: attachment.texture_size - 2 * attachment.border_size,
-            pixels_per_section_entry,
+            pixels_per_entry,
+            entries_per_side,
+            entries_per_node,
         };
 
         let mut attachment_meta_buffer = UniformBuffer::from(attachment_meta);
@@ -195,9 +200,10 @@ impl GpuAtlasAttachment {
             format: attachment.format.storage_format(),
             texture_size: attachment.texture_size,
             mip_level_count: attachment.mip_level_count,
-            workgroup_count: UVec2::new(
-                attachment.texture_size / 8 / pixels_per_section_entry,
+            workgroup_count: UVec3::new(
+                attachment.texture_size / 8 / pixels_per_entry,
                 attachment.texture_size / 8,
+                1,
             ),
         }
     }
@@ -206,13 +212,13 @@ impl GpuAtlasAttachment {
         &self,
         command_encoder: &mut CommandEncoder,
         images: &RenderAssets<Image>,
-        nodes: &[NodeMeta],
+        atlas_indices: &[u32],
     ) {
         let atlas = images.get(&self.atlas_handle).unwrap();
 
-        for (write_section_index, node_meta) in nodes.iter().enumerate() {
+        for (write_section_index, &atlas_index) in atlas_indices.iter().enumerate() {
             command_encoder.copy_texture_to_buffer(
-                self.image_copy_texture(&atlas.texture, node_meta.atlas_index, 0),
+                self.image_copy_texture(&atlas.texture, atlas_index, 0),
                 self.image_copy_buffer(&self.atlas_write_section, write_section_index as u32),
                 self.image_copy_size(0),
             );
@@ -223,14 +229,14 @@ impl GpuAtlasAttachment {
         &self,
         command_encoder: &mut CommandEncoder,
         images: &RenderAssets<Image>,
-        nodes: &[NodeMeta],
+        atlas_indices: &[u32],
     ) {
         let atlas = images.get(&self.atlas_handle).unwrap();
 
-        for (write_section_index, node_meta) in nodes.iter().enumerate() {
+        for (write_section_index, &atlas_index) in atlas_indices.iter().enumerate() {
             command_encoder.copy_buffer_to_texture(
                 self.image_copy_buffer(&self.atlas_write_section, write_section_index as u32),
-                self.image_copy_texture(&atlas.texture, node_meta.atlas_index, 0),
+                self.image_copy_texture(&atlas.texture, atlas_index, 0),
                 self.image_copy_size(0),
             );
         }
@@ -262,13 +268,13 @@ impl GpuAtlasAttachment {
         &self,
         command_encoder: &mut CommandEncoder,
         images: &RenderAssets<Image>,
-        nodes: &[NodeMeta],
+        atlas_indices: &[u32],
     ) {
         let atlas = images.get(&self.atlas_handle).unwrap();
 
-        for (read_back_index, node_meta) in nodes.iter().enumerate() {
+        for (read_back_index, &atlas_index) in atlas_indices.iter().enumerate() {
             command_encoder.copy_texture_to_buffer(
-                self.image_copy_texture(&atlas.texture, node_meta.atlas_index as u32, 0),
+                self.image_copy_texture(&atlas.texture, atlas_index, 0),
                 self.image_copy_buffer(
                     self.read_back_buffer.lock().unwrap().as_ref().unwrap(),
                     read_back_index as u32,
