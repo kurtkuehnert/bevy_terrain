@@ -1,13 +1,13 @@
+use crate::preprocess_gpu::gpu_preprocessor::create_stitch_node_layout;
+use crate::preprocess_gpu::preprocessor::PreprocessTaskType;
+use crate::preprocess_gpu::shaders::STITCH_NODES_SHADER;
 use crate::{
     preprocess_gpu::{
-        gpu_preprocessor::{create_preprocess_layout, GpuPreprocessor},
+        gpu_preprocessor::{create_split_tile_layout, GpuPreprocessor},
         shaders::SPLIT_TILE_SHADER,
     },
     terrain::{Terrain, TerrainComponents},
-    terrain_data::{
-        gpu_atlas_attachment::{create_attachment_layout, GpuAtlasAttachment},
-        gpu_node_atlas::GpuNodeAtlas,
-    },
+    terrain_data::{gpu_atlas_attachment::create_attachment_layout, gpu_node_atlas::GpuNodeAtlas},
 };
 use bevy::{
     prelude::*,
@@ -26,12 +26,14 @@ type TerrainPreprocessPipelineKey = TerrainPreprocessPipelineId;
 #[derive(Copy, Clone, Hash, PartialEq, Eq, EnumIter)]
 pub enum TerrainPreprocessPipelineId {
     SplitTile,
+    StitchNodes,
 }
 
 #[derive(Resource)]
 pub struct TerrainPreprocessPipelines {
     attachment_layout: BindGroupLayout,
-    preprocess_layout: BindGroupLayout,
+    split_tile_layout: BindGroupLayout,
+    stitch_node_layout: BindGroupLayout,
     pipelines: Vec<CachedComputePipelineId>,
 }
 
@@ -40,11 +42,13 @@ impl FromWorld for TerrainPreprocessPipelines {
         let device = world.resource::<RenderDevice>();
 
         let attachment_layout = create_attachment_layout(&device);
-        let preprocess_layout = create_preprocess_layout(&device);
+        let split_tile_layout = create_split_tile_layout(&device);
+        let stitch_node_layout = create_stitch_node_layout(&device);
 
         let mut preprocess_pipelines = TerrainPreprocessPipelines {
             attachment_layout,
-            preprocess_layout,
+            split_tile_layout,
+            stitch_node_layout,
             pipelines: vec![],
         };
 
@@ -73,10 +77,18 @@ impl SpecializedComputePipeline for TerrainPreprocessPipelines {
             TerrainPreprocessPipelineId::SplitTile => {
                 layout = vec![
                     self.attachment_layout.clone(),
-                    self.preprocess_layout.clone(),
+                    self.split_tile_layout.clone(),
                 ];
                 shader = SPLIT_TILE_SHADER;
                 entry_point = "split_tile".into();
+            }
+            TerrainPreprocessPipelineId::StitchNodes => {
+                layout = vec![
+                    self.attachment_layout.clone(),
+                    self.stitch_node_layout.clone(),
+                ];
+                shader = STITCH_NODES_SHADER;
+                entry_point = "stitch_nodes".into();
             }
         }
 
@@ -93,31 +105,6 @@ impl SpecializedComputePipeline for TerrainPreprocessPipelines {
 
 pub struct TerrainPreprocessNode {
     terrain_query: QueryState<Entity, With<Terrain>>,
-}
-
-impl TerrainPreprocessNode {
-    fn split_tile(
-        command_encoder: &mut CommandEncoder,
-        pipelines: &[&ComputePipeline],
-        attachment: &GpuAtlasAttachment,
-        preprocess_data: &GpuPreprocessor,
-        node_count: u32,
-    ) {
-        // dispatch shader
-        let mut pass = command_encoder.begin_compute_pass(&ComputePassDescriptor::default());
-        pass.set_pipeline(pipelines[TerrainPreprocessPipelineId::SplitTile as usize]);
-        pass.set_bind_group(0, &attachment.bind_group, &[]);
-        pass.set_bind_group(
-            1,
-            preprocess_data.preprocess_bind_group.as_ref().unwrap(),
-            &[],
-        );
-        pass.dispatch_workgroups(
-            attachment.workgroup_count.x,
-            attachment.workgroup_count.y,
-            node_count,
-        );
-    }
 }
 
 impl FromWorld for TerrainPreprocessNode {
@@ -167,27 +154,65 @@ impl render_graph::Node for TerrainPreprocessNode {
 
                 attachment.create_read_back_buffer(device);
 
-                let nodes = preprocess_data
+                let atlas_indices = preprocess_data
                     .processing_tasks
                     .iter()
-                    .map(|task| task.node.clone())
+                    .map(|task| task.task.node.atlas_index)
                     .collect::<Vec<_>>();
 
-                attachment.copy_nodes_to_write_section(context.command_encoder(), images, &nodes);
-
-                TerrainPreprocessNode::split_tile(
+                attachment.copy_nodes_to_write_section(
                     context.command_encoder(),
-                    pipelines,
-                    attachment,
-                    preprocess_data,
-                    nodes.len() as u32,
+                    images,
+                    &atlas_indices,
                 );
 
-                attachment.copy_nodes_from_write_section(context.command_encoder(), images, &nodes);
+                let mut pass = context
+                    .command_encoder()
+                    .begin_compute_pass(&ComputePassDescriptor::default());
 
-                attachment.download_nodes(context.command_encoder(), images, &nodes);
+                for task in &preprocess_data.processing_tasks {
+                    pass.set_bind_group(0, &attachment.bind_group, &[]);
 
-                println!("Ran preprocessing pipeline with {} nodes.", nodes.len())
+                    match task.task.task_type {
+                        PreprocessTaskType::SplitTile { .. } => {
+                            dbg!("running split tile shader");
+
+                            pass.set_pipeline(
+                                pipelines[TerrainPreprocessPipelineId::SplitTile as usize],
+                            );
+                        }
+                        PreprocessTaskType::Stitch { .. } => {
+                            dbg!("running stitch nodes shader");
+
+                            pass.set_pipeline(
+                                pipelines[TerrainPreprocessPipelineId::StitchNodes as usize],
+                            );
+                        }
+                        PreprocessTaskType::Downsample => {}
+                    }
+
+                    pass.set_bind_group(1, task.bind_group.as_ref().unwrap(), &[]);
+                    pass.dispatch_workgroups(
+                        attachment.workgroup_count.x,
+                        attachment.workgroup_count.y,
+                        attachment.workgroup_count.z,
+                    );
+                }
+
+                drop(pass);
+
+                attachment.copy_nodes_from_write_section(
+                    context.command_encoder(),
+                    images,
+                    &atlas_indices,
+                );
+
+                attachment.download_nodes(context.command_encoder(), images, &atlas_indices);
+
+                println!(
+                    "Ran preprocessing pipeline with {} nodes.",
+                    atlas_indices.len()
+                )
             }
         }
 

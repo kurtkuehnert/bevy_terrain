@@ -5,7 +5,6 @@ use crate::{
     terrain::{Terrain, TerrainComponents},
     terrain_data::{gpu_node_atlas::GpuNodeAtlas, NodeCoordinate},
 };
-use bevy::utils::dbg;
 use bevy::{
     prelude::*,
     render::{
@@ -16,6 +15,7 @@ use bevy::{
     },
     tasks::{AsyncComputeTaskPool, Task},
 };
+use itertools::Itertools;
 use std::collections::VecDeque;
 use std::{
     mem,
@@ -23,12 +23,30 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+pub(crate) struct ProcessingTask {
+    pub(crate) task: PreprocessTask,
+    pub(crate) bind_group: Option<BindGroup>,
+}
+
 // Todo: this does not belong here
-#[derive(Clone, Debug, ShaderType)]
+#[derive(Copy, Clone, Debug, Default, ShaderType)]
 pub(crate) struct NodeMeta {
-    pub(crate) atlas_index: u32,
-    pub(crate) _padding: u32,
     pub(crate) node_coordinate: NodeCoordinate,
+    #[size(16)]
+    pub(crate) atlas_index: u32,
+}
+
+#[derive(Clone, Debug, ShaderType)]
+pub(crate) struct SplitTileData {
+    pub(crate) node_meta: NodeMeta,
+    pub(crate) node_index: u32,
+}
+
+#[derive(Clone, Debug, ShaderType)]
+struct StitchNodeData {
+    node: NodeMeta,
+    neighbour_nodes: [NodeMeta; 8],
+    node_index: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -65,25 +83,34 @@ impl ReadBackNode {
     }
 }
 
-pub(crate) fn create_preprocess_layout(device: &RenderDevice) -> BindGroupLayout {
+pub(crate) fn create_split_tile_layout(device: &RenderDevice) -> BindGroupLayout {
     device.create_bind_group_layout(
         None,
         &BindGroupLayoutEntries::sequential(
             ShaderStages::COMPUTE,
             (
+                uniform_buffer::<SplitTileData>(false), // split_tile_data
                 texture_2d(TextureSampleType::Float { filterable: true }), // tile
-                sampler(SamplerBindingType::Filtering),                    // tile_sampler
-                storage_buffer_read_only::<NodeMeta>(false),               // node_meta_list
+                sampler(SamplerBindingType::Filtering), // tile_sampler
             ),
+        ),
+    )
+}
+
+pub(crate) fn create_stitch_node_layout(device: &RenderDevice) -> BindGroupLayout {
+    device.create_bind_group_layout(
+        None,
+        &BindGroupLayoutEntries::single(
+            ShaderStages::COMPUTE,
+            uniform_buffer::<StitchNodeData>(false),
         ),
     )
 }
 
 pub(crate) struct GpuPreprocessor {
     pub(crate) ready_tasks: VecDeque<PreprocessTask>,
-    pub(crate) processing_tasks: Vec<PreprocessTask>,
+    pub(crate) processing_tasks: Vec<ProcessingTask>,
     pub(crate) read_back_tasks: Arc<Mutex<Vec<Task<Vec<ReadBackNode>>>>>,
-    pub(crate) preprocess_bind_group: Option<BindGroup>,
 }
 
 impl GpuPreprocessor {
@@ -92,7 +119,6 @@ impl GpuPreprocessor {
             ready_tasks: default(),
             processing_tasks: vec![],
             read_back_tasks: preprocessor.read_back_tasks.clone(),
-            preprocess_bind_group: None,
         }
     }
 
@@ -129,51 +155,58 @@ impl GpuPreprocessor {
             let gpu_preprocessor = gpu_preprocessors.get_mut(&terrain).unwrap();
 
             if !gpu_preprocessor.ready_tasks.is_empty() {
-                let task_type = gpu_preprocessor
-                    .ready_tasks
-                    .front()
-                    .unwrap()
-                    .task_type
-                    .clone();
-                let mut node_meta_list = vec![];
-
-                // Todo: take slots amount of compatible ready task
-
-                for _ in 0..4 {
+                for node_index in 0..4 {
                     if let Some(task) = gpu_preprocessor.ready_tasks.pop_back() {
-                        if task.task_type == task_type {
-                            node_meta_list.push(task.node.clone());
-                            gpu_preprocessor.processing_tasks.push(task);
-                        }
+                        let bind_group = match &task.task_type {
+                            PreprocessTaskType::SplitTile { tile } => {
+                                let tile = images.get(tile).unwrap();
+
+                                let split_tile_data = SplitTileData {
+                                    node_meta: task.node.clone(),
+                                    node_index,
+                                };
+
+                                let mut split_tile_data_buffer =
+                                    UniformBuffer::from(split_tile_data);
+                                split_tile_data_buffer.write_buffer(&device, &queue);
+
+                                Some(device.create_bind_group(
+                                    "split_tile_bind_group",
+                                    &create_split_tile_layout(&device),
+                                    &BindGroupEntries::sequential((
+                                        split_tile_data_buffer.binding().unwrap(),
+                                        &tile.texture_view,
+                                        &tile.sampler,
+                                    )),
+                                ))
+                            }
+                            PreprocessTaskType::Stitch { neighbour_nodes } => {
+                                let stitch_node_data = StitchNodeData {
+                                    node: task.node.clone(),
+                                    neighbour_nodes: neighbour_nodes.clone(),
+                                    node_index,
+                                };
+
+                                let mut stitch_node_data_buffer =
+                                    UniformBuffer::from(stitch_node_data);
+                                stitch_node_data_buffer.write_buffer(&device, &queue);
+
+                                Some(device.create_bind_group(
+                                    "stitch_node_bind_group",
+                                    &create_stitch_node_layout(&device),
+                                    &BindGroupEntries::single(
+                                        stitch_node_data_buffer.binding().unwrap(),
+                                    ),
+                                ))
+                            }
+                            PreprocessTaskType::Downsample => None,
+                        };
+
+                        gpu_preprocessor
+                            .processing_tasks
+                            .push(ProcessingTask { task, bind_group });
                     } else {
                         break;
-                    }
-                }
-
-                let mut nodes_meta_buffer = StorageBuffer::from(node_meta_list);
-                nodes_meta_buffer.write_buffer(&device, &queue);
-
-                match &task_type {
-                    PreprocessTaskType::SplitTile { tile } => {
-                        let tile = images.get(tile).unwrap();
-
-                        let preprocess_bind_group = device.create_bind_group(
-                            "preprocess_bind_group",
-                            &create_preprocess_layout(&device),
-                            &BindGroupEntries::sequential((
-                                &tile.texture_view,
-                                &tile.sampler,
-                                nodes_meta_buffer.binding().unwrap(),
-                            )),
-                        );
-
-                        gpu_preprocessor.preprocess_bind_group = Some(preprocess_bind_group);
-                    }
-                    PreprocessTaskType::Stitch => {
-                        todo!()
-                    }
-                    PreprocessTaskType::Downsample => {
-                        todo!()
                     }
                 }
             }
@@ -194,6 +227,7 @@ impl GpuPreprocessor {
                 let attachment = &gpu_node_atlas.attachments[0];
 
                 let tasks = mem::take(&mut gpu_preprocessor.processing_tasks);
+                let tasks = tasks.into_iter().map(|task| task.task).collect_vec();
 
                 gpu_preprocessor
                     .read_back_tasks

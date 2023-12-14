@@ -149,27 +149,44 @@ impl NodeAtlas {
         )
     }
 
-    pub fn allocate(&mut self, node_coordinate: NodeCoordinate) -> AtlasIndex {
+    pub fn get_or_allocate(&mut self, node_coordinate: NodeCoordinate) -> AtlasIndex {
         let NodeAtlas {
             unused_nodes,
             nodes,
+            load_events,
+            loading_nodes,
+            attachments,
             ..
         } = self;
 
-        // remove least recently used node and reuse its atlas index
-        let unused_node = unused_nodes.pop_front().expect("Atlas out of indices");
+        if let Some(node) = nodes.get(&node_coordinate) {
+            node.atlas_index
+        } else {
+            // remove least recently used node and reuse its atlas index
+            let unused_node = unused_nodes.pop_front().expect("Atlas out of indices");
 
-        nodes.remove(&unused_node.node_coordinate);
-        nodes.insert(
-            node_coordinate,
-            AtlasNode {
-                requests: 1,
-                state: LoadingState::Loaded,
-                atlas_index: unused_node.atlas_index,
-            },
-        );
+            nodes.remove(&unused_node.node_coordinate);
+            nodes.insert(
+                node_coordinate,
+                AtlasNode {
+                    requests: 1,
+                    state: LoadingState::Loaded,
+                    atlas_index: unused_node.atlas_index,
+                },
+            );
 
-        unused_node.atlas_index
+            load_events.push(node_coordinate);
+            loading_nodes.insert(
+                node_coordinate,
+                LoadingNode {
+                    atlas_index: unused_node.atlas_index,
+                    loading_attachments: (0..attachments.len()).collect(),
+                    attachments: default(),
+                },
+            );
+
+            unused_node.atlas_index
+        }
     }
 
     /// Adjusts the node atlas according to the requested and released nodes of the [`Quadtree`]
