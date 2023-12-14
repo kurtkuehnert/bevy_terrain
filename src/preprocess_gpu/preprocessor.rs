@@ -21,7 +21,7 @@ use std::{
 pub(crate) enum PreprocessTaskType {
     SplitTile { tile: Handle<Image> },
     Stitch { neighbour_nodes: [NodeMeta; 8] },
-    Downsample,
+    Downsample { parent_nodes: [NodeMeta; 4] },
 }
 
 // Todo: store node_coordinate, task_type, node_dependencies and tile dependencies
@@ -42,6 +42,118 @@ pub struct Preprocessor {
     pub(crate) slots: u32,
 }
 
+fn split(
+    node_atlas: &mut NodeAtlas,
+    tile: Handle<Image>,
+    lod: u32,
+    x: u32,
+    y: u32,
+) -> PreprocessTask {
+    let node_coordinate = NodeCoordinate::new(0, lod, x, y);
+    let atlas_index = node_atlas.get_or_allocate(node_coordinate);
+
+    let node = NodeMeta {
+        atlas_index: atlas_index as u32,
+        node_coordinate,
+    };
+
+    PreprocessTask {
+        task_type: PreprocessTaskType::SplitTile { tile },
+        node,
+    }
+}
+
+fn stitch(
+    node_atlas: &mut NodeAtlas,
+    lod: u32,
+    x: u32,
+    y: u32,
+    node_width: u32,
+    node_height: u32,
+) -> PreprocessTask {
+    let node_coordinate = NodeCoordinate::new(0, lod, x, y);
+    let atlas_index = node_atlas.get_or_allocate(node_coordinate) as u32;
+
+    let node = NodeMeta {
+        atlas_index,
+        node_coordinate,
+    };
+
+    let offsets = [
+        IVec2::new(0, -1),
+        IVec2::new(1, 0),
+        IVec2::new(0, 1),
+        IVec2::new(-1, 0),
+        IVec2::new(-1, -1),
+        IVec2::new(1, -1),
+        IVec2::new(1, 1),
+        IVec2::new(-1, 1),
+    ];
+
+    let node_position = IVec2::new(x as i32, y as i32);
+
+    let mut neighbour_nodes = [NodeMeta::default(); 8];
+
+    for (index, &offset) in offsets.iter().enumerate() {
+        let neighbour_node_position = node_position + offset;
+
+        let neighbour_node_coordinate = NodeCoordinate::new(
+            node_coordinate.side,
+            node_coordinate.lod,
+            neighbour_node_position.x as u32,
+            neighbour_node_position.y as u32,
+        );
+
+        let neighbour_atlas_index = if neighbour_node_position.x < 0
+            || neighbour_node_position.y < 0
+            || neighbour_node_position.x >= node_width as i32
+            || neighbour_node_position.y >= node_height as i32
+        {
+            u32::MAX
+        } else {
+            node_atlas.get_or_allocate(neighbour_node_coordinate) as u32
+        };
+
+        neighbour_nodes[index] = NodeMeta {
+            node_coordinate: neighbour_node_coordinate,
+            atlas_index: neighbour_atlas_index,
+        };
+    }
+
+    PreprocessTask {
+        task_type: PreprocessTaskType::Stitch { neighbour_nodes },
+        node,
+    }
+}
+
+fn downsample(node_atlas: &mut NodeAtlas, lod: u32, x: u32, y: u32) -> PreprocessTask {
+    let node_coordinate = NodeCoordinate::new(0, lod, x, y);
+    let atlas_index = node_atlas.get_or_allocate(node_coordinate);
+
+    let node = NodeMeta {
+        atlas_index: atlas_index as u32,
+        node_coordinate,
+    };
+
+    let mut parent_nodes = [NodeMeta::default(); 4];
+
+    for index in 0..4 {
+        let parent_node_coordinate =
+            NodeCoordinate::new(0, lod - 1, 2 * x + index % 2, 2 * y + index / 2);
+        let parent_atlas_index = node_atlas.get_or_allocate(parent_node_coordinate) as u32;
+
+        parent_nodes[index as usize] = NodeMeta {
+            node_coordinate: parent_node_coordinate,
+            atlas_index: parent_atlas_index,
+        };
+    }
+
+    PreprocessTask {
+        task_type: PreprocessTaskType::Downsample { parent_nodes },
+        node,
+    }
+}
+
 impl Preprocessor {
     pub fn new() -> Self {
         Self {
@@ -60,83 +172,36 @@ impl Preprocessor {
         asset_server: &AssetServer,
         node_atlas: &mut NodeAtlas,
     ) {
-        self.tile_handle = Some(asset_server.load(tile_config.path));
+        let tile_handle = asset_server.load(tile_config.path);
+        self.tile_handle = Some(tile_handle.clone());
 
-        let node_width = 2;
-        let node_height = 2;
+        let node_width = 4;
+        let node_height = 4;
+        let lod_count = 3;
+        let lod = 0;
 
         for (x, y) in iproduct!(0..node_width, 0..node_height) {
-            let node_coordinate = NodeCoordinate::new(0, 0, x, y);
-
-            let atlas_index = node_atlas.get_or_allocate(node_coordinate.clone());
-
-            let node = NodeMeta {
-                atlas_index: atlas_index as u32,
-                node_coordinate,
-            };
-
-            self.task_queue.push_back(PreprocessTask {
-                task_type: PreprocessTaskType::SplitTile {
-                    tile: self.tile_handle.clone().unwrap(),
-                },
-                node,
-            });
+            self.task_queue
+                .push_back(split(node_atlas, tile_handle.clone(), lod, x, y));
         }
 
         for (x, y) in iproduct!(0..node_width, 0..node_height) {
-            let node_coordinate = NodeCoordinate::new(0, 0, x, y);
-            let atlas_index = node_atlas.get_or_allocate(node_coordinate) as u32;
+            self.task_queue
+                .push_back(stitch(node_atlas, lod, x, y, node_width, node_height));
+        }
 
-            let node = NodeMeta {
-                atlas_index,
-                node_coordinate,
-            };
+        for lod in 1..lod_count {
+            let node_width = node_width >> lod;
+            let node_height = node_height >> lod;
 
-            let offsets = [
-                IVec2::new(0, -1),
-                IVec2::new(1, 0),
-                IVec2::new(0, 1),
-                IVec2::new(-1, 0),
-                IVec2::new(-1, -1),
-                IVec2::new(1, -1),
-                IVec2::new(1, 1),
-                IVec2::new(-1, 1),
-            ];
-
-            let node_position = IVec2::new(x as i32, y as i32);
-
-            let mut neighbour_nodes = [NodeMeta::default(); 8];
-
-            for (index, &offset) in offsets.iter().enumerate() {
-                let neighbour_node_position = node_position + offset;
-
-                let neighbour_node_coordinate = NodeCoordinate::new(
-                    node_coordinate.side,
-                    node_coordinate.lod,
-                    neighbour_node_position.x as u32,
-                    neighbour_node_position.y as u32,
-                );
-
-                let neighbour_atlas_index = if neighbour_node_position.x < 0
-                    || neighbour_node_position.y < 0
-                    || neighbour_node_position.x >= node_width as i32
-                    || neighbour_node_position.y >= node_height as i32
-                {
-                    u32::MAX
-                } else {
-                    node_atlas.get_or_allocate(neighbour_node_coordinate) as u32
-                };
-
-                neighbour_nodes[index] = NodeMeta {
-                    node_coordinate: neighbour_node_coordinate,
-                    atlas_index: neighbour_atlas_index,
-                };
+            for (x, y) in iproduct!(0..node_width, 0..node_height) {
+                self.task_queue.push_back(downsample(node_atlas, lod, x, y));
             }
 
-            self.task_queue.push_back(PreprocessTask {
-                task_type: PreprocessTaskType::Stitch { neighbour_nodes },
-                node,
-            });
+            for (x, y) in iproduct!(0..node_width, 0..node_height) {
+                self.task_queue
+                    .push_back(stitch(node_atlas, lod, x, y, node_width, node_height));
+            }
         }
     }
 }
@@ -189,7 +254,7 @@ pub(crate) fn select_ready_tasks(
                         asset_server.load_state(tile) == LoadState::Loaded
                     }
                     PreprocessTaskType::Stitch { .. } => true,
-                    PreprocessTaskType::Downsample => false,
+                    PreprocessTaskType::Downsample { .. } => true,
                 });
 
             if ready {
