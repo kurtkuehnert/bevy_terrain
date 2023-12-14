@@ -71,7 +71,7 @@ pub(crate) fn generate_attachment_shader(plugin_config: &TerrainPluginConfig) ->
                 const {attachment_name_upper}_SCALE : f32 = {attachment_scale:.10};
                 const {attachment_name_upper}_OFFSET: f32 = {attachment_offset:.10};
 
-                @group(2) @binding({binding})
+                @group(1) @binding({binding})
                 var {attachment_name_lower}_atlas: texture_2d_array<f32>;
 
             "

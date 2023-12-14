@@ -2,7 +2,7 @@
 #import bevy_terrain::bindings::config
 #import bevy_terrain::functions::node_count
 
-@group(2) @binding(2)
+@group(1) @binding(2)
 var atlas_sampler: sampler;
 
 fn sample_height(lookup: NodeLookup) -> f32 {
