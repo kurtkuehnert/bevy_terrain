@@ -287,8 +287,8 @@ where
             }
         };
 
+        bind_group_layout.push(self.terrain_layout.clone());
         bind_group_layout.push(self.terrain_view_layout.clone());
-        bind_group_layout.push(self.terrain_layout.clone()); // Todo: do this properly for multiple terrains
         bind_group_layout.push(self.material_layout.clone());
 
         RenderPipelineDescriptor {
@@ -350,8 +350,8 @@ where
 pub(crate) type DrawTerrain<M> = (
     SetItemPipeline,
     SetMeshViewBindGroup<0>,
-    SetTerrainViewBindGroup<1>,
-    SetTerrainBindGroup<2>,
+    SetTerrainBindGroup<1>,
+    SetTerrainViewBindGroup<2>,
     SetMaterialBindGroup<M, 3>,
     DrawTerrainCommand,
 );
