@@ -22,7 +22,7 @@ fn pixel_value(coords: vec2<u32>) -> f32 {
         return 0.0;
     }
 
-    let lod_count = 3u;
+    let lod_count = 4u;
 
     let node_coordinate = split_tile_data.node_meta.node_coordinate;
     let node_offset =  vec2<f32>(f32(node_coordinate.x), f32(node_coordinate.y));

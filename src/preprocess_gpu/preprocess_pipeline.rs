@@ -166,13 +166,13 @@ impl render_graph::Node for TerrainPreprocessNode {
 
                 let device = world.resource::<RenderDevice>();
 
-                attachment.create_read_back_buffer(device);
-
                 let atlas_indices = preprocess_data
                     .processing_tasks
                     .iter()
                     .map(|task| task.task.node.atlas_index)
                     .collect::<Vec<_>>();
+
+                attachment.create_read_back_buffer(device, &atlas_indices);
 
                 attachment.copy_nodes_to_write_section(
                     context.command_encoder(),
@@ -209,6 +209,7 @@ impl render_graph::Node for TerrainPreprocessNode {
                                 pipelines[TerrainPreprocessPipelineId::Downsample as usize],
                             );
                         }
+                        _ => continue,
                     }
 
                     pass.set_bind_group(1, task.bind_group.as_ref().unwrap(), &[]);

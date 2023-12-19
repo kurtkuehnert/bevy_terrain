@@ -7,11 +7,11 @@ use bevy_terrain::prelude::*;
 
 const TILE_SIZE: u32 = 1024;
 const TILE_FORMAT: FileFormat = FileFormat::PNG;
-const TERRAIN_SIZE: f32 = 4.0 * 507.5;
+const TERRAIN_SIZE: f32 = 8.0 * 507.5;
 const TEXTURE_SIZE: u32 = 512;
 const MIP_LEVEL_COUNT: u32 = 1;
-const LOD_COUNT: u32 = 3;
-const HEIGHT: f32 = 1000.0 / TERRAIN_SIZE;
+const LOD_COUNT: u32 = 4;
+const HEIGHT: f32 = 2000.0 / TERRAIN_SIZE;
 const NODE_ATLAS_SIZE: u32 = 1024;
 const PATH: &str = "terrains/basic";
 
