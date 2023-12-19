@@ -47,6 +47,7 @@ fn setup(
     let mut preprocessor = Preprocessor::new();
 
     preprocessor.preprocess_tile(
+        PATH.to_string(),
         TileConfig {
             side: 0,
             path: format!("{PATH}/source/height.png"),
