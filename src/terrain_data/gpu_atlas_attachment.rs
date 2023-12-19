@@ -1,9 +1,7 @@
-use crate::prelude::Terrain;
-use crate::terrain_data::AttachmentFormat;
-use crate::util::StaticUniformBuffer;
 use crate::{
-    preprocess_gpu::{gpu_preprocessor::ReadBackNode, preprocessor::PreprocessTask},
-    terrain_data::{AtlasAttachment, AtlasIndex},
+    preprocess_gpu::gpu_preprocessor::NodeMeta,
+    terrain_data::{node_atlas::ReadBackNode, AtlasAttachment, AtlasIndex, AttachmentFormat},
+    util::StaticUniformBuffer,
 };
 use bevy::{
     prelude::*,
@@ -16,11 +14,7 @@ use bevy::{
     tasks::{AsyncComputeTaskPool, Task},
 };
 use itertools::Itertools;
-use std::{
-    mem,
-    ops::DerefMut,
-    sync::{Arc, Mutex},
-};
+use std::mem;
 
 const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
 
@@ -141,9 +135,11 @@ impl AtlasBufferInfo {
 }
 
 pub(crate) struct GpuAtlasAttachment {
+    pub(crate) max_slots: usize,
+    pub(crate) slots: Vec<NodeMeta>,
     pub(crate) atlas_handle: Handle<Image>,
     pub(crate) atlas_write_section: Buffer,
-    pub(crate) read_back_buffer: Arc<Mutex<Option<Buffer>>>,
+    pub(crate) read_back_buffer: Option<Buffer>,
     pub(crate) bind_group: BindGroup,
     pub(crate) buffer_info: AtlasBufferInfo,
     pub(crate) mip_level_count: u32,
@@ -158,7 +154,7 @@ impl GpuAtlasAttachment {
         images: &mut RenderAssets<Image>,
         node_atlas_size: AtlasIndex,
     ) -> Self {
-        let process_slots = 16;
+        let max_slots = 16;
 
         let atlas_texture = device.create_texture(&TextureDescriptor {
             label: Some(&(attachment.name.to_string() + "_attachment")),
@@ -190,7 +186,7 @@ impl GpuAtlasAttachment {
 
         let atlas_write_section = device.create_buffer(&BufferDescriptor {
             label: Some(&(attachment.name.to_string() + "_atlas_write_section")),
-            size: buffer_info.buffer_size(process_slots) as BufferAddress,
+            size: buffer_info.buffer_size(max_slots as u32) as BufferAddress,
             usage: BufferUsages::COPY_DST | BufferUsages::COPY_SRC | BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
@@ -236,9 +232,11 @@ impl GpuAtlasAttachment {
         );
 
         Self {
+            slots: vec![],
+            max_slots,
             atlas_handle: attachment.handle.clone(),
             atlas_write_section,
-            read_back_buffer: Arc::new(Mutex::new(None)),
+            read_back_buffer: None,
             bind_group,
             mip_level_count: attachment.mip_level_count,
             workgroup_count,
@@ -246,18 +244,26 @@ impl GpuAtlasAttachment {
         }
     }
 
+    pub(crate) fn reserve_write_slot(&mut self, node_meta: NodeMeta) -> Option<u32> {
+        if self.slots.len() < self.max_slots - 1 {
+            self.slots.push(node_meta);
+            Some(self.slots.len() as u32 - 1)
+        } else {
+            None
+        }
+    }
+
     pub(crate) fn copy_nodes_to_write_section(
         &self,
         command_encoder: &mut CommandEncoder,
         images: &RenderAssets<Image>,
-        atlas_indices: &[u32],
     ) {
         let atlas = images.get(&self.atlas_handle).unwrap();
 
-        for (section_index, &atlas_index) in atlas_indices.iter().enumerate() {
+        for (section_index, node_meta) in self.slots.iter().enumerate() {
             command_encoder.copy_texture_to_buffer(
                 self.buffer_info
-                    .image_copy_texture(&atlas.texture, atlas_index, 0),
+                    .image_copy_texture(&atlas.texture, node_meta.atlas_index, 0),
                 self.buffer_info
                     .image_copy_buffer(&self.atlas_write_section, section_index as u32),
                 self.buffer_info.image_copy_size(0),
@@ -269,16 +275,15 @@ impl GpuAtlasAttachment {
         &self,
         command_encoder: &mut CommandEncoder,
         images: &RenderAssets<Image>,
-        atlas_indices: &[u32],
     ) {
         let atlas = images.get(&self.atlas_handle).unwrap();
 
-        for (section_index, &atlas_index) in atlas_indices.iter().enumerate() {
+        for (section_index, node_meta) in self.slots.iter().enumerate() {
             command_encoder.copy_buffer_to_texture(
                 self.buffer_info
                     .image_copy_buffer(&self.atlas_write_section, section_index as u32),
                 self.buffer_info
-                    .image_copy_texture(&atlas.texture, atlas_index, 0),
+                    .image_copy_texture(&atlas.texture, node_meta.atlas_index, 0),
                 self.buffer_info.image_copy_size(0),
             );
         }
@@ -311,20 +316,20 @@ impl GpuAtlasAttachment {
         }
     }
 
+    // Todo: combine with read back nodes?
     pub(crate) fn download_nodes(
         &self,
         command_encoder: &mut CommandEncoder,
         images: &RenderAssets<Image>,
-        atlas_indices: &[u32],
     ) {
         let atlas = images.get(&self.atlas_handle).unwrap();
 
-        for (read_back_index, &atlas_index) in atlas_indices.iter().enumerate() {
+        for (read_back_index, node_meta) in self.slots.iter().enumerate() {
             command_encoder.copy_texture_to_buffer(
                 self.buffer_info
-                    .image_copy_texture(&atlas.texture, atlas_index, 0),
+                    .image_copy_texture(&atlas.texture, node_meta.atlas_index, 0),
                 self.buffer_info.image_copy_buffer(
-                    self.read_back_buffer.lock().unwrap().as_ref().unwrap(),
+                    self.read_back_buffer.as_ref().unwrap(),
                     read_back_index as u32,
                 ),
                 self.buffer_info.image_copy_size(0),
@@ -332,31 +337,25 @@ impl GpuAtlasAttachment {
         }
     }
 
-    pub(crate) fn create_read_back_buffer(&self, device: &RenderDevice, atlas_indices: &[u32]) {
-        *self.read_back_buffer.lock().unwrap().deref_mut() =
-            Some(device.create_buffer(&BufferDescriptor {
-                label: Some("read_back_buffer"),
-                size: self.buffer_info.buffer_size(atlas_indices.len() as u32) as BufferAddress,
-                usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
-                mapped_at_creation: false,
-            }));
+    pub(crate) fn create_read_back_buffer(&mut self, device: &RenderDevice) {
+        self.read_back_buffer = Some(device.create_buffer(&BufferDescriptor {
+            label: Some("read_back_buffer"),
+            size: self.buffer_info.buffer_size(self.slots.len() as u32) as BufferAddress,
+            usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        }));
     }
 
-    pub(crate) fn start_reading_back_nodes(
-        &self,
-        tasks: Vec<PreprocessTask>,
-    ) -> Task<Vec<ReadBackNode>> {
+    pub(crate) fn start_reading_back_nodes(&mut self) -> Task<Vec<ReadBackNode>> {
         let buffer_info = self.buffer_info.clone();
+        let read_back_buffer = mem::take(&mut self.read_back_buffer).unwrap();
+        let slots = mem::take(&mut self.slots);
 
-        let read_back_buffer =
-            mem::take(self.read_back_buffer.lock().unwrap().deref_mut()).unwrap();
-
-        println!("Started reading back {} nodes", tasks.len());
+        println!("Started reading back {} nodes", slots.len());
 
         AsyncComputeTaskPool::get().spawn(async move {
             let (tx, rx) = async_channel::bounded(1);
 
-            // Todo: determine how much data to read
             let buffer_slice = read_back_buffer.slice(..);
 
             buffer_slice.map_async(MapMode::Read, move |result| {
@@ -371,15 +370,14 @@ impl GpuAtlasAttachment {
 
             let mapped_data = buffer_slice.get_mapped_range();
 
-            let mut read_back_tasks = mapped_data
+            let mut read_back_nodes = mapped_data
                 .chunks_exact(buffer_info.aligned_node_size as usize)
                 .map(|node_data| node_data.to_vec())
-                .zip(tasks)
-                .map(|(data, task)| ReadBackNode {
+                .zip(slots)
+                .map(|(data, node_meta)| ReadBackNode {
+                    meta: node_meta,
                     data,
                     texture_size: buffer_info.pixels_per_side,
-                    meta: task.node,
-                    save_to_disk: task.save_to_disk,
                 })
                 .collect_vec();
 
@@ -387,7 +385,7 @@ impl GpuAtlasAttachment {
             read_back_buffer.unmap();
             drop(read_back_buffer);
 
-            for node in &mut read_back_tasks {
+            for node in &mut read_back_nodes {
                 if node.data.len() != buffer_info.actual_node_size as usize {
                     let actual_side_size = buffer_info.actual_side_size as usize;
                     let aligned_side_size = buffer_info.aligned_side_size as usize;
@@ -408,21 +406,7 @@ impl GpuAtlasAttachment {
                 }
             }
 
-            read_back_tasks
+            read_back_nodes
         })
     }
 }
-
-// pub(crate) fn cleanup_atlas_attachments(
-//     terrain_query: Query<Entity, With<Terrain>>,
-// ) {
-//     let gpu_node_atlas = gpu_node_atlases.get(&terrain).unwrap();
-//
-//     attachment.copy_nodes_from_write_section(
-//         context.command_encoder(),
-//         images,
-//         &atlas_indices,
-//     );
-//
-//     attachment.download_nodes(context.command_encoder(), images, &atlas_indices);
-// }
