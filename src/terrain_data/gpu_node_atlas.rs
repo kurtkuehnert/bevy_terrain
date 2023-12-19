@@ -1,3 +1,4 @@
+use crate::terrain_data::node_atlas::ReadBackNode;
 use crate::{
     terrain::{Terrain, TerrainComponents},
     terrain_data::{
@@ -5,6 +6,7 @@ use crate::{
         node_atlas::{LoadingNode, NodeAtlas},
     },
 };
+use bevy::tasks::Task;
 use bevy::{
     prelude::*,
     render::{
@@ -15,6 +17,7 @@ use bevy::{
     },
 };
 use std::mem;
+use std::sync::{Arc, Mutex};
 
 /// Stores the GPU representation of the [`NodeAtlas`] (array textures)
 /// alongside the data to update it.
@@ -26,6 +29,7 @@ pub struct GpuNodeAtlas {
     pub(crate) attachments: Vec<GpuAtlasAttachment>,
     /// Stores the nodes, that have finished loading this frame.
     pub(crate) loaded_nodes: Vec<LoadingNode>,
+    pub(crate) read_back_nodes: Arc<Mutex<Vec<Task<Vec<ReadBackNode>>>>>,
 }
 
 impl GpuNodeAtlas {
@@ -46,7 +50,8 @@ impl GpuNodeAtlas {
 
         Self {
             attachments,
-            loaded_nodes: Vec::new(),
+            loaded_nodes: default(),
+            read_back_nodes: node_atlas.read_back_nodes.clone(),
         }
     }
 
@@ -121,8 +126,30 @@ impl GpuNodeAtlas {
         for terrain in terrain_query.iter() {
             let gpu_node_atlas = gpu_node_atlases.get_mut(&terrain).unwrap();
             gpu_node_atlas.update_attachments(&mut command_encoder, &images);
+
+            let attachment = &mut gpu_node_atlas.attachments[0];
+
+            attachment.create_read_back_buffer(&device);
         }
 
         queue.submit(vec![command_encoder.finish()]);
+    }
+
+    pub(crate) fn cleanup(
+        mut gpu_node_atlases: ResMut<TerrainComponents<GpuNodeAtlas>>,
+        terrain_query: Query<Entity, With<Terrain>>,
+    ) {
+        for terrain in terrain_query.iter() {
+            let gpu_node_atlas = gpu_node_atlases.get_mut(&terrain).unwrap();
+            let attachment = &mut gpu_node_atlas.attachments[0];
+
+            if !attachment.slots.is_empty() {
+                gpu_node_atlas
+                    .read_back_nodes
+                    .lock()
+                    .unwrap()
+                    .push(attachment.start_reading_back_nodes());
+            }
+        }
     }
 }

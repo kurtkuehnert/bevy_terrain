@@ -1,3 +1,6 @@
+use crate::preprocess::file_io::format_node_path;
+use crate::preprocess::R16Image;
+use crate::preprocess_gpu::gpu_preprocessor::NodeMeta;
 use crate::{
     terrain::{Terrain, TerrainConfig},
     terrain_data::{
@@ -5,11 +8,16 @@ use crate::{
     },
     terrain_view::{TerrainView, TerrainViewComponents},
 };
+use bevy::tasks::futures_lite::future;
+use bevy::tasks::{AsyncComputeTaskPool, Task};
 use bevy::{
     prelude::*,
     utils::{HashMap, HashSet},
 };
 use std::collections::VecDeque;
+use std::ops::DerefMut;
+use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 /// Stores all of the attachments of the node, alongside their loading state.
 #[derive(Clone)]
@@ -75,6 +83,43 @@ struct UnusedNode {
     atlas_index: AtlasIndex,
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct ReadBackNode {
+    pub(crate) meta: NodeMeta,
+    pub(crate) data: Vec<u8>,
+    pub(crate) texture_size: u32,
+}
+
+impl ReadBackNode {
+    pub(crate) fn start_saving(self, path: String) -> Task<NodeMeta> {
+        AsyncComputeTaskPool::get().spawn(async move {
+            // if !self.save_to_disk {
+            //     return ();
+            // };
+
+            let image_data = self
+                .data
+                .chunks_exact(2)
+                .map(|pixel| u16::from_le_bytes(pixel.try_into().unwrap()))
+                .collect::<Vec<u16>>();
+
+            let path = format_node_path(&path, &self.meta.node_coordinate);
+            let path = Path::new(&path);
+            let path = path.with_extension("png");
+            let path = path.to_str().unwrap();
+
+            let image =
+                R16Image::from_raw(self.texture_size, self.texture_size, image_data).unwrap();
+
+            image.save(path).unwrap();
+
+            println!("Finished saving node: {path}");
+
+            self.meta
+        })
+    }
+}
+
 /// A sparse storage of all terrain attachments, which streams data in and out of memory
 /// depending on the decisions of the corresponding [`Quadtree`]s.
 ///
@@ -108,6 +153,11 @@ pub struct NodeAtlas {
     pub(crate) existing_nodes: HashSet<NodeCoordinate>,
     /// Lists the unused nodes in least recently used order.
     unused_nodes: VecDeque<UnusedNode>,
+
+    pub(crate) read_back_nodes: Arc<Mutex<Vec<Task<Vec<ReadBackNode>>>>>,
+    pub(crate) saving_nodes: Vec<Task<NodeMeta>>,
+    pub(crate) slots: u32,
+    pub(crate) max_slots: u32,
 }
 
 impl NodeAtlas {
@@ -137,6 +187,11 @@ impl NodeAtlas {
             size,
             unused_nodes,
             existing_nodes,
+
+            read_back_nodes: default(),
+            saving_nodes: default(),
+            slots: 16,
+            max_slots: 16,
         }
     }
 
@@ -187,6 +242,41 @@ impl NodeAtlas {
 
             unused_node.atlas_index
         }
+    }
+
+    fn read_back_update(&mut self) {
+        let NodeAtlas {
+            read_back_nodes,
+            saving_nodes,
+            slots,
+            ..
+        } = self;
+
+        read_back_nodes
+            .lock()
+            .unwrap()
+            .deref_mut()
+            .retain_mut(|nodes| {
+                if let Some(nodes) = future::block_on(future::poll_once(nodes)) {
+                    for node in nodes {
+                        let path = "terrains/basic";
+                        let path = format!("assets/{path}/data/height");
+                        saving_nodes.push(node.start_saving(path));
+                    }
+                    false
+                } else {
+                    true
+                }
+            });
+
+        saving_nodes.retain_mut(|task| {
+            if let Some(_) = future::block_on(future::poll_once(task)) {
+                *slots += 1;
+                false
+            } else {
+                true
+            }
+        });
     }
 
     /// Adjusts the node atlas according to the requested and released nodes of the [`Quadtree`]
@@ -319,6 +409,7 @@ pub(crate) fn update_node_atlas(
 ) {
     for (terrain, mut node_atlas) in terrain_query.iter_mut() {
         node_atlas.update_loaded_nodes();
+        node_atlas.read_back_update();
 
         for view in view_query.iter() {
             if let Some(quadtree) = quadtrees.get_mut(&(terrain, view)) {

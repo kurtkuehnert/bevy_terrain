@@ -164,21 +164,7 @@ impl render_graph::Node for TerrainPreprocessNode {
             if !preprocess_data.processing_tasks.is_empty() {
                 let attachment = &gpu_node_atlas.attachments[0];
 
-                let device = world.resource::<RenderDevice>();
-
-                let atlas_indices = preprocess_data
-                    .processing_tasks
-                    .iter()
-                    .map(|task| task.task.node.atlas_index)
-                    .collect::<Vec<_>>();
-
-                attachment.create_read_back_buffer(device, &atlas_indices);
-
-                attachment.copy_nodes_to_write_section(
-                    context.command_encoder(),
-                    images,
-                    &atlas_indices,
-                );
+                attachment.copy_nodes_to_write_section(context.command_encoder(), images);
 
                 let mut pass = context
                     .command_encoder()
@@ -222,17 +208,13 @@ impl render_graph::Node for TerrainPreprocessNode {
 
                 drop(pass);
 
-                attachment.copy_nodes_from_write_section(
-                    context.command_encoder(),
-                    images,
-                    &atlas_indices,
-                );
+                attachment.copy_nodes_from_write_section(context.command_encoder(), images);
 
-                attachment.download_nodes(context.command_encoder(), images, &atlas_indices);
+                attachment.download_nodes(context.command_encoder(), images);
 
                 println!(
                     "Ran preprocessing pipeline with {} nodes.",
-                    atlas_indices.len()
+                    attachment.slots.len()
                 )
             }
         }

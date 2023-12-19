@@ -1,3 +1,4 @@
+use crate::preprocess_gpu::shaders::load_preprocess_shaders;
 use crate::{
     preprocess_gpu::{
         gpu_preprocessor::GpuPreprocessor,
@@ -5,6 +6,7 @@ use crate::{
         preprocessor::{preprocessor_load_tile, select_ready_tasks},
     },
     terrain::TerrainComponents,
+    terrain_data::gpu_node_atlas::GpuNodeAtlas,
 };
 use bevy::{
     prelude::*,
@@ -37,17 +39,16 @@ impl Plugin for TerrainPreprocessPlugin {
                 )
                 .add_systems(
                     Render,
-                    (
-                        GpuPreprocessor::prepare.in_set(RenderSet::PrepareAssets),
-                        GpuPreprocessor::cleanup
-                            .in_set(RenderSet::Cleanup)
-                            .before(World::clear_entities),
-                    ),
+                    GpuPreprocessor::prepare
+                        .in_set(RenderSet::PrepareAssets)
+                        .before(GpuNodeAtlas::prepare),
                 );
         }
     }
 
     fn finish(&self, app: &mut App) {
+        load_preprocess_shaders(app);
+
         let render_app = app
             .sub_app_mut(RenderApp)
             .init_resource::<SpecializedComputePipelines<TerrainPreprocessPipelines>>()

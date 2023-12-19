@@ -1,23 +1,15 @@
-use crate::formats::tc::save_node_config;
 use crate::{
-    prelude::{NodeAtlas, TileConfig},
-    preprocess_gpu::gpu_preprocessor::{NodeMeta, ReadBackNode},
-    terrain::Terrain,
-    terrain_data::NodeCoordinate,
+    formats::tc::save_node_config, preprocess::TileConfig,
+    preprocess_gpu::gpu_preprocessor::NodeMeta, terrain::Terrain,
+    terrain_data::node_atlas::NodeAtlas, terrain_data::NodeCoordinate,
 };
 use bevy::{
     asset::LoadState,
     prelude::*,
     render::{render_resource::TextureFormat, texture::ImageSampler},
-    tasks::{futures_lite::future, Task},
 };
 use itertools::iproduct;
-use std::time::Instant;
-use std::{
-    collections::VecDeque,
-    ops::DerefMut,
-    sync::{Arc, Mutex},
-};
+use std::{collections::VecDeque, ops::DerefMut, time::Instant};
 
 #[derive(Clone)]
 pub(crate) enum PreprocessTaskType {
@@ -33,7 +25,6 @@ pub(crate) enum PreprocessTaskType {
 pub(crate) struct PreprocessTask {
     pub(crate) task_type: PreprocessTaskType,
     pub(crate) node: NodeMeta,
-    pub(crate) save_to_disk: bool,
 }
 
 fn split(
@@ -54,7 +45,6 @@ fn split(
     PreprocessTask {
         task_type: PreprocessTaskType::SplitTile { tile },
         node,
-        save_to_disk: false,
     }
 }
 
@@ -118,7 +108,6 @@ fn stitch(
     PreprocessTask {
         task_type: PreprocessTaskType::Stitch { neighbour_nodes },
         node,
-        save_to_disk: true,
     }
 }
 
@@ -147,7 +136,6 @@ fn downsample(node_atlas: &mut NodeAtlas, lod: u32, x: u32, y: u32) -> Preproces
     PreprocessTask {
         task_type: PreprocessTaskType::Downsample { parent_nodes },
         node,
-        save_to_disk: false,
     }
 }
 
@@ -157,10 +145,7 @@ pub struct Preprocessor {
     pub(crate) tile_handle: Option<Handle<Image>>,
     pub(crate) task_queue: VecDeque<PreprocessTask>,
     pub(crate) ready_tasks: Vec<PreprocessTask>,
-    pub(crate) read_back_tasks: Arc<Mutex<Vec<Task<Vec<ReadBackNode>>>>>,
-    pub(crate) saving_tasks: Vec<Task<()>>,
-    pub(crate) slots: u32,
-    pub(crate) max_slots: u32,
+
     pub(crate) start_time: Option<Instant>,
 }
 
@@ -171,10 +156,6 @@ impl Preprocessor {
             tile_handle: None,
             task_queue: default(),
             ready_tasks: default(),
-            read_back_tasks: default(),
-            saving_tasks: default(),
-            slots: 16,
-            max_slots: 16,
             start_time: None,
         }
     }
@@ -204,7 +185,6 @@ impl Preprocessor {
         self.task_queue.push_back(PreprocessTask {
             task_type: PreprocessTaskType::Barrier,
             node: Default::default(),
-            save_to_disk: false,
         });
 
         for (x, y) in iproduct!(0..node_width, 0..node_height) {
@@ -223,7 +203,6 @@ impl Preprocessor {
             self.task_queue.push_back(PreprocessTask {
                 task_type: PreprocessTaskType::Barrier,
                 node: Default::default(),
-                save_to_disk: false,
             });
 
             for (x, y) in iproduct!(0..node_width, 0..node_height) {
@@ -236,22 +215,18 @@ impl Preprocessor {
 
 pub(crate) fn select_ready_tasks(
     asset_server: Res<AssetServer>,
-    mut terrain_query: Query<&mut Preprocessor, With<Terrain>>,
+    mut terrain_query: Query<(&mut Preprocessor, &mut NodeAtlas), With<Terrain>>,
 ) {
-    for mut preprocessor in terrain_query.iter_mut() {
+    for (mut preprocessor, mut node_atlas) in terrain_query.iter_mut() {
         let Preprocessor {
             path,
             task_queue,
             ready_tasks,
-            read_back_tasks,
-            saving_tasks,
-            slots,
-            max_slots,
             start_time,
             ..
         } = preprocessor.deref_mut();
 
-        if task_queue.is_empty() && *slots == *max_slots {
+        if task_queue.is_empty() && node_atlas.slots == node_atlas.max_slots {
             if let Some(start) = start_time {
                 let elapsed = start.elapsed();
                 *start_time = None;
@@ -262,34 +237,9 @@ pub(crate) fn select_ready_tasks(
             }
         }
 
-        saving_tasks.retain_mut(|task| {
-            if future::block_on(future::poll_once(task)).is_some() {
-                *slots += 1;
-                false
-            } else {
-                true
-            }
-        });
-
-        read_back_tasks
-            .lock()
-            .unwrap()
-            .deref_mut()
-            .retain_mut(|task| {
-                if let Some(nodes) = future::block_on(future::poll_once(task)) {
-                    for node in nodes {
-                        let path = format!("assets/{path}/data/height");
-                        saving_tasks.push(node.start_saving(path));
-                    }
-                    false
-                } else {
-                    true
-                }
-            });
-
         ready_tasks.clear();
 
-        while *slots > 0 {
+        while node_atlas.slots > 0 {
             let ready = task_queue
                 .front()
                 .map_or(false, |task| match &task.task_type {
@@ -299,11 +249,11 @@ pub(crate) fn select_ready_tasks(
                     PreprocessTaskType::Stitch { .. } => true,
                     PreprocessTaskType::Downsample { .. } => true,
                     PreprocessTaskType::Barrier => {
-                        dbg!(*slots);
-                        if *slots == *max_slots {
+                        dbg!(node_atlas.slots);
+                        if node_atlas.slots == node_atlas.max_slots {
                             dbg!("barrier complete");
                         }
-                        *slots == *max_slots
+                        node_atlas.slots == node_atlas.max_slots
                     }
                 });
 
@@ -312,7 +262,7 @@ pub(crate) fn select_ready_tasks(
 
                 if !matches!(task.task_type, PreprocessTaskType::Barrier) {
                     ready_tasks.push(task);
-                    *slots -= 1;
+                    node_atlas.slots -= 1;
                 }
             } else {
                 break;
