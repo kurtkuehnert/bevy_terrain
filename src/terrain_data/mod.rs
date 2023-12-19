@@ -111,12 +111,13 @@ impl AttachmentFormat {
             AttachmentFormat::Rg16 => TextureFormat::Rg16Unorm,
         }
     }
-    pub(crate) fn storage_format(self) -> TextureFormat {
+
+    pub(crate) fn pixel_size(self) -> u32 {
         match self {
-            AttachmentFormat::Rgb8 => TextureFormat::Rgba8Uint,
-            AttachmentFormat::Rgba8 => TextureFormat::Rgba8Uint,
-            AttachmentFormat::R16 => TextureFormat::R16Uint,
-            AttachmentFormat::Rg16 => TextureFormat::Rg16Uint,
+            AttachmentFormat::Rgb8 => 3,
+            AttachmentFormat::Rgba8 => 4,
+            AttachmentFormat::R16 => 2,
+            AttachmentFormat::Rg16 => 4,
         }
     }
 }

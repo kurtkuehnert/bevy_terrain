@@ -5,7 +5,6 @@ use crate::{
     terrain::{Terrain, TerrainComponents},
     terrain_data::{gpu_node_atlas::GpuNodeAtlas, NodeCoordinate},
 };
-use bevy::render::Render;
 use bevy::{
     prelude::*,
     render::{
@@ -61,23 +60,24 @@ struct DownsampleData {
 pub(crate) struct ReadBackNode {
     pub(crate) data: Vec<u8>,
     pub(crate) texture_size: u32,
-    pub(crate) format: TextureFormat,
     pub(crate) meta: NodeMeta,
+    pub(crate) save_to_disk: bool,
 }
 
 impl ReadBackNode {
-    pub(crate) fn start_saving(self) -> Task<()> {
+    pub(crate) fn start_saving(self, path: String) -> Task<()> {
         AsyncComputeTaskPool::get().spawn(async move {
+            if !self.save_to_disk {
+                return ();
+            };
+
             let image_data = self
                 .data
                 .chunks_exact(2)
                 .map(|pixel| u16::from_le_bytes(pixel.try_into().unwrap()))
                 .collect::<Vec<u16>>();
 
-            let path = format_node_path(
-                "assets/terrains/basic/data/height",
-                &self.meta.node_coordinate,
-            );
+            let path = format_node_path(&path, &self.meta.node_coordinate);
             let path = Path::new(&path);
             let path = path.with_extension("png");
             let path = path.to_str().unwrap();
@@ -175,8 +175,10 @@ impl GpuPreprocessor {
         for terrain in terrain_query.iter() {
             let gpu_preprocessor = gpu_preprocessors.get_mut(&terrain).unwrap();
 
+            let slots = 16;
+
             if !gpu_preprocessor.ready_tasks.is_empty() {
-                for node_index in 0..4 {
+                for node_index in 0..slots {
                     if let Some(task) = gpu_preprocessor.ready_tasks.pop_back() {
                         let bind_group = match &task.task_type {
                             PreprocessTaskType::SplitTile { tile } => {
@@ -239,6 +241,7 @@ impl GpuPreprocessor {
                                     ),
                                 ))
                             }
+                            _ => break,
                         };
 
                         gpu_preprocessor

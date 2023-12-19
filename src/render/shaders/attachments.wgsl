@@ -26,7 +26,7 @@ fn sample_normal(lookup: NodeLookup, local_position: vec3<f32>) -> vec3<f32> {
 #else
     let TBN = mat3x3<f32>(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0);
 
-    let distance_between_samples = 1.0 / (HEIGHT_SIZE * node_count(lookup.atlas_lod));
+    let distance_between_samples = 4.0 * 1.0 / (HEIGHT_SIZE * node_count(lookup.atlas_lod));
 #endif
 
     let height_coordinate = lookup.atlas_coordinate * HEIGHT_SCALE + HEIGHT_OFFSET;
