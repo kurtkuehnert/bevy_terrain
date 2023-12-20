@@ -144,7 +144,7 @@ impl GpuPreprocessor {
                             let tile = images.get(tile).unwrap();
 
                             let split_tile_data = SplitTileData {
-                                node_meta: task.node.clone(),
+                                node_meta: task.node,
                                 node_index: section_index,
                             };
 
@@ -163,8 +163,8 @@ impl GpuPreprocessor {
                         }
                         PreprocessTaskType::Stitch { neighbour_nodes } => {
                             let stitch_node_data = StitchNodeData {
-                                node: task.node.clone(),
-                                neighbour_nodes: neighbour_nodes.clone(),
+                                node: task.node,
+                                neighbour_nodes: *neighbour_nodes,
                                 node_index: section_index,
                             };
 
@@ -182,7 +182,7 @@ impl GpuPreprocessor {
                         PreprocessTaskType::Downsample { parent_nodes } => {
                             let downsample_data = DownsampleData {
                                 node: task.node,
-                                parent_nodes: parent_nodes.clone(),
+                                parent_nodes: *parent_nodes,
                                 node_index: section_index,
                             };
 

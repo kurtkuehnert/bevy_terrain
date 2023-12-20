@@ -1,6 +1,6 @@
 use crate::{
     preprocess_gpu::gpu_preprocessor::NodeMeta,
-    terrain_data::{node_atlas::ReadBackNode, AtlasAttachment, AtlasIndex, AttachmentFormat},
+    terrain_data::{node_atlas::ReadBackNode, AtlasAttachment, AttachmentFormat},
     util::StaticBuffer,
 };
 use bevy::{
@@ -22,16 +22,6 @@ fn align_byte_size(value: u32) -> u32 {
     value - 1 - (value - 1) % COPY_BYTES_PER_ROW_ALIGNMENT + COPY_BYTES_PER_ROW_ALIGNMENT
 }
 
-#[derive(Clone, Default, ShaderType)]
-pub(crate) struct AttachmentMeta {
-    pub(crate) texture_size: u32,
-    pub(crate) border_size: u32,
-    pub(crate) node_size: u32,
-    pub(crate) pixels_per_entry: u32,
-    pub(crate) entries_per_side: u32,
-    pub(crate) entries_per_node: u32,
-}
-
 pub(crate) fn create_attachment_layout(device: &RenderDevice) -> BindGroupLayout {
     device.create_bind_group_layout(
         None,
@@ -45,6 +35,16 @@ pub(crate) fn create_attachment_layout(device: &RenderDevice) -> BindGroupLayout
             ),
         ),
     )
+}
+
+#[derive(Default, ShaderType)]
+pub(crate) struct AttachmentMeta {
+    pub(crate) texture_size: u32,
+    pub(crate) border_size: u32,
+    pub(crate) node_size: u32,
+    pub(crate) pixels_per_entry: u32,
+    pub(crate) entries_per_side: u32,
+    pub(crate) entries_per_node: u32,
 }
 
 #[derive(Clone)]
@@ -111,7 +111,7 @@ impl AtlasBufferInfo {
 
     fn image_copy_buffer<'a>(&'a self, buffer: &'a Buffer, index: u32) -> ImageCopyBuffer {
         ImageCopyBuffer {
-            buffer: &buffer,
+            buffer,
             layout: ImageDataLayout {
                 bytes_per_row: Some(self.aligned_side_size),
                 rows_per_image: Some(self.pixels_per_side),
@@ -150,7 +150,7 @@ impl GpuAtlasAttachment {
     pub(crate) fn create(
         attachment: &AtlasAttachment,
         device: &RenderDevice,
-        node_atlas_size: AtlasIndex,
+        node_atlas_size: u32,
     ) -> Self {
         let max_slots = 16;
 
@@ -159,7 +159,7 @@ impl GpuAtlasAttachment {
             size: Extent3d {
                 width: attachment.texture_size,
                 height: attachment.texture_size,
-                depth_or_array_layers: node_atlas_size as u32,
+                depth_or_array_layers: node_atlas_size,
             },
             mip_level_count: attachment.mip_level_count,
             sample_count: 1,
@@ -202,7 +202,7 @@ impl GpuAtlasAttachment {
 
         let bind_group = device.create_bind_group(
             "attachment_bind_group",
-            &create_attachment_layout(&device),
+            &create_attachment_layout(device),
             &BindGroupEntries::sequential((
                 &atlas_write_section,
                 &atlas_view,
@@ -269,7 +269,7 @@ impl GpuAtlasAttachment {
         command_encoder: &mut CommandEncoder,
         images: &RenderAssets<Image>,
         node_handle: &Handle<Image>,
-        atlas_index: AtlasIndex,
+        atlas_index: u32,
     ) {
         if let Some(node_image) = images.get(node_handle) {
             for mip_level in 0..self.mip_level_count {
@@ -278,7 +278,7 @@ impl GpuAtlasAttachment {
                         .image_copy_texture(&node_image.texture, 0, mip_level),
                     self.buffer_info.image_copy_texture(
                         &self.atlas_texture,
-                        atlas_index as u32,
+                        atlas_index,
                         mip_level,
                     ),
                     self.buffer_info.image_copy_size(mip_level),

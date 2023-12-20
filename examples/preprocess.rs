@@ -44,7 +44,7 @@ fn setup(
     let mut terrain_bundle =
         TerrainBundle::new(config.clone(), Vec3::new(20.0, -30.0, -100.0), TERRAIN_SIZE);
 
-    let mut preprocessor = Preprocessor::new();
+    let mut preprocessor = Preprocessor::default();
 
     preprocessor.preprocess_tile(
         PATH.to_string(),

@@ -53,6 +53,15 @@ struct Blend {
     ratio: f32,
 }
 
+struct QuadtreeEntry {
+    atlas_index: u32,
+    atlas_lod: u32,
+}
+
+struct Quadtree {
+    data: array<QuadtreeEntry>,
+}
+
 // A lookup of a node inside the node atlas based on the view of a quadtree.
 struct NodeLookup {
     atlas_index: u32,

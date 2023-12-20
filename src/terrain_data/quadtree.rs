@@ -2,14 +2,14 @@ use crate::{
     terrain::{Terrain, TerrainConfig},
     terrain_data::{
         node_atlas::{LoadingState, NodeAtlas},
-        AtlasIndex, NodeCoordinate, INVALID_ATLAS_INDEX, INVALID_LOD, SIDE_COUNT,
+        NodeCoordinate, INVALID_ATLAS_INDEX, INVALID_LOD, SIDE_COUNT,
     },
     terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
 };
 use bevy::{math::Vec4Swizzles, prelude::*};
 use bytemuck::{Pod, Zeroable};
 use itertools::iproduct;
-use ndarray::{Array3, Array4};
+use ndarray::Array4;
 
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
@@ -196,9 +196,9 @@ impl Default for TreeNode {
 #[derive(Clone, Copy, Zeroable, Pod)]
 pub(crate) struct QuadtreeEntry {
     /// The atlas index of the best entry.
-    atlas_index: AtlasIndex,
+    atlas_index: u32,
     /// The atlas lod of the best entry.
-    atlas_lod: u16,
+    atlas_lod: u32,
 }
 
 impl Default for QuadtreeEntry {
@@ -233,10 +233,8 @@ impl Default for QuadtreeEntry {
 /// `adjust` methode, which can later be used to access the terrain data.
 #[derive(Default, Component)]
 pub struct Quadtree {
-    /// The handle of the quadtree texture.
-    pub(crate) handle: Handle<Image>,
     /// The current cpu quadtree data. This is synced each frame with the gpu quadtree data.
-    pub(crate) data: Array3<QuadtreeEntry>,
+    pub(crate) data: Array4<QuadtreeEntry>,
     /// Nodes that are no longer required by this quadtree.
     pub(crate) released_nodes: Vec<NodeCoordinate>,
     /// Nodes that are requested to be loaded by this quadtree.
@@ -257,14 +255,12 @@ pub struct Quadtree {
 impl Quadtree {
     /// Creates a new quadtree from parameters.
     ///
-    /// * `handle` - The handle of the quadtree texture.
     /// * `lod_count` - The count of level of detail layers.
     /// * `quadtree_size` - The count of nodes in x and y direction per layer.
     /// * `node_size` - The size of the smallest nodes (with lod 0).
     /// * `load_distance` - The distance (measured in node sizes) until which to request nodes to be loaded.
     /// * `height` - The height of the terrain.
     pub fn new(
-        handle: Handle<Image>,
         lod_count: u32,
         quadtree_size: u32,
         leaf_node_count: f32,
@@ -272,15 +268,15 @@ impl Quadtree {
         height: f32,
     ) -> Self {
         Self {
-            handle,
             lod_count,
             quadtree_size,
             leaf_node_count,
             load_distance,
             _height: height,
             _height_under_viewer: height / 2.0,
-            data: Array3::default((
-                SIDE_COUNT as usize * lod_count as usize,
+            data: Array4::default((
+                SIDE_COUNT as usize,
+                lod_count as usize,
                 quadtree_size as usize,
                 quadtree_size as usize,
             )),
@@ -298,7 +294,6 @@ impl Quadtree {
     /// Creates a new quadtree from a terrain and a terrain view config.
     pub fn from_configs(config: &TerrainConfig, view_config: &TerrainViewConfig) -> Self {
         Self::new(
-            view_config.quadtree_handle.clone(),
             config.lod_count,
             view_config.quadtree_size,
             config.leaf_node_count,
@@ -327,7 +322,7 @@ impl Quadtree {
         let transform = transform.compute_matrix();
         let inverse_model = transform.inverse();
 
-        return (inverse_model * world_position.extend(1.0)).xyz();
+        (inverse_model * world_position.extend(1.0)).xyz()
     }
 
     pub(crate) fn compute_requests(
@@ -407,7 +402,7 @@ impl Quadtree {
 
     /// Adjusts the quadtree to the node atlas by updating the entries with the best available nodes.
     fn adjust(&mut self, node_atlas: &NodeAtlas) {
-        for ((side, lod, x, y), node) in self.nodes.indexed_iter_mut() {
+        for (node, entry) in self.nodes.iter().zip(self.data.iter_mut()) {
             let mut best_node_coordinate = node.node_coordinate;
 
             let (atlas_index, atlas_lod) = loop {
@@ -415,13 +410,13 @@ impl Quadtree {
                     || best_node_coordinate.lod == self.lod_count
                 {
                     // highest lod is not loaded
-                    break (INVALID_ATLAS_INDEX, u16::MAX);
+                    break (INVALID_ATLAS_INDEX, INVALID_LOD);
                 }
 
                 if let Some(atlas_node) = node_atlas.nodes.get(&best_node_coordinate) {
                     if atlas_node.state == LoadingState::Loaded {
                         // found best loaded node
-                        break (atlas_node.atlas_index, best_node_coordinate.lod as u16);
+                        break (atlas_node.atlas_index, best_node_coordinate.lod);
                     }
                 }
 
@@ -431,7 +426,7 @@ impl Quadtree {
                 best_node_coordinate.y >>= 1;
             };
 
-            self.data[[side * self.lod_count as usize + lod, y, x]] = QuadtreeEntry {
+            *entry = QuadtreeEntry {
                 atlas_index,
                 atlas_lod,
             };
@@ -446,7 +441,6 @@ pub(crate) fn compute_quadtree_request(
     view_query: Query<(Entity, &GlobalTransform), With<TerrainView>>,
     terrain_query: Query<(Entity, &GlobalTransform), With<Terrain>>,
 ) {
-    // Todo: properly take the terrain transform into account
     for (terrain, terrain_transform) in terrain_query.iter() {
         for (view, view_transform) in view_query.iter() {
             let view_position = view_transform.translation();
@@ -472,64 +466,3 @@ pub(crate) fn adjust_quadtree(
         }
     }
 }
-
-/*
-pub(crate) fn update_height_under_viewer(
-    images: Res<Assets<Image>>,
-    mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
-    mut terrain_view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
-    view_query: Query<(Entity, &GlobalTransform), With<TerrainView>>,
-    mut terrain_query: Query<(Entity, &NodeAtlas), With<Terrain>>,
-) {
-    for (terrain, node_atlas) in terrain_query.iter_mut() {
-        for (view, view_transform) in view_query.iter() {
-            if let Some(quadtree) = quadtrees.get_mut(&(terrain, view)) {
-                quadtree.height_under_viewer = height_under_viewer(
-                    quadtree,
-                    node_atlas,
-                    &images,
-                    view_transform.translation().xz(),
-                );
-
-                terrain_view_configs
-                    .get_mut(&(terrain, view))
-                    .unwrap()
-                    .height_under_viewer = quadtree.height_under_viewer;
-            }
-        }
-    }
-}
-
-fn height_under_viewer(
-    quadtree: &Quadtree,
-    node_atlas: &NodeAtlas,
-    images: &Assets<Image>,
-    viewer_position: Vec2,
-) -> f32 {
-    let coordinate =
-        (viewer_position / quadtree.node_size as f32).as_uvec2() % quadtree.quadtree_size;
-
-    let node = &quadtree.data[[0, coordinate.y as usize, coordinate.x as usize]];
-    let atlas_coords = (viewer_position / quadtree.node_size as f32) % 1.0;
-
-    if node.atlas_index == INVALID_ATLAS_INDEX {
-        return 0.0;
-    }
-
-    if let Some(node) = node_atlas.data[node.atlas_index as usize]
-        ._attachments
-        .get(&0)
-    {
-        if let Some(image) = images.get(node) {
-            let position = (image.size() * atlas_coords).as_uvec2();
-            let index = 2 * (position.x + position.y * image.size().x as u32) as usize;
-            let height = ((image.data[index + 1] as u16) << 8) + image.data[index] as u16;
-            let height = height as f32 / u16::MAX as f32 * quadtree.height;
-
-            return height;
-        }
-    }
-
-    quadtree.height_under_viewer
-}
-*/

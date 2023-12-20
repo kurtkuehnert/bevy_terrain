@@ -35,8 +35,6 @@ pub struct TerrainView;
 /// A terrain view describes the quality settings the corresponding terrain will be rendered with.
 #[derive(Clone, Component)]
 pub struct TerrainViewConfig {
-    /// A handle to the quadtree texture.
-    pub quadtree_handle: Handle<Image>,
     /// The current height under the viewer.
     pub height_under_viewer: f32,
     /// The count of nodes in x and y direction per quadtree layer.
@@ -60,7 +58,6 @@ pub struct TerrainViewConfig {
 impl Default for TerrainViewConfig {
     fn default() -> Self {
         Self {
-            quadtree_handle: Handle::<Image>::weak_from_u128(fastrand::u128(..)), // Todo: fix this awful hack
             height_under_viewer: 0.0,
             quadtree_size: 10,
             tile_count: 1000000,
