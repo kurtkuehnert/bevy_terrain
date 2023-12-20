@@ -1,14 +1,27 @@
 use crate::{
     terrain::Terrain,
     terrain_view::{TerrainView, TerrainViewComponents},
+    util::StaticBuffer,
 };
 use bevy::{
     prelude::*,
     render::{
-        render_asset::RenderAssets, render_resource::*, renderer::RenderDevice,
-        texture::FallbackImage, view::ExtractedView,
+        render_resource::{binding_types::*, *},
+        renderer::RenderDevice,
+        view::ExtractedView,
     },
 };
+use std::ops::Deref;
+
+pub(crate) fn create_culling_layout(device: &RenderDevice) -> BindGroupLayout {
+    device.create_bind_group_layout(
+        None,
+        &BindGroupLayoutEntries::single(
+            ShaderStages::COMPUTE,
+            uniform_buffer::<CullingUniform>(false), // culling data
+        ),
+    )
+}
 
 pub fn planes(view_projection: &Mat4) -> [Vec4; 5] {
     let row3 = view_projection.row(3);
@@ -25,20 +38,15 @@ pub fn planes(view_projection: &Mat4) -> [Vec4; 5] {
     planes
 }
 
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Default, AsBindGroup)]
-pub struct CullingData {
-    #[uniform(0)]
+#[derive(Default, ShaderType)]
+pub struct CullingUniform {
     world_position: Vec3,
-    #[uniform(0)]
     view_proj: Mat4,
-    #[uniform(0)]
     model: Mat4,
-    #[uniform(0)]
     planes: [Vec4; 5],
 }
 
-impl From<&ExtractedView> for CullingData {
+impl From<&ExtractedView> for CullingUniform {
     fn from(view: &ExtractedView) -> Self {
         let view_proj = view.projection * view.transform.compute_matrix().inverse();
         let world_position = view.transform.translation();
@@ -54,39 +62,33 @@ impl From<&ExtractedView> for CullingData {
 }
 
 #[derive(Component)]
-pub struct CullingBindGroup(PreparedBindGroup<()>);
+pub struct CullingBindGroup(BindGroup);
+
+impl Deref for CullingBindGroup {
+    type Target = BindGroup;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 impl CullingBindGroup {
-    fn new(
-        extracted_view: &ExtractedView,
-        device: &RenderDevice,
-        images: &RenderAssets<Image>,
-        fallback_image: &FallbackImage,
-    ) -> Self {
-        let layout = Self::layout(&device);
+    fn new(device: &RenderDevice, culling_uniform: CullingUniform) -> Self {
+        let culling_buffer =
+            StaticBuffer::<CullingUniform>::create(device, &culling_uniform, BufferUsages::UNIFORM);
 
-        let culling_data = CullingData::from(extracted_view);
-
-        let bind_group = culling_data
-            .as_bind_group(&layout, &device, &images, &fallback_image)
-            .ok()
-            .unwrap();
+        let bind_group = device.create_bind_group(
+            None,
+            &create_culling_layout(device),
+            &BindGroupEntries::single(&culling_buffer),
+        );
 
         Self(bind_group)
     }
 
-    pub(crate) fn bind_group(&self) -> &BindGroup {
-        &self.0.bind_group
-    }
-
-    pub(crate) fn layout(device: &RenderDevice) -> BindGroupLayout {
-        CullingData::bind_group_layout(device)
-    }
-
     pub(crate) fn prepare(
         device: Res<RenderDevice>,
-        images: Res<RenderAssets<Image>>,
-        fallback_image: Res<FallbackImage>,
         mut culling_bind_groups: ResMut<TerrainViewComponents<CullingBindGroup>>,
         terrain_query: Query<Entity, With<Terrain>>,
         view_query: Query<(Entity, &ExtractedView), With<TerrainView>>,
@@ -95,8 +97,7 @@ impl CullingBindGroup {
             // todo: save per view not per terrain
 
             for terrain in terrain_query.iter() {
-                let culling_bind_group =
-                    CullingBindGroup::new(extracted_view, &device, &images, &fallback_image);
+                let culling_bind_group = CullingBindGroup::new(&device, extracted_view.into());
 
                 culling_bind_groups.insert((terrain, view), culling_bind_group);
             }

@@ -15,7 +15,7 @@
 //! Both the node atlas and the quadtrees also have a corresponding GPU representation,
 //! which can be used to access the terrain data in shaders.
 
-use bevy::{prelude::*, render::render_resource::*};
+use bevy::render::render_resource::*;
 use bincode::{Decode, Encode};
 use std::{fmt, str::FromStr};
 
@@ -192,8 +192,6 @@ impl AttachmentConfig {
 /// An attachment of a [`NodeAtlas`](node_atlas::NodeAtlas).
 #[derive(Clone)]
 pub struct AtlasAttachment {
-    /// The handle of the attachment array texture.
-    pub(crate) handle: Handle<Image>,
     /// The name of the attachment.
     pub(crate) name: String,
     pub(crate) texture_size: u32,
@@ -205,11 +203,7 @@ pub struct AtlasAttachment {
 
 impl From<AttachmentConfig> for AtlasAttachment {
     fn from(config: AttachmentConfig) -> Self {
-        // Todo: fix this awful hack
-        let handle = Handle::<Image>::weak_from_u128(fastrand::u128(..));
-
         Self {
-            handle,
             name: config.name,
             texture_size: config.texture_size,
             border_size: config.border_size,

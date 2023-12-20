@@ -54,7 +54,7 @@ pub mod render;
 pub mod terrain;
 pub mod terrain_data;
 pub mod terrain_view;
-mod util;
+pub mod util;
 
 pub mod prelude {
     //! `use bevy_terrain::prelude::*;` to import common components, bundles, and plugins.
