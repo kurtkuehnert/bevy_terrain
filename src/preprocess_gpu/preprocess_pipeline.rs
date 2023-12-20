@@ -14,7 +14,6 @@ use crate::{
 use bevy::{
     prelude::*,
     render::{
-        render_asset::RenderAssets,
         render_graph::{self},
         render_resource::*,
         renderer::{RenderContext, RenderDevice},
@@ -145,8 +144,6 @@ impl render_graph::Node for TerrainPreprocessNode {
         let preprocess_data = world.resource::<TerrainComponents<GpuPreprocessor>>();
         let gpu_node_atlases = world.resource::<TerrainComponents<GpuNodeAtlas>>();
 
-        let images = world.resource::<RenderAssets<Image>>();
-
         let pipelines = &match TerrainPreprocessPipelineId::iter()
             .map(|id| {
                 pipeline_cache.get_compute_pipeline(preprocess_pipelines.pipelines[id as usize])
@@ -164,7 +161,7 @@ impl render_graph::Node for TerrainPreprocessNode {
             if !preprocess_data.processing_tasks.is_empty() {
                 let attachment = &gpu_node_atlas.attachments[0];
 
-                attachment.copy_nodes_to_write_section(context.command_encoder(), images);
+                attachment.copy_nodes_to_write_section(context.command_encoder());
 
                 let mut pass = context
                     .command_encoder()
@@ -208,9 +205,9 @@ impl render_graph::Node for TerrainPreprocessNode {
 
                 drop(pass);
 
-                attachment.copy_nodes_from_write_section(context.command_encoder(), images);
+                attachment.copy_nodes_from_write_section(context.command_encoder());
 
-                attachment.download_nodes(context.command_encoder(), images);
+                attachment.download_nodes(context.command_encoder());
 
                 println!(
                     "Ran preprocessing pipeline with {} nodes.",

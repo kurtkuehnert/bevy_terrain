@@ -1,15 +1,16 @@
-use crate::terrain::TerrainComponents;
-use crate::terrain_view::{TerrainView, TerrainViewComponents};
 use crate::{
     debug::DebugTerrain,
     render::{
-        culling_bind_group::CullingBindGroup,
+        culling_bind_group::{create_culling_layout, CullingBindGroup},
         shaders::{PREPARE_INDIRECT_SHADER, REFINE_TILES_SHADER},
-        terrain_bind_group::TerrainBindGroup,
-        terrain_view_data::{TerrainViewConfigUniform, TerrainViewData},
-        PREPARE_INDIRECT_LAYOUT, REFINE_TILES_LAYOUT,
+        terrain_bind_group::{create_terrain_layout, TerrainData},
+        terrain_view_bind_group::{
+            create_prepare_indirect_layout, create_refine_tiles_layout, TerrainViewConfigUniform,
+            TerrainViewData,
+        },
     },
-    terrain::Terrain,
+    terrain::{Terrain, TerrainComponents},
+    terrain_view::{TerrainView, TerrainViewComponents},
 };
 use bevy::{
     prelude::*,
@@ -107,11 +108,10 @@ impl FromWorld for TerrainComputePipelines {
     fn from_world(world: &mut World) -> Self {
         let device = world.resource::<RenderDevice>();
 
-        let prepare_indirect_layout =
-            device.create_bind_group_layout(None, &PREPARE_INDIRECT_LAYOUT);
-        let refine_tiles_layout = device.create_bind_group_layout(None, &REFINE_TILES_LAYOUT);
-        let culling_data_layout = CullingBindGroup::layout(device);
-        let terrain_layout = TerrainBindGroup::layout(device);
+        let prepare_indirect_layout = create_prepare_indirect_layout(device);
+        let refine_tiles_layout = create_refine_tiles_layout(device);
+        let culling_data_layout = create_culling_layout(device);
+        let terrain_layout = create_terrain_layout(device);
 
         let prepare_indirect_shader = PREPARE_INDIRECT_SHADER;
         let refine_tiles_shader = REFINE_TILES_SHADER;
@@ -210,13 +210,13 @@ impl TerrainComputeNode {
         pass: &mut ComputePass<'a>,
         pipelines: &'a [&'a ComputePipeline],
         view_data: &'a TerrainViewData,
-        terrain_data: &'a TerrainBindGroup,
+        terrain_data: &'a TerrainData,
         culling_bind_group: &'a CullingBindGroup,
         refinement_count: u32,
     ) {
-        pass.set_bind_group(0, culling_bind_group.bind_group(), &[]);
+        pass.set_bind_group(0, culling_bind_group, &[]);
         pass.set_bind_group(1, &view_data.refine_tiles_bind_group, &[]);
-        pass.set_bind_group(2, terrain_data.bind_group(), &[]);
+        pass.set_bind_group(2, &terrain_data.terrain_bind_group, &[]);
         pass.set_bind_group(3, &view_data.prepare_indirect_bind_group, &[]);
 
         pass.set_pipeline(pipelines[TerrainComputePipelineId::PrepareRoot as usize]);
@@ -254,7 +254,7 @@ impl render_graph::Node for TerrainComputeNode {
         let pipeline_cache = world.resource::<PipelineCache>();
         let view_config_uniforms =
             world.resource::<TerrainViewComponents<TerrainViewConfigUniform>>();
-        let terrain_data = world.resource::<TerrainComponents<TerrainBindGroup>>();
+        let terrain_data = world.resource::<TerrainComponents<TerrainData>>();
         let terrain_view_data = world.resource::<TerrainViewComponents<TerrainViewData>>();
         let culling_bind_groups = world.resource::<TerrainViewComponents<CullingBindGroup>>();
 
