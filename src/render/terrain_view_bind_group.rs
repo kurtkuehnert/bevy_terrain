@@ -1,5 +1,6 @@
 use crate::{
     terrain::Terrain,
+    terrain_data::gpu_quadtree::GpuQuadtree,
     terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
     util::StaticBuffer,
 };
@@ -10,7 +11,6 @@ use bevy::{
     },
     prelude::*,
     render::{
-        render_asset::RenderAssets,
         render_phase::{PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass},
         render_resource::{binding_types::*, *},
         renderer::{RenderDevice, RenderQueue},
@@ -38,7 +38,7 @@ pub(crate) fn create_refine_tiles_layout(device: &RenderDevice) -> BindGroupLayo
             ShaderStages::COMPUTE,
             (
                 uniform_buffer::<TerrainViewConfigUniform>(false), // terrain view config
-                texture_2d_array(TextureSampleType::Uint),         // quadtree
+                storage_buffer_sized(false, None),                 // quadtree
                 storage_buffer_sized(false, TILE_BUFFER_MIN_SIZE), // final tiles
                 storage_buffer_sized(false, TILE_BUFFER_MIN_SIZE), // temporary tiles
                 storage_buffer::<Parameters>(false),               // parameters
@@ -54,7 +54,7 @@ pub(crate) fn create_terrain_view_layout(device: &RenderDevice) -> BindGroupLayo
             ShaderStages::VERTEX_FRAGMENT,
             (
                 uniform_buffer::<TerrainViewConfigUniform>(false), // terrain view config
-                texture_2d_array(TextureSampleType::Uint),         // quadtree
+                storage_buffer_sized(false, None),                 // quadtree
                 storage_buffer_read_only_sized(false, TILE_BUFFER_MIN_SIZE), // tiles
             ),
         ),
@@ -125,8 +125,8 @@ pub struct TerrainViewData {
 impl TerrainViewData {
     fn new(
         device: &RenderDevice,
-        images: &RenderAssets<Image>,
         view_config: &TerrainViewConfig,
+        gpu_quadtree: &GpuQuadtree,
     ) -> Self {
         // Todo: figure out a better way of limiting the tile buffer size
         let tile_buffer_size = 32 + TILE_SIZE * view_config.tile_count as BufferAddress;
@@ -141,8 +141,6 @@ impl TerrainViewData {
         let final_tile_buffer =
             StaticBuffer::<()>::empty_sized(device, tile_buffer_size, BufferUsages::STORAGE);
 
-        let quadtree = images.get(&view_config.quadtree_handle).unwrap();
-
         let prepare_indirect_bind_group = device.create_bind_group(
             "prepare_indirect_bind_group",
             &create_prepare_indirect_layout(device),
@@ -153,7 +151,7 @@ impl TerrainViewData {
             &create_refine_tiles_layout(device),
             &BindGroupEntries::sequential((
                 &view_config_buffer,
-                &quadtree.texture_view,
+                &gpu_quadtree.quadtree_buffer,
                 &final_tile_buffer,
                 &temporary_tile_buffer,
                 &parameter_buffer,
@@ -164,7 +162,7 @@ impl TerrainViewData {
             &create_terrain_view_layout(device),
             &BindGroupEntries::sequential((
                 &view_config_buffer,
-                &quadtree.texture_view,
+                &gpu_quadtree.quadtree_buffer,
                 &final_tile_buffer,
             )),
         );
@@ -180,8 +178,8 @@ impl TerrainViewData {
 
     pub(crate) fn initialize(
         device: Res<RenderDevice>,
-        images: Res<RenderAssets<Image>>,
         mut terrain_view_data: ResMut<TerrainViewComponents<TerrainViewData>>,
+        gpu_quadtrees: Res<TerrainViewComponents<GpuQuadtree>>,
         view_configs: Extract<Res<TerrainViewComponents<TerrainViewConfig>>>,
         view_query: Extract<Query<Entity, With<TerrainView>>>,
         terrain_query: Extract<Query<Entity, Added<Terrain>>>,
@@ -189,10 +187,11 @@ impl TerrainViewData {
         for terrain in terrain_query.iter() {
             for view in view_query.iter() {
                 let view_config = view_configs.get(&(terrain, view)).unwrap();
+                let gpu_quadtree = gpu_quadtrees.get(&(terrain, view)).unwrap();
 
                 terrain_view_data.insert(
                     (terrain, view),
-                    TerrainViewData::new(&device, &images, view_config),
+                    TerrainViewData::new(&device, view_config, gpu_quadtree),
                 );
             }
         }

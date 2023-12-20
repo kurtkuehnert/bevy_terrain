@@ -44,10 +44,10 @@ impl FromWorld for TerrainPreprocessPipelines {
     fn from_world(world: &mut World) -> Self {
         let device = world.resource::<RenderDevice>();
 
-        let attachment_layout = create_attachment_layout(&device);
-        let split_tile_layout = create_split_tile_layout(&device);
-        let stitch_node_layout = create_stitch_node_layout(&device);
-        let downsample_layout = create_downsample_layout(&device);
+        let attachment_layout = create_attachment_layout(device);
+        let split_tile_layout = create_split_tile_layout(device);
+        let stitch_node_layout = create_stitch_node_layout(device);
+        let downsample_layout = create_downsample_layout(device);
 
         let mut preprocess_pipelines = TerrainPreprocessPipelines {
             attachment_layout,
@@ -60,7 +60,7 @@ impl FromWorld for TerrainPreprocessPipelines {
         world.resource_scope(|world: &mut World,mut pipelines: Mut<SpecializedComputePipelines<TerrainPreprocessPipelines>>| {
             let pipeline_cache = world.resource::<PipelineCache>();
             for id in TerrainPreprocessPipelineId::iter() {
-                preprocess_pipelines.pipelines.push(pipelines.specialize(&pipeline_cache, &preprocess_pipelines, id));
+                preprocess_pipelines.pipelines.push(pipelines.specialize(pipeline_cache, &preprocess_pipelines, id));
             }
         });
 

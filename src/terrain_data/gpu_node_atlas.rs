@@ -1,12 +1,10 @@
-use crate::terrain_data::node_atlas::ReadBackNode;
 use crate::{
     terrain::{Terrain, TerrainComponents},
     terrain_data::{
         gpu_atlas_attachment::GpuAtlasAttachment,
-        node_atlas::{LoadingNode, NodeAtlas},
+        node_atlas::{LoadingNode, NodeAtlas, ReadBackNode},
     },
 };
-use bevy::tasks::Task;
 use bevy::{
     prelude::*,
     render::{
@@ -15,10 +13,13 @@ use bevy::{
         renderer::{RenderDevice, RenderQueue},
         Extract, MainWorld,
     },
+    tasks::Task,
 };
 use itertools::Itertools;
-use std::mem;
-use std::sync::{Arc, Mutex};
+use std::{
+    mem,
+    sync::{Arc, Mutex},
+};
 
 /// Stores the GPU representation of the [`NodeAtlas`] (array textures)
 /// alongside the data to update it.

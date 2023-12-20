@@ -3,9 +3,7 @@ use crate::preprocess::R16Image;
 use crate::preprocess_gpu::gpu_preprocessor::NodeMeta;
 use crate::{
     terrain::{Terrain, TerrainConfig},
-    terrain_data::{
-        quadtree::Quadtree, AtlasAttachment, AtlasIndex, AttachmentIndex, NodeCoordinate,
-    },
+    terrain_data::{quadtree::Quadtree, AtlasAttachment, AttachmentIndex, NodeCoordinate},
     terrain_view::{TerrainView, TerrainViewComponents},
 };
 use bevy::tasks::futures_lite::future;
@@ -23,7 +21,7 @@ use std::sync::{Arc, Mutex};
 #[derive(Clone)]
 pub struct LoadingNode {
     /// The atlas index of the node.
-    pub(crate) atlas_index: AtlasIndex,
+    pub(crate) atlas_index: u32,
     // Todo: replace with array or vec of options
     /// Stores all of the nodes attachments.
     pub(crate) attachments: HashMap<AttachmentIndex, Handle<Image>>,
@@ -72,7 +70,7 @@ pub(crate) struct AtlasNode {
     /// Indicates whether or not the node is loading or loaded.
     pub(crate) state: LoadingState,
     /// The index of the node inside the atlas.
-    pub(crate) atlas_index: AtlasIndex,
+    pub(crate) atlas_index: u32,
     /// The count of [`Quadtrees`] that have requested this node.
     requests: u32,
 }
@@ -80,7 +78,7 @@ pub(crate) struct AtlasNode {
 /// A node which is not currently requested by any [`Quadtree`].
 struct UnusedNode {
     node_coordinate: NodeCoordinate,
-    atlas_index: AtlasIndex,
+    atlas_index: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -123,14 +121,14 @@ impl ReadBackNode {
 /// A sparse storage of all terrain attachments, which streams data in and out of memory
 /// depending on the decisions of the corresponding [`Quadtree`]s.
 ///
-/// A node is considered present and assigned an [`AtlasIndex`] as soon as it is
+/// A node is considered present and assigned an [`u32`] as soon as it is
 /// requested by any quadtree. Then the node atlas will start loading all of its attachments
 /// by storing the [`NodeCoordinate`] (for one frame) in `load_events` for which
 /// attachment-loading-systems can listen.
 /// Nodes that are not being used by any quadtree anymore are cached (LRU),
 /// until new atlas indices are required.
 ///
-/// The [`AtlasIndex`] can be used for accessing the attached data in systems by the CPU
+/// The [`u32`] can be used for accessing the attached data in systems by the CPU
 /// and in shaders by the GPU.
 #[derive(Component)]
 pub struct NodeAtlas {
@@ -147,7 +145,7 @@ pub struct NodeAtlas {
     /// Stores the currently loading nodes.
     pub(crate) loading_nodes: HashMap<NodeCoordinate, LoadingNode>,
     /// The amount of nodes the can be loaded simultaneously in the node atlas.
-    pub(crate) size: AtlasIndex,
+    pub(crate) size: u32,
     /// Stores the states of all present nodes.
     pub(crate) nodes: HashMap<NodeCoordinate, AtlasNode>,
     pub(crate) existing_nodes: HashSet<NodeCoordinate>,
@@ -166,7 +164,7 @@ impl NodeAtlas {
     /// * `size` - The amount of nodes the can be loaded simultaneously in the node atlas.
     /// * `attachments` - The atlas attachments of the terrain.
     pub fn new(
-        size: u16,
+        size: u32,
         attachments: Vec<AtlasAttachment>,
         existing_nodes: HashSet<NodeCoordinate>,
     ) -> Self {
@@ -198,13 +196,13 @@ impl NodeAtlas {
     /// Creates a new quadtree from a terrain config.
     pub fn from_config(config: &TerrainConfig) -> Self {
         Self::new(
-            config.node_atlas_size as u16,
+            config.node_atlas_size,
             config.attachments.clone(),
             config.nodes.clone(),
         )
     }
 
-    pub fn get_or_allocate(&mut self, node_coordinate: NodeCoordinate) -> AtlasIndex {
+    pub fn get_or_allocate(&mut self, node_coordinate: NodeCoordinate) -> u32 {
         let NodeAtlas {
             unused_nodes,
             nodes,
@@ -270,7 +268,7 @@ impl NodeAtlas {
             });
 
         saving_nodes.retain_mut(|task| {
-            if let Some(_) = future::block_on(future::poll_once(task)) {
+            if future::block_on(future::poll_once(task)).is_some() {
                 *slots += 1;
                 false
             } else {

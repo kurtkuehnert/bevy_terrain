@@ -1,7 +1,7 @@
 #define_import_path bevy_terrain::functions
 
 #import bevy_terrain::bindings::{config, view_config, tiles, quadtree}
-#import bevy_terrain::types::{Tile, NodeLookup, Morph, Blend, S2Coordinate}
+#import bevy_terrain::types::{Tile, Quadtree, NodeLookup, Morph, Blend, S2Coordinate}
 #import bevy_pbr::mesh_view_bindings::view
 #import bevy_pbr::mesh_bindings::mesh
 #import bevy_render::maths::affine_to_square
@@ -312,13 +312,17 @@ fn lookup_node(local_position: vec3<f32>, lod: u32) -> NodeLookup {
 #else
     let quadtree_lod        = min(lod, config.lod_count - 1u);
 #endif
-    let quadtree_index      = s2.side * config.lod_count + quadtree_lod;
+    let quadtree_side       = s2.side;
     let quadtree_coordinate = vec2<u32>(node_coordinate(s2.st, quadtree_lod)) % view_config.quadtree_size;
+    let quadtree_index      = ((quadtree_side          * config.lod_count +
+                                quadtree_lod)          * view_config.quadtree_size +
+                                quadtree_coordinate.x) * view_config.quadtree_size +
+                                quadtree_coordinate.y;
 
-    let lookup = textureLoad(quadtree, quadtree_coordinate, quadtree_index, 0);
+    let entry = quadtree.data[quadtree_index];
 
-    let atlas_lod        = lookup.y;
-    let atlas_index      = lookup.x;
+    let atlas_lod        = entry.atlas_lod;
+    let atlas_index      = entry.atlas_index;
     let atlas_coordinate = node_coordinate(s2.st, atlas_lod) % 1.0;
 
     return NodeLookup(atlas_index, atlas_lod, atlas_coordinate);
