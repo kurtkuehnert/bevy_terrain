@@ -2,9 +2,10 @@ use crate::{
     debug::DebugTerrain,
     render::{
         shaders::DEFAULT_SHADER,
-        terrain_bind_group::{SetTerrainBindGroup, TerrainBindGroup},
-        terrain_view_data::{DrawTerrainCommand, SetTerrainViewBindGroup},
-        TERRAIN_VIEW_LAYOUT,
+        terrain_bind_group::{create_terrain_layout, SetTerrainBindGroup},
+        terrain_view_bind_group::{
+            create_terrain_view_layout, DrawTerrainCommand, SetTerrainViewBindGroup,
+        },
     },
 };
 use bevy::{
@@ -241,8 +242,8 @@ impl<M: Material> FromWorld for TerrainRenderPipeline<M> {
         let view_layout_multisampled = mesh_pipeline
             .get_view_layout(MeshPipelineViewLayoutKey::MULTISAMPLED)
             .clone();
-        let terrain_layout = TerrainBindGroup::layout(device);
-        let terrain_view_layout = device.create_bind_group_layout(None, &TERRAIN_VIEW_LAYOUT);
+        let terrain_layout = create_terrain_layout(device);
+        let terrain_view_layout = create_terrain_view_layout(device);
         let material_layout = M::bind_group_layout(device);
 
         let vertex_shader = match M::vertex_shader() {

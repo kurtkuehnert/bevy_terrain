@@ -16,6 +16,7 @@ use bevy::{
         Extract, MainWorld,
     },
 };
+use itertools::Itertools;
 use std::mem;
 use std::sync::{Arc, Mutex};
 
@@ -34,19 +35,12 @@ pub struct GpuNodeAtlas {
 
 impl GpuNodeAtlas {
     /// Creates a new gpu node atlas and initializes its attachment textures.
-    fn new(
-        device: &RenderDevice,
-        queue: &RenderQueue,
-        images: &mut RenderAssets<Image>,
-        node_atlas: &NodeAtlas,
-    ) -> Self {
+    fn new(device: &RenderDevice, node_atlas: &NodeAtlas) -> Self {
         let attachments = node_atlas
             .attachments
             .iter()
-            .map(|attachment| {
-                GpuAtlasAttachment::create(attachment, device, queue, images, node_atlas.size)
-            })
-            .collect::<Vec<_>>();
+            .map(|attachment| GpuAtlasAttachment::create(attachment, device, node_atlas.size))
+            .collect_vec();
 
         Self {
             attachments,
@@ -81,16 +75,11 @@ impl GpuNodeAtlas {
     /// Initializes the [`GpuNodeAtlas`] of newly created terrains.
     pub(crate) fn initialize(
         device: Res<RenderDevice>,
-        queue: Res<RenderQueue>,
-        mut images: ResMut<RenderAssets<Image>>,
         mut gpu_node_atlases: ResMut<TerrainComponents<GpuNodeAtlas>>,
         mut terrain_query: Extract<Query<(Entity, &NodeAtlas), Added<Terrain>>>,
     ) {
         for (terrain, node_atlas) in terrain_query.iter_mut() {
-            gpu_node_atlases.insert(
-                terrain,
-                GpuNodeAtlas::new(&device, &queue, &mut images, node_atlas),
-            );
+            gpu_node_atlases.insert(terrain, GpuNodeAtlas::new(&device, node_atlas));
         }
     }
 
