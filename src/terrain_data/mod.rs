@@ -60,7 +60,7 @@ impl FromStr for NodeCoordinate {
     type Err = std::num::ParseIntError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut parts = s.split("_");
+        let mut parts = s.split('_');
 
         Ok(Self {
             side: parts.next().unwrap().parse()?,
@@ -80,11 +80,8 @@ impl NodeCoordinate {
     };
 }
 
-/// Identifier of a node (and its attachments) inside the node atlas.
-pub type AtlasIndex = u16; // Todo: change to u32
-pub const INVALID_ATLAS_INDEX: AtlasIndex = AtlasIndex::MAX;
-
-pub const INVALID_LOD: u16 = u16::MAX;
+pub const INVALID_ATLAS_INDEX: u32 = u32::MAX;
+pub const INVALID_LOD: u32 = u32::MAX;
 
 /// Identifier of an attachment inside the node atlas.
 pub type AttachmentIndex = usize;

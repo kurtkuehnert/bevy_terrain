@@ -117,6 +117,7 @@ impl TerrainData {
         Self { terrain_bind_group }
     }
 
+    #[allow(clippy::type_complexity)]
     pub(crate) fn initialize(
         device: Res<RenderDevice>,
         fallback_image: Res<FallbackImage>,

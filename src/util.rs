@@ -45,7 +45,7 @@ pub struct StaticBuffer<T> {
     _marker: PhantomData<T>,
 }
 
-impl StaticBuffer<()> {
+impl<T> StaticBuffer<T> {
     pub fn empty_sized(device: &RenderDevice, size: BufferAddress, usage: BufferUsages) -> Self {
         let buffer = device.create_buffer(&BufferDescriptor {
             label: None,
@@ -57,8 +57,12 @@ impl StaticBuffer<()> {
         Self {
             buffer,
             scratch: Scratch::None,
-            _marker: PhantomData::default(),
+            _marker: PhantomData,
         }
+    }
+
+    pub fn update_bytes(&self, queue: &RenderQueue, bytes: &[u8]) {
+        queue.write_buffer(&self.buffer, 0, bytes);
     }
 }
 
@@ -74,7 +78,7 @@ impl<T: ShaderType + Default> StaticBuffer<T> {
         Self {
             buffer,
             scratch: Scratch::new(usage),
-            _marker: PhantomData::default(),
+            _marker: PhantomData,
         }
     }
 }
@@ -93,7 +97,7 @@ impl<T: ShaderType + WriteInto> StaticBuffer<T> {
         Self {
             buffer,
             scratch,
-            _marker: PhantomData::default(),
+            _marker: PhantomData,
         }
     }
 

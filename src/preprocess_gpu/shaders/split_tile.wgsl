@@ -2,7 +2,7 @@
 
 struct NodeMeta {
     node_coordinate: NodeCoordinate,
-    @size(16) atlas_index: u32,
+    @size(16) atlas_index: AtlasIndex,
 }
 
 struct SplitTileData {

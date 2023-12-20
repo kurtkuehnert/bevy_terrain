@@ -38,7 +38,7 @@ fn split(
     let atlas_index = node_atlas.get_or_allocate(node_coordinate);
 
     let node = NodeMeta {
-        atlas_index: atlas_index as u32,
+        atlas_index,
         node_coordinate,
     };
 
@@ -57,7 +57,7 @@ fn stitch(
     node_height: u32,
 ) -> PreprocessTask {
     let node_coordinate = NodeCoordinate::new(0, lod, x, y);
-    let atlas_index = node_atlas.get_or_allocate(node_coordinate) as u32;
+    let atlas_index = node_atlas.get_or_allocate(node_coordinate);
 
     let node = NodeMeta {
         atlas_index,
@@ -96,7 +96,7 @@ fn stitch(
         {
             u32::MAX
         } else {
-            node_atlas.get_or_allocate(neighbour_node_coordinate) as u32
+            node_atlas.get_or_allocate(neighbour_node_coordinate)
         };
 
         neighbour_nodes[index] = NodeMeta {
@@ -116,7 +116,7 @@ fn downsample(node_atlas: &mut NodeAtlas, lod: u32, x: u32, y: u32) -> Preproces
     let atlas_index = node_atlas.get_or_allocate(node_coordinate);
 
     let node = NodeMeta {
-        atlas_index: atlas_index as u32,
+        atlas_index,
         node_coordinate,
     };
 
@@ -125,7 +125,7 @@ fn downsample(node_atlas: &mut NodeAtlas, lod: u32, x: u32, y: u32) -> Preproces
     for index in 0..4 {
         let parent_node_coordinate =
             NodeCoordinate::new(0, lod - 1, 2 * x + index % 2, 2 * y + index / 2);
-        let parent_atlas_index = node_atlas.get_or_allocate(parent_node_coordinate) as u32;
+        let parent_atlas_index = node_atlas.get_or_allocate(parent_node_coordinate);
 
         parent_nodes[index as usize] = NodeMeta {
             node_coordinate: parent_node_coordinate,
@@ -139,7 +139,7 @@ fn downsample(node_atlas: &mut NodeAtlas, lod: u32, x: u32, y: u32) -> Preproces
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Default)]
 pub struct Preprocessor {
     pub(crate) path: String,
     pub(crate) tile_handle: Option<Handle<Image>>,
@@ -150,16 +150,6 @@ pub struct Preprocessor {
 }
 
 impl Preprocessor {
-    pub fn new() -> Self {
-        Self {
-            path: default(),
-            tile_handle: None,
-            task_queue: default(),
-            ready_tasks: default(),
-            start_time: None,
-        }
-    }
-
     pub fn preprocess_tile(
         &mut self,
         path: String,
