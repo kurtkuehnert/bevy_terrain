@@ -1,9 +1,6 @@
 use crate::{
     terrain::Terrain,
-    terrain_data::{
-        quadtree::{Quadtree, QuadtreeEntry},
-        SIDE_COUNT,
-    },
+    terrain_data::quadtree::{Quadtree, QuadtreeEntry},
     terrain_view::{TerrainView, TerrainViewComponents},
     util::StaticBuffer,
 };
@@ -17,7 +14,7 @@ use bevy::{
     },
 };
 use ndarray::Array4;
-use std::mem;
+use std::{iter, mem};
 
 /// Stores the GPU representation of the [`Quadtree`] (array texture)
 /// alongside the data to update it.
@@ -32,14 +29,9 @@ pub struct GpuQuadtree {
 
 impl GpuQuadtree {
     fn new(device: &RenderDevice, quadtree: &Quadtree) -> Self {
-        let size = quadtree.quadtree_size
-            * quadtree.quadtree_size
-            * quadtree.lod_count
-            * SIDE_COUNT
-            * mem::size_of::<QuadtreeEntry>() as u32;
         let quadtree_buffer = StaticBuffer::empty_sized(
             device,
-            size as BufferAddress,
+            (quadtree.data.len() * mem::size_of::<QuadtreeEntry>()) as BufferAddress,
             BufferUsages::STORAGE | BufferUsages::COPY_DST,
         );
 
@@ -57,12 +49,10 @@ impl GpuQuadtree {
         view_query: Extract<Query<Entity, With<TerrainView>>>,
         terrain_query: Extract<Query<Entity, Added<Terrain>>>,
     ) {
-        for terrain in terrain_query.iter() {
-            for view in view_query.iter() {
-                let quadtree = quadtrees.get(&(terrain, view)).unwrap();
+        for terrain_view in iter::zip(&terrain_query, &view_query) {
+            let quadtree = quadtrees.get(&terrain_view).unwrap();
 
-                gpu_quadtrees.insert((terrain, view), GpuQuadtree::new(&device, quadtree));
-            }
+            gpu_quadtrees.insert(terrain_view, GpuQuadtree::new(&device, quadtree));
         }
     }
 
@@ -73,13 +63,11 @@ impl GpuQuadtree {
         view_query: Extract<Query<Entity, With<TerrainView>>>,
         terrain_query: Extract<Query<Entity, With<Terrain>>>,
     ) {
-        for terrain in terrain_query.iter() {
-            for view in view_query.iter() {
-                let quadtree = quadtrees.get(&(terrain, view)).unwrap();
-                let gpu_quadtree = gpu_quadtrees.get_mut(&(terrain, view)).unwrap();
+        for terrain_view in iter::zip(&terrain_query, &view_query) {
+            let quadtree = quadtrees.get(&terrain_view).unwrap();
+            let gpu_quadtree = gpu_quadtrees.get_mut(&terrain_view).unwrap();
 
-                gpu_quadtree.data = quadtree.data.clone();
-            }
+            gpu_quadtree.data = quadtree.data.clone();
         }
     }
 
@@ -90,13 +78,11 @@ impl GpuQuadtree {
         view_query: Query<Entity, With<TerrainView>>,
         terrain_query: Query<Entity, With<Terrain>>,
     ) {
-        for terrain in terrain_query.iter() {
-            for view in view_query.iter() {
-                let gpu_quadtree = gpu_quadtrees.get_mut(&(terrain, view)).unwrap();
+        for terrain_view in iter::zip(&terrain_query, &view_query) {
+            let gpu_quadtree = gpu_quadtrees.get_mut(&terrain_view).unwrap();
 
-                let data = cast_slice(gpu_quadtree.data.as_slice().unwrap());
-                gpu_quadtree.quadtree_buffer.update_bytes(&queue, data);
-            }
+            let data = cast_slice(gpu_quadtree.data.as_slice().unwrap());
+            gpu_quadtree.quadtree_buffer.update_bytes(&queue, data);
         }
     }
 }

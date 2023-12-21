@@ -3,7 +3,7 @@ use crate::{
     preprocess::TileConfig,
     terrain::Terrain,
     terrain_data::{
-        node_atlas::{NodeAtlas, NodeMeta},
+        node_atlas::{AtlasNode, NodeAtlas},
         NodeCoordinate,
     },
 };
@@ -18,8 +18,8 @@ use std::{collections::VecDeque, ops::DerefMut, time::Instant};
 #[derive(Clone)]
 pub(crate) enum PreprocessTaskType {
     Split { tile: Handle<Image> },
-    Stitch { neighbour_nodes: [NodeMeta; 8] },
-    Downsample { parent_nodes: [NodeMeta; 4] },
+    Stitch { neighbour_nodes: [AtlasNode; 8] },
+    Downsample { parent_nodes: [AtlasNode; 4] },
     Barrier,
 }
 
@@ -28,7 +28,7 @@ pub(crate) enum PreprocessTaskType {
 #[derive(Clone)]
 pub(crate) struct PreprocessTask {
     pub(crate) task_type: PreprocessTaskType,
-    pub(crate) node: NodeMeta,
+    pub(crate) node: AtlasNode,
 }
 
 fn split(
@@ -41,7 +41,7 @@ fn split(
     let node_coordinate = NodeCoordinate::new(0, lod, x, y);
     let atlas_index = node_atlas.get_or_allocate(node_coordinate);
 
-    let node = NodeMeta {
+    let node = AtlasNode {
         atlas_index,
         coordinate: node_coordinate,
     };
@@ -63,7 +63,7 @@ fn stitch(
     let node_coordinate = NodeCoordinate::new(0, lod, x, y);
     let atlas_index = node_atlas.get_or_allocate(node_coordinate);
 
-    let node = NodeMeta {
+    let node = AtlasNode {
         atlas_index,
         coordinate: node_coordinate,
     };
@@ -81,7 +81,7 @@ fn stitch(
 
     let node_position = IVec2::new(x as i32, y as i32);
 
-    let mut neighbour_nodes = [NodeMeta::default(); 8];
+    let mut neighbour_nodes = [AtlasNode::default(); 8];
 
     for (index, &offset) in offsets.iter().enumerate() {
         let neighbour_node_position = node_position + offset;
@@ -103,7 +103,7 @@ fn stitch(
             node_atlas.get_or_allocate(neighbour_node_coordinate)
         };
 
-        neighbour_nodes[index] = NodeMeta {
+        neighbour_nodes[index] = AtlasNode {
             coordinate: neighbour_node_coordinate,
             atlas_index: neighbour_atlas_index,
         };
@@ -119,19 +119,19 @@ fn downsample(node_atlas: &mut NodeAtlas, lod: u32, x: u32, y: u32) -> Preproces
     let node_coordinate = NodeCoordinate::new(0, lod, x, y);
     let atlas_index = node_atlas.get_or_allocate(node_coordinate);
 
-    let node = NodeMeta {
+    let node = AtlasNode {
         atlas_index,
         coordinate: node_coordinate,
     };
 
-    let mut parent_nodes = [NodeMeta::default(); 4];
+    let mut parent_nodes = [AtlasNode::default(); 4];
 
     for index in 0..4 {
         let parent_node_coordinate =
             NodeCoordinate::new(0, lod - 1, 2 * x + index % 2, 2 * y + index / 2);
         let parent_atlas_index = node_atlas.get_or_allocate(parent_node_coordinate);
 
-        parent_nodes[index as usize] = NodeMeta {
+        parent_nodes[index as usize] = AtlasNode {
             coordinate: parent_node_coordinate,
             atlas_index: parent_atlas_index,
         };
