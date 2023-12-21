@@ -1,7 +1,11 @@
 use crate::{
-    formats::tc::save_node_config, preprocess::TileConfig,
-    preprocess_gpu::gpu_preprocessor::NodeMeta, terrain::Terrain,
-    terrain_data::node_atlas::NodeAtlas, terrain_data::NodeCoordinate,
+    formats::tc::save_node_config,
+    preprocess::TileConfig,
+    terrain::Terrain,
+    terrain_data::{
+        node_atlas::{NodeAtlas, NodeMeta},
+        NodeCoordinate,
+    },
 };
 use bevy::{
     asset::LoadState,

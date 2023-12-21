@@ -1,5 +1,4 @@
 use crate::{
-    attachment_loader::{finish_loading_attachment_from_disk, start_loading_attachment_from_disk},
     formats::{tc::load_node_config, TDFPlugin},
     preprocess::BaseConfig,
     render::{
@@ -58,12 +57,7 @@ impl TerrainPluginConfig {
         let leaf_node_size = (self.base.texture_size - 2 * self.base.border_size) as f32;
         let leaf_node_count = side_length / leaf_node_size;
 
-        let attachments = self
-            .attachments
-            .clone()
-            .into_iter()
-            .map(AttachmentConfig::into)
-            .collect();
+        let attachments = self.attachments.clone();
 
         let nodes = load_node_config(&path);
 
@@ -98,12 +92,9 @@ impl Plugin for TerrainPlugin {
         .add_systems(
             Last,
             (
-                finish_loading_attachment_from_disk.before(update_node_atlas),
                 compute_quadtree_request.before(update_node_atlas),
                 update_node_atlas,
                 adjust_quadtree.after(update_node_atlas),
-                start_loading_attachment_from_disk.after(update_node_atlas),
-                // update_height_under_viewer.after(adjust_quadtree),
             ),
         );
 

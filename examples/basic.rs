@@ -44,21 +44,6 @@ fn setup(
     mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
 ) {
-    let mut loader = AttachmentFromDiskLoader::new(LOD_COUNT, PATH.to_string());
-    loader.add_base_attachment(
-        &plugin_config,
-        TileConfig {
-            side: 0,
-            path: format!("assets/{PATH}/source/height.png"),
-            size: TILE_SIZE,
-            file_format: TILE_FORMAT,
-        },
-    );
-
-    // Preprocesses the terrain data.
-    // Todo: Should be commented out after the first run.
-    // loader.preprocess();
-
     // Configure all the important properties of the terrain, as well as its attachments.
     let config = plugin_config.configure_terrain(
         TERRAIN_SIZE,
@@ -83,7 +68,6 @@ fn setup(
     let terrain = commands
         .spawn((
             TerrainBundle::new(config.clone(), Vec3::new(20.0, -30.0, -100.0), TERRAIN_SIZE),
-            loader,
             materials.add(TerrainMaterial {}),
         ))
         .id();

@@ -25,7 +25,7 @@ use std::mem;
 /// The data is synchronized each frame by copying it from the [`Quadtree`] to the texture.
 #[derive(Component)]
 pub struct GpuQuadtree {
-    pub(crate) quadtree_buffer: StaticBuffer<Vec<QuadtreeEntry>>,
+    pub(crate) quadtree_buffer: StaticBuffer<()>,
     /// The current cpu quadtree data. This is synced each frame with the quadtree data.
     data: Array4<QuadtreeEntry>,
 }
@@ -47,12 +47,6 @@ impl GpuQuadtree {
             quadtree_buffer,
             data: default(),
         }
-    }
-
-    fn update(&self, queue: &RenderQueue) {
-        let data = cast_slice(self.data.as_slice().unwrap());
-
-        self.quadtree_buffer.update_bytes(queue, data);
     }
 
     /// Initializes the [`GpuQuadtree`] of newly created terrains.
@@ -84,8 +78,6 @@ impl GpuQuadtree {
                 let quadtree = quadtrees.get(&(terrain, view)).unwrap();
                 let gpu_quadtree = gpu_quadtrees.get_mut(&(terrain, view)).unwrap();
 
-                // Todo: enable this again once mutable access to the main world in extract is less painful
-                // mem::swap(&mut gpu_quadtree.data, &mut gpu_gpu_quadtree.data);
                 gpu_quadtree.data = quadtree.data.clone();
             }
         }
@@ -101,7 +93,9 @@ impl GpuQuadtree {
         for terrain in terrain_query.iter() {
             for view in view_query.iter() {
                 let gpu_quadtree = gpu_quadtrees.get_mut(&(terrain, view)).unwrap();
-                gpu_quadtree.update(&queue);
+
+                let data = cast_slice(gpu_quadtree.data.as_slice().unwrap());
+                gpu_quadtree.quadtree_buffer.update_bytes(&queue, data);
             }
         }
     }

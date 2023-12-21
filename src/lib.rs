@@ -43,7 +43,6 @@
 //!
 //! [^note]: Some of these claims are not yet fully implemented.
 
-pub mod attachment_loader;
 pub mod bundle;
 pub mod debug;
 pub mod formats;
@@ -60,7 +59,6 @@ pub mod prelude {
     //! `use bevy_terrain::prelude::*;` to import common components, bundles, and plugins.
     // #[doc(hidden)]
     pub use crate::{
-        attachment_loader::AttachmentFromDiskLoader,
         bundle::TerrainBundle,
         debug::{camera::DebugCamera, TerrainDebugPlugin},
         plugin::{TerrainPlugin, TerrainPluginConfig},

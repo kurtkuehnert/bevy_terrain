@@ -1,6 +1,6 @@
 //! Types for configuring terrains.
 
-use crate::terrain_data::{AtlasAttachment, NodeCoordinate};
+use crate::terrain_data::{AttachmentConfig, NodeCoordinate};
 use bevy::{
     prelude::*,
     render::extract_component::ExtractComponent,
@@ -55,6 +55,6 @@ pub struct TerrainConfig {
     /// The path to the terrain folder inside the assets directory.
     pub path: String,
     /// The attachments of the terrain.
-    pub attachments: Vec<AtlasAttachment>,
+    pub attachments: Vec<AttachmentConfig>,
     pub nodes: HashSet<NodeCoordinate>,
 }
