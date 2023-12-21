@@ -283,6 +283,7 @@ impl render_graph::Node for TerrainComputeNode {
 
         for terrain in self.terrain_query.iter_manual(world) {
             let terrain_data = terrain_data.get(&terrain).unwrap();
+
             for view in self.view_query.iter_manual(world) {
                 let view_config = view_config_uniforms.get(&(terrain, view)).unwrap();
                 let view_data = terrain_view_data.get(&(terrain, view)).unwrap();

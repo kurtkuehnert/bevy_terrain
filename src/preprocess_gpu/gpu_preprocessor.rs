@@ -1,7 +1,7 @@
 use crate::{
     preprocess_gpu::preprocessor::{PreprocessTask, PreprocessTaskType, Preprocessor},
     terrain::{Terrain, TerrainComponents},
-    terrain_data::{gpu_node_atlas::GpuNodeAtlas, node_atlas::NodeMeta},
+    terrain_data::{gpu_node_atlas::GpuNodeAtlas, node_atlas::AtlasNode},
 };
 use bevy::{
     prelude::*,
@@ -21,21 +21,21 @@ pub(crate) struct ProcessingTask {
 
 #[derive(Clone, Debug, ShaderType)]
 pub(crate) struct SplitTileData {
-    pub(crate) node_meta: NodeMeta,
+    pub(crate) node: AtlasNode,
     pub(crate) node_index: u32,
 }
 
 #[derive(Clone, Debug, ShaderType)]
 struct StitchNodeData {
-    node: NodeMeta,
-    neighbour_nodes: [NodeMeta; 8],
+    node: AtlasNode,
+    neighbour_nodes: [AtlasNode; 8],
     node_index: u32,
 }
 
 #[derive(Clone, Debug, ShaderType)]
 struct DownsampleData {
-    node: NodeMeta,
-    parent_nodes: [NodeMeta; 4],
+    node: AtlasNode,
+    parent_nodes: [AtlasNode; 4],
     node_index: u32,
 }
 
@@ -126,9 +126,9 @@ impl GpuPreprocessor {
             let attachment = &mut gpu_node_atlas.attachments[0];
 
             while !gpu_preprocessor.ready_tasks.is_empty() {
-                let node_meta = gpu_preprocessor.ready_tasks.back().unwrap().node;
+                let node = gpu_preprocessor.ready_tasks.back().unwrap().node;
 
-                if let Some(section_index) = attachment.reserve_write_slot(node_meta) {
+                if let Some(section_index) = attachment.reserve_write_slot(node) {
                     let task = gpu_preprocessor.ready_tasks.pop_back().unwrap();
 
                     let bind_group = match &task.task_type {
@@ -136,7 +136,7 @@ impl GpuPreprocessor {
                             let tile = images.get(tile).unwrap();
 
                             let split_tile_data = SplitTileData {
-                                node_meta: task.node,
+                                node: task.node,
                                 node_index: section_index,
                             };
 

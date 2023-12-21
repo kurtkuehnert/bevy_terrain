@@ -16,16 +16,10 @@ use bevy::{
 };
 use image::io::Reader;
 use itertools::Itertools;
-use std::{
-    collections::VecDeque,
-    mem,
-    ops::DerefMut,
-    sync::{Arc, Mutex},
-};
+use std::{collections::VecDeque, mem};
 
-// Todo: find better name (AtlasNode?)
 #[derive(Copy, Clone, Debug, Default, ShaderType)]
-pub(crate) struct NodeMeta {
+pub(crate) struct AtlasNode {
     pub(crate) coordinate: NodeCoordinate,
     #[size(16)]
     pub(crate) atlas_index: u32,
@@ -33,15 +27,15 @@ pub(crate) struct NodeMeta {
 
 #[derive(Clone, Debug)]
 pub(crate) struct NodeWithData {
-    pub(crate) meta: NodeMeta,
-    pub(crate) data: Vec<u16>,
+    pub(crate) node: AtlasNode,
+    pub(crate) data: AttachmentData,
     pub(crate) texture_size: u32,
 }
 
 impl NodeWithData {
-    pub(crate) fn start_saving(self, path: String) -> Task<NodeMeta> {
+    pub(crate) fn start_saving(self, path: String) -> Task<AtlasNode> {
         AsyncComputeTaskPool::get().spawn(async move {
-            let path = self.meta.coordinate.path(&path, "png");
+            let path = self.node.coordinate.path(&path, "png");
 
             let image =
                 R16Image::from_raw(self.texture_size, self.texture_size, self.data).unwrap();
@@ -50,11 +44,11 @@ impl NodeWithData {
 
             println!("Finished saving node: {path}");
 
-            self.meta
+            self.node
         })
     }
 
-    pub(crate) fn start_loading(node: NodeMeta, path: String) -> Task<Self> {
+    pub(crate) fn start_loading(node: AtlasNode, path: String) -> Task<Self> {
         AsyncComputeTaskPool::get().spawn(async move {
             let path = node.coordinate.path(&path, "png");
 
@@ -65,7 +59,7 @@ impl NodeWithData {
             let data = image.into_raw();
 
             Self {
-                meta: node,
+                node,
                 data,
                 texture_size,
             }
@@ -77,41 +71,39 @@ type AttachmentData = Vec<u16>;
 
 /// An attachment of a [`NodeAtlas`].
 pub struct AtlasAttachment {
-    /// The name of the attachment.
     pub(crate) name: String,
     pub(crate) path: String,
     pub(crate) texture_size: u32,
     pub(crate) center_size: u32,
     pub(crate) border_size: u32,
     pub(crate) mip_level_count: u32,
-    /// The format of the attachment.
     pub(crate) format: AttachmentFormat,
     pub(crate) data: Vec<AttachmentData>,
 
-    pub(crate) saving_nodes: Vec<Task<NodeMeta>>,
+    pub(crate) saving_nodes: Vec<Task<AtlasNode>>,
     pub(crate) loading_nodes: Vec<Task<NodeWithData>>,
 
-    pub(crate) finished_loading_nodes: Vec<NodeWithData>,
-    pub(crate) read_back_nodes: Arc<Mutex<Vec<Task<Vec<NodeWithData>>>>>,
+    pub(crate) upload_nodes: Vec<NodeWithData>,
+    pub(crate) download_nodes: Vec<Task<NodeWithData>>,
 }
 
 impl AtlasAttachment {
     fn new(config: &AttachmentConfig, node_atlas_size: u32) -> Self {
-        let path = format!("assets/terrains/basic/data/height");
+        let path = "assets/terrains/basic/data/height".to_string();
 
         Self {
             name: config.name.clone(),
             path,
             texture_size: config.texture_size,
-            center_size: config.texture_size - 2 * config.border_size,
+            center_size: config.center_size,
             border_size: config.border_size,
             mip_level_count: config.mip_level_count,
             format: config.format,
             data: vec![Vec::new(); node_atlas_size as usize],
-            finished_loading_nodes: default(),
+            upload_nodes: default(),
             loading_nodes: default(),
             saving_nodes: default(),
-            read_back_nodes: default(),
+            download_nodes: default(),
         }
     }
 
@@ -120,12 +112,18 @@ impl AtlasAttachment {
     }
 
     fn update(&mut self, atlas_state: &mut NodeAtlasState) {
+        // Todo: build customizable loader abstraction
+        for node in atlas_state.start_loading_nodes.drain(..) {
+            self.loading_nodes
+                .push(NodeWithData::start_loading(node, self.path.clone()));
+        }
+
         let mut loading_nodes = mem::take(&mut self.loading_nodes);
         loading_nodes.retain_mut(|node| {
             if let Some(node) = future::block_on(future::poll_once(node)) {
-                self.add_node_data(node.data.clone(), node.meta.atlas_index);
-                atlas_state.loaded_node_attachment(node.meta.coordinate, 0);
-                self.finished_loading_nodes.push(node);
+                self.add_node_data(node.data.clone(), node.node.atlas_index);
+                atlas_state.loaded_node_attachment(node.node.coordinate, 0);
+                self.upload_nodes.push(node);
                 false
             } else {
                 true
@@ -133,23 +131,16 @@ impl AtlasAttachment {
         });
         self.loading_nodes = loading_nodes;
 
-        self.read_back_nodes
-            .lock()
-            .unwrap()
-            .deref_mut()
-            .retain_mut(|nodes| {
-                if let Some(nodes) = future::block_on(future::poll_once(nodes)) {
-                    for node in nodes {
-                        self.saving_nodes.push(node.start_saving(self.path.clone()));
-                    }
-                    false
-                } else {
-                    true
-                }
-            });
+        self.download_nodes.retain_mut(|nodes| {
+            if let Some(node) = future::block_on(future::poll_once(nodes)) {
+                self.saving_nodes.push(node.start_saving(self.path.clone()));
+                false
+            } else {
+                true
+            }
+        });
 
-        let mut saving_nodes = mem::take(&mut self.saving_nodes);
-        saving_nodes.retain_mut(|task| {
+        self.saving_nodes.retain_mut(|task| {
             if future::block_on(future::poll_once(task)).is_some() {
                 atlas_state.slots += 1;
                 false
@@ -157,7 +148,6 @@ impl AtlasAttachment {
                 true
             }
         });
-        self.saving_nodes = saving_nodes;
     }
 
     // Todo: Implement get data at coordinate function
@@ -186,10 +176,10 @@ struct NodeState {
 
 pub(crate) struct NodeAtlasState {
     node_states: HashMap<NodeCoordinate, NodeState>,
-    unused_nodes: VecDeque<NodeMeta>,
+    unused_nodes: VecDeque<AtlasNode>,
     existing_nodes: HashSet<NodeCoordinate>,
 
-    start_loading_nodes: Vec<NodeMeta>,
+    start_loading_nodes: Vec<AtlasNode>,
 
     pub(crate) slots: u32,
     pub(crate) max_slots: u32,
@@ -198,7 +188,7 @@ pub(crate) struct NodeAtlasState {
 impl NodeAtlasState {
     fn new(atlas_size: u32, existing_nodes: HashSet<NodeCoordinate>) -> Self {
         let unused_nodes = (0..atlas_size)
-            .map(|atlas_index| NodeMeta {
+            .map(|atlas_index| AtlasNode {
                 coordinate: NodeCoordinate::INVALID,
                 atlas_index,
             })
@@ -213,7 +203,7 @@ impl NodeAtlasState {
             max_slots: 16,
         }
     }
-    fn loaded_node_attachment(&mut self, node_coordinate: NodeCoordinate, attachment_index: u32) {
+    fn loaded_node_attachment(&mut self, node_coordinate: NodeCoordinate, _attachment_index: u32) {
         let node_state = self.node_states.get_mut(&node_coordinate).unwrap();
         node_state.state = LoadingState::Loaded;
     }
@@ -274,7 +264,7 @@ impl NodeAtlasState {
                 },
             );
 
-            self.start_loading_nodes.push(NodeMeta {
+            self.start_loading_nodes.push(AtlasNode {
                 coordinate: node_coordinate,
                 atlas_index,
             });
@@ -296,7 +286,7 @@ impl NodeAtlasState {
 
         if node.requests == 0 {
             // the node is not used anymore
-            self.unused_nodes.push_back(NodeMeta {
+            self.unused_nodes.push_back(AtlasNode {
                 coordinate: node_coordinate,
                 atlas_index: node.atlas_index,
             });
@@ -401,15 +391,9 @@ impl NodeAtlas {
             state, attachments, ..
         } = self;
 
-        let attachment = &mut attachments[0];
-
-        for node in state.start_loading_nodes.drain(..) {
-            attachment
-                .loading_nodes
-                .push(NodeWithData::start_loading(node, attachment.path.clone()));
+        for attachment in attachments {
+            attachment.update(state);
         }
-
-        attachment.update(state);
     }
 
     /// Adjusts the node atlas according to the requested and released nodes of the [`Quadtree`]
@@ -422,11 +406,6 @@ impl NodeAtlas {
         for node_coordinate in quadtree.requested_nodes.drain(..) {
             self.state.request_node(node_coordinate);
         }
-
-        // println!(
-        //     "Currently there are {} nodes in use.",
-        //     self.size as usize - self.unused_nodes.len()
-        // );
     }
 }
 

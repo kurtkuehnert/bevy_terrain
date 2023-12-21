@@ -17,6 +17,7 @@ use bevy::{
         Extract,
     },
 };
+use std::iter;
 
 const TILE_SIZE: BufferAddress = 16 * 4;
 const TILE_BUFFER_MIN_SIZE: Option<BufferSize> = BufferSize::new(32 + TILE_SIZE);
@@ -184,16 +185,14 @@ impl TerrainViewData {
         view_query: Extract<Query<Entity, With<TerrainView>>>,
         terrain_query: Extract<Query<Entity, Added<Terrain>>>,
     ) {
-        for terrain in terrain_query.iter() {
-            for view in view_query.iter() {
-                let view_config = view_configs.get(&(terrain, view)).unwrap();
-                let gpu_quadtree = gpu_quadtrees.get(&(terrain, view)).unwrap();
+        for terrain_view in iter::zip(&terrain_query, &view_query) {
+            let view_config = view_configs.get(&terrain_view).unwrap();
+            let gpu_quadtree = gpu_quadtrees.get(&terrain_view).unwrap();
 
-                terrain_view_data.insert(
-                    (terrain, view),
-                    TerrainViewData::new(&device, view_config, gpu_quadtree),
-                );
-            }
+            terrain_view_data.insert(
+                terrain_view,
+                TerrainViewData::new(&device, view_config, gpu_quadtree),
+            );
         }
     }
 

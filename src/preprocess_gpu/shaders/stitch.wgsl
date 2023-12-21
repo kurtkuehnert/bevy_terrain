@@ -2,14 +2,14 @@
 
 const INVALID_ATLAS_INDEX: u32 = 4294967295u;
 
-struct NodeMeta {
-    node_coordinate: NodeCoordinate,
+struct AtlasNode {
+    coordinate: NodeCoordinate,
     @size(16) atlas_index: u32,
 }
 
 struct StitchNodeData {
-    node: NodeMeta,
-    neighbour_nodes: array<NodeMeta, 8u>,
+    node: AtlasNode,
+    neighbour_nodes: array<AtlasNode, 8u>,
     node_index: u32,
 }
 
