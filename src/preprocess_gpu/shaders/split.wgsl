@@ -2,7 +2,7 @@
 
 struct NodeMeta {
     node_coordinate: NodeCoordinate,
-    @size(16) atlas_index: AtlasIndex,
+    @size(16) atlas_index: u32,
 }
 
 struct SplitTileData {
@@ -18,7 +18,7 @@ var tile: texture_2d<f32>;
 var tile_sampler: sampler;
 
 fn pixel_value(coords: vec2<u32>) -> f32 {
-    if (!inside(coords, vec4<u32>(attachment.border_size, attachment.border_size, attachment.node_size, attachment.node_size))) {
+    if (!inside(coords, vec4<u32>(attachment.border_size, attachment.border_size, attachment.center_size, attachment.center_size))) {
         return 0.0;
     }
 
@@ -26,7 +26,7 @@ fn pixel_value(coords: vec2<u32>) -> f32 {
 
     let node_coordinate = split_tile_data.node_meta.node_coordinate;
     let node_offset =  vec2<f32>(f32(node_coordinate.x), f32(node_coordinate.y));
-    let node_coords = vec2<f32>(coords - vec2<u32>(attachment.border_size)) / f32(attachment.node_size);
+    let node_coords = vec2<f32>(coords - vec2<u32>(attachment.border_size)) / f32(attachment.center_size);
     let node_scale = f32(1u << (lod_count - node_coordinate.lod - 1u));
 
     let tile_coords = (node_offset + node_coords) / node_scale;
@@ -36,7 +36,7 @@ fn pixel_value(coords: vec2<u32>) -> f32 {
 
 // Todo: respect memory coalescing
 @compute @workgroup_size(8, 8, 1)
-fn split_tile(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
+fn split(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
     let entry_coords = vec3<u32>(invocation_id.xy, split_tile_data.node_index);
 
     let entry_value = pack2x16unorm(vec2<f32>(pixel_value(pixel_coords(entry_coords, 0u)),

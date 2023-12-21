@@ -39,7 +39,7 @@ struct DownsampleData {
     node_index: u32,
 }
 
-pub(crate) fn create_split_tile_layout(device: &RenderDevice) -> BindGroupLayout {
+pub(crate) fn create_split_layout(device: &RenderDevice) -> BindGroupLayout {
     device.create_bind_group_layout(
         None,
         &BindGroupLayoutEntries::sequential(
@@ -53,7 +53,7 @@ pub(crate) fn create_split_tile_layout(device: &RenderDevice) -> BindGroupLayout
     )
 }
 
-pub(crate) fn create_stitch_node_layout(device: &RenderDevice) -> BindGroupLayout {
+pub(crate) fn create_stitch_layout(device: &RenderDevice) -> BindGroupLayout {
     device.create_bind_group_layout(
         None,
         &BindGroupLayoutEntries::single(
@@ -132,7 +132,7 @@ impl GpuPreprocessor {
                     let task = gpu_preprocessor.ready_tasks.pop_back().unwrap();
 
                     let bind_group = match &task.task_type {
-                        PreprocessTaskType::SplitTile { tile } => {
+                        PreprocessTaskType::Split { tile } => {
                             let tile = images.get(tile).unwrap();
 
                             let split_tile_data = SplitTileData {
@@ -145,7 +145,7 @@ impl GpuPreprocessor {
 
                             Some(device.create_bind_group(
                                 "split_tile_bind_group",
-                                &create_split_tile_layout(&device),
+                                &create_split_layout(&device),
                                 &BindGroupEntries::sequential((
                                     split_tile_data_buffer.binding().unwrap(),
                                     &tile.texture_view,
@@ -165,7 +165,7 @@ impl GpuPreprocessor {
 
                             Some(device.create_bind_group(
                                 "stitch_node_bind_group",
-                                &create_stitch_node_layout(&device),
+                                &create_stitch_layout(&device),
                                 &BindGroupEntries::single(
                                     stitch_node_data_buffer.binding().unwrap(),
                                 ),

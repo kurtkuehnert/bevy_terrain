@@ -17,7 +17,7 @@ use std::{collections::VecDeque, ops::DerefMut, time::Instant};
 
 #[derive(Clone)]
 pub(crate) enum PreprocessTaskType {
-    SplitTile { tile: Handle<Image> },
+    Split { tile: Handle<Image> },
     Stitch { neighbour_nodes: [NodeMeta; 8] },
     Downsample { parent_nodes: [NodeMeta; 4] },
     Barrier,
@@ -43,11 +43,11 @@ fn split(
 
     let node = NodeMeta {
         atlas_index,
-        node_coordinate,
+        coordinate: node_coordinate,
     };
 
     PreprocessTask {
-        task_type: PreprocessTaskType::SplitTile { tile },
+        task_type: PreprocessTaskType::Split { tile },
         node,
     }
 }
@@ -65,7 +65,7 @@ fn stitch(
 
     let node = NodeMeta {
         atlas_index,
-        node_coordinate,
+        coordinate: node_coordinate,
     };
 
     let offsets = [
@@ -104,7 +104,7 @@ fn stitch(
         };
 
         neighbour_nodes[index] = NodeMeta {
-            node_coordinate: neighbour_node_coordinate,
+            coordinate: neighbour_node_coordinate,
             atlas_index: neighbour_atlas_index,
         };
     }
@@ -121,7 +121,7 @@ fn downsample(node_atlas: &mut NodeAtlas, lod: u32, x: u32, y: u32) -> Preproces
 
     let node = NodeMeta {
         atlas_index,
-        node_coordinate,
+        coordinate: node_coordinate,
     };
 
     let mut parent_nodes = [NodeMeta::default(); 4];
@@ -132,7 +132,7 @@ fn downsample(node_atlas: &mut NodeAtlas, lod: u32, x: u32, y: u32) -> Preproces
         let parent_atlas_index = node_atlas.get_or_allocate(parent_node_coordinate);
 
         parent_nodes[index as usize] = NodeMeta {
-            node_coordinate: parent_node_coordinate,
+            coordinate: parent_node_coordinate,
             atlas_index: parent_atlas_index,
         };
     }
@@ -220,7 +220,7 @@ pub(crate) fn select_ready_tasks(
             ..
         } = preprocessor.deref_mut();
 
-        if task_queue.is_empty() && node_atlas.slots == node_atlas.max_slots {
+        if task_queue.is_empty() && node_atlas.state.slots == node_atlas.state.max_slots {
             if let Some(start) = start_time {
                 let elapsed = start.elapsed();
                 *start_time = None;
@@ -233,21 +233,21 @@ pub(crate) fn select_ready_tasks(
 
         ready_tasks.clear();
 
-        while node_atlas.slots > 0 {
+        while node_atlas.state.slots > 0 {
             let ready = task_queue
                 .front()
                 .map_or(false, |task| match &task.task_type {
-                    PreprocessTaskType::SplitTile { tile } => {
+                    PreprocessTaskType::Split { tile } => {
                         asset_server.load_state(tile) == LoadState::Loaded
                     }
                     PreprocessTaskType::Stitch { .. } => true,
                     PreprocessTaskType::Downsample { .. } => true,
                     PreprocessTaskType::Barrier => {
-                        dbg!(node_atlas.slots);
-                        if node_atlas.slots == node_atlas.max_slots {
+                        dbg!(node_atlas.state.slots);
+                        if node_atlas.state.slots == node_atlas.state.max_slots {
                             dbg!("barrier complete");
                         }
-                        node_atlas.slots == node_atlas.max_slots
+                        node_atlas.state.slots == node_atlas.state.max_slots
                     }
                 });
 
@@ -256,7 +256,7 @@ pub(crate) fn select_ready_tasks(
 
                 if !matches!(task.task_type, PreprocessTaskType::Barrier) {
                     ready_tasks.push(task);
-                    node_atlas.slots -= 1;
+                    node_atlas.state.slots -= 1;
                 }
             } else {
                 break;
