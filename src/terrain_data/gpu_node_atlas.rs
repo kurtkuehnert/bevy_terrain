@@ -2,14 +2,12 @@ use crate::{
     terrain::{Terrain, TerrainComponents},
     terrain_data::{
         gpu_atlas_attachment::GpuAtlasAttachment,
-        node_atlas::{LoadingNode, NodeAtlas, ReadBackNode},
+        node_atlas::{NodeAtlas, NodeWithData},
     },
 };
 use bevy::{
     prelude::*,
     render::{
-        render_asset::RenderAssets,
-        render_resource::*,
         renderer::{RenderDevice, RenderQueue},
         Extract, MainWorld,
     },
@@ -30,8 +28,8 @@ pub struct GpuNodeAtlas {
     /// Stores the atlas attachments of the terrain.
     pub(crate) attachments: Vec<GpuAtlasAttachment>,
     /// Stores the nodes, that have finished loading this frame.
-    pub(crate) loaded_nodes: Vec<LoadingNode>,
-    pub(crate) read_back_nodes: Arc<Mutex<Vec<Task<Vec<ReadBackNode>>>>>,
+    pub(crate) loaded_nodes: Vec<NodeWithData>,
+    pub(crate) read_back_nodes: Arc<Mutex<Vec<Task<Vec<NodeWithData>>>>>,
 }
 
 impl GpuNodeAtlas {
@@ -52,24 +50,13 @@ impl GpuNodeAtlas {
 
     /// Updates the atlas attachments, by copying over the data of the nodes that have
     /// finished loading this frame.
-    fn update_attachments(
-        &mut self,
-        command_encoder: &mut CommandEncoder,
-        images: &RenderAssets<Image>,
-    ) {
-        for node in self.loaded_nodes.drain(..) {
-            for (node_handle, attachment) in
-                self.attachments
-                    .iter()
-                    .enumerate()
-                    .map(|(index, atlas_handle)| {
-                        let node_handle = node.attachments.get(&index).unwrap();
+    fn update(&mut self, device: &RenderDevice, queue: &RenderQueue) {
+        let attachment = &mut self.attachments[0];
 
-                        (node_handle, atlas_handle)
-                    })
-            {
-                attachment.upload_node(command_encoder, images, node_handle, node.atlas_index);
-            }
+        attachment.create_read_back_buffer(&device);
+
+        for node in self.loaded_nodes.drain(..) {
+            attachment.upload_node(queue, node);
         }
     }
 
@@ -95,7 +82,7 @@ impl GpuNodeAtlas {
         for (terrain, mut node_atlas) in terrain_query.iter_mut(&mut main_world) {
             let gpu_node_atlas = gpu_node_atlases.get_mut(&terrain).unwrap();
             mem::swap(
-                &mut node_atlas.loaded_nodes,
+                &mut node_atlas.finished_loading_nodes,
                 &mut gpu_node_atlas.loaded_nodes,
             );
         }
@@ -106,23 +93,13 @@ impl GpuNodeAtlas {
     pub(crate) fn prepare(
         device: Res<RenderDevice>,
         queue: Res<RenderQueue>,
-        images: Res<RenderAssets<Image>>,
         mut gpu_node_atlases: ResMut<TerrainComponents<GpuNodeAtlas>>,
         terrain_query: Query<Entity, With<Terrain>>,
     ) {
-        let mut command_encoder =
-            device.create_command_encoder(&CommandEncoderDescriptor::default());
-
         for terrain in terrain_query.iter() {
             let gpu_node_atlas = gpu_node_atlases.get_mut(&terrain).unwrap();
-            gpu_node_atlas.update_attachments(&mut command_encoder, &images);
-
-            let attachment = &mut gpu_node_atlas.attachments[0];
-
-            attachment.create_read_back_buffer(&device);
+            gpu_node_atlas.update(&device, &queue);
         }
-
-        queue.submit(vec![command_encoder.finish()]);
     }
 
     pub(crate) fn cleanup(

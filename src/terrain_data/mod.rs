@@ -83,9 +83,6 @@ impl NodeCoordinate {
 pub const INVALID_ATLAS_INDEX: u32 = u32::MAX;
 pub const INVALID_LOD: u32 = u32::MAX;
 
-/// Identifier of an attachment inside the node atlas.
-pub type AttachmentIndex = usize;
-
 /// The data format of an attachment.
 #[derive(Encode, Decode, Clone, Copy, Debug)]
 pub enum AttachmentFormat {
