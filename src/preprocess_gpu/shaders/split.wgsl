@@ -1,12 +1,12 @@
 #import bevy_terrain::preprocessing::{NodeCoordinate, atlas, attachment, inside, pixel_coords, store_entry}
 
-struct NodeMeta {
-    node_coordinate: NodeCoordinate,
+struct AtlasNode {
+    coordinate: NodeCoordinate,
     @size(16) atlas_index: u32,
 }
 
 struct SplitTileData {
-    node_meta: NodeMeta,
+    node: AtlasNode,
     node_index: u32,
 }
 
@@ -24,7 +24,7 @@ fn pixel_value(coords: vec2<u32>) -> f32 {
 
     let lod_count = 4u;
 
-    let node_coordinate = split_tile_data.node_meta.node_coordinate;
+    let node_coordinate = split_tile_data.node.coordinate;
     let node_offset =  vec2<f32>(f32(node_coordinate.x), f32(node_coordinate.y));
     let node_coords = vec2<f32>(coords - vec2<u32>(attachment.border_size)) / f32(attachment.center_size);
     let node_scale = f32(1u << (lod_count - node_coordinate.lod - 1u));

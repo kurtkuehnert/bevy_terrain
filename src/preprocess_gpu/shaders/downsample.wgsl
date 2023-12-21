@@ -1,14 +1,14 @@
 #import bevy_terrain::preprocessing::{NodeCoordinate, atlas, attachment, inside, pixel_coords, store_entry}
 
 // Todo: move this once naga oil does not mess up the size attribute anymore
-struct NodeMeta {
-    node_coordinate: NodeCoordinate,
+struct AtlasNode {
+    coordinate: NodeCoordinate,
     @size(16) atlas_index: u32,
 }
 
 struct DownsampleData {
-    node_meta: NodeMeta,
-    parent_nodes: array<NodeMeta, 4u>,
+    node: AtlasNode,
+    parent_nodes: array<AtlasNode, 4u>,
     node_index: u32,
 }
 

@@ -9,6 +9,7 @@ use bevy::{math::Vec4Swizzles, prelude::*};
 use bytemuck::{Pod, Zeroable};
 use itertools::iproduct;
 use ndarray::Array4;
+use std::iter;
 
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
@@ -398,13 +399,6 @@ impl Quadtree {
             }
         }
     }
-
-    /// Adjusts the quadtree to the node atlas by updating the entries with the best available nodes.
-    fn adjust(&mut self, node_atlas: &NodeAtlas) {
-        for (node, entry) in self.nodes.iter().zip(self.data.iter_mut()) {
-            *entry = node_atlas.get_best_node(node.node_coordinate, self.lod_count);
-        }
-    }
 }
 
 /// Traverses all quadtrees and updates the node states,
@@ -414,13 +408,13 @@ pub(crate) fn compute_quadtree_request(
     view_query: Query<(Entity, &GlobalTransform), With<TerrainView>>,
     terrain_query: Query<(Entity, &GlobalTransform), With<Terrain>>,
 ) {
-    for (terrain, terrain_transform) in terrain_query.iter() {
-        for (view, view_transform) in view_query.iter() {
-            let view_position = view_transform.translation();
-            let quadtree = quadtrees.get_mut(&(terrain, view)).unwrap();
+    for ((terrain, terrain_transform), (view, view_transform)) in
+        iter::zip(&terrain_query, &view_query)
+    {
+        let view_position = view_transform.translation();
+        let quadtree = quadtrees.get_mut(&(terrain, view)).unwrap();
 
-            quadtree.compute_requests(terrain_transform, view_position);
-        }
+        quadtree.compute_requests(terrain_transform, view_position);
     }
 }
 
@@ -431,11 +425,11 @@ pub(crate) fn adjust_quadtree(
     view_query: Query<Entity, With<TerrainView>>,
     mut terrain_query: Query<(Entity, &NodeAtlas), With<Terrain>>,
 ) {
-    for (terrain, node_atlas) in terrain_query.iter_mut() {
-        for view in view_query.iter() {
-            let quadtree = quadtrees.get_mut(&(terrain, view)).unwrap();
+    for ((terrain, node_atlas), view) in iter::zip(&mut terrain_query, &view_query) {
+        let quadtree = quadtrees.get_mut(&(terrain, view)).unwrap();
 
-            quadtree.adjust(node_atlas);
+        for (node, entry) in iter::zip(&quadtree.nodes, &mut quadtree.data) {
+            *entry = node_atlas.get_best_node(node.node_coordinate, quadtree.lod_count);
         }
     }
 }

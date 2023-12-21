@@ -1,7 +1,7 @@
 use crate::{
     terrain::{Terrain, TerrainComponents},
     terrain_data::{
-        node_atlas::{AtlasAttachment, NodeAtlas, NodeMeta, NodeWithData},
+        node_atlas::{AtlasAttachment, AtlasNode, NodeAtlas, NodeWithData},
         AttachmentFormat,
     },
     util::StaticBuffer,
@@ -17,10 +17,7 @@ use bevy::{
 };
 use bytemuck::cast_slice;
 use itertools::Itertools;
-use std::{
-    mem,
-    sync::{Arc, Mutex},
-};
+use std::{iter, mem};
 
 const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
 
@@ -142,15 +139,17 @@ impl AtlasBufferInfo {
 
 pub(crate) struct GpuAtlasAttachment {
     pub(crate) max_slots: usize,
-    pub(crate) slots: Vec<NodeMeta>,
+    pub(crate) slots: Vec<AtlasNode>,
     pub(crate) atlas_texture: Texture,
     pub(crate) atlas_view: TextureView,
     pub(crate) atlas_write_section: StaticBuffer<()>,
-    pub(crate) read_back_buffer: Option<StaticBuffer<()>>,
+    pub(crate) download_buffers: Vec<StaticBuffer<()>>,
     pub(crate) bind_group: BindGroup,
     pub(crate) buffer_info: AtlasBufferInfo,
-    pub(crate) _mip_level_count: u32,
     pub(crate) workgroup_count: UVec3,
+
+    pub(crate) upload_nodes: Vec<NodeWithData>,
+    pub(crate) download_nodes: Vec<Task<NodeWithData>>,
 }
 
 impl GpuAtlasAttachment {
@@ -225,22 +224,32 @@ impl GpuAtlasAttachment {
         );
 
         Self {
-            slots: vec![],
+            slots: default(),
             max_slots,
             atlas_texture,
             atlas_view,
             atlas_write_section,
-            read_back_buffer: None,
+            download_buffers: default(),
             bind_group,
-            _mip_level_count: attachment.mip_level_count,
             workgroup_count,
             buffer_info,
+
+            upload_nodes: default(),
+            download_nodes: default(),
         }
     }
 
-    pub(crate) fn reserve_write_slot(&mut self, node_meta: NodeMeta) -> Option<u32> {
+    fn synchronize(&mut self, attachment: &mut AtlasAttachment) {
+        mem::swap(&mut attachment.upload_nodes, &mut self.upload_nodes);
+
+        attachment
+            .download_nodes
+            .extend(mem::take(&mut self.download_nodes));
+    }
+
+    pub(crate) fn reserve_write_slot(&mut self, node: AtlasNode) -> Option<u32> {
         if self.slots.len() < self.max_slots - 1 {
-            self.slots.push(node_meta);
+            self.slots.push(node);
             Some(self.slots.len() as u32 - 1)
         } else {
             None
@@ -248,10 +257,10 @@ impl GpuAtlasAttachment {
     }
 
     pub(crate) fn copy_nodes_to_write_section(&self, command_encoder: &mut CommandEncoder) {
-        for (section_index, node_meta) in self.slots.iter().enumerate() {
+        for (section_index, node) in self.slots.iter().enumerate() {
             command_encoder.copy_texture_to_buffer(
                 self.buffer_info
-                    .image_copy_texture(&self.atlas_texture, node_meta.atlas_index, 0),
+                    .image_copy_texture(&self.atlas_texture, node.atlas_index, 0),
                 self.buffer_info
                     .image_copy_buffer(&self.atlas_write_section, section_index as u32),
                 self.buffer_info.image_copy_size(0),
@@ -260,122 +269,120 @@ impl GpuAtlasAttachment {
     }
 
     pub(crate) fn copy_nodes_from_write_section(&self, command_encoder: &mut CommandEncoder) {
-        for (section_index, node_meta) in self.slots.iter().enumerate() {
+        for (section_index, node) in self.slots.iter().enumerate() {
             command_encoder.copy_buffer_to_texture(
                 self.buffer_info
                     .image_copy_buffer(&self.atlas_write_section, section_index as u32),
                 self.buffer_info
-                    .image_copy_texture(&self.atlas_texture, node_meta.atlas_index, 0),
+                    .image_copy_texture(&self.atlas_texture, node.atlas_index, 0),
                 self.buffer_info.image_copy_size(0),
             );
         }
     }
 
-    pub(crate) fn upload_node(&self, queue: &RenderQueue, node: NodeWithData) {
-        queue.write_texture(
-            self.buffer_info
-                .image_copy_texture(&self.atlas_texture, node.meta.atlas_index, 0),
-            cast_slice(&node.data),
-            ImageDataLayout {
-                offset: 0,
-                bytes_per_row: Some(self.buffer_info.actual_side_size),
-                rows_per_image: Some(self.buffer_info.actual_side_size),
-            },
-            self.buffer_info.image_copy_size(0),
-        );
+    pub(crate) fn upload_nodes(&mut self, queue: &RenderQueue) {
+        for node in self.upload_nodes.drain(..) {
+            queue.write_texture(
+                self.buffer_info
+                    .image_copy_texture(&self.atlas_texture, node.node.atlas_index, 0),
+                cast_slice(&node.data),
+                ImageDataLayout {
+                    offset: 0,
+                    bytes_per_row: Some(self.buffer_info.actual_side_size),
+                    rows_per_image: Some(self.buffer_info.actual_side_size),
+                },
+                self.buffer_info.image_copy_size(0),
+            );
+        }
     }
 
-    // Todo: combine with read back nodes?
     pub(crate) fn download_nodes(&self, command_encoder: &mut CommandEncoder) {
-        for (read_back_index, node_meta) in self.slots.iter().enumerate() {
+        for (node, download_buffer) in iter::zip(&self.slots, &self.download_buffers) {
             command_encoder.copy_texture_to_buffer(
                 self.buffer_info
-                    .image_copy_texture(&self.atlas_texture, node_meta.atlas_index, 0),
-                self.buffer_info.image_copy_buffer(
-                    self.read_back_buffer.as_ref().unwrap(),
-                    read_back_index as u32,
-                ),
+                    .image_copy_texture(&self.atlas_texture, node.atlas_index, 0),
+                self.buffer_info.image_copy_buffer(download_buffer, 0),
                 self.buffer_info.image_copy_size(0),
             );
         }
     }
 
-    pub(crate) fn create_read_back_buffer(&mut self, device: &RenderDevice) {
-        self.read_back_buffer = Some(StaticBuffer::empty_sized(
-            device,
-            self.buffer_info.buffer_size(self.slots.len() as u32) as BufferAddress,
-            BufferUsages::COPY_DST | BufferUsages::MAP_READ,
-        ));
+    pub(crate) fn create_download_buffers(&mut self, device: &RenderDevice) {
+        self.download_buffers = (0..self.slots.len())
+            .map(|_| {
+                StaticBuffer::empty_sized(
+                    device,
+                    self.buffer_info.aligned_node_size as BufferAddress,
+                    BufferUsages::COPY_DST | BufferUsages::MAP_READ,
+                )
+            })
+            .collect_vec();
     }
 
-    pub(crate) fn start_reading_back_nodes(&mut self) -> Task<Vec<NodeWithData>> {
+    pub(crate) fn start_downloading_nodes(&mut self) {
         let buffer_info = self.buffer_info.clone();
-        let read_back_buffer = mem::take(&mut self.read_back_buffer).unwrap();
+        let download_buffers = mem::take(&mut self.download_buffers);
         let slots = mem::take(&mut self.slots);
 
-        println!("Started reading back {} nodes", slots.len());
+        if !slots.is_empty() {
+            println!("Started reading back {} nodes", slots.len());
+        }
 
-        AsyncComputeTaskPool::get().spawn(async move {
-            let (tx, rx) = async_channel::bounded(1);
+        self.download_nodes = iter::zip(slots, download_buffers)
+            .map(|(node, download_buffer)| {
+                AsyncComputeTaskPool::get().spawn(async move {
+                    let (tx, rx) = async_channel::bounded(1);
 
-            let buffer_slice = read_back_buffer.slice(..);
+                    let buffer_slice = download_buffer.slice(..);
 
-            buffer_slice.map_async(MapMode::Read, move |result| {
-                if result.is_err() {
-                    panic!("{}", result.err().unwrap().to_string());
-                }
+                    buffer_slice.map_async(MapMode::Read, move |result| {
+                        if result.is_err() {
+                            panic!("{}", result.err().unwrap().to_string());
+                        }
 
-                tx.try_send(()).unwrap();
-            });
+                        tx.try_send(()).unwrap();
+                    });
 
-            rx.recv().await.unwrap();
+                    rx.recv().await.unwrap();
 
-            let mapped_data = buffer_slice.get_mapped_range();
+                    let mapped_data = buffer_slice.get_mapped_range();
 
-            let mut read_back_nodes = mapped_data
-                .chunks_exact(buffer_info.aligned_node_size as usize)
-                .map(|node_data| {
-                    node_data
+                    let mut data = mapped_data
                         .chunks_exact(2)
                         .map(|pixel| u16::from_le_bytes(pixel.try_into().unwrap()))
-                        .collect::<Vec<u16>>()
-                })
-                .zip(slots)
-                .map(|(data, node_meta)| NodeWithData {
-                    meta: node_meta,
-                    data,
-                    texture_size: buffer_info.pixels_per_side,
-                })
-                .collect_vec();
+                        .collect::<Vec<u16>>();
 
-            drop(mapped_data);
-            read_back_buffer.unmap();
-            drop(read_back_buffer);
+                    drop(mapped_data);
+                    download_buffer.unmap();
+                    drop(download_buffer);
 
-            for node in &mut read_back_nodes {
-                if node.data.len() != buffer_info.actual_node_size as usize / 2 {
-                    let actual_side_size = buffer_info.actual_side_size as usize / 2;
-                    let aligned_side_size = buffer_info.aligned_side_size as usize / 2;
+                    if data.len() != buffer_info.actual_node_size as usize / 2 {
+                        let actual_side_size = buffer_info.actual_side_size as usize / 2;
+                        let aligned_side_size = buffer_info.aligned_side_size as usize / 2;
 
-                    let mut take_offset = aligned_side_size;
-                    let mut place_offset = actual_side_size;
+                        let mut take_offset = aligned_side_size;
+                        let mut place_offset = actual_side_size;
 
-                    for _ in 1..buffer_info.pixels_per_side {
-                        node.data.copy_within(
-                            take_offset..take_offset + aligned_side_size,
-                            place_offset,
-                        );
-                        take_offset += aligned_side_size;
-                        place_offset += actual_side_size;
+                        for _ in 1..buffer_info.pixels_per_side {
+                            data.copy_within(
+                                take_offset..take_offset + aligned_side_size,
+                                place_offset,
+                            );
+                            take_offset += aligned_side_size;
+                            place_offset += actual_side_size;
+                        }
+
+                        data.truncate(buffer_info.actual_node_size as usize / 2);
                     }
 
-                    node.data
-                        .truncate(buffer_info.actual_node_size as usize / 2);
-                }
-            }
-
-            read_back_nodes
-        })
+                    NodeWithData {
+                        node,
+                        data,
+                        texture_size: buffer_info.pixels_per_side,
+                    }
+                })
+            })
+            .collect_vec();
     }
 }
 
@@ -387,9 +394,6 @@ impl GpuAtlasAttachment {
 pub struct GpuNodeAtlas {
     /// Stores the atlas attachments of the terrain.
     pub(crate) attachments: Vec<GpuAtlasAttachment>,
-    /// Stores the nodes, that have finished loading this frame.
-    pub(crate) loaded_nodes: Vec<NodeWithData>,
-    pub(crate) read_back_nodes: Arc<Mutex<Vec<Task<Vec<NodeWithData>>>>>,
 }
 
 impl GpuNodeAtlas {
@@ -401,25 +405,7 @@ impl GpuNodeAtlas {
             .map(|attachment| GpuAtlasAttachment::new(device, attachment, node_atlas.atlas_size))
             .collect_vec();
 
-        let attachment = &node_atlas.attachments[0];
-
-        Self {
-            attachments,
-            loaded_nodes: default(),
-            read_back_nodes: attachment.read_back_nodes.clone(),
-        }
-    }
-
-    /// Updates the atlas attachments, by copying over the data of the nodes that have
-    /// finished loading this frame.
-    fn update(&mut self, device: &RenderDevice, queue: &RenderQueue) {
-        let attachment = &mut self.attachments[0];
-
-        attachment.create_read_back_buffer(&device);
-
-        for node in self.loaded_nodes.drain(..) {
-            attachment.upload_node(queue, node);
-        }
+        Self { attachments }
     }
 
     /// Initializes the [`GpuNodeAtlas`] of newly created terrains.
@@ -444,12 +430,11 @@ impl GpuNodeAtlas {
         for (terrain, mut node_atlas) in terrain_query.iter_mut(&mut main_world) {
             let gpu_node_atlas = gpu_node_atlases.get_mut(&terrain).unwrap();
 
-            let attachment = &mut node_atlas.attachments[0];
-
-            mem::swap(
-                &mut attachment.finished_loading_nodes,
-                &mut gpu_node_atlas.loaded_nodes,
-            );
+            for (attachment, gpu_attachment) in
+                iter::zip(&mut node_atlas.attachments, &mut gpu_node_atlas.attachments)
+            {
+                gpu_attachment.synchronize(attachment);
+            }
         }
     }
 
@@ -461,9 +446,13 @@ impl GpuNodeAtlas {
         mut gpu_node_atlases: ResMut<TerrainComponents<GpuNodeAtlas>>,
         terrain_query: Query<Entity, With<Terrain>>,
     ) {
-        for terrain in terrain_query.iter() {
+        for terrain in &terrain_query {
             let gpu_node_atlas = gpu_node_atlases.get_mut(&terrain).unwrap();
-            gpu_node_atlas.update(&device, &queue);
+
+            for attachment in &mut gpu_node_atlas.attachments {
+                attachment.create_download_buffers(&device);
+                attachment.upload_nodes(&queue);
+            }
         }
     }
 
@@ -471,16 +460,11 @@ impl GpuNodeAtlas {
         mut gpu_node_atlases: ResMut<TerrainComponents<GpuNodeAtlas>>,
         terrain_query: Query<Entity, With<Terrain>>,
     ) {
-        for terrain in terrain_query.iter() {
+        for terrain in &terrain_query {
             let gpu_node_atlas = gpu_node_atlases.get_mut(&terrain).unwrap();
-            let attachment = &mut gpu_node_atlas.attachments[0];
 
-            if !attachment.slots.is_empty() {
-                gpu_node_atlas
-                    .read_back_nodes
-                    .lock()
-                    .unwrap()
-                    .push(attachment.start_reading_back_nodes());
+            for attachment in &mut gpu_node_atlas.attachments {
+                attachment.start_downloading_nodes();
             }
         }
     }
