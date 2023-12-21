@@ -3,7 +3,7 @@
 // Todo: move this once naga oil does not mess up the size attribute anymore
 struct NodeMeta {
     node_coordinate: NodeCoordinate,
-    @size(16) atlas_index: AtlasIndex,
+    @size(16) atlas_index: u32,
 }
 
 struct DownsampleData {
@@ -16,12 +16,12 @@ struct DownsampleData {
 var<uniform> downsample_data: DownsampleData;
 
 fn pixel_value(coords: vec2<u32>) -> f32 {
-    if (!inside(coords, vec4<u32>(attachment.border_size, attachment.border_size, attachment.node_size, attachment.node_size))) {
+    if (!inside(coords, vec4<u32>(attachment.border_size, attachment.border_size, attachment.center_size, attachment.center_size))) {
         return 0.0;
     }
 
     let node_coords = coords - vec2<u32>(attachment.border_size);
-    let parent_size = attachment.node_size / 2u;
+    let parent_size = attachment.center_size / 2u;
     let parent_coords = 2u * (node_coords % parent_size) + vec2<u32>(attachment.border_size);
     let parent_index  = node_coords.x / parent_size + 2u * (node_coords.y / parent_size);
 

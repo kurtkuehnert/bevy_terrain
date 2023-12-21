@@ -1,85 +1,34 @@
-use crate::preprocess::R16Image;
 use crate::{
+    prelude::{AttachmentConfig, AttachmentFormat},
+    preprocess::R16Image,
     terrain::{Terrain, TerrainConfig},
-    terrain_data::{quadtree::Quadtree, AtlasAttachment, NodeCoordinate},
+    terrain_data::{
+        quadtree::{Quadtree, QuadtreeEntry},
+        NodeCoordinate, INVALID_ATLAS_INDEX, INVALID_LOD,
+    },
     terrain_view::{TerrainView, TerrainViewComponents},
 };
-use bevy::render::render_resource::ShaderType;
-use bevy::tasks::futures_lite::future;
-use bevy::tasks::{AsyncComputeTaskPool, Task};
 use bevy::{
     prelude::*,
+    render::render_resource::ShaderType,
+    tasks::{futures_lite::future, AsyncComputeTaskPool, Task},
     utils::{HashMap, HashSet},
 };
 use image::io::Reader;
 use itertools::Itertools;
-use std::collections::VecDeque;
-use std::ops::DerefMut;
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::VecDeque,
+    mem,
+    ops::DerefMut,
+    sync::{Arc, Mutex},
+};
 
-/// Stores all of the attachments of the node, alongside their loading state.
-// #[derive(Clone)]
-// pub struct LoadingNode {
-//     /// The atlas index of the node.
-//     pub(crate) atlas_index: u32,
-//     // Todo: replace with array or vec of options
-//     /// Stores all of the nodes attachments.
-//     pub(crate) attachments: HashMap<AttachmentIndex, Handle<Image>>,
-//     /// The set of still loading attachments. Is empty if the node is fully loaded.
-//     loading_attachments: HashSet<AttachmentIndex>,
-// }
-//
-// impl LoadingNode {
-//     /// Sets the attachment data of the node.
-//     pub fn set_attachment(&mut self, attachment_index: AttachmentIndex, attachment: Handle<Image>) {
-//         self.attachments.insert(attachment_index, attachment);
-//     }
-//
-//     /// Marks the corresponding attachment as loaded.
-//     pub fn loaded(&mut self, attachment_index: AttachmentIndex) {
-//         self.loading_attachments.remove(&attachment_index);
-//     }
-//
-//     /// Returns whether all node attachments of the node have finished loading.
-//     fn finished_loading(&self) -> bool {
-//         self.loading_attachments.is_empty()
-//     }
-// }
-
-/// The current state of a node of a [`NodeAtlas`].
-///
-/// This indicates, whether the node is loading or loaded and ready to be used.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum LoadingState {
-    /// The node is loading, but can not be used yet.
-    Loading,
-    /// The node is loaded and can be used.
-    Loaded,
-}
-
-/// The internal representation of a present node in a [`NodeAtlas`].
-pub(crate) struct AtlasNode {
-    /// Indicates whether or not the node is loading or loaded.
-    pub(crate) state: LoadingState,
-    /// The index of the node inside the atlas.
-    pub(crate) atlas_index: u32,
-    /// The count of [`Quadtrees`] that have requested this node.
-    requests: u32,
-}
-
+// Todo: find better name (AtlasNode?)
 #[derive(Copy, Clone, Debug, Default, ShaderType)]
 pub(crate) struct NodeMeta {
-    pub(crate) node_coordinate: NodeCoordinate,
+    pub(crate) coordinate: NodeCoordinate,
     #[size(16)]
     pub(crate) atlas_index: u32,
-}
-
-pub(crate) fn format_node_path(
-    path: &str,
-    node_coordinate: &NodeCoordinate,
-    extension: &str,
-) -> String {
-    format!("{path}/{node_coordinate}.{extension}",)
 }
 
 #[derive(Clone, Debug)]
@@ -92,7 +41,7 @@ pub(crate) struct NodeWithData {
 impl NodeWithData {
     pub(crate) fn start_saving(self, path: String) -> Task<NodeMeta> {
         AsyncComputeTaskPool::get().spawn(async move {
-            let path = format_node_path(&path, &self.meta.node_coordinate, "png");
+            let path = self.meta.coordinate.path(&path, "png");
 
             let image =
                 R16Image::from_raw(self.texture_size, self.texture_size, self.data).unwrap();
@@ -107,7 +56,7 @@ impl NodeWithData {
 
     pub(crate) fn start_loading(node: NodeMeta, path: String) -> Task<Self> {
         AsyncComputeTaskPool::get().spawn(async move {
-            let path = format_node_path(&path, &node.node_coordinate, "png");
+            let path = node.coordinate.path(&path, "png");
 
             let mut reader = Reader::open(path).unwrap();
             reader.no_limits();
@@ -121,6 +70,265 @@ impl NodeWithData {
                 texture_size,
             }
         })
+    }
+}
+
+type AttachmentData = Vec<u16>;
+
+/// An attachment of a [`NodeAtlas`].
+pub struct AtlasAttachment {
+    /// The name of the attachment.
+    pub(crate) name: String,
+    pub(crate) path: String,
+    pub(crate) texture_size: u32,
+    pub(crate) center_size: u32,
+    pub(crate) border_size: u32,
+    pub(crate) mip_level_count: u32,
+    /// The format of the attachment.
+    pub(crate) format: AttachmentFormat,
+    pub(crate) data: Vec<AttachmentData>,
+
+    pub(crate) saving_nodes: Vec<Task<NodeMeta>>,
+    pub(crate) loading_nodes: Vec<Task<NodeWithData>>,
+
+    pub(crate) finished_loading_nodes: Vec<NodeWithData>,
+    pub(crate) read_back_nodes: Arc<Mutex<Vec<Task<Vec<NodeWithData>>>>>,
+}
+
+impl AtlasAttachment {
+    fn new(config: &AttachmentConfig, node_atlas_size: u32) -> Self {
+        let path = format!("assets/terrains/basic/data/height");
+
+        Self {
+            name: config.name.clone(),
+            path,
+            texture_size: config.texture_size,
+            center_size: config.texture_size - 2 * config.border_size,
+            border_size: config.border_size,
+            mip_level_count: config.mip_level_count,
+            format: config.format,
+            data: vec![Vec::new(); node_atlas_size as usize],
+            finished_loading_nodes: default(),
+            loading_nodes: default(),
+            saving_nodes: default(),
+            read_back_nodes: default(),
+        }
+    }
+
+    fn add_node_data(&mut self, data: AttachmentData, atlas_index: u32) {
+        self.data[atlas_index as usize] = data;
+    }
+
+    fn update(&mut self, atlas_state: &mut NodeAtlasState) {
+        let mut loading_nodes = mem::take(&mut self.loading_nodes);
+        loading_nodes.retain_mut(|node| {
+            if let Some(node) = future::block_on(future::poll_once(node)) {
+                self.add_node_data(node.data.clone(), node.meta.atlas_index);
+                atlas_state.loaded_node_attachment(node.meta.coordinate, 0);
+                self.finished_loading_nodes.push(node);
+                false
+            } else {
+                true
+            }
+        });
+        self.loading_nodes = loading_nodes;
+
+        self.read_back_nodes
+            .lock()
+            .unwrap()
+            .deref_mut()
+            .retain_mut(|nodes| {
+                if let Some(nodes) = future::block_on(future::poll_once(nodes)) {
+                    for node in nodes {
+                        self.saving_nodes.push(node.start_saving(self.path.clone()));
+                    }
+                    false
+                } else {
+                    true
+                }
+            });
+
+        let mut saving_nodes = mem::take(&mut self.saving_nodes);
+        saving_nodes.retain_mut(|task| {
+            if future::block_on(future::poll_once(task)).is_some() {
+                atlas_state.slots += 1;
+                false
+            } else {
+                true
+            }
+        });
+        self.saving_nodes = saving_nodes;
+    }
+
+    // Todo: Implement get data at coordinate function
+}
+
+/// The current state of a node of a [`NodeAtlas`].
+///
+/// This indicates, whether the node is loading or loaded and ready to be used.
+#[derive(Clone, Copy)]
+enum LoadingState {
+    /// The node is loading, but can not be used yet.
+    Loading,
+    /// The node is loaded and can be used.
+    Loaded,
+}
+
+/// The internal representation of a present node in a [`NodeAtlas`].
+struct NodeState {
+    /// Indicates whether or not the node is loading or loaded.
+    state: LoadingState,
+    /// The index of the node inside the atlas.
+    atlas_index: u32,
+    /// The count of [`Quadtrees`] that have requested this node.
+    requests: u32,
+}
+
+pub(crate) struct NodeAtlasState {
+    node_states: HashMap<NodeCoordinate, NodeState>,
+    unused_nodes: VecDeque<NodeMeta>,
+    existing_nodes: HashSet<NodeCoordinate>,
+
+    start_loading_nodes: Vec<NodeMeta>,
+
+    pub(crate) slots: u32,
+    pub(crate) max_slots: u32,
+}
+
+impl NodeAtlasState {
+    fn new(atlas_size: u32, existing_nodes: HashSet<NodeCoordinate>) -> Self {
+        let unused_nodes = (0..atlas_size)
+            .map(|atlas_index| NodeMeta {
+                coordinate: NodeCoordinate::INVALID,
+                atlas_index,
+            })
+            .collect();
+
+        Self {
+            node_states: default(),
+            unused_nodes,
+            existing_nodes,
+            start_loading_nodes: default(),
+            slots: 16,
+            max_slots: 16,
+        }
+    }
+    fn loaded_node_attachment(&mut self, node_coordinate: NodeCoordinate, attachment_index: u32) {
+        let node_state = self.node_states.get_mut(&node_coordinate).unwrap();
+        node_state.state = LoadingState::Loaded;
+    }
+
+    fn allocate_node(&mut self) -> u32 {
+        let unused_node = self.unused_nodes.pop_front().expect("Atlas out of indices");
+
+        self.node_states.remove(&unused_node.coordinate);
+
+        unused_node.atlas_index
+    }
+
+    fn get_or_allocate(&mut self, node_coordinate: NodeCoordinate) -> u32 {
+        if let Some(node) = self.node_states.get(&node_coordinate) {
+            node.atlas_index
+        } else {
+            let atlas_index = self.allocate_node();
+
+            self.node_states.insert(
+                node_coordinate,
+                NodeState {
+                    requests: 1,
+                    state: LoadingState::Loaded,
+                    atlas_index,
+                },
+            );
+
+            atlas_index
+        }
+    }
+
+    fn request_node(&mut self, node_coordinate: NodeCoordinate) {
+        if !self.existing_nodes.contains(&node_coordinate) {
+            return;
+        }
+
+        let mut node_states = mem::take(&mut self.node_states);
+
+        // check if the node is already present else start loading it
+        if let Some(node) = node_states.get_mut(&node_coordinate) {
+            if node.requests == 0 {
+                // the node is now used again
+                self.unused_nodes
+                    .retain(|unused_node| node.atlas_index != unused_node.atlas_index);
+            }
+
+            node.requests += 1;
+        } else {
+            // Todo: implement better loading strategy
+            let atlas_index = self.allocate_node();
+
+            node_states.insert(
+                node_coordinate,
+                NodeState {
+                    requests: 1,
+                    state: LoadingState::Loading,
+                    atlas_index,
+                },
+            );
+
+            self.start_loading_nodes.push(NodeMeta {
+                coordinate: node_coordinate,
+                atlas_index,
+            });
+        }
+
+        self.node_states = node_states;
+    }
+
+    fn release_node(&mut self, node_coordinate: NodeCoordinate) {
+        if !self.existing_nodes.contains(&node_coordinate) {
+            return;
+        }
+
+        let node = self
+            .node_states
+            .get_mut(&node_coordinate)
+            .expect("Tried releasing a node, which is not present.");
+        node.requests -= 1;
+
+        if node.requests == 0 {
+            // the node is not used anymore
+            self.unused_nodes.push_back(NodeMeta {
+                coordinate: node_coordinate,
+                atlas_index: node.atlas_index,
+            });
+        }
+    }
+
+    fn get_best_node(&self, node_coordinate: NodeCoordinate, lod_count: u32) -> QuadtreeEntry {
+        let mut best_node_coordinate = node_coordinate;
+
+        loop {
+            if best_node_coordinate == NodeCoordinate::INVALID
+                || best_node_coordinate.lod == lod_count
+            {
+                // highest lod is not loaded
+                return QuadtreeEntry {
+                    atlas_index: INVALID_ATLAS_INDEX,
+                    atlas_lod: INVALID_LOD,
+                };
+            }
+
+            if let Some(atlas_node) = self.node_states.get(&best_node_coordinate) {
+                if matches!(atlas_node.state, LoadingState::Loaded) {
+                    // found best loaded node
+                    return QuadtreeEntry {
+                        atlas_index: atlas_node.atlas_index,
+                        atlas_lod: best_node_coordinate.lod,
+                    };
+                }
+            }
+
+            best_node_coordinate = best_node_coordinate.parent();
+        }
     }
 }
 
@@ -139,25 +347,8 @@ impl NodeWithData {
 #[derive(Component)]
 pub struct NodeAtlas {
     pub(crate) attachments: Vec<AtlasAttachment>, // stores the attachment data
-    pub(crate) nodes: HashMap<NodeCoordinate, AtlasNode>,
-
-    // pub(crate) start_loading_nodes: Vec<NodeCoordinate>,
-    pub(crate) finished_loading_nodes: Vec<NodeWithData>,
-
-    pub(crate) loading_nodes: Vec<Task<NodeWithData>>,
-
-    pub(crate) read_back_nodes: Arc<Mutex<Vec<Task<Vec<NodeWithData>>>>>,
-    pub(crate) saving_nodes: Vec<Task<NodeMeta>>,
-
-    unused_nodes: VecDeque<NodeMeta>,
-
-    pub(crate) existing_nodes: HashSet<NodeCoordinate>,
-    pub(crate) size: u32,
-
-    pub(crate) slots: u32,
-    pub(crate) max_slots: u32,
-
-    path: String,
+    pub(crate) state: NodeAtlasState,
+    pub(crate) atlas_size: u32,
 }
 
 impl NodeAtlas {
@@ -167,34 +358,20 @@ impl NodeAtlas {
     /// * `attachments` - The atlas attachments of the terrain.
     pub fn new(
         size: u32,
-        attachments: Vec<AtlasAttachment>,
+        attachments: &Vec<AttachmentConfig>,
         existing_nodes: HashSet<NodeCoordinate>,
     ) -> Self {
-        let unused_nodes = (0..size)
-            .map(|atlas_index| NodeMeta {
-                node_coordinate: NodeCoordinate::INVALID,
-                atlas_index,
-            })
-            .collect();
+        let attachments = attachments
+            .iter()
+            .map(|attachment| AtlasAttachment::new(attachment, size))
+            .collect_vec();
 
-        let path = "terrains/basic";
-        let path = format!("assets/{path}/data/height");
+        let state = NodeAtlasState::new(size, existing_nodes);
 
         Self {
-            finished_loading_nodes: default(),
-            loading_nodes: default(),
-            nodes: default(),
             attachments,
-            size,
-            unused_nodes,
-            existing_nodes,
-
-            read_back_nodes: default(),
-            saving_nodes: default(),
-            slots: 16,
-            max_slots: 16,
-            // start_loading_nodes: vec![],
-            path,
+            atlas_size: size,
+            state,
         }
     }
 
@@ -202,166 +379,48 @@ impl NodeAtlas {
     pub fn from_config(config: &TerrainConfig) -> Self {
         Self::new(
             config.node_atlas_size,
-            config
-                .attachments
-                .clone()
-                .into_iter()
-                .map(|attachment| attachment.into())
-                .collect_vec(),
+            &config.attachments,
             config.nodes.clone(),
         )
     }
 
-    fn reserve_atlas_index(&mut self) -> u32 {
-        let unused_node = self.unused_nodes.pop_front().expect("Atlas out of indices");
-
-        self.nodes.remove(&unused_node.node_coordinate);
-
-        unused_node.atlas_index
+    pub fn get_or_allocate(&mut self, node_coordinate: NodeCoordinate) -> u32 {
+        self.state.get_or_allocate(node_coordinate)
     }
 
-    pub fn get_or_allocate(&mut self, node_coordinate: NodeCoordinate) -> u32 {
-        if let Some(node) = self.nodes.get(&node_coordinate) {
-            node.atlas_index
-        } else {
-            let atlas_index = self.reserve_atlas_index();
-
-            self.nodes.insert(
-                node_coordinate,
-                AtlasNode {
-                    requests: 1,
-                    state: LoadingState::Loaded,
-                    atlas_index,
-                },
-            );
-
-            self.loading_nodes.push(NodeWithData::start_loading(
-                NodeMeta {
-                    node_coordinate,
-                    atlas_index,
-                },
-                self.path.clone(),
-            ));
-
-            atlas_index
-        }
+    pub(crate) fn get_best_node(
+        &self,
+        node_coordinate: NodeCoordinate,
+        lod_count: u32,
+    ) -> QuadtreeEntry {
+        self.state.get_best_node(node_coordinate, lod_count)
     }
 
     fn update(&mut self) {
         let NodeAtlas {
-            read_back_nodes,
-            saving_nodes,
-            loading_nodes,
-            finished_loading_nodes,
-            nodes,
-            slots,
-            ..
+            state, attachments, ..
         } = self;
 
-        loading_nodes.retain_mut(|node| {
-            if let Some(node) = future::block_on(future::poll_once(node)) {
-                nodes.get_mut(&node.meta.node_coordinate).unwrap().state = LoadingState::Loaded;
-                finished_loading_nodes.push(node);
-                false
-            } else {
-                true
-            }
-        });
+        let attachment = &mut attachments[0];
 
-        read_back_nodes
-            .lock()
-            .unwrap()
-            .deref_mut()
-            .retain_mut(|nodes| {
-                if let Some(nodes) = future::block_on(future::poll_once(nodes)) {
-                    for node in nodes {
-                        saving_nodes.push(node.start_saving(self.path.clone()));
-                    }
-                    false
-                } else {
-                    true
-                }
-            });
+        for node in state.start_loading_nodes.drain(..) {
+            attachment
+                .loading_nodes
+                .push(NodeWithData::start_loading(node, attachment.path.clone()));
+        }
 
-        saving_nodes.retain_mut(|task| {
-            if future::block_on(future::poll_once(task)).is_some() {
-                *slots += 1;
-                false
-            } else {
-                true
-            }
-        });
+        attachment.update(state);
     }
 
     /// Adjusts the node atlas according to the requested and released nodes of the [`Quadtree`]
     /// and starts loading not already present nodes.
     fn fulfill_request(&mut self, quadtree: &mut Quadtree) {
-        let NodeAtlas {
-            unused_nodes,
-            nodes,
-            loading_nodes,
-            existing_nodes,
-            ..
-        } = self;
-
-        // release nodes that are on longer required
         for node_coordinate in quadtree.released_nodes.drain(..) {
-            if !existing_nodes.contains(&node_coordinate) {
-                continue;
-            }
-
-            let node = nodes
-                .get_mut(&node_coordinate)
-                .expect("Tried releasing a node, which is not present.");
-            node.requests -= 1;
-
-            if node.requests == 0 {
-                // the node is not used anymore
-                unused_nodes.push_back(NodeMeta {
-                    node_coordinate,
-                    atlas_index: node.atlas_index,
-                });
-            }
+            self.state.release_node(node_coordinate);
         }
 
-        // load nodes that are requested
         for node_coordinate in quadtree.requested_nodes.drain(..) {
-            if !existing_nodes.contains(&node_coordinate) {
-                continue;
-            }
-
-            // check if the node is already present else start loading it
-            if let Some(node) = nodes.get_mut(&node_coordinate) {
-                if node.requests == 0 {
-                    // the node is now used again
-                    unused_nodes.retain(|unused_node| node.atlas_index != unused_node.atlas_index);
-                }
-
-                node.requests += 1;
-            } else {
-                // Todo: implement better loading strategy
-                // remove least recently used node and reuse its atlas index
-                let unused_node = unused_nodes.pop_front().expect("Atlas out of indices");
-                nodes.remove(&unused_node.node_coordinate);
-                let atlas_index = unused_node.atlas_index;
-
-                nodes.insert(
-                    node_coordinate,
-                    AtlasNode {
-                        requests: 1,
-                        state: LoadingState::Loading,
-                        atlas_index,
-                    },
-                );
-
-                loading_nodes.push(NodeWithData::start_loading(
-                    NodeMeta {
-                        node_coordinate,
-                        atlas_index,
-                    },
-                    self.path.clone(),
-                ));
-            }
+            self.state.request_node(node_coordinate);
         }
 
         // println!(
