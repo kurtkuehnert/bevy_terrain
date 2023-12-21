@@ -19,7 +19,6 @@ use bevy::render::render_resource::*;
 use bincode::{Decode, Encode};
 use std::{fmt, str::FromStr};
 
-pub mod gpu_atlas_attachment;
 pub mod gpu_node_atlas;
 pub mod gpu_quadtree;
 pub mod node_atlas;
@@ -47,6 +46,19 @@ pub struct NodeCoordinate {
 impl NodeCoordinate {
     pub fn new(side: u32, lod: u32, x: u32, y: u32) -> Self {
         Self { side, lod, x, y }
+    }
+
+    pub fn parent(self) -> Self {
+        Self {
+            side: self.side,
+            lod: self.lod + 1,
+            x: self.x >> 1,
+            y: self.y >> 1,
+        }
+    }
+
+    pub fn path(self, path: &str, extension: &str) -> String {
+        format!("{path}/{self}.{extension}")
     }
 }
 
@@ -179,30 +191,6 @@ impl AttachmentConfig {
             mip_level_count,
             format,
             file_format: FileFormat::TDF,
-        }
-    }
-}
-
-/// An attachment of a [`NodeAtlas`](node_atlas::NodeAtlas).
-#[derive(Clone)]
-pub struct AtlasAttachment {
-    /// The name of the attachment.
-    pub(crate) name: String,
-    pub(crate) texture_size: u32,
-    pub(crate) border_size: u32,
-    pub mip_level_count: u32,
-    /// The format of the attachment.
-    pub(crate) format: AttachmentFormat,
-}
-
-impl From<AttachmentConfig> for AtlasAttachment {
-    fn from(config: AttachmentConfig) -> Self {
-        Self {
-            name: config.name,
-            texture_size: config.texture_size,
-            border_size: config.border_size,
-            mip_level_count: config.mip_level_count,
-            format: config.format,
         }
     }
 }

@@ -1,8 +1,7 @@
 use crate::{
     terrain::{Terrain, TerrainConfig},
     terrain_data::{
-        node_atlas::{LoadingState, NodeAtlas},
-        NodeCoordinate, INVALID_ATLAS_INDEX, INVALID_LOD, SIDE_COUNT,
+        node_atlas::NodeAtlas, NodeCoordinate, INVALID_ATLAS_INDEX, INVALID_LOD, SIDE_COUNT,
     },
     terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
 };
@@ -196,9 +195,9 @@ impl Default for QuadtreeNode {
 #[derive(Clone, Copy, Zeroable, Pod)]
 pub(crate) struct QuadtreeEntry {
     /// The atlas index of the best entry.
-    atlas_index: u32,
+    pub(crate) atlas_index: u32,
     /// The atlas lod of the best entry.
-    atlas_lod: u32,
+    pub(crate) atlas_lod: u32,
 }
 
 impl Default for QuadtreeEntry {
@@ -257,7 +256,7 @@ impl Quadtree {
     ///
     /// * `lod_count` - The count of level of detail layers.
     /// * `quadtree_size` - The count of nodes in x and y direction per layer.
-    /// * `node_size` - The size of the smallest nodes (with lod 0).
+    /// * `center_size` - The size of the smallest nodes (with lod 0).
     /// * `load_distance` - The distance (measured in node sizes) until which to request nodes to be loaded.
     /// * `height` - The height of the terrain.
     pub fn new(
@@ -403,33 +402,7 @@ impl Quadtree {
     /// Adjusts the quadtree to the node atlas by updating the entries with the best available nodes.
     fn adjust(&mut self, node_atlas: &NodeAtlas) {
         for (node, entry) in self.nodes.iter().zip(self.data.iter_mut()) {
-            let mut best_node_coordinate = node.node_coordinate;
-
-            let (atlas_index, atlas_lod) = loop {
-                if best_node_coordinate == NodeCoordinate::INVALID
-                    || best_node_coordinate.lod == self.lod_count
-                {
-                    // highest lod is not loaded
-                    break (INVALID_ATLAS_INDEX, INVALID_LOD);
-                }
-
-                if let Some(atlas_node) = node_atlas.nodes.get(&best_node_coordinate) {
-                    if atlas_node.state == LoadingState::Loaded {
-                        // found best loaded node
-                        break (atlas_node.atlas_index, best_node_coordinate.lod);
-                    }
-                }
-
-                // node not loaded, try parent
-                best_node_coordinate.lod += 1;
-                best_node_coordinate.x >>= 1;
-                best_node_coordinate.y >>= 1;
-            };
-
-            *entry = QuadtreeEntry {
-                atlas_index,
-                atlas_lod,
-            };
+            *entry = node_atlas.get_best_node(node.node_coordinate, self.lod_count);
         }
     }
 }

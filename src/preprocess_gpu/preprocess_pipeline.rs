@@ -1,15 +1,13 @@
-use crate::preprocess_gpu::gpu_preprocessor::{
-    create_downsample_layout, create_stitch_node_layout,
-};
-use crate::preprocess_gpu::preprocessor::PreprocessTaskType;
-use crate::preprocess_gpu::shaders::{DOWNSAMPLE_SHADER, STITCH_NODES_SHADER};
 use crate::{
     preprocess_gpu::{
-        gpu_preprocessor::{create_split_tile_layout, GpuPreprocessor},
-        shaders::SPLIT_TILE_SHADER,
+        gpu_preprocessor::{
+            create_downsample_layout, create_split_layout, create_stitch_layout, GpuPreprocessor,
+        },
+        preprocessor::PreprocessTaskType,
+        shaders::{DOWNSAMPLE_SHADER, SPLIT_SHADER, STITCH_SHADER},
     },
     terrain::{Terrain, TerrainComponents},
-    terrain_data::{gpu_atlas_attachment::create_attachment_layout, gpu_node_atlas::GpuNodeAtlas},
+    terrain_data::gpu_node_atlas::{create_attachment_layout, GpuNodeAtlas},
 };
 use bevy::{
     prelude::*,
@@ -26,16 +24,16 @@ type TerrainPreprocessPipelineKey = TerrainPreprocessPipelineId;
 
 #[derive(Copy, Clone, Hash, PartialEq, Eq, EnumIter)]
 pub enum TerrainPreprocessPipelineId {
-    SplitTile,
-    StitchNodes,
+    Split,
+    Stitch,
     Downsample,
 }
 
 #[derive(Resource)]
 pub struct TerrainPreprocessPipelines {
     attachment_layout: BindGroupLayout,
-    split_tile_layout: BindGroupLayout,
-    stitch_node_layout: BindGroupLayout,
+    split_layout: BindGroupLayout,
+    stitch_layout: BindGroupLayout,
     downsample_layout: BindGroupLayout,
     pipelines: Vec<CachedComputePipelineId>,
 }
@@ -45,14 +43,14 @@ impl FromWorld for TerrainPreprocessPipelines {
         let device = world.resource::<RenderDevice>();
 
         let attachment_layout = create_attachment_layout(device);
-        let split_tile_layout = create_split_tile_layout(device);
-        let stitch_node_layout = create_stitch_node_layout(device);
+        let split_layout = create_split_layout(device);
+        let stitch_layout = create_stitch_layout(device);
         let downsample_layout = create_downsample_layout(device);
 
         let mut preprocess_pipelines = TerrainPreprocessPipelines {
             attachment_layout,
-            split_tile_layout,
-            stitch_node_layout,
+            split_layout,
+            stitch_layout,
             downsample_layout,
             pipelines: vec![],
         };
@@ -79,21 +77,15 @@ impl SpecializedComputePipeline for TerrainPreprocessPipelines {
         let shader_defs = vec![];
 
         match key {
-            TerrainPreprocessPipelineId::SplitTile => {
-                layout = vec![
-                    self.attachment_layout.clone(),
-                    self.split_tile_layout.clone(),
-                ];
-                shader = SPLIT_TILE_SHADER;
-                entry_point = "split_tile".into();
+            TerrainPreprocessPipelineId::Split => {
+                layout = vec![self.attachment_layout.clone(), self.split_layout.clone()];
+                shader = SPLIT_SHADER;
+                entry_point = "split".into();
             }
-            TerrainPreprocessPipelineId::StitchNodes => {
-                layout = vec![
-                    self.attachment_layout.clone(),
-                    self.stitch_node_layout.clone(),
-                ];
-                shader = STITCH_NODES_SHADER;
-                entry_point = "stitch_nodes".into();
+            TerrainPreprocessPipelineId::Stitch => {
+                layout = vec![self.attachment_layout.clone(), self.stitch_layout.clone()];
+                shader = STITCH_SHADER;
+                entry_point = "stitch".into();
             }
             TerrainPreprocessPipelineId::Downsample => {
                 layout = vec![
@@ -171,18 +163,18 @@ impl render_graph::Node for TerrainPreprocessNode {
                     pass.set_bind_group(0, &attachment.bind_group, &[]);
 
                     match task.task.task_type {
-                        PreprocessTaskType::SplitTile { .. } => {
-                            dbg!("running split tile shader");
+                        PreprocessTaskType::Split { .. } => {
+                            dbg!("running split shader");
 
                             pass.set_pipeline(
-                                pipelines[TerrainPreprocessPipelineId::SplitTile as usize],
+                                pipelines[TerrainPreprocessPipelineId::Split as usize],
                             );
                         }
                         PreprocessTaskType::Stitch { .. } => {
-                            dbg!("running stitch nodes shader");
+                            dbg!("running stitch shader");
 
                             pass.set_pipeline(
-                                pipelines[TerrainPreprocessPipelineId::StitchNodes as usize],
+                                pipelines[TerrainPreprocessPipelineId::Stitch as usize],
                             );
                         }
                         PreprocessTaskType::Downsample { .. } => {
