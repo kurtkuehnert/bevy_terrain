@@ -1,7 +1,7 @@
 use crate::{
     preprocess_gpu::preprocessor::{PreprocessTask, PreprocessTaskType, Preprocessor},
     terrain::{Terrain, TerrainComponents},
-    terrain_data::{gpu_node_atlas::GpuNodeAtlas, NodeCoordinate},
+    terrain_data::{gpu_node_atlas::GpuNodeAtlas, node_atlas::NodeMeta},
 };
 use bevy::{
     prelude::*,
@@ -17,14 +17,6 @@ use std::collections::VecDeque;
 pub(crate) struct ProcessingTask {
     pub(crate) task: PreprocessTask,
     pub(crate) bind_group: Option<BindGroup>,
-}
-
-// Todo: this does not belong here
-#[derive(Copy, Clone, Debug, Default, ShaderType)]
-pub(crate) struct NodeMeta {
-    pub(crate) node_coordinate: NodeCoordinate,
-    #[size(16)]
-    pub(crate) atlas_index: u32,
 }
 
 #[derive(Clone, Debug, ShaderType)]

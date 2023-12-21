@@ -171,14 +171,14 @@ enum RequestState {
 }
 
 /// The internal representation of a node in a [`Quadtree`].
-struct TreeNode {
+struct QuadtreeNode {
     /// The current node coordinate at the quadtree position.
     node_coordinate: NodeCoordinate,
     /// Indicates, whether the node is currently demanded or released.
     state: RequestState,
 }
 
-impl Default for TreeNode {
+impl Default for QuadtreeNode {
     fn default() -> Self {
         Self {
             node_coordinate: NodeCoordinate::INVALID,
@@ -243,13 +243,13 @@ pub struct Quadtree {
     pub(crate) lod_count: u32,
     /// The count of nodes in x and y direction per layer.
     pub(crate) quadtree_size: u32,
+    /// The internal node states of the quadtree.
+    nodes: Array4<QuadtreeNode>,
     leaf_node_count: f32,
     /// The distance (measured in node sizes) until which to request nodes to be loaded.
     load_distance: f32,
     _height: f32,
     _height_under_viewer: f32,
-    /// The internal node states of the quadtree.
-    nodes: Array4<TreeNode>,
 }
 
 impl Quadtree {
