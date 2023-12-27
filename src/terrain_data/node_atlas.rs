@@ -1,20 +1,21 @@
 use crate::{
     prelude::{AttachmentConfig, AttachmentFormat},
-    preprocess::R16Image,
+    preprocess::{R16Image, Rg16Image, Rgba8Image},
     terrain::{Terrain, TerrainConfig},
     terrain_data::{
         quadtree::{Quadtree, QuadtreeEntry},
-        NodeCoordinate, INVALID_ATLAS_INDEX, INVALID_LOD,
+        AttachmentData, NodeCoordinate, INVALID_ATLAS_INDEX, INVALID_LOD,
     },
     terrain_view::{TerrainView, TerrainViewComponents},
 };
 use bevy::{
     prelude::*,
-    render::render_resource::ShaderType,
+    render::render_resource::*,
     tasks::{futures_lite::future, AsyncComputeTaskPool, Task},
     utils::{HashMap, HashSet},
 };
-use image::io::Reader;
+use bytemuck::cast_slice;
+use image::{io::Reader, DynamicImage};
 use itertools::Itertools;
 use std::{collections::VecDeque, mem};
 
@@ -25,7 +26,7 @@ pub(crate) struct AtlasNode {
     pub(crate) atlas_index: u32,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub(crate) struct NodeWithData {
     pub(crate) node: AtlasNode,
     pub(crate) data: AttachmentData,
@@ -37,8 +38,24 @@ impl NodeWithData {
         AsyncComputeTaskPool::get().spawn(async move {
             let path = self.node.coordinate.path(&path, "png");
 
-            let image =
-                R16Image::from_raw(self.texture_size, self.texture_size, self.data).unwrap();
+            let image = match self.data {
+                AttachmentData::Rgba8(data) => {
+                    let data = data.into_iter().flatten().collect_vec();
+                    DynamicImage::from(
+                        Rgba8Image::from_raw(self.texture_size, self.texture_size, data).unwrap(),
+                    )
+                }
+                AttachmentData::R16(data) => DynamicImage::from(
+                    R16Image::from_raw(self.texture_size, self.texture_size, data).unwrap(),
+                ),
+                AttachmentData::Rg16(data) => {
+                    let data = data.into_iter().flatten().collect_vec();
+                    DynamicImage::from(
+                        Rg16Image::from_raw(self.texture_size, self.texture_size, data).unwrap(),
+                    )
+                }
+                AttachmentData::None => panic!("Attachment has not data."),
+            };
 
             image.save(&path).unwrap();
 
@@ -48,15 +65,19 @@ impl NodeWithData {
         })
     }
 
-    pub(crate) fn start_loading(node: AtlasNode, path: String) -> Task<Self> {
+    pub(crate) fn start_loading(
+        node: AtlasNode,
+        path: String,
+        format: AttachmentFormat,
+    ) -> Task<Self> {
         AsyncComputeTaskPool::get().spawn(async move {
             let path = node.coordinate.path(&path, "png");
 
             let mut reader = Reader::open(path).unwrap();
             reader.no_limits();
-            let image = reader.decode().unwrap().into_luma16();
+            let image = reader.decode().unwrap();
             let texture_size = image.width();
-            let data = image.into_raw();
+            let data = AttachmentData::from_bytes(image.as_bytes(), format);
 
             Self {
                 node,
@@ -66,8 +87,6 @@ impl NodeWithData {
         })
     }
 }
-
-type AttachmentData = Vec<u16>;
 
 /// An attachment of a [`NodeAtlas`].
 pub struct AtlasAttachment {
@@ -99,7 +118,7 @@ impl AtlasAttachment {
             border_size: config.border_size,
             mip_level_count: config.mip_level_count,
             format: config.format,
-            data: vec![Vec::new(); node_atlas_size as usize],
+            data: vec![AttachmentData::None; node_atlas_size as usize],
             upload_nodes: default(),
             loading_nodes: default(),
             saving_nodes: default(),
@@ -114,8 +133,11 @@ impl AtlasAttachment {
     fn update(&mut self, atlas_state: &mut NodeAtlasState) {
         // Todo: build customizable loader abstraction
         for node in atlas_state.start_loading_nodes.drain(..) {
-            self.loading_nodes
-                .push(NodeWithData::start_loading(node, self.path.clone()));
+            self.loading_nodes.push(NodeWithData::start_loading(
+                node,
+                self.path.clone(),
+                self.format,
+            ));
         }
 
         let mut loading_nodes = mem::take(&mut self.loading_nodes);

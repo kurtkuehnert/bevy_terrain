@@ -2,7 +2,7 @@ use crate::{
     terrain::{Terrain, TerrainComponents},
     terrain_data::{
         node_atlas::{AtlasAttachment, AtlasNode, NodeAtlas, NodeWithData},
-        AttachmentFormat,
+        AttachmentData, AttachmentFormat,
     },
     util::StaticBuffer,
 };
@@ -15,7 +15,6 @@ use bevy::{
     },
     tasks::{AsyncComputeTaskPool, Task},
 };
-use bytemuck::cast_slice;
 use itertools::Itertools;
 use std::{iter, mem};
 
@@ -51,7 +50,7 @@ pub(crate) struct AttachmentMeta {
     pub(crate) entries_per_node: u32,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub(crate) struct AtlasBufferInfo {
     pixels_per_entry: u32,
     pixels_per_side: u32,
@@ -138,6 +137,7 @@ impl AtlasBufferInfo {
 }
 
 pub(crate) struct GpuAtlasAttachment {
+    pub(crate) format: AttachmentFormat,
     pub(crate) max_slots: usize,
     pub(crate) slots: Vec<AtlasNode>,
     pub(crate) atlas_texture: Texture,
@@ -224,6 +224,7 @@ impl GpuAtlasAttachment {
         );
 
         Self {
+            format: attachment.format,
             slots: default(),
             max_slots,
             atlas_texture,
@@ -285,7 +286,7 @@ impl GpuAtlasAttachment {
             queue.write_texture(
                 self.buffer_info
                     .image_copy_texture(&self.atlas_texture, node.node.atlas_index, 0),
-                cast_slice(&node.data),
+                node.data.bytes(),
                 ImageDataLayout {
                     offset: 0,
                     bytes_per_row: Some(self.buffer_info.actual_side_size),
@@ -320,7 +321,8 @@ impl GpuAtlasAttachment {
     }
 
     pub(crate) fn start_downloading_nodes(&mut self) {
-        let buffer_info = self.buffer_info.clone();
+        let format = self.format;
+        let buffer_info = self.buffer_info;
         let download_buffers = mem::take(&mut self.download_buffers);
         let slots = mem::take(&mut self.slots);
 
@@ -335,30 +337,20 @@ impl GpuAtlasAttachment {
 
                     let buffer_slice = download_buffer.slice(..);
 
-                    buffer_slice.map_async(MapMode::Read, move |result| {
-                        if result.is_err() {
-                            panic!("{}", result.err().unwrap().to_string());
-                        }
-
+                    buffer_slice.map_async(MapMode::Read, move |_| {
                         tx.try_send(()).unwrap();
                     });
 
                     rx.recv().await.unwrap();
 
-                    let mapped_data = buffer_slice.get_mapped_range();
+                    let mut data = buffer_slice.get_mapped_range().to_vec();
 
-                    let mut data = mapped_data
-                        .chunks_exact(2)
-                        .map(|pixel| u16::from_le_bytes(pixel.try_into().unwrap()))
-                        .collect::<Vec<u16>>();
-
-                    drop(mapped_data);
                     download_buffer.unmap();
                     drop(download_buffer);
 
-                    if data.len() != buffer_info.actual_node_size as usize / 2 {
-                        let actual_side_size = buffer_info.actual_side_size as usize / 2;
-                        let aligned_side_size = buffer_info.aligned_side_size as usize / 2;
+                    if data.len() != buffer_info.actual_node_size as usize {
+                        let actual_side_size = buffer_info.actual_side_size as usize;
+                        let aligned_side_size = buffer_info.aligned_side_size as usize;
 
                         let mut take_offset = aligned_side_size;
                         let mut place_offset = actual_side_size;
@@ -372,12 +364,12 @@ impl GpuAtlasAttachment {
                             place_offset += actual_side_size;
                         }
 
-                        data.truncate(buffer_info.actual_node_size as usize / 2);
+                        data.truncate(buffer_info.actual_node_size as usize);
                     }
 
                     NodeWithData {
                         node,
-                        data,
+                        data: AttachmentData::from_bytes(&data, format),
                         texture_size: buffer_info.pixels_per_side,
                     }
                 })
