@@ -9,6 +9,7 @@ struct NodeCoordinate {
 }
 
 struct AttachmentMeta {
+    lod_count: u32,
     texture_size: u32,
     border_size: u32,
     center_size: u32,

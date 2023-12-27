@@ -42,6 +42,7 @@ pub(crate) fn create_attachment_layout(device: &RenderDevice) -> BindGroupLayout
 
 #[derive(Default, ShaderType)]
 pub(crate) struct AttachmentMeta {
+    pub(crate) lod_count: u32,
     pub(crate) texture_size: u32,
     pub(crate) border_size: u32,
     pub(crate) center_size: u32,
@@ -156,7 +157,7 @@ impl GpuAtlasAttachment {
     pub(crate) fn new(
         device: &RenderDevice,
         attachment: &AtlasAttachment,
-        node_atlas_size: u32,
+        node_atlas: &NodeAtlas,
     ) -> Self {
         let max_slots = 16;
 
@@ -165,7 +166,7 @@ impl GpuAtlasAttachment {
             size: Extent3d {
                 width: attachment.texture_size,
                 height: attachment.texture_size,
-                depth_or_array_layers: node_atlas_size,
+                depth_or_array_layers: node_atlas.atlas_size,
             },
             mip_level_count: attachment.mip_level_count,
             sample_count: 1,
@@ -195,6 +196,7 @@ impl GpuAtlasAttachment {
         );
 
         let attachment_meta = AttachmentMeta {
+            lod_count: node_atlas.lod_count,
             texture_size: attachment.texture_size,
             border_size: attachment.border_size,
             center_size: attachment.center_size,
@@ -394,7 +396,7 @@ impl GpuNodeAtlas {
         let attachments = node_atlas
             .attachments
             .iter()
-            .map(|attachment| GpuAtlasAttachment::new(device, attachment, node_atlas.atlas_size))
+            .map(|attachment| GpuAtlasAttachment::new(device, attachment, node_atlas))
             .collect_vec();
 
         Self { attachments }
