@@ -17,6 +17,7 @@
 
 use bevy::render::render_resource::*;
 use bincode::{Decode, Encode};
+use bytemuck::cast_slice;
 use std::{fmt, str::FromStr};
 
 pub mod gpu_node_atlas;
@@ -124,6 +125,39 @@ impl AttachmentFormat {
             AttachmentFormat::Rgba8 => 4,
             AttachmentFormat::R16 => 2,
             AttachmentFormat::Rg16 => 4,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub(crate) enum AttachmentData {
+    None,
+    /// Three channels  8 bit
+    // Rgb8(Vec<(u8, u8, u8)>), Can not be represented currently
+    /// Four  channels  8 bit
+    Rgba8(Vec<[u8; 4]>),
+    /// One   channel  16 bit
+    R16(Vec<u16>),
+    /// Two   channels 16 bit
+    Rg16(Vec<[u16; 2]>),
+}
+
+impl AttachmentData {
+    pub(crate) fn from_bytes(data: &[u8], format: AttachmentFormat) -> Self {
+        match format {
+            AttachmentFormat::Rgb8 => unimplemented!(),
+            AttachmentFormat::Rgba8 => Self::Rgba8(cast_slice(data).to_vec()),
+            AttachmentFormat::R16 => Self::R16(cast_slice(data).to_vec()),
+            AttachmentFormat::Rg16 => Self::Rg16(cast_slice(data).to_vec()),
+        }
+    }
+
+    pub(crate) fn bytes(&self) -> &[u8] {
+        match self {
+            AttachmentData::Rgba8(data) => cast_slice(data),
+            AttachmentData::R16(data) => cast_slice(data),
+            AttachmentData::Rg16(data) => cast_slice(data),
+            AttachmentData::None => panic!("Attachment has no data."),
         }
     }
 }
