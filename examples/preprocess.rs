@@ -1,21 +1,22 @@
 use bevy::prelude::*;
 use bevy_terrain::prelude::*;
-use bevy_terrain::preprocess_gpu::preprocessor::Preprocessor;
+use bevy_terrain::preprocess_gpu::preprocessor::{PreprocessDataset, Preprocessor};
 use bevy_terrain::preprocess_gpu::TerrainPreprocessPlugin;
 
-const TILE_SIZE: u32 = 1024;
-const TILE_FORMAT: FileFormat = FileFormat::PNG;
-const TERRAIN_SIZE: f32 = 1024.0;
 const TEXTURE_SIZE: u32 = 512;
-const MIP_LEVEL_COUNT: u32 = 1;
-const LOD_COUNT: u32 = 8;
-const HEIGHT: f32 = 400.0 / TERRAIN_SIZE;
+const LOD_COUNT: u32 = 2;
 const NODE_ATLAS_SIZE: u32 = 1024;
-const PATH: &str = "terrains/basic";
+const PATH: &str = "terrains/advanced";
 
 fn main() {
-    let config =
-        TerrainPluginConfig::with_base_attachment(BaseConfig::new(TEXTURE_SIZE, MIP_LEVEL_COUNT));
+    let config = TerrainPluginConfig::with_base_attachment(BaseConfig::new(TEXTURE_SIZE, 1))
+        .add_attachment(AttachmentConfig::new(
+            "albedo".to_string(),
+            TEXTURE_SIZE,
+            1,
+            1,
+            AttachmentFormat::Rgba8,
+        ));
 
     App::new()
         .add_plugins((
@@ -33,26 +34,30 @@ fn setup(
     asset_server: Res<AssetServer>,
 ) {
     let config = plugin_config.configure_terrain(
-        TERRAIN_SIZE,
+        0.0,
         LOD_COUNT,
         0.0,
-        HEIGHT,
+        0.0,
         NODE_ATLAS_SIZE,
         PATH.to_string(),
     );
 
-    let mut terrain_bundle =
-        TerrainBundle::new(config.clone(), Vec3::new(20.0, -30.0, -100.0), TERRAIN_SIZE);
+    let mut terrain_bundle = TerrainBundle::new(config.clone(), Vec3::ZERO, 0.0);
 
-    let mut preprocessor = Preprocessor::default();
+    let mut preprocessor = Preprocessor::new(PATH.to_string());
 
+    // preprocessor.preprocess_tile(
+    //     PreprocessDataset {
+    //         attachment_index: 0,
+    //         path: format!("{PATH}/source/height.png"),
+    //     },
+    //     &asset_server,
+    //     &mut terrain_bundle.node_atlas,
+    // );
     preprocessor.preprocess_tile(
-        PATH.to_string(),
-        TileConfig {
-            side: 0,
-            path: format!("{PATH}/source/height.png"),
-            size: TILE_SIZE,
-            file_format: TILE_FORMAT,
+        PreprocessDataset {
+            attachment_index: 1,
+            path: format!("{PATH}/source/albedo.png"),
         },
         &asset_server,
         &mut terrain_bundle.node_atlas,

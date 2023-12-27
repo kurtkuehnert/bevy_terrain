@@ -14,7 +14,6 @@ use bevy::{
     tasks::{futures_lite::future, AsyncComputeTaskPool, Task},
     utils::{HashMap, HashSet},
 };
-use bytemuck::cast_slice;
 use image::{io::Reader, DynamicImage};
 use itertools::Itertools;
 use std::{collections::VecDeque, mem};
@@ -107,11 +106,12 @@ pub struct AtlasAttachment {
 }
 
 impl AtlasAttachment {
-    fn new(config: &AttachmentConfig, node_atlas_size: u32) -> Self {
-        let path = "assets/terrains/basic/data/height".to_string();
+    fn new(config: &AttachmentConfig, node_atlas_size: u32, path: &str) -> Self {
+        let name = config.name.clone();
+        let path = format!("assets/{path}/data/{name}");
 
         Self {
-            name: config.name.clone(),
+            name,
             path,
             texture_size: config.texture_size,
             center_size: config.center_size,
@@ -361,6 +361,7 @@ pub struct NodeAtlas {
     pub(crate) attachments: Vec<AtlasAttachment>, // stores the attachment data
     pub(crate) state: NodeAtlasState,
     pub(crate) atlas_size: u32,
+    pub(crate) lod_count: u32,
 }
 
 impl NodeAtlas {
@@ -369,28 +370,33 @@ impl NodeAtlas {
     /// * `size` - The amount of nodes the can be loaded simultaneously in the node atlas.
     /// * `attachments` - The atlas attachments of the terrain.
     pub fn new(
-        size: u32,
+        path: &str,
+        atlas_size: u32,
+        lod_count: u32,
         attachments: &Vec<AttachmentConfig>,
         existing_nodes: HashSet<NodeCoordinate>,
     ) -> Self {
         let attachments = attachments
             .iter()
-            .map(|attachment| AtlasAttachment::new(attachment, size))
+            .map(|attachment| AtlasAttachment::new(attachment, atlas_size, path))
             .collect_vec();
 
-        let state = NodeAtlasState::new(size, existing_nodes);
+        let state = NodeAtlasState::new(atlas_size, existing_nodes);
 
         Self {
             attachments,
-            atlas_size: size,
             state,
+            atlas_size,
+            lod_count,
         }
     }
 
     /// Creates a new quadtree from a terrain config.
     pub fn from_config(config: &TerrainConfig) -> Self {
         Self::new(
+            &config.path,
             config.node_atlas_size,
+            config.lod_count,
             &config.attachments,
             config.nodes.clone(),
         )

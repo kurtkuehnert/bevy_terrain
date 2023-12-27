@@ -123,12 +123,11 @@ impl GpuPreprocessor {
 
             gpu_preprocessor.processing_tasks.clear();
 
-            let attachment = &mut gpu_node_atlas.attachments[0];
-
             while !gpu_preprocessor.ready_tasks.is_empty() {
-                let node = gpu_preprocessor.ready_tasks.back().unwrap().node;
+                let task = gpu_preprocessor.ready_tasks.back().unwrap();
+                let attachment = &mut gpu_node_atlas.attachments[task.attachment_index];
 
-                if let Some(section_index) = attachment.reserve_write_slot(node) {
+                if let Some(section_index) = attachment.reserve_write_slot(task.node) {
                     let task = gpu_preprocessor.ready_tasks.pop_back().unwrap();
 
                     let bind_group = match &task.task_type {
