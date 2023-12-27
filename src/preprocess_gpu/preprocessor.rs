@@ -1,6 +1,5 @@
 use crate::{
     formats::tc::save_node_config,
-    preprocess::TileConfig,
     terrain::Terrain,
     terrain_data::{
         node_atlas::{AtlasNode, NodeAtlas},
@@ -14,6 +13,11 @@ use bevy::{
 };
 use itertools::iproduct;
 use std::{collections::VecDeque, ops::DerefMut, time::Instant};
+
+pub struct PreprocessDataset {
+    pub attachment_index: usize,
+    pub path: String,
+}
 
 #[derive(Clone)]
 pub(crate) enum PreprocessTaskType {
@@ -29,9 +33,11 @@ pub(crate) enum PreprocessTaskType {
 pub(crate) struct PreprocessTask {
     pub(crate) task_type: PreprocessTaskType,
     pub(crate) node: AtlasNode,
+    pub(crate) attachment_index: usize,
 }
 
 fn split(
+    attachment_index: usize,
     node_atlas: &mut NodeAtlas,
     tile: Handle<Image>,
     lod: u32,
@@ -47,18 +53,19 @@ fn split(
     };
 
     PreprocessTask {
+        attachment_index,
         task_type: PreprocessTaskType::Split { tile },
         node,
     }
 }
 
 fn stitch(
+    attachment_index: usize,
     node_atlas: &mut NodeAtlas,
     lod: u32,
     x: u32,
     y: u32,
-    node_width: u32,
-    node_height: u32,
+    node_count: u32,
 ) -> PreprocessTask {
     let node_coordinate = NodeCoordinate::new(0, lod, x, y);
     let atlas_index = node_atlas.get_or_allocate(node_coordinate);
@@ -95,8 +102,8 @@ fn stitch(
 
         let neighbour_atlas_index = if neighbour_node_position.x < 0
             || neighbour_node_position.y < 0
-            || neighbour_node_position.x >= node_width as i32
-            || neighbour_node_position.y >= node_height as i32
+            || neighbour_node_position.x >= node_count as i32
+            || neighbour_node_position.y >= node_count as i32
         {
             u32::MAX
         } else {
@@ -110,12 +117,19 @@ fn stitch(
     }
 
     PreprocessTask {
+        attachment_index,
         task_type: PreprocessTaskType::Stitch { neighbour_nodes },
         node,
     }
 }
 
-fn downsample(node_atlas: &mut NodeAtlas, lod: u32, x: u32, y: u32) -> PreprocessTask {
+fn downsample(
+    attachment_index: usize,
+    node_atlas: &mut NodeAtlas,
+    lod: u32,
+    x: u32,
+    y: u32,
+) -> PreprocessTask {
     let node_coordinate = NodeCoordinate::new(0, lod, x, y);
     let atlas_index = node_atlas.get_or_allocate(node_coordinate);
 
@@ -138,15 +152,16 @@ fn downsample(node_atlas: &mut NodeAtlas, lod: u32, x: u32, y: u32) -> Preproces
     }
 
     PreprocessTask {
+        attachment_index,
         task_type: PreprocessTaskType::Downsample { parent_nodes },
         node,
     }
 }
 
-#[derive(Component, Default)]
+#[derive(Component)]
 pub struct Preprocessor {
     pub(crate) path: String,
-    pub(crate) tile_handle: Option<Handle<Image>>,
+    pub(crate) loading_tiles: Vec<Handle<Image>>,
     pub(crate) task_queue: VecDeque<PreprocessTask>,
     pub(crate) ready_tasks: Vec<PreprocessTask>,
 
@@ -154,56 +169,89 @@ pub struct Preprocessor {
 }
 
 impl Preprocessor {
+    pub fn new(path: String) -> Self {
+        Self {
+            path,
+            loading_tiles: default(),
+            task_queue: default(),
+            ready_tasks: default(),
+            start_time: default(),
+        }
+    }
+
     pub fn preprocess_tile(
         &mut self,
-        path: String,
-        tile_config: TileConfig,
+        dataset: PreprocessDataset,
         asset_server: &AssetServer,
         node_atlas: &mut NodeAtlas,
     ) {
-        self.path = path;
+        let tile_handle = asset_server.load(dataset.path);
+        self.loading_tiles.push(tile_handle.clone());
 
-        let tile_handle = asset_server.load(tile_config.path);
-        self.tile_handle = Some(tile_handle.clone());
-
-        let node_width = 8;
-        let node_height = 8;
-        let lod_count = 4;
+        let lod_count = node_atlas.lod_count;
+        let node_count = 1 << (lod_count - 1);
         let lod = 0;
 
-        for (x, y) in iproduct!(0..node_width, 0..node_height) {
-            self.task_queue
-                .push_back(split(node_atlas, tile_handle.clone(), lod, x, y));
+        for (x, y) in iproduct!(0..node_count, 0..node_count) {
+            self.task_queue.push_back(split(
+                dataset.attachment_index,
+                node_atlas,
+                tile_handle.clone(),
+                lod,
+                x,
+                y,
+            ));
         }
 
         self.task_queue.push_back(PreprocessTask {
+            attachment_index: dataset.attachment_index,
             task_type: PreprocessTaskType::Barrier,
             node: Default::default(),
         });
 
-        for (x, y) in iproduct!(0..node_width, 0..node_height) {
-            self.task_queue
-                .push_back(stitch(node_atlas, lod, x, y, node_width, node_height));
+        for (x, y) in iproduct!(0..node_count, 0..node_count) {
+            self.task_queue.push_back(stitch(
+                dataset.attachment_index,
+                node_atlas,
+                lod,
+                x,
+                y,
+                node_count,
+            ));
         }
 
         for lod in 1..lod_count {
-            let node_width = node_width >> lod;
-            let node_height = node_height >> lod;
+            let node_count = node_count >> lod;
 
-            for (x, y) in iproduct!(0..node_width, 0..node_height) {
-                self.task_queue.push_back(downsample(node_atlas, lod, x, y));
+            for (x, y) in iproduct!(0..node_count, 0..node_count) {
+                self.task_queue.push_back(downsample(
+                    dataset.attachment_index,
+                    node_atlas,
+                    lod,
+                    x,
+                    y,
+                ));
             }
 
             self.task_queue.push_back(PreprocessTask {
+                attachment_index: dataset.attachment_index,
                 task_type: PreprocessTaskType::Barrier,
                 node: Default::default(),
             });
 
-            for (x, y) in iproduct!(0..node_width, 0..node_height) {
-                self.task_queue
-                    .push_back(stitch(node_atlas, lod, x, y, node_width, node_height));
+            for (x, y) in iproduct!(0..node_count, 0..node_count) {
+                self.task_queue.push_back(stitch(
+                    dataset.attachment_index,
+                    node_atlas,
+                    lod,
+                    x,
+                    y,
+                    node_count,
+                ));
             }
         }
+
+        self.start_time = Some(Instant::now());
     }
 }
 
@@ -243,7 +291,6 @@ pub(crate) fn select_ready_tasks(
                     PreprocessTaskType::Stitch { .. } => true,
                     PreprocessTaskType::Downsample { .. } => true,
                     PreprocessTaskType::Barrier => {
-                        dbg!(node_atlas.state.slots);
                         if node_atlas.state.slots == node_atlas.state.max_slots {
                             dbg!("barrier complete");
                         }
@@ -266,20 +313,19 @@ pub(crate) fn select_ready_tasks(
 }
 
 pub(crate) fn preprocessor_load_tile(
-    asset_server: Res<AssetServer>,
     mut terrain_query: Query<&mut Preprocessor, With<Terrain>>,
     mut images: ResMut<Assets<Image>>,
 ) {
     for mut preprocessor in terrain_query.iter_mut() {
-        if let Some(handle) = &preprocessor.tile_handle {
-            if asset_server.load_state(handle) == LoadState::Loaded {
-                let image = images.get_mut(handle).unwrap();
+        preprocessor.loading_tiles.retain_mut(|handle| {
+            if let Some(image) = images.get_mut(handle.id()) {
                 image.texture_descriptor.format = TextureFormat::R16Unorm;
                 image.sampler = ImageSampler::linear();
 
-                preprocessor.tile_handle = None;
-                preprocessor.start_time = Some(Instant::now());
+                false
+            } else {
+                true
             }
-        }
+        });
     }
 }

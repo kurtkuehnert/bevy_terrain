@@ -150,35 +150,37 @@ impl render_graph::Node for TerrainPreprocessNode {
             let preprocess_data = preprocess_data.get(&terrain).unwrap();
             let gpu_node_atlas = gpu_node_atlases.get(&terrain).unwrap();
 
-            if !preprocess_data.processing_tasks.is_empty() {
-                let attachment = &gpu_node_atlas.attachments[0];
-
+            for attachment in &gpu_node_atlas.attachments {
                 attachment.copy_nodes_to_write_section(context.command_encoder());
+            }
 
+            if !preprocess_data.processing_tasks.is_empty() {
                 let mut pass = context
                     .command_encoder()
                     .begin_compute_pass(&ComputePassDescriptor::default());
 
                 for task in &preprocess_data.processing_tasks {
+                    let attachment = &gpu_node_atlas.attachments[task.task.attachment_index];
+
                     pass.set_bind_group(0, &attachment.bind_group, &[]);
 
                     match task.task.task_type {
                         PreprocessTaskType::Split { .. } => {
-                            dbg!("running split shader");
+                            // dbg!("running split shader");
 
                             pass.set_pipeline(
                                 pipelines[TerrainPreprocessPipelineId::Split as usize],
                             );
                         }
                         PreprocessTaskType::Stitch { .. } => {
-                            dbg!("running stitch shader");
+                            //  dbg!("running stitch shader");
 
                             pass.set_pipeline(
                                 pipelines[TerrainPreprocessPipelineId::Stitch as usize],
                             );
                         }
                         PreprocessTaskType::Downsample { .. } => {
-                            dbg!("running downsample shader");
+                            //  dbg!("running downsample shader");
 
                             pass.set_pipeline(
                                 pipelines[TerrainPreprocessPipelineId::Downsample as usize],
@@ -194,17 +196,19 @@ impl render_graph::Node for TerrainPreprocessNode {
                         attachment.workgroup_count.z,
                     );
                 }
+            }
 
-                drop(pass);
-
+            for attachment in &gpu_node_atlas.attachments {
                 attachment.copy_nodes_from_write_section(context.command_encoder());
 
                 attachment.download_nodes(context.command_encoder());
 
-                println!(
-                    "Ran preprocessing pipeline with {} nodes.",
-                    attachment.slots.len()
-                )
+                if !attachment.slots.is_empty() {
+                    println!(
+                        "Ran preprocessing pipeline with {} nodes.",
+                        attachment.slots.len()
+                    )
+                }
             }
         }
 
