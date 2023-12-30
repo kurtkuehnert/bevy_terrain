@@ -90,8 +90,8 @@ impl TerrainData {
                 gpu_node_atlas
                     .attachments
                     .get(i)
-                    .map_or(&fallback_image.d2_array.texture_view, |attachment| {
-                        &attachment.atlas_view
+                    .map_or(fallback_image.d2_array.texture_view.clone(), |attachment| {
+                        attachment.atlas_texture.create_view(&default())
                     })
             })
             .collect_vec();
@@ -103,14 +103,14 @@ impl TerrainData {
                 &mesh_buffer,
                 &terrain_config_buffer,
                 &atlas_sampler,
-                attachments[0],
-                attachments[1],
-                attachments[2],
-                attachments[3],
-                attachments[4],
-                attachments[5],
-                attachments[6],
-                attachments[7],
+                &attachments[0],
+                &attachments[1],
+                &attachments[2],
+                &attachments[3],
+                &attachments[4],
+                &attachments[5],
+                &attachments[6],
+                &attachments[7],
             )),
         );
 

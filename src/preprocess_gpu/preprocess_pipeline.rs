@@ -191,9 +191,9 @@ impl render_graph::Node for TerrainPreprocessNode {
 
                     pass.set_bind_group(1, task.bind_group.as_ref().unwrap(), &[]);
                     pass.dispatch_workgroups(
-                        attachment.workgroup_count.x,
-                        attachment.workgroup_count.y,
-                        attachment.workgroup_count.z,
+                        attachment.buffer_info.workgroup_count.x,
+                        attachment.buffer_info.workgroup_count.y,
+                        attachment.buffer_info.workgroup_count.z,
                     );
                 }
             }

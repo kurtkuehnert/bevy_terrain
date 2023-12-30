@@ -1,4 +1,4 @@
-#import bevy_terrain::preprocessing::{NodeCoordinate, atlas, attachment, inside, pixel_coords, store_entry}
+#import bevy_terrain::preprocessing::{NodeCoordinate, atlas, attachment, inside, pixel_coords, pixel_value, process_entry}
 
 // Todo: move this once naga oil does not mess up the size attribute anymore
 struct AtlasNode {
@@ -15,9 +15,9 @@ struct DownsampleData {
 @group(1) @binding(0)
 var<uniform> downsample_data: DownsampleData;
 
-fn pixel_value(coords: vec2<u32>) -> f32 {
+override fn pixel_value(coords: vec2<u32>) -> vec4<f32> {
     if (!inside(coords, vec4<u32>(attachment.border_size, attachment.border_size, attachment.center_size, attachment.center_size))) {
-        return 0.0;
+        return vec4<f32>(0.0);
     }
 
     let node_coords = coords - vec2<u32>(attachment.border_size);
@@ -27,19 +27,14 @@ fn pixel_value(coords: vec2<u32>) -> f32 {
 
     let parent_node = downsample_data.parent_nodes[parent_index];
 
-    return (textureLoad(atlas, parent_coords + vec2<u32>(0u, 0u), parent_node.atlas_index, 0).x +
-            textureLoad(atlas, parent_coords + vec2<u32>(0u, 1u), parent_node.atlas_index, 0).x +
-            textureLoad(atlas, parent_coords + vec2<u32>(1u, 0u), parent_node.atlas_index, 0).x +
-            textureLoad(atlas, parent_coords + vec2<u32>(1u, 1u), parent_node.atlas_index, 0).x ) / 4.0;
+    return (textureLoad(atlas, parent_coords + vec2<u32>(0u, 0u), parent_node.atlas_index, 0) +
+            textureLoad(atlas, parent_coords + vec2<u32>(0u, 1u), parent_node.atlas_index, 0) +
+            textureLoad(atlas, parent_coords + vec2<u32>(1u, 0u), parent_node.atlas_index, 0) +
+            textureLoad(atlas, parent_coords + vec2<u32>(1u, 1u), parent_node.atlas_index, 0) ) / 4.0;
 }
 
 // Todo: respect memory coalescing
 @compute @workgroup_size(8, 8, 1)
 fn downsample(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
-    let entry_coords = vec3<u32>(invocation_id.xy, downsample_data.node_index);
-
-    let entry_value = pack2x16unorm(vec2<f32>(pixel_value(pixel_coords(entry_coords, 0u)),
-                                              pixel_value(pixel_coords(entry_coords, 1u))));
-
-    store_entry(entry_coords, entry_value);
+    process_entry(vec3<u32>(invocation_id.xy, downsample_data.node_index));
 }

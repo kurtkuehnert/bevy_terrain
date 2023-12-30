@@ -132,7 +132,7 @@ impl AtlasAttachment {
 
     fn update(&mut self, atlas_state: &mut NodeAtlasState) {
         // Todo: build customizable loader abstraction
-        for node in atlas_state.start_loading_nodes.drain(..) {
+        for &node in &atlas_state.start_loading_nodes {
             self.loading_nodes.push(NodeWithData::start_loading(
                 node,
                 self.path.clone(),
@@ -181,7 +181,7 @@ impl AtlasAttachment {
 #[derive(Clone, Copy)]
 enum LoadingState {
     /// The node is loading, but can not be used yet.
-    Loading,
+    Loading(u32),
     /// The node is loaded and can be used.
     Loaded,
 }
@@ -201,6 +201,8 @@ pub(crate) struct NodeAtlasState {
     unused_nodes: VecDeque<AtlasNode>,
     existing_nodes: HashSet<NodeCoordinate>,
 
+    attachment_count: u32,
+
     start_loading_nodes: Vec<AtlasNode>,
 
     pub(crate) slots: u32,
@@ -208,7 +210,11 @@ pub(crate) struct NodeAtlasState {
 }
 
 impl NodeAtlasState {
-    fn new(atlas_size: u32, existing_nodes: HashSet<NodeCoordinate>) -> Self {
+    fn new(
+        atlas_size: u32,
+        attachment_count: u32,
+        existing_nodes: HashSet<NodeCoordinate>,
+    ) -> Self {
         let unused_nodes = (0..atlas_size)
             .map(|atlas_index| AtlasNode {
                 coordinate: NodeCoordinate::INVALID,
@@ -220,6 +226,7 @@ impl NodeAtlasState {
             node_states: default(),
             unused_nodes,
             existing_nodes,
+            attachment_count,
             start_loading_nodes: default(),
             slots: 16,
             max_slots: 16,
@@ -227,7 +234,14 @@ impl NodeAtlasState {
     }
     fn loaded_node_attachment(&mut self, node_coordinate: NodeCoordinate, _attachment_index: u32) {
         let node_state = self.node_states.get_mut(&node_coordinate).unwrap();
-        node_state.state = LoadingState::Loaded;
+
+        node_state.state = match node_state.state {
+            LoadingState::Loading(1) => LoadingState::Loaded,
+            LoadingState::Loading(n) => LoadingState::Loading(n - 1),
+            LoadingState::Loaded => {
+                panic!("Loaded more attachments, than registered with the atlas.")
+            }
+        };
     }
 
     fn allocate_node(&mut self) -> u32 {
@@ -281,7 +295,7 @@ impl NodeAtlasState {
                 node_coordinate,
                 NodeState {
                     requests: 1,
-                    state: LoadingState::Loading,
+                    state: LoadingState::Loading(self.attachment_count),
                     atlas_index,
                 },
             );
@@ -381,7 +395,7 @@ impl NodeAtlas {
             .map(|attachment| AtlasAttachment::new(attachment, atlas_size, path))
             .collect_vec();
 
-        let state = NodeAtlasState::new(atlas_size, existing_nodes);
+        let state = NodeAtlasState::new(atlas_size, attachments.len() as u32, existing_nodes);
 
         Self {
             attachments,
@@ -422,6 +436,8 @@ impl NodeAtlas {
         for attachment in attachments {
             attachment.update(state);
         }
+
+        state.start_loading_nodes.clear();
     }
 
     /// Adjusts the node atlas according to the requested and released nodes of the [`Quadtree`]

@@ -6,13 +6,11 @@ use bevy::{
 };
 use bevy_terrain::prelude::*;
 
-const TILE_SIZE: u32 = 1024;
-const TILE_FORMAT: FileFormat = FileFormat::PNG;
-const TERRAIN_SIZE: f32 = 1024.0;
-const TEXTURE_SIZE: u32 = 256;
+const TERRAIN_SIZE: f32 = 8.0 * 507.5;
+const TEXTURE_SIZE: u32 = 512;
 const MIP_LEVEL_COUNT: u32 = 1;
 const LOD_COUNT: u32 = 4;
-const HEIGHT: f32 = 400.0 / TERRAIN_SIZE;
+const HEIGHT: f32 = 2000.0 / TERRAIN_SIZE;
 const NODE_ATLAS_SIZE: u32 = 1024;
 const PATH: &str = "terrains/advanced";
 
@@ -38,11 +36,10 @@ fn main() {
                 TEXTURE_SIZE,
                 1,
                 MIP_LEVEL_COUNT,
-                AttachmentFormat::Rgb8,
+                AttachmentFormat::Rgba8,
             ));
 
     App::new()
-        .insert_resource(ClearColor(Color::rgb_u8(43, 44, 47)))
         .add_plugins((
             DefaultPlugins,
             TerrainPlugin { config },
@@ -68,30 +65,6 @@ fn setup(
         gradient: gradient.clone(),
     });
 
-    let mut loader = AttachmentFromDiskLoader::new(LOD_COUNT, PATH.to_string());
-    loader.add_base_attachment(
-        &plugin_config,
-        TileConfig {
-            side: 0,
-            path: format!("assets/{PATH}/source/height"),
-            size: TILE_SIZE,
-            file_format: TILE_FORMAT,
-        },
-    );
-    loader.add_attachment(
-        &plugin_config,
-        TileConfig {
-            side: 0,
-            path: format!("assets/{PATH}/source/albedo.png"),
-            size: TILE_SIZE,
-            file_format: TILE_FORMAT,
-        },
-    );
-
-    // Preprocesses the terrain data.
-    // Todo: Should be commented out after the first run.
-    // loader.preprocess();
-
     // Configure all the important properties of the terrain, as well as its attachments.
     let config = plugin_config.configure_terrain(
         TERRAIN_SIZE,
@@ -116,7 +89,6 @@ fn setup(
     let terrain = commands
         .spawn((
             TerrainBundle::new(config.clone(), default(), TERRAIN_SIZE),
-            loader,
             materials.add(TerrainMaterial { gradient }),
         ))
         .id();
