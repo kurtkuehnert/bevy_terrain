@@ -1,6 +1,5 @@
 use crate::{
-    formats::{tc::load_node_config, TDFPlugin},
-    preprocess::BaseConfig,
+    formats::TDFPlugin,
     render::{
         compute_pipelines::{TerrainComputeNode, TerrainComputePipelines},
         culling_bind_group::CullingBindGroup,
@@ -8,13 +7,12 @@ use crate::{
         terrain_bind_group::TerrainData,
         terrain_view_bind_group::{TerrainViewConfigUniform, TerrainViewData},
     },
-    terrain::{Terrain, TerrainComponents, TerrainConfig},
+    terrain::{Terrain, TerrainComponents},
     terrain_data::{
         gpu_node_atlas::GpuNodeAtlas,
         gpu_quadtree::GpuQuadtree,
         node_atlas::update_node_atlas,
         quadtree::{adjust_quadtree, compute_quadtree_request, Quadtree},
-        AttachmentConfig,
     },
     terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
 };
@@ -26,58 +24,8 @@ use bevy::{
     },
 };
 
-#[derive(Clone, Resource)]
-pub struct TerrainPluginConfig {
-    pub base: BaseConfig,
-    pub attachments: Vec<AttachmentConfig>,
-}
-
-impl TerrainPluginConfig {
-    pub fn with_base_attachment(base: BaseConfig) -> Self {
-        Self {
-            base,
-            attachments: vec![base.height_attachment()],
-        }
-    }
-
-    pub fn add_attachment(mut self, attachment: AttachmentConfig) -> Self {
-        self.attachments.push(attachment);
-        self
-    }
-
-    pub fn configure_terrain(
-        &self,
-        side_length: f32,
-        lod_count: u32,
-        min_height: f32,
-        max_height: f32,
-        node_atlas_size: u32,
-        path: String,
-    ) -> TerrainConfig {
-        let leaf_node_size = (self.base.texture_size - 2 * self.base.border_size) as f32;
-        let leaf_node_count = side_length / leaf_node_size;
-
-        let attachments = self.attachments.clone();
-
-        let nodes = load_node_config(&path);
-
-        TerrainConfig {
-            lod_count,
-            min_height,
-            max_height,
-            leaf_node_count,
-            node_atlas_size,
-            path,
-            attachments,
-            nodes,
-        }
-    }
-}
-
 /// The plugin for the terrain renderer.
-pub struct TerrainPlugin {
-    pub config: TerrainPluginConfig,
-}
+pub struct TerrainPlugin;
 
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
@@ -86,7 +34,6 @@ impl Plugin for TerrainPlugin {
             ExtractComponentPlugin::<Terrain>::default(),
             ExtractComponentPlugin::<TerrainView>::default(),
         ))
-        .insert_resource(self.config.clone())
         .init_resource::<TerrainViewComponents<Quadtree>>()
         .init_resource::<TerrainViewComponents<TerrainViewConfig>>()
         .add_systems(
@@ -136,7 +83,7 @@ impl Plugin for TerrainPlugin {
     }
 
     fn finish(&self, app: &mut App) {
-        load_terrain_shaders(app, &self.config);
+        load_terrain_shaders(app);
 
         let render_app = app
             .sub_app_mut(RenderApp)

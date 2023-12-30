@@ -1,11 +1,7 @@
 //! Types for configuring terrains.
 
-use crate::terrain_data::{AttachmentConfig, NodeCoordinate};
-use bevy::{
-    prelude::*,
-    render::extract_component::ExtractComponent,
-    utils::{HashMap, HashSet},
-};
+use crate::terrain_data::AttachmentConfig;
+use bevy::{prelude::*, render::extract_component::ExtractComponent, utils::HashMap};
 
 /// Resource that stores components that are associated to a terrain entity.
 /// This is used to persist components in the render world.
@@ -48,13 +44,30 @@ pub struct TerrainConfig {
     pub min_height: f32,
     /// The maximum height of the terrain.
     pub max_height: f32,
-    /// The count in x and y direction of the smallest nodes (with lod 0) on each side the terrain.
-    pub leaf_node_count: f32,
     /// The amount of nodes the can be loaded simultaneously in the node atlas.
     pub node_atlas_size: u32,
     /// The path to the terrain folder inside the assets directory.
     pub path: String,
     /// The attachments of the terrain.
     pub attachments: Vec<AttachmentConfig>,
-    pub nodes: HashSet<NodeCoordinate>,
+}
+
+impl Default for TerrainConfig {
+    fn default() -> Self {
+        Self {
+            lod_count: 1,
+            min_height: 0.0,
+            max_height: 1.0,
+            node_atlas_size: 1024,
+            path: default(),
+            attachments: default(),
+        }
+    }
+}
+
+impl TerrainConfig {
+    pub fn add_attachment(mut self, attachment_config: AttachmentConfig) -> Self {
+        self.attachments.push(attachment_config);
+        self
+    }
 }

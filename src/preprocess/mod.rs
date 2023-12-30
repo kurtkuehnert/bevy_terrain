@@ -55,7 +55,6 @@ impl BaseConfig {
             "height".to_string(),
             self.texture_size,
             self.border_size,
-            self.mip_level_count,
             AttachmentFormat::R16,
         );
 

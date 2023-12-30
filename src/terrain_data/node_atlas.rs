@@ -1,3 +1,4 @@
+use crate::formats::tc::load_node_config;
 use crate::{
     prelude::{AttachmentConfig, AttachmentFormat},
     preprocess::{R16Image, Rg16Image, Rgba8Image},
@@ -388,12 +389,13 @@ impl NodeAtlas {
         atlas_size: u32,
         lod_count: u32,
         attachments: &Vec<AttachmentConfig>,
-        existing_nodes: HashSet<NodeCoordinate>,
     ) -> Self {
         let attachments = attachments
             .iter()
             .map(|attachment| AtlasAttachment::new(attachment, atlas_size, path))
             .collect_vec();
+
+        let existing_nodes = load_node_config(path);
 
         let state = NodeAtlasState::new(atlas_size, attachments.len() as u32, existing_nodes);
 
@@ -412,7 +414,6 @@ impl NodeAtlas {
             config.node_atlas_size,
             config.lod_count,
             &config.attachments,
-            config.nodes.clone(),
         )
     }
 

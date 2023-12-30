@@ -5,13 +5,11 @@ use bevy::{
 };
 use bevy_terrain::prelude::*;
 
-const TERRAIN_SIZE: f32 = 8.0 * 507.5;
+const PATH: &str = "terrains/planar";
+const TERRAIN_SIZE: f32 = 1000.0;
+const HEIGHT: f32 = 500.0 / TERRAIN_SIZE;
 const TEXTURE_SIZE: u32 = 512;
-const MIP_LEVEL_COUNT: u32 = 1;
 const LOD_COUNT: u32 = 4;
-const HEIGHT: f32 = 2000.0 / TERRAIN_SIZE;
-const NODE_ATLAS_SIZE: u32 = 1024;
-const PATH: &str = "terrains/basic";
 
 #[derive(Asset, AsBindGroup, TypeUuid, TypePath, Clone)]
 #[uuid = "003e1d5d-241c-45a6-8c25-731dee22d820"]
@@ -20,37 +18,36 @@ pub struct TerrainMaterial {}
 impl Material for TerrainMaterial {}
 
 fn main() {
-    let config =
-        TerrainPluginConfig::with_base_attachment(BaseConfig::new(TEXTURE_SIZE, MIP_LEVEL_COUNT));
-
     App::new()
         .add_plugins((
             DefaultPlugins,
-            TerrainPlugin { config },
+            TerrainPlugin,
             TerrainDebugPlugin, // enable debug settings and controls
             TerrainMaterialPlugin::<TerrainMaterial>::default(),
         ))
         .add_systems(Startup, setup)
-        .add_systems(Update, toggle_camera)
         .run();
 }
 
 fn setup(
     mut commands: Commands,
-    plugin_config: Res<TerrainPluginConfig>,
     mut materials: ResMut<Assets<TerrainMaterial>>,
     mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
 ) {
     // Configure all the important properties of the terrain, as well as its attachments.
-    let config = plugin_config.configure_terrain(
-        TERRAIN_SIZE,
-        LOD_COUNT,
-        0.0,
-        HEIGHT,
-        NODE_ATLAS_SIZE,
-        PATH.to_string(),
-    );
+    let config = TerrainConfig {
+        lod_count: LOD_COUNT,
+        max_height: HEIGHT,
+        path: PATH.to_string(),
+        ..default()
+    }
+    .add_attachment(AttachmentConfig::new(
+        "height".to_string(),
+        TEXTURE_SIZE,
+        2,
+        AttachmentFormat::R16,
+    ));
 
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
     let view_config = TerrainViewConfig {
@@ -71,13 +68,7 @@ fn setup(
         .id();
 
     // Create the view.
-    let view = commands
-        .spawn((
-            TerrainView,
-            DebugCamera::default(),
-            Camera3dBundle::default(),
-        ))
-        .id();
+    let view = commands.spawn((TerrainView, DebugCamera::default())).id();
 
     // Store the quadtree and the view config for the terrain and view.
     // This will hopefully be way nicer once the ECS can handle relations.
@@ -98,11 +89,4 @@ fn setup(
         brightness: 0.2,
         ..default()
     });
-}
-
-fn toggle_camera(input: Res<Input<KeyCode>>, mut camera_query: Query<&mut DebugCamera>) {
-    let mut camera = camera_query.single_mut();
-    if input.just_pressed(KeyCode::T) {
-        camera.active = !camera.active;
-    }
 }
