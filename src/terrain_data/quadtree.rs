@@ -260,17 +260,11 @@ impl Quadtree {
     /// * `center_size` - The size of the smallest nodes (with lod 0).
     /// * `load_distance` - The distance (measured in node sizes) until which to request nodes to be loaded.
     /// * `height` - The height of the terrain.
-    pub fn new(
-        lod_count: u32,
-        quadtree_size: u32,
-        leaf_node_count: f32,
-        load_distance: f32,
-        height: f32,
-    ) -> Self {
+    pub fn new(lod_count: u32, quadtree_size: u32, load_distance: f32, height: f32) -> Self {
         Self {
             lod_count,
             quadtree_size,
-            leaf_node_count,
+            leaf_node_count: (1 << (lod_count - 1)) as f32,
             load_distance,
             _height: height,
             _height_under_viewer: height / 2.0,
@@ -296,7 +290,6 @@ impl Quadtree {
         Self::new(
             config.lod_count,
             view_config.quadtree_size,
-            config.leaf_node_count,
             view_config.load_distance,
             config.max_height,
         )

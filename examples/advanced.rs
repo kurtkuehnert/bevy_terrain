@@ -6,13 +6,11 @@ use bevy::{
 };
 use bevy_terrain::prelude::*;
 
-const TERRAIN_SIZE: f32 = 8.0 * 507.5;
+const PATH: &str = "terrains/planar";
+const TERRAIN_SIZE: f32 = 1000.0;
+const HEIGHT: f32 = 500.0 / TERRAIN_SIZE;
 const TEXTURE_SIZE: u32 = 512;
-const MIP_LEVEL_COUNT: u32 = 1;
 const LOD_COUNT: u32 = 4;
-const HEIGHT: f32 = 2000.0 / TERRAIN_SIZE;
-const NODE_ATLAS_SIZE: u32 = 1024;
-const PATH: &str = "terrains/advanced";
 
 #[derive(Asset, AsBindGroup, TypeUuid, TypePath, Clone)]
 #[uuid = "4ccc53dd-2cfd-48ba-b659-c0e1a9bc0bdb"]
@@ -29,32 +27,21 @@ impl Material for TerrainMaterial {
 }
 
 fn main() {
-    let config =
-        TerrainPluginConfig::with_base_attachment(BaseConfig::new(TEXTURE_SIZE, MIP_LEVEL_COUNT))
-            .add_attachment(AttachmentConfig::new(
-                "albedo".to_string(),
-                TEXTURE_SIZE,
-                1,
-                MIP_LEVEL_COUNT,
-                AttachmentFormat::Rgba8,
-            ));
-
     App::new()
         .add_plugins((
             DefaultPlugins,
-            TerrainPlugin { config },
+            TerrainPlugin,
             TerrainDebugPlugin, // enable debug settings and controls
             TerrainMaterialPlugin::<TerrainMaterial>::default(),
         ))
         .add_systems(Startup, setup)
-        .add_systems(Update, (create_array_texture, toggle_camera))
+        .add_systems(Update, create_array_texture)
         .run();
 }
 
 fn setup(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    plugin_config: Res<TerrainPluginConfig>,
     mut materials: ResMut<Assets<TerrainMaterial>>,
     mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
@@ -66,22 +53,32 @@ fn setup(
     });
 
     // Configure all the important properties of the terrain, as well as its attachments.
-    let config = plugin_config.configure_terrain(
-        TERRAIN_SIZE,
-        LOD_COUNT,
-        0.0,
-        HEIGHT,
-        NODE_ATLAS_SIZE,
-        PATH.to_string(),
-    );
+    let config = TerrainConfig {
+        lod_count: LOD_COUNT,
+        max_height: HEIGHT,
+        path: PATH.to_string(),
+        ..default()
+    }
+    .add_attachment(AttachmentConfig::new(
+        "height".to_string(),
+        TEXTURE_SIZE,
+        2,
+        AttachmentFormat::R16,
+    ))
+    .add_attachment(AttachmentConfig::new(
+        "albedo".to_string(),
+        TEXTURE_SIZE,
+        1,
+        AttachmentFormat::Rgba8,
+    ));
 
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
     let view_config = TerrainViewConfig {
         grid_size: 16,
         quadtree_size: 8,
-        load_distance: 500.0,
+        load_distance: 3.0,
         morph_distance: 8.0,
-        blend_distance: 100.0,
+        blend_distance: 1.5,
         ..default()
     };
 
@@ -94,13 +91,7 @@ fn setup(
         .id();
 
     // Create the view.
-    let view = commands
-        .spawn((
-            TerrainView,
-            DebugCamera::default(),
-            Camera3dBundle::default(),
-        ))
-        .id();
+    let view = commands.spawn((TerrainView, DebugCamera::default())).id();
 
     // Store the quadtree and the view config for the terrain and view.
     // This will hopefully be way nicer once the ECS can handle relations.
@@ -114,20 +105,13 @@ fn setup(
             illuminance: 20000.0,
             ..default()
         },
-        transform: Transform::from_xyz(-1.0, 1.0, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
+        transform: Transform::from_xyz(1.0, 1.0, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
         ..default()
     });
     commands.insert_resource(AmbientLight {
         brightness: 0.2,
         ..default()
     });
-}
-
-fn toggle_camera(input: Res<Input<KeyCode>>, mut camera_query: Query<&mut DebugCamera>) {
-    let mut camera = camera_query.single_mut();
-    if input.just_pressed(KeyCode::T) {
-        camera.active = !camera.active;
-    }
 }
 
 #[derive(Resource)]
