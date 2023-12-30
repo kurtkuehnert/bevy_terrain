@@ -1,8 +1,7 @@
 #import bevy_terrain::types::NodeLookup
 #import bevy_terrain::bindings::config
 #import bevy_terrain::functions::{vertex_local_position, lookup_node, compute_blend}
-#import bevy_terrain::attachments::{atlas_sampler, height_atlas, HEIGHT_SCALE, HEIGHT_OFFSET, HEIGHT_SIZE, sample_height, sample_normal,
-                                                   albedo_atlas, ALBEDO_SCALE, ALBEDO_OFFSET, ALBEDO_SIZE}
+#import bevy_terrain::attachments::{sample_height, sample_normal, sample_attachment1 as sample_albedo}
 #import bevy_terrain::fragment::{FragmentInput, FragmentOutput, fragment_output}
 #import bevy_pbr::pbr_types::{PbrInput, pbr_input_new}
 #import bevy_pbr::pbr_functions::{calculate_view, apply_pbr_lighting}
@@ -14,11 +13,9 @@ var gradient_sampler: sampler;
 
 fn sample_color(lookup: NodeLookup) -> vec4<f32> {
 #ifdef ALBEDO
-    let albedo_coords = lookup.atlas_coordinate * ALBEDO_SCALE + ALBEDO_OFFSET;
-    return textureSample(albedo_atlas, atlas_sampler, albedo_coords, lookup.atlas_index);
+    return sample_albedo(lookup);
 #else
-    let height_coordinate = lookup.atlas_coordinate * HEIGHT_SCALE + HEIGHT_OFFSET;
-    let height = textureSampleLevel(height_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0).x;
+    let height = sample_height(lookup);
 
     return textureSampleLevel(gradient, gradient_sampler, pow(height, 0.9), 0.0);
 #endif

@@ -55,9 +55,9 @@ pub(crate) struct AttachmentMeta {
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct AtlasBufferInfo {
     lod_count: u32,
-    texture_size: u32,
-    border_size: u32,
-    center_size: u32,
+    pub(crate) texture_size: u32,
+    pub(crate) border_size: u32,
+    pub(crate) center_size: u32,
     format: AttachmentFormat,
 
     pixels_per_entry: u32,

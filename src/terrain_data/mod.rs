@@ -229,7 +229,6 @@ impl AttachmentConfig {
         name: String,
         texture_size: u32,
         border_size: u32,
-        mip_level_count: u32,
         format: AttachmentFormat,
     ) -> Self {
         let center_size = texture_size - 2 * border_size;
@@ -239,7 +238,7 @@ impl AttachmentConfig {
             texture_size,
             center_size,
             border_size,
-            mip_level_count,
+            mip_level_count: 1,
             format,
             file_format: FileFormat::TDF,
         }

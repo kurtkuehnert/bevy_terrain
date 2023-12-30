@@ -68,3 +68,14 @@ struct NodeLookup {
     atlas_lod: u32,
     atlas_coordinate: vec2<f32>,
 }
+
+struct AttachmentConfig {
+    size: f32,
+    scale: f32,
+    offset: f32,
+    _padding: u32,
+}
+
+struct AttachmentList {
+    data: array<AttachmentConfig, 8u>,
+}

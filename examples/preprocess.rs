@@ -3,46 +3,37 @@ use bevy_terrain::prelude::*;
 use bevy_terrain::preprocess_gpu::preprocessor::{PreprocessDataset, Preprocessor};
 use bevy_terrain::preprocess_gpu::TerrainPreprocessPlugin;
 
+const PATH: &str = "terrains/planar";
 const TEXTURE_SIZE: u32 = 512;
 const LOD_COUNT: u32 = 4;
-const NODE_ATLAS_SIZE: u32 = 1024;
-const PATH: &str = "terrains/advanced";
 
 fn main() {
-    let config = TerrainPluginConfig::with_base_attachment(BaseConfig::new(TEXTURE_SIZE, 1))
-        .add_attachment(AttachmentConfig::new(
-            "albedo".to_string(),
-            TEXTURE_SIZE,
-            1,
-            1,
-            AttachmentFormat::Rgba8,
-        ));
-
     App::new()
-        .add_plugins((
-            DefaultPlugins,
-            TerrainPlugin { config },
-            TerrainPreprocessPlugin,
-        ))
+        .add_plugins((DefaultPlugins, TerrainPlugin, TerrainPreprocessPlugin))
         .add_systems(Startup, setup)
         .run();
 }
 
-fn setup(
-    mut commands: Commands,
-    plugin_config: Res<TerrainPluginConfig>,
-    asset_server: Res<AssetServer>,
-) {
-    let config = plugin_config.configure_terrain(
-        0.0,
-        LOD_COUNT,
-        0.0,
-        0.0,
-        NODE_ATLAS_SIZE,
-        PATH.to_string(),
-    );
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
+    let config = TerrainConfig {
+        lod_count: LOD_COUNT,
+        path: PATH.to_string(),
+        ..default()
+    }
+    .add_attachment(AttachmentConfig::new(
+        "height".to_string(),
+        TEXTURE_SIZE,
+        2,
+        AttachmentFormat::R16,
+    ))
+    .add_attachment(AttachmentConfig::new(
+        "albedo".to_string(),
+        TEXTURE_SIZE,
+        1,
+        AttachmentFormat::Rgba8,
+    ));
 
-    let mut terrain_bundle = TerrainBundle::new(config.clone(), Vec3::ZERO, 0.0);
+    let mut terrain_bundle = TerrainBundle::new(config, Vec3::ZERO, 0.0);
 
     let mut preprocessor = Preprocessor::new(PATH.to_string());
 

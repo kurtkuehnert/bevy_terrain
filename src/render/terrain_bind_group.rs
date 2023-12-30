@@ -19,6 +19,7 @@ use bevy::{
     },
 };
 use itertools::Itertools;
+use std::iter;
 
 pub(crate) fn create_terrain_layout(device: &RenderDevice) -> BindGroupLayout {
     device.create_bind_group_layout(
@@ -28,7 +29,8 @@ pub(crate) fn create_terrain_layout(device: &RenderDevice) -> BindGroupLayout {
             (
                 storage_buffer::<MeshUniform>(false),          // mesh
                 uniform_buffer::<TerrainConfigUniform>(false), // terrain config
-                sampler(SamplerBindingType::Filtering),        // atlas sampler
+                uniform_buffer::<AttachmentUniform>(false),
+                sampler(SamplerBindingType::Filtering), // atlas sampler
                 texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment 1
                 texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment 2
                 texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment 3
@@ -57,8 +59,37 @@ impl From<&TerrainConfig> for TerrainConfigUniform {
             lod_count: config.lod_count,
             min_height: config.min_height,
             max_height: config.max_height,
-            leaf_node_count: config.leaf_node_count,
+            leaf_node_count: (1 << (config.lod_count - 1)) as f32,
         }
+    }
+}
+
+#[derive(Default, ShaderType)]
+struct AttachmentConfig {
+    size: f32,
+    scale: f32,
+    offset: f32,
+    _padding: u32,
+}
+
+#[derive(Default, ShaderType)]
+struct AttachmentUniform {
+    data: [AttachmentConfig; 8],
+}
+
+impl AttachmentUniform {
+    fn new(atlas: &GpuNodeAtlas) -> Self {
+        let mut uniform = Self::default();
+
+        for (config, attachment) in iter::zip(&mut uniform.data, &atlas.attachments) {
+            config.size = attachment.buffer_info.texture_size as f32;
+            config.scale = attachment.buffer_info.center_size as f32
+                / attachment.buffer_info.texture_size as f32;
+            config.offset = attachment.buffer_info.border_size as f32
+                / attachment.buffer_info.texture_size as f32;
+        }
+
+        uniform
     }
 }
 
@@ -96,12 +127,17 @@ impl TerrainData {
             })
             .collect_vec();
 
+        let attachment_uniform = AttachmentUniform::new(gpu_node_atlas);
+        let attachment_buffer =
+            StaticBuffer::create(&device, &attachment_uniform, BufferUsages::UNIFORM);
+
         let terrain_bind_group = device.create_bind_group(
             "terrain_bind_group",
             &create_terrain_layout(device),
             &BindGroupEntries::sequential((
                 &mesh_buffer,
                 &terrain_config_buffer,
+                &attachment_buffer,
                 &atlas_sampler,
                 &attachments[0],
                 &attachments[1],
