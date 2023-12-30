@@ -1,4 +1,4 @@
-#import bevy_terrain::preprocessing::{NodeCoordinate, atlas, attachment, inside, pixel_coords, store_entry}
+#import bevy_terrain::preprocessing::{NodeCoordinate, atlas, attachment, inside, pixel_coords, pixel_value, process_entry}
 
 struct AtlasNode {
     coordinate: NodeCoordinate,
@@ -17,9 +17,9 @@ var tile: texture_2d<f32>;
 @group(1) @binding(2)
 var tile_sampler: sampler;
 
-fn pixel_value(coords: vec2<u32>) -> f32 {
+override fn pixel_value(coords: vec2<u32>) -> vec4<f32> {
     if (!inside(coords, vec4<u32>(attachment.border_size, attachment.border_size, attachment.center_size, attachment.center_size))) {
-        return 0.0;
+        return vec4<f32>(0.0);
     }
 
     let node_coordinate = split_tile_data.node.coordinate;
@@ -29,16 +29,11 @@ fn pixel_value(coords: vec2<u32>) -> f32 {
 
     let tile_coords = (node_offset + node_coords) / node_scale;
 
-    return textureSampleLevel(tile, tile_sampler, tile_coords, 0.0).x;
+    return textureSampleLevel(tile, tile_sampler, tile_coords, 0.0);
 }
 
 // Todo: respect memory coalescing
 @compute @workgroup_size(8, 8, 1)
 fn split(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
-    let entry_coords = vec3<u32>(invocation_id.xy, split_tile_data.node_index);
-
-    let entry_value = pack2x16unorm(vec2<f32>(pixel_value(pixel_coords(entry_coords, 0u)),
-                                              pixel_value(pixel_coords(entry_coords, 1u))));
-
-    store_entry(entry_coords, entry_value);
+    process_entry(vec3<u32>(invocation_id.xy, split_tile_data.node_index));
 }

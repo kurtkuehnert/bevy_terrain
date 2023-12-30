@@ -1,4 +1,4 @@
-#import bevy_terrain::preprocessing::{NodeCoordinate, atlas, attachment, inside, pixel_coords, store_entry}
+#import bevy_terrain::preprocessing::{NodeCoordinate, atlas, attachment, inside, pixel_coords, pixel_value, process_entry}
 
 const INVALID_ATLAS_INDEX: u32 = 4294967295u;
 
@@ -62,33 +62,24 @@ fn repeat_coords(coords: vec2<u32>) -> vec2<u32> {
                  vec2<u32>(attachment.border_size + attachment.center_size - 1u));
 }
 
-fn pixel_value(coords: vec2<u32>) -> f32 {
-    let node = stitch_node_data.node;
-
+override fn pixel_value(coords: vec2<u32>) -> vec4<f32> {
     if (inside(coords, vec4<u32>(attachment.border_size, attachment.border_size, attachment.center_size, attachment.center_size))) {
-        return textureLoad(atlas, coords, node.atlas_index, 0).x;
-        // return 0.0;
+        return textureLoad(atlas, coords, stitch_node_data.node.atlas_index, 0);
     }
-    // else { return 1.0; }
 
     let neighbour_index = neighbour_index(coords);
     let neighbour_node = stitch_node_data.neighbour_nodes[neighbour_index];
 
     if (neighbour_node.atlas_index != INVALID_ATLAS_INDEX) {
-        return textureLoad(atlas, neighbour_coords(coords, neighbour_index), neighbour_node.atlas_index, 0).x;
+        return textureLoad(atlas, neighbour_coords(coords, neighbour_index), neighbour_node.atlas_index, 0);
     }
     else {
-        return textureLoad(atlas, repeat_coords(coords), node.atlas_index, 0).x;
+        return textureLoad(atlas, repeat_coords(coords), stitch_node_data.node.atlas_index, 0);
     }
 }
 
 // Todo: respect memory coalescing
 @compute @workgroup_size(8, 8, 1)
 fn stitch(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
-    let entry_coords = vec3<u32>(invocation_id.xy, stitch_node_data.node_index);
-
-    let entry_value = pack2x16unorm(vec2<f32>(pixel_value(pixel_coords(entry_coords, 0u)),
-                                              pixel_value(pixel_coords(entry_coords, 1u))));
-
-    store_entry(entry_coords, entry_value);
+    process_entry(vec3<u32>(invocation_id.xy, stitch_node_data.node_index));
 }

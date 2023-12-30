@@ -3,16 +3,17 @@ use crate::{
     terrain::Terrain,
     terrain_data::{
         node_atlas::{AtlasNode, NodeAtlas},
-        NodeCoordinate,
+        AttachmentFormat, NodeCoordinate,
     },
 };
-use bevy::{
-    asset::LoadState,
-    prelude::*,
-    render::{render_resource::TextureFormat, texture::ImageSampler},
-};
+use bevy::{asset::LoadState, prelude::*, render::texture::ImageSampler};
 use itertools::iproduct;
 use std::{collections::VecDeque, ops::DerefMut, time::Instant};
+
+pub(crate) struct LoadingTile {
+    id: AssetId<Image>,
+    format: AttachmentFormat,
+}
 
 pub struct PreprocessDataset {
     pub attachment_index: usize,
@@ -161,7 +162,7 @@ fn downsample(
 #[derive(Component)]
 pub struct Preprocessor {
     pub(crate) path: String,
-    pub(crate) loading_tiles: Vec<Handle<Image>>,
+    pub(crate) loading_tiles: Vec<LoadingTile>,
     pub(crate) task_queue: VecDeque<PreprocessTask>,
     pub(crate) ready_tasks: Vec<PreprocessTask>,
 
@@ -175,7 +176,7 @@ impl Preprocessor {
             loading_tiles: default(),
             task_queue: default(),
             ready_tasks: default(),
-            start_time: default(),
+            start_time: Some(Instant::now()),
         }
     }
 
@@ -186,7 +187,11 @@ impl Preprocessor {
         node_atlas: &mut NodeAtlas,
     ) {
         let tile_handle = asset_server.load(dataset.path);
-        self.loading_tiles.push(tile_handle.clone());
+
+        self.loading_tiles.push(LoadingTile {
+            id: tile_handle.id(),
+            format: node_atlas.attachments[dataset.attachment_index].format,
+        });
 
         let lod_count = node_atlas.lod_count;
         let node_count = 1 << (lod_count - 1);
@@ -250,8 +255,6 @@ impl Preprocessor {
                 ));
             }
         }
-
-        self.start_time = Some(Instant::now());
     }
 }
 
@@ -317,9 +320,9 @@ pub(crate) fn preprocessor_load_tile(
     mut images: ResMut<Assets<Image>>,
 ) {
     for mut preprocessor in terrain_query.iter_mut() {
-        preprocessor.loading_tiles.retain_mut(|handle| {
-            if let Some(image) = images.get_mut(handle.id()) {
-                image.texture_descriptor.format = TextureFormat::R16Unorm;
+        preprocessor.loading_tiles.retain_mut(|tile| {
+            if let Some(image) = images.get_mut(tile.id) {
+                image.texture_descriptor.format = tile.format.processing_format();
                 image.sampler = ImageSampler::linear();
 
                 false

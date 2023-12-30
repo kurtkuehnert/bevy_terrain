@@ -4,7 +4,7 @@ use bevy_terrain::preprocess_gpu::preprocessor::{PreprocessDataset, Preprocessor
 use bevy_terrain::preprocess_gpu::TerrainPreprocessPlugin;
 
 const TEXTURE_SIZE: u32 = 512;
-const LOD_COUNT: u32 = 2;
+const LOD_COUNT: u32 = 4;
 const NODE_ATLAS_SIZE: u32 = 1024;
 const PATH: &str = "terrains/advanced";
 
@@ -46,14 +46,14 @@ fn setup(
 
     let mut preprocessor = Preprocessor::new(PATH.to_string());
 
-    // preprocessor.preprocess_tile(
-    //     PreprocessDataset {
-    //         attachment_index: 0,
-    //         path: format!("{PATH}/source/height.png"),
-    //     },
-    //     &asset_server,
-    //     &mut terrain_bundle.node_atlas,
-    // );
+    preprocessor.preprocess_tile(
+        PreprocessDataset {
+            attachment_index: 0,
+            path: format!("{PATH}/source/height.png"),
+        },
+        &asset_server,
+        &mut terrain_bundle.node_atlas,
+    );
     preprocessor.preprocess_tile(
         PreprocessDataset {
             attachment_index: 1,

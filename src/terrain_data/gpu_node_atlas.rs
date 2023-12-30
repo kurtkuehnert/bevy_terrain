@@ -42,6 +42,7 @@ pub(crate) fn create_attachment_layout(device: &RenderDevice) -> BindGroupLayout
 
 #[derive(Default, ShaderType)]
 pub(crate) struct AttachmentMeta {
+    pub(crate) format_id: u32,
     pub(crate) lod_count: u32,
     pub(crate) texture_size: u32,
     pub(crate) border_size: u32,
@@ -51,10 +52,16 @@ pub(crate) struct AttachmentMeta {
     pub(crate) entries_per_node: u32,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct AtlasBufferInfo {
+    lod_count: u32,
+    texture_size: u32,
+    border_size: u32,
+    center_size: u32,
+    format: AttachmentFormat,
+
     pixels_per_entry: u32,
-    pixels_per_side: u32,
+
     entries_per_side: u32,
     entries_per_node: u32,
 
@@ -62,30 +69,42 @@ pub(crate) struct AtlasBufferInfo {
     aligned_side_size: u32,
     actual_node_size: u32,
     aligned_node_size: u32,
+
+    pub(crate) workgroup_count: UVec3,
 }
 
 impl AtlasBufferInfo {
-    fn new(texture_size: u32, format: AttachmentFormat) -> Self {
+    fn new(attachment: &AtlasAttachment, lod_count: u32) -> Self {
         // Todo: adjust this code for pixel sizes larger than 4 byte
         // This approach is currently limited to 1, 2, and 4 byte sized pixels
         // Extending it to 8 and 16 sized pixels should be quite easy.
         // However 3, 6, 12 sized pixels do and will not work!
         // For them to work properly we will need to write into a texture instead of buffer.
 
+        let format = attachment.format;
+        let texture_size = attachment.texture_size;
+        let border_size = attachment.border_size;
+        let center_size = attachment.center_size;
+
         let pixel_size = format.pixel_size();
         let entry_size = mem::size_of::<u32>() as u32;
         let pixels_per_entry = entry_size / pixel_size;
-        let pixels_per_side = texture_size;
-        let entries_per_side = align_byte_size(pixels_per_side * pixel_size) / pixels_per_entry;
-        let entries_per_node = entries_per_side * pixels_per_side;
 
-        let actual_side_size = pixels_per_side * pixel_size;
-        let aligned_side_size = entries_per_side * entry_size;
-        let actual_node_size = pixels_per_side * pixels_per_side * pixel_size;
-        let aligned_node_size = entries_per_node * entry_size;
+        let actual_side_size = texture_size * pixel_size;
+        let aligned_side_size = align_byte_size(actual_side_size);
+        let actual_node_size = texture_size * actual_side_size;
+        let aligned_node_size = texture_size * aligned_side_size;
+
+        let entries_per_side = aligned_side_size / entry_size;
+        let entries_per_node = texture_size * entries_per_side;
+
+        let workgroup_count = UVec3::new(entries_per_side / 8, texture_size / 8, 1);
 
         Self {
-            pixels_per_side,
+            lod_count,
+            border_size,
+            center_size,
+            texture_size,
             pixels_per_entry,
             entries_per_side,
             entries_per_node,
@@ -93,6 +112,8 @@ impl AtlasBufferInfo {
             aligned_side_size,
             actual_node_size,
             aligned_node_size,
+            format,
+            workgroup_count,
         }
     }
 
@@ -118,7 +139,7 @@ impl AtlasBufferInfo {
             buffer,
             layout: ImageDataLayout {
                 bytes_per_row: Some(self.aligned_side_size),
-                rows_per_image: Some(self.pixels_per_side),
+                rows_per_image: Some(self.texture_size),
                 offset: self.buffer_size(index) as BufferAddress,
             },
         }
@@ -126,8 +147,8 @@ impl AtlasBufferInfo {
 
     fn image_copy_size(&self, mip_level: u32) -> Extent3d {
         Extent3d {
-            width: self.pixels_per_side >> mip_level,
-            height: self.pixels_per_side >> mip_level,
+            width: self.texture_size >> mip_level,
+            height: self.texture_size >> mip_level,
             depth_or_array_layers: 1,
         }
     }
@@ -135,19 +156,31 @@ impl AtlasBufferInfo {
     fn buffer_size(&self, slots: u32) -> u32 {
         slots * self.aligned_node_size
     }
+
+    fn attachment_meta(&self) -> AttachmentMeta {
+        AttachmentMeta {
+            format_id: self.format.id(),
+            lod_count: self.lod_count,
+            texture_size: self.texture_size,
+            border_size: self.border_size,
+            center_size: self.center_size,
+            pixels_per_entry: self.pixels_per_entry,
+            entries_per_side: self.entries_per_side,
+            entries_per_node: self.entries_per_node,
+        }
+    }
 }
 
 pub(crate) struct GpuAtlasAttachment {
-    pub(crate) format: AttachmentFormat,
-    pub(crate) max_slots: usize,
-    pub(crate) slots: Vec<AtlasNode>,
+    pub(crate) buffer_info: AtlasBufferInfo,
+
     pub(crate) atlas_texture: Texture,
-    pub(crate) atlas_view: TextureView,
     pub(crate) atlas_write_section: StaticBuffer<()>,
     pub(crate) download_buffers: Vec<StaticBuffer<()>>,
     pub(crate) bind_group: BindGroup,
-    pub(crate) buffer_info: AtlasBufferInfo,
-    pub(crate) workgroup_count: UVec3,
+
+    pub(crate) max_slots: usize,
+    pub(crate) slots: Vec<AtlasNode>,
 
     pub(crate) upload_nodes: Vec<NodeWithData>,
     pub(crate) download_nodes: Vec<Task<NodeWithData>>,
@@ -161,24 +194,31 @@ impl GpuAtlasAttachment {
     ) -> Self {
         let max_slots = 16;
 
+        let buffer_info = AtlasBufferInfo::new(attachment, node_atlas.lod_count);
+
+        // dbg!(&buffer_info);
+
         let atlas_texture = device.create_texture(&TextureDescriptor {
             label: Some(&(attachment.name.to_string() + "_attachment")),
             size: Extent3d {
-                width: attachment.texture_size,
-                height: attachment.texture_size,
+                width: buffer_info.texture_size,
+                height: buffer_info.texture_size,
                 depth_or_array_layers: node_atlas.atlas_size,
             },
             mip_level_count: attachment.mip_level_count,
             sample_count: 1,
             dimension: TextureDimension::D2,
-            format: attachment.format.sample_format(),
+            format: buffer_info.format.render_format(),
             usage: TextureUsages::COPY_DST
                 | TextureUsages::COPY_SRC
                 | TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
+            view_formats: &[buffer_info.format.processing_format()],
         });
 
-        let atlas_view = atlas_texture.create_view(&default());
+        let atlas_view = atlas_texture.create_view(&TextureViewDescriptor {
+            format: Some(buffer_info.format.processing_format()),
+            ..default()
+        });
 
         let atlas_sampler = device.create_sampler(&SamplerDescriptor {
             mag_filter: FilterMode::Linear,
@@ -187,26 +227,17 @@ impl GpuAtlasAttachment {
             ..default()
         });
 
-        let buffer_info = AtlasBufferInfo::new(attachment.texture_size, attachment.format);
-
         let atlas_write_section = StaticBuffer::empty_sized(
             device,
             buffer_info.buffer_size(max_slots as u32) as BufferAddress,
             BufferUsages::COPY_DST | BufferUsages::COPY_SRC | BufferUsages::STORAGE,
         );
 
-        let attachment_meta = AttachmentMeta {
-            lod_count: node_atlas.lod_count,
-            texture_size: attachment.texture_size,
-            border_size: attachment.border_size,
-            center_size: attachment.center_size,
-            pixels_per_entry: buffer_info.pixels_per_entry,
-            entries_per_side: buffer_info.entries_per_side,
-            entries_per_node: buffer_info.entries_per_node,
-        };
-
-        let attachment_meta_buffer =
-            StaticBuffer::create(device, &attachment_meta, BufferUsages::UNIFORM);
+        let attachment_meta_buffer = StaticBuffer::create(
+            device,
+            &buffer_info.attachment_meta(),
+            BufferUsages::UNIFORM,
+        );
 
         let bind_group = device.create_bind_group(
             "attachment_bind_group",
@@ -219,22 +250,13 @@ impl GpuAtlasAttachment {
             )),
         );
 
-        let workgroup_count = UVec3::new(
-            buffer_info.entries_per_side / 8,
-            buffer_info.pixels_per_side / 8,
-            1,
-        );
-
         Self {
-            format: attachment.format,
             slots: default(),
             max_slots,
             atlas_texture,
-            atlas_view,
             atlas_write_section,
             download_buffers: default(),
             bind_group,
-            workgroup_count,
             buffer_info,
 
             upload_nodes: default(),
@@ -323,7 +345,6 @@ impl GpuAtlasAttachment {
     }
 
     pub(crate) fn start_downloading_nodes(&mut self) {
-        let format = self.format;
         let buffer_info = self.buffer_info;
         let download_buffers = mem::take(&mut self.download_buffers);
         let slots = mem::take(&mut self.slots);
@@ -357,7 +378,7 @@ impl GpuAtlasAttachment {
                         let mut take_offset = aligned_side_size;
                         let mut place_offset = actual_side_size;
 
-                        for _ in 1..buffer_info.pixels_per_side {
+                        for _ in 1..buffer_info.texture_size {
                             data.copy_within(
                                 take_offset..take_offset + aligned_side_size,
                                 place_offset,
@@ -371,8 +392,8 @@ impl GpuAtlasAttachment {
 
                     NodeWithData {
                         node,
-                        data: AttachmentData::from_bytes(&data, format),
-                        texture_size: buffer_info.pixels_per_side,
+                        data: AttachmentData::from_bytes(&data, buffer_info.format),
+                        texture_size: buffer_info.texture_size,
                     }
                 })
             })

@@ -5,8 +5,6 @@ use bevy::{
 };
 use bevy_terrain::prelude::*;
 
-const TILE_SIZE: u32 = 1024;
-const TILE_FORMAT: FileFormat = FileFormat::PNG;
 const TERRAIN_SIZE: f32 = 8.0 * 507.5;
 const TEXTURE_SIZE: u32 = 512;
 const MIP_LEVEL_COUNT: u32 = 1;
