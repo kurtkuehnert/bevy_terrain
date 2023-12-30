@@ -110,10 +110,27 @@ pub enum AttachmentFormat {
 }
 
 impl AttachmentFormat {
-    pub(crate) fn sample_format(self) -> TextureFormat {
+    pub(crate) fn id(self) -> u32 {
+        match self {
+            AttachmentFormat::Rgb8 => 5,
+            AttachmentFormat::Rgba8 => 0,
+            AttachmentFormat::R16 => 1,
+            AttachmentFormat::Rg16 => 3,
+        }
+    }
+    pub(crate) fn render_format(self) -> TextureFormat {
         match self {
             AttachmentFormat::Rgb8 => TextureFormat::Rgba8UnormSrgb,
             AttachmentFormat::Rgba8 => TextureFormat::Rgba8UnormSrgb,
+            AttachmentFormat::R16 => TextureFormat::R16Unorm,
+            AttachmentFormat::Rg16 => TextureFormat::Rg16Unorm,
+        }
+    }
+
+    pub(crate) fn processing_format(self) -> TextureFormat {
+        match self {
+            AttachmentFormat::Rgb8 => TextureFormat::Rgba8Unorm,
+            AttachmentFormat::Rgba8 => TextureFormat::Rgba8Unorm,
             AttachmentFormat::R16 => TextureFormat::R16Unorm,
             AttachmentFormat::Rg16 => TextureFormat::Rg16Unorm,
         }

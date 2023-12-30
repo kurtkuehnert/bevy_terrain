@@ -2,13 +2,14 @@ use crate::{
     preprocess_gpu::preprocessor::{PreprocessTask, PreprocessTaskType, Preprocessor},
     terrain::{Terrain, TerrainComponents},
     terrain_data::{gpu_node_atlas::GpuNodeAtlas, node_atlas::AtlasNode},
+    util::StaticBuffer,
 };
 use bevy::{
     prelude::*,
     render::{
         render_asset::RenderAssets,
         render_resource::{binding_types::*, *},
-        renderer::{RenderDevice, RenderQueue},
+        renderer::RenderDevice,
         Extract,
     },
 };
@@ -20,13 +21,13 @@ pub(crate) struct ProcessingTask {
 }
 
 #[derive(Clone, Debug, ShaderType)]
-pub(crate) struct SplitTileData {
+pub(crate) struct SplitData {
     pub(crate) node: AtlasNode,
     pub(crate) node_index: u32,
 }
 
 #[derive(Clone, Debug, ShaderType)]
-struct StitchNodeData {
+struct StitchData {
     node: AtlasNode,
     neighbour_nodes: [AtlasNode; 8],
     node_index: u32,
@@ -45,7 +46,7 @@ pub(crate) fn create_split_layout(device: &RenderDevice) -> BindGroupLayout {
         &BindGroupLayoutEntries::sequential(
             ShaderStages::COMPUTE,
             (
-                uniform_buffer::<SplitTileData>(false), // split_tile_data
+                uniform_buffer::<SplitData>(false), // split_tile_data
                 texture_2d(TextureSampleType::Float { filterable: true }), // tile
                 sampler(SamplerBindingType::Filtering), // tile_sampler
             ),
@@ -56,10 +57,7 @@ pub(crate) fn create_split_layout(device: &RenderDevice) -> BindGroupLayout {
 pub(crate) fn create_stitch_layout(device: &RenderDevice) -> BindGroupLayout {
     device.create_bind_group_layout(
         None,
-        &BindGroupLayoutEntries::single(
-            ShaderStages::COMPUTE,
-            uniform_buffer::<StitchNodeData>(false),
-        ),
+        &BindGroupLayoutEntries::single(ShaderStages::COMPUTE, uniform_buffer::<StitchData>(false)),
     )
 }
 
@@ -111,7 +109,6 @@ impl GpuPreprocessor {
 
     pub(crate) fn prepare(
         device: Res<RenderDevice>,
-        queue: Res<RenderQueue>,
         images: Res<RenderAssets<Image>>,
         mut gpu_preprocessors: ResMut<TerrainComponents<GpuPreprocessor>>,
         mut gpu_node_atlases: ResMut<TerrainComponents<GpuNodeAtlas>>,
@@ -134,58 +131,57 @@ impl GpuPreprocessor {
                         PreprocessTaskType::Split { tile } => {
                             let tile = images.get(tile).unwrap();
 
-                            let split_tile_data = SplitTileData {
-                                node: task.node,
-                                node_index: section_index,
-                            };
-
-                            let mut split_tile_data_buffer = UniformBuffer::from(split_tile_data);
-                            split_tile_data_buffer.write_buffer(&device, &queue);
+                            let split_buffer = StaticBuffer::create(
+                                &device,
+                                &SplitData {
+                                    node: task.node,
+                                    node_index: section_index,
+                                },
+                                BufferUsages::UNIFORM,
+                            );
 
                             Some(device.create_bind_group(
-                                "split_tile_bind_group",
+                                "split_bind_group",
                                 &create_split_layout(&device),
                                 &BindGroupEntries::sequential((
-                                    split_tile_data_buffer.binding().unwrap(),
+                                    &split_buffer,
                                     &tile.texture_view,
                                     &tile.sampler,
                                 )),
                             ))
                         }
                         PreprocessTaskType::Stitch { neighbour_nodes } => {
-                            let stitch_node_data = StitchNodeData {
-                                node: task.node,
-                                neighbour_nodes: *neighbour_nodes,
-                                node_index: section_index,
-                            };
-
-                            let mut stitch_node_data_buffer = UniformBuffer::from(stitch_node_data);
-                            stitch_node_data_buffer.write_buffer(&device, &queue);
+                            let stitch_buffer = StaticBuffer::create(
+                                &device,
+                                &StitchData {
+                                    node: task.node,
+                                    neighbour_nodes: *neighbour_nodes,
+                                    node_index: section_index,
+                                },
+                                BufferUsages::UNIFORM,
+                            );
 
                             Some(device.create_bind_group(
-                                "stitch_node_bind_group",
+                                "stitch_bind_group",
                                 &create_stitch_layout(&device),
-                                &BindGroupEntries::single(
-                                    stitch_node_data_buffer.binding().unwrap(),
-                                ),
+                                &BindGroupEntries::single(&stitch_buffer),
                             ))
                         }
                         PreprocessTaskType::Downsample { parent_nodes } => {
-                            let downsample_data = DownsampleData {
-                                node: task.node,
-                                parent_nodes: *parent_nodes,
-                                node_index: section_index,
-                            };
-
-                            let mut downsample_data_buffer = UniformBuffer::from(downsample_data);
-                            downsample_data_buffer.write_buffer(&device, &queue);
+                            let downsample_buffer = StaticBuffer::create(
+                                &device,
+                                &DownsampleData {
+                                    node: task.node,
+                                    parent_nodes: *parent_nodes,
+                                    node_index: section_index,
+                                },
+                                BufferUsages::UNIFORM,
+                            );
 
                             Some(device.create_bind_group(
                                 "downsample_bind_group",
                                 &create_downsample_layout(&device),
-                                &BindGroupEntries::single(
-                                    downsample_data_buffer.binding().unwrap(),
-                                ),
+                                &BindGroupEntries::single(&downsample_buffer),
                             ))
                         }
                         _ => break,
