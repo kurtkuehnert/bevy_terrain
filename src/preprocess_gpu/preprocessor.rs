@@ -18,6 +18,7 @@ pub(crate) struct LoadingTile {
 pub struct PreprocessDataset {
     pub attachment_index: usize,
     pub path: String,
+    pub side: u32,
 }
 
 #[derive(Clone)]
@@ -41,11 +42,8 @@ fn split(
     attachment_index: usize,
     node_atlas: &mut NodeAtlas,
     tile: Handle<Image>,
-    lod: u32,
-    x: u32,
-    y: u32,
+    node_coordinate: NodeCoordinate,
 ) -> PreprocessTask {
-    let node_coordinate = NodeCoordinate::new(0, lod, x, y);
     let atlas_index = node_atlas.get_or_allocate(node_coordinate);
 
     let node = AtlasNode {
@@ -63,12 +61,9 @@ fn split(
 fn stitch(
     attachment_index: usize,
     node_atlas: &mut NodeAtlas,
-    lod: u32,
-    x: u32,
-    y: u32,
+    node_coordinate: NodeCoordinate,
     node_count: u32,
 ) -> PreprocessTask {
-    let node_coordinate = NodeCoordinate::new(0, lod, x, y);
     let atlas_index = node_atlas.get_or_allocate(node_coordinate);
 
     let node = AtlasNode {
@@ -87,7 +82,7 @@ fn stitch(
         IVec2::new(-1, 1),
     ];
 
-    let node_position = IVec2::new(x as i32, y as i32);
+    let node_position = IVec2::new(node_coordinate.x as i32, node_coordinate.y as i32);
 
     let mut neighbour_nodes = [AtlasNode::default(); 8];
 
@@ -127,11 +122,8 @@ fn stitch(
 fn downsample(
     attachment_index: usize,
     node_atlas: &mut NodeAtlas,
-    lod: u32,
-    x: u32,
-    y: u32,
+    node_coordinate: NodeCoordinate,
 ) -> PreprocessTask {
-    let node_coordinate = NodeCoordinate::new(0, lod, x, y);
     let atlas_index = node_atlas.get_or_allocate(node_coordinate);
 
     let node = AtlasNode {
@@ -142,8 +134,12 @@ fn downsample(
     let mut parent_nodes = [AtlasNode::default(); 4];
 
     for index in 0..4 {
-        let parent_node_coordinate =
-            NodeCoordinate::new(0, lod - 1, 2 * x + index % 2, 2 * y + index / 2);
+        let parent_node_coordinate = NodeCoordinate::new(
+            node_coordinate.side,
+            node_coordinate.lod - 1,
+            2 * node_coordinate.x + index % 2,
+            2 * node_coordinate.y + index / 2,
+        );
         let parent_atlas_index = node_atlas.get_or_allocate(parent_node_coordinate);
 
         parent_nodes[index as usize] = AtlasNode {
@@ -202,9 +198,7 @@ impl Preprocessor {
                 dataset.attachment_index,
                 node_atlas,
                 tile_handle.clone(),
-                lod,
-                x,
-                y,
+                NodeCoordinate::new(dataset.side, lod, x, y),
             ));
         }
 
@@ -218,9 +212,7 @@ impl Preprocessor {
             self.task_queue.push_back(stitch(
                 dataset.attachment_index,
                 node_atlas,
-                lod,
-                x,
-                y,
+                NodeCoordinate::new(dataset.side, lod, x, y),
                 node_count,
             ));
         }
@@ -232,9 +224,7 @@ impl Preprocessor {
                 self.task_queue.push_back(downsample(
                     dataset.attachment_index,
                     node_atlas,
-                    lod,
-                    x,
-                    y,
+                    NodeCoordinate::new(dataset.side, lod, x, y),
                 ));
             }
 
@@ -248,9 +238,7 @@ impl Preprocessor {
                 self.task_queue.push_back(stitch(
                     dataset.attachment_index,
                     node_atlas,
-                    lod,
-                    x,
-                    y,
+                    NodeCoordinate::new(dataset.side, lod, x, y),
                     node_count,
                 ));
             }

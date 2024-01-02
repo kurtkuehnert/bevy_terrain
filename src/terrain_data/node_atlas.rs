@@ -38,6 +38,8 @@ impl NodeWithData {
         AsyncComputeTaskPool::get().spawn(async move {
             let path = self.node.coordinate.path(&path, "png");
 
+            dbg!(&path);
+
             let image = match self.data {
                 AttachmentData::Rgba8(data) => {
                     let data = data.into_iter().flatten().collect_vec();
@@ -388,7 +390,7 @@ impl NodeAtlas {
         path: &str,
         atlas_size: u32,
         lod_count: u32,
-        attachments: &Vec<AttachmentConfig>,
+        attachments: &[AttachmentConfig],
     ) -> Self {
         let attachments = attachments
             .iter()
