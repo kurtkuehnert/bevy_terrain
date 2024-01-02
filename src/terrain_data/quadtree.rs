@@ -245,7 +245,6 @@ pub struct Quadtree {
     pub(crate) quadtree_size: u32,
     /// The internal node states of the quadtree.
     nodes: Array4<QuadtreeNode>,
-    leaf_node_count: f32,
     /// The distance (measured in node sizes) until which to request nodes to be loaded.
     load_distance: f32,
     _height: f32,
@@ -264,7 +263,6 @@ impl Quadtree {
         Self {
             lod_count,
             quadtree_size,
-            leaf_node_count: (1 << (lod_count - 1)) as f32,
             load_distance,
             _height: height,
             _height_under_viewer: height / 2.0,
@@ -297,7 +295,7 @@ impl Quadtree {
 
     #[inline]
     fn node_count(&self, lod: u32) -> f32 {
-        self.leaf_node_count / (1 << lod) as f32
+        (1 << (self.lod_count - lod - 1)) as f32
     }
 
     fn origin(&self, quadtree_s2: S2Coordinate, lod: u32) -> UVec2 {

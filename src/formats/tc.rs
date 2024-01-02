@@ -55,6 +55,9 @@ pub(crate) fn save_node_config(path: &str) {
 /// Loads the node configuration of the terrain, which stores the [`NodeCoordinate`]s of all the nodes
 /// of the terrain.
 pub(crate) fn load_node_config(path: &str) -> HashSet<NodeCoordinate> {
-    let tc = TC::load_file(format_directory(path, "../config.tc")).unwrap();
-    tc.nodes.into_iter().collect()
+    if let Ok(tc) = TC::load_file(format_directory(path, "../config.tc")) {
+        tc.nodes.into_iter().collect()
+    } else {
+        HashSet::default()
+    }
 }

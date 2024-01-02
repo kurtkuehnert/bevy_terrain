@@ -50,7 +50,6 @@ struct TerrainConfigUniform {
     lod_count: u32,
     min_height: f32,
     max_height: f32,
-    leaf_node_count: f32,
 }
 
 impl From<&TerrainConfig> for TerrainConfigUniform {
@@ -59,7 +58,6 @@ impl From<&TerrainConfig> for TerrainConfigUniform {
             lod_count: config.lod_count,
             min_height: config.min_height,
             max_height: config.max_height,
-            leaf_node_count: (1 << (config.lod_count - 1)) as f32,
         }
     }
 }
@@ -129,7 +127,7 @@ impl TerrainData {
 
         let attachment_uniform = AttachmentUniform::new(gpu_node_atlas);
         let attachment_buffer =
-            StaticBuffer::create(&device, &attachment_uniform, BufferUsages::UNIFORM);
+            StaticBuffer::create(device, &attachment_uniform, BufferUsages::UNIFORM);
 
         let terrain_bind_group = device.create_bind_group(
             "terrain_bind_group",

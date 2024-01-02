@@ -33,8 +33,16 @@ dolly = "0.4"
 async-channel = "2.1.0"
 
 [[example]]
+name = "preprocess_planar"
+path = "examples/planar/preprocess_planar.rs"
+
+[package.metadata.example.preprocess_planar]
+name = "Preprocess Planar"
+description = "Preprocesses the terrain data for the planar examples."
+
+[[example]]
 name = "basic"
-path = "examples/basic.rs"
+path = "examples/planar/basic.rs"
 
 [package.metadata.example.basic]
 name = "Basic"
@@ -42,16 +50,25 @@ description = "Renders a basic flat terrain with only the base attachment."
 
 [[example]]
 name = "advanced"
-path = "examples/advanced.rs"
+path = "examples/planar/advanced.rs"
 
 [package.metadata.example.advanced]
 name = "Advanced"
 description = "Renders a flat terrain with the base attachment and an albedo texture, using a custom shader."
 
 
+
+[[example]]
+name = "preprocess_spherical"
+path = "examples/spherical/preprocess_spherical.rs"
+
+[package.metadata.example.preprocess_spherical]
+name = "Preprocess Spherical"
+description = "Preprocesses the terrain data for the spherical examples."
+
 [[example]]
 name = "spherical"
-path = "examples/spherical.rs"
+path = "examples/spherical/spherical.rs"
 required-features = ["spherical"]
 
 [package.metadata.example.spherical]
