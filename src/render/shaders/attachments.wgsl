@@ -41,11 +41,11 @@ fn sample_normal(lookup: NodeLookup, local_position: vec3<f32>) -> vec3<f32> {
 
     // Todo: this is only an approximation of the S2 distance
     // local circumference / pixels per circumference
-    let distance_between_samples = 3.14159265359 / (4.0 * height_attachment.size * node_count(lookup.atlas_lod));
+    let distance_between_samples = 3.14159265359 / (4.0 * height_attachment.size * f32(node_count(lookup.atlas_lod)));
 #else
     let TBN = mat3x3<f32>(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0);
 
-    let distance_between_samples = 4.0 * 1.0 / (height_attachment.size * node_count(lookup.atlas_lod));
+    let distance_between_samples = 4.0 * 1.0 / (height_attachment.size * f32(node_count(lookup.atlas_lod)));
 #endif
 
     let left  = mix(config.min_height, config.max_height, textureSampleLevel(attachment0_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0, vec2<i32>(-1,  0)).x);

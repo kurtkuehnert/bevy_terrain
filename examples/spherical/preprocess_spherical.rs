@@ -3,7 +3,7 @@ use bevy_terrain::prelude::*;
 use bevy_terrain::preprocess_gpu::preprocessor::{PreprocessDataset, Preprocessor};
 use bevy_terrain::preprocess_gpu::TerrainPreprocessPlugin;
 
-const PATH: &str = "terrains/planar";
+const PATH: &str = "terrains/spherical";
 const TEXTURE_SIZE: u32 = 512;
 const LOD_COUNT: u32 = 4;
 
@@ -25,34 +25,23 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         TEXTURE_SIZE,
         2,
         AttachmentFormat::R16,
-    ))
-    .add_attachment(AttachmentConfig::new(
-        "albedo".to_string(),
-        TEXTURE_SIZE,
-        1,
-        AttachmentFormat::Rgba8,
     ));
 
     let mut terrain_bundle = TerrainBundle::new(config, Vec3::ZERO, 0.0);
 
     let mut preprocessor = Preprocessor::new(PATH.to_string());
 
-    preprocessor.preprocess_tile(
-        PreprocessDataset {
-            attachment_index: 0,
-            path: format!("{PATH}/source/height.png"),
-        },
-        &asset_server,
-        &mut terrain_bundle.node_atlas,
-    );
-    preprocessor.preprocess_tile(
-        PreprocessDataset {
-            attachment_index: 1,
-            path: format!("{PATH}/source/albedo.png"),
-        },
-        &asset_server,
-        &mut terrain_bundle.node_atlas,
-    );
+    for side in 0..6 {
+        preprocessor.preprocess_tile(
+            PreprocessDataset {
+                attachment_index: 0,
+                path: format!("{PATH}/source/height/face{side}.png"),
+                side,
+            },
+            &asset_server,
+            &mut terrain_bundle.node_atlas,
+        );
+    }
 
     commands.spawn((terrain_bundle, preprocessor));
 }

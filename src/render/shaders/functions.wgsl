@@ -21,7 +21,7 @@ fn morph_threshold_distance(tile: Tile) -> f32 {
 }
 
 fn blend_threshold_distance() -> f32 {
-    return view_config.blend_distance / config.leaf_node_count;
+    return view_config.blend_distance / f32(1u << (config.lod_count - 1u));
 }
 
 fn compute_morph(tile: Tile, local_position: vec3<f32>) -> Morph {
@@ -258,12 +258,12 @@ fn s2_project_to_side(s2: S2Coordinate, side: u32) -> S2Coordinate {
     return S2Coordinate(side, st);
 }
 
-fn node_count(lod: u32) -> f32 {
-    return config.leaf_node_count / f32(1u << lod);
+fn node_count(lod: u32) -> u32 {
+    return 1u << (config.lod_count - lod - 1u);
 }
 
 fn node_coordinate(st: vec2<f32>, lod: u32) -> vec2<f32> {
-    return st * node_count(lod);
+    return st * f32(node_count(lod));
 }
 
 fn inside_square(position: vec2<f32>, origin: vec2<f32>, size: f32) -> f32 {
@@ -281,8 +281,8 @@ fn inside_quadtree(view_s2: S2Coordinate, frag_s2: S2Coordinate, lod: u32) -> f3
 
     let frag_coordinate            = node_coordinate(frag_s2.st,     lod);
     let quadtree_coordinate        = node_coordinate(quadtree_s2.st, lod);
-    let max_offset                 = ceil(node_count(lod)) - f32(view_config.quadtree_size);
-    let quadtree_origin_coordinate = clamp(round(quadtree_coordinate - 0.5 * f32(view_config.quadtree_size)), vec2<f32>(0.0), vec2<f32>(max_offset));
+    let max_offset                 = node_count(lod) - view_config.quadtree_size;
+    let quadtree_origin_coordinate = clamp(round(quadtree_coordinate - 0.5 * f32(view_config.quadtree_size)), vec2<f32>(0.0), vec2<f32>(f32(max_offset)));
 
     let dist = floor(frag_coordinate) - floor(quadtree_origin_coordinate);
 
@@ -312,18 +312,22 @@ fn lookup_node(local_position: vec3<f32>, lod: u32) -> NodeLookup {
 #else
     let quadtree_lod        = min(lod, config.lod_count - 1u);
 #endif
+    let max_coordinate  = vec2<f32>(f32(node_count(quadtree_lod)) - 0.00001);
+    var coordinate = min(node_coordinate(s2.st, quadtree_lod), max_coordinate);
+
     let quadtree_side       = s2.side;
-    let quadtree_coordinate = vec2<u32>(node_coordinate(s2.st, quadtree_lod)) % view_config.quadtree_size;
+    let quadtree_coordinate = vec2<u32>(coordinate) % view_config.quadtree_size;
     let quadtree_index      = ((quadtree_side          * config.lod_count +
                                 quadtree_lod)          * view_config.quadtree_size +
                                 quadtree_coordinate.x) * view_config.quadtree_size +
                                 quadtree_coordinate.y;
 
     let entry = quadtree.data[quadtree_index];
+    coordinate *= f32(1u << (quadtree_lod - entry.atlas_lod));
 
     let atlas_lod        = entry.atlas_lod;
     let atlas_index      = entry.atlas_index;
-    let atlas_coordinate = node_coordinate(s2.st, atlas_lod) % 1.0;
+    let atlas_coordinate = coordinate % 1.0;
 
     return NodeLookup(atlas_index, atlas_lod, atlas_coordinate);
 }
