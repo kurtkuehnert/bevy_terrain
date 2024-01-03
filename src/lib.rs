@@ -62,12 +62,14 @@ pub mod prelude {
         bundle::TerrainBundle,
         debug::{camera::DebugCamera, TerrainDebugPlugin},
         plugin::TerrainPlugin,
-        preprocess::{BaseConfig, OldPreprocessor, TileConfig},
+        preprocess_gpu::{
+            preprocessor::PreprocessDataset, preprocessor::Preprocessor, TerrainPreprocessPlugin,
+        },
         render::render_pipeline::TerrainMaterialPlugin,
         terrain::{Terrain, TerrainConfig},
         terrain_data::{
-            node_atlas::NodeAtlas, quadtree::Quadtree, AttachmentConfig, AttachmentFormat,
-            FileFormat,
+            node_atlas::NodeAtlas, quadtree::Quadtree, sample_attachment, AttachmentConfig,
+            AttachmentFormat, FileFormat,
         },
         terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
     };

@@ -77,16 +77,17 @@ bitflags::bitflags! {
         const SHOW_UV            = (1 <<  3);
         const SHOW_TILES         = (1 <<  4);
         const SHOW_QUADTREE      = (1 <<  5);
-        const MESH_MORPH         = (1 <<  6);
-        const LAYER_BLEND        = (1 <<  7);
-        const QUADTREE_LOD       = (1 <<  8);
-        const ALBEDO             = (1 <<  9);
-        const BRIGHT             = (1 << 10);
-        const LIGHTING           = (1 << 11);
-        const SAMPLE_GRAD        = (1 << 12);
-        const TEST1              = (1 << 13);
-        const TEST2              = (1 << 14);
-        const TEST3              = (1 << 15);
+        const SHOW_PIXELS        = (1 <<  6);
+        const MESH_MORPH         = (1 <<  7);
+        const LAYER_BLEND        = (1 <<  8);
+        const QUADTREE_LOD       = (1 <<  9);
+        const ALBEDO             = (1 << 10);
+        const BRIGHT             = (1 << 11);
+        const LIGHTING           = (1 << 12);
+        const SAMPLE_GRAD        = (1 << 13);
+        const TEST1              = (1 << 14);
+        const TEST2              = (1 << 15);
+        const TEST3              = (1 << 16);
 
         const MSAA_RESERVED_BITS = TerrainPipelineFlags::MSAA_MASK_BITS << TerrainPipelineFlags::MSAA_SHIFT_BITS;
     }
@@ -118,6 +119,9 @@ impl TerrainPipelineFlags {
         }
         if debug.show_quadtree {
             key |= TerrainPipelineFlags::SHOW_QUADTREE;
+        }
+        if debug.show_pixels {
+            key |= TerrainPipelineFlags::SHOW_PIXELS;
         }
         if debug.mesh_morph {
             key |= TerrainPipelineFlags::MESH_MORPH;
@@ -181,6 +185,9 @@ impl TerrainPipelineFlags {
         }
         if (self.bits() & TerrainPipelineFlags::SHOW_QUADTREE.bits()) != 0 {
             shader_defs.push("SHOW_QUADTREE".into());
+        }
+        if (self.bits() & TerrainPipelineFlags::SHOW_PIXELS.bits()) != 0 {
+            shader_defs.push("SHOW_PIXELS".into())
         }
         if (self.bits() & TerrainPipelineFlags::MESH_MORPH.bits()) != 0 {
             shader_defs.push("MESH_MORPH".into());

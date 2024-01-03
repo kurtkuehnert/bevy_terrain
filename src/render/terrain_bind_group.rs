@@ -80,7 +80,7 @@ impl AttachmentUniform {
         let mut uniform = Self::default();
 
         for (config, attachment) in iter::zip(&mut uniform.data, &atlas.attachments) {
-            config.size = attachment.buffer_info.texture_size as f32;
+            config.size = attachment.buffer_info.center_size as f32;
             config.scale = attachment.buffer_info.center_size as f32
                 / attachment.buffer_info.texture_size as f32;
             config.offset = attachment.buffer_info.border_size as f32
