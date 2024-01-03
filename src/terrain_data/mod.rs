@@ -15,6 +15,8 @@
 //! Both the node atlas and the quadtrees also have a corresponding GPU representation,
 //! which can be used to access the terrain data in shaders.
 
+use crate::prelude::{NodeAtlas, Quadtree};
+use bevy::prelude::*;
 use bevy::render::render_resource::*;
 use bincode::{Decode, Encode};
 use bytemuck::cast_slice;
@@ -177,6 +179,21 @@ impl AttachmentData {
             AttachmentData::None => panic!("Attachment has no data."),
         }
     }
+
+    pub(crate) fn sample(&self, coordinate: Vec2, size: u32) -> Vec4 {
+        let coordinate = (coordinate * size as f32).as_uvec2();
+
+        let index = coordinate.y * size + coordinate.x;
+
+        match self {
+            AttachmentData::None => Vec4::splat(0.0),
+            AttachmentData::Rgba8(_) => Vec4::splat(0.0),
+            AttachmentData::R16(data) => {
+                Vec4::new(data[index as usize] as f32 / u16::MAX as f32, 0.0, 0.0, 0.0)
+            }
+            AttachmentData::Rg16(_) => Vec4::splat(0.0),
+        }
+    }
 }
 
 /// The file format used to store the terrain data.
@@ -243,4 +260,36 @@ impl AttachmentConfig {
             file_format: FileFormat::TDF,
         }
     }
+}
+
+pub(crate) fn sample_attachment_local(
+    quadtree: &Quadtree,
+    node_atlas: &NodeAtlas,
+    attachment_index: u32,
+    local_position: Vec3,
+) -> Vec4 {
+    let (lod, blend_ratio) = quadtree.compute_blend(local_position);
+
+    let lookup = quadtree.lookup_node(local_position, lod);
+    let mut value = node_atlas.sample_attachment(lookup, attachment_index);
+
+    if blend_ratio > 0.0 {
+        let lookup2 = quadtree.lookup_node(local_position, lod);
+        value = value.lerp(
+            node_atlas.sample_attachment(lookup2, attachment_index),
+            blend_ratio,
+        );
+    }
+
+    value
+}
+
+pub fn sample_attachment(
+    quadtree: &Quadtree,
+    node_atlas: &NodeAtlas,
+    attachment_index: u32,
+    world_position: Vec3,
+) -> Vec4 {
+    let local_position = quadtree.world_to_local_position(world_position);
+    sample_attachment_local(quadtree, node_atlas, attachment_index, local_position)
 }

@@ -1,4 +1,5 @@
 use crate::formats::tc::load_node_config;
+use crate::terrain_data::quadtree::NodeLookup;
 use crate::{
     prelude::{AttachmentConfig, AttachmentFormat},
     preprocess::{R16Image, Rg16Image, Rgba8Image},
@@ -97,6 +98,8 @@ pub struct AtlasAttachment {
     pub(crate) texture_size: u32,
     pub(crate) center_size: u32,
     pub(crate) border_size: u32,
+    scale: f32,
+    offset: f32,
     pub(crate) mip_level_count: u32,
     pub(crate) format: AttachmentFormat,
     pub(crate) data: Vec<AttachmentData>,
@@ -119,6 +122,8 @@ impl AtlasAttachment {
             texture_size: config.texture_size,
             center_size: config.center_size,
             border_size: config.border_size,
+            scale: config.center_size as f32 / config.texture_size as f32,
+            offset: config.border_size as f32 / config.texture_size as f32,
             mip_level_count: config.mip_level_count,
             format: config.format,
             data: vec![AttachmentData::None; node_atlas_size as usize],
@@ -175,7 +180,17 @@ impl AtlasAttachment {
         });
     }
 
-    // Todo: Implement get data at coordinate function
+    fn sample(&self, lookup: NodeLookup) -> Vec4 {
+        if lookup.atlas_index == INVALID_ATLAS_INDEX {
+            return Vec4::splat(0.0); // Todo: Handle this better
+        }
+
+        let data = &self.data[lookup.atlas_index as usize];
+
+        let coordinate = lookup.atlas_coordinate * self.scale + self.offset;
+
+        return data.sample(coordinate, self.texture_size);
+    }
 }
 
 /// The current state of a node of a [`NodeAtlas`].
@@ -429,6 +444,10 @@ impl NodeAtlas {
         lod_count: u32,
     ) -> QuadtreeEntry {
         self.state.get_best_node(node_coordinate, lod_count)
+    }
+
+    pub(crate) fn sample_attachment(&self, node_lookup: NodeLookup, attachment_index: u32) -> Vec4 {
+        self.attachments[attachment_index as usize].sample(node_lookup)
     }
 
     fn update(&mut self) {

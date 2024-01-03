@@ -12,7 +12,7 @@ use crate::{
         gpu_node_atlas::GpuNodeAtlas,
         gpu_quadtree::GpuQuadtree,
         node_atlas::update_node_atlas,
-        quadtree::{adjust_quadtree, compute_quadtree_request, Quadtree},
+        quadtree::{adjust_quadtree, approximate_height, compute_quadtree_request, Quadtree},
     },
     terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
 };
@@ -39,10 +39,12 @@ impl Plugin for TerrainPlugin {
         .add_systems(
             Last,
             (
-                compute_quadtree_request.before(update_node_atlas),
+                compute_quadtree_request,
                 update_node_atlas,
-                adjust_quadtree.after(update_node_atlas),
-            ),
+                adjust_quadtree,
+                approximate_height,
+            )
+                .chain(),
         );
 
         app.sub_app_mut(RenderApp)

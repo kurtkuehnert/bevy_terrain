@@ -36,7 +36,7 @@ pub struct TerrainView;
 #[derive(Clone, Component)]
 pub struct TerrainViewConfig {
     /// The current height under the viewer.
-    pub height_under_viewer: f32,
+    pub approximate_height: f32,
     /// The count of nodes in x and y direction per quadtree layer.
     pub quadtree_size: u32,
     /// The size of the tile buffer.
@@ -58,7 +58,7 @@ pub struct TerrainViewConfig {
 impl Default for TerrainViewConfig {
     fn default() -> Self {
         Self {
-            height_under_viewer: 0.0,
+            approximate_height: 0.0,
             quadtree_size: 10,
             tile_count: 1000000,
             refinement_count: 20,
