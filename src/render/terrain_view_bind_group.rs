@@ -81,7 +81,7 @@ struct Parameters {
 #[derive(Default, ShaderType)]
 pub(crate) struct TerrainViewConfigUniform {
     view_local_position: Vec3,
-    height_under_viewer: f32,
+    approximate_height: f32,
     quadtree_size: u32,
     tile_count: u32,
     pub(crate) refinement_count: u32,
@@ -99,7 +99,7 @@ impl TerrainViewConfigUniform {
     fn new(view_config: &TerrainViewConfig, view_local_position: Vec3) -> Self {
         TerrainViewConfigUniform {
             view_local_position,
-            height_under_viewer: view_config.height_under_viewer,
+            approximate_height: view_config.approximate_height,
             quadtree_size: view_config.quadtree_size,
             tile_count: view_config.tile_count,
             refinement_count: view_config.refinement_count,

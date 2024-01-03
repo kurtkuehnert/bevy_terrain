@@ -3,7 +3,7 @@
 #import bevy_terrain::types::NodeLookup
 #import bevy_terrain::functions::{compute_blend, lookup_node}
 #import bevy_terrain::attachments::{sample_normal, sample_color}
-#import bevy_terrain::debug::{show_lod, show_quadtree}
+#import bevy_terrain::debug::{show_lod, show_quadtree, show_pixels}
 #import bevy_pbr::pbr_types::{PbrInput, pbr_input_new}
 #import bevy_pbr::pbr_functions::{calculate_view, apply_pbr_lighting}
 
@@ -35,6 +35,9 @@ fn fragment_output(input: FragmentInput, color: vec4<f32>, lookup: NodeLookup) -
 #endif
 #ifdef SHOW_QUADTREE
     output.color = show_quadtree(input.local_position);
+#endif
+#ifdef SHOW_PIXELS
+    output.color = mix(output.color, show_pixels(input.local_position, lookup.atlas_lod), 0.5);
 #endif
 
     return output;

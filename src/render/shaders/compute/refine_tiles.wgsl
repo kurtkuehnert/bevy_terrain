@@ -46,7 +46,7 @@ fn should_be_divided(tile: Tile) -> bool {
     var min_view_distance = 3.40282347E+38; // f32::MAX
 
     for (var i: u32 = 0u; i < 4u; i = i + 1u) {
-        let local_position = tile_local_position(tile, vec2<f32>(f32(i & 1u), f32(i >> 1u & 1u)));
+        let local_position = tile_local_position(tile, vec2<f32>(f32(i & 1u), f32(i >> 1u & 1u)), view_config.approximate_height);
         let view_distance = distance(local_position, view_config.view_local_position);
 
         min_view_distance = min(min_view_distance, view_distance);

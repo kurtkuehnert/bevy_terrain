@@ -32,6 +32,7 @@ pub struct DebugTerrain {
     pub show_uv: bool,
     pub show_tiles: bool,
     pub show_quadtree: bool,
+    pub show_pixels: bool,
     pub mesh_morph: bool,
     pub layer_blend: bool,
     pub quadtree_lod: bool,
@@ -53,6 +54,7 @@ impl Default for DebugTerrain {
             show_uv: false,
             show_tiles: false,
             show_quadtree: false,
+            show_pixels: false,
             mesh_morph: true,
             layer_blend: true,
             quadtree_lod: false,
@@ -106,6 +108,13 @@ pub fn toggle_debug(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTerrain>)
         println!(
             "Toggled the quadtree view {}.",
             if debug.show_quadtree { "on" } else { "off" }
+        )
+    }
+    if input.just_pressed(KeyCode::P) {
+        debug.show_pixels = !debug.show_pixels;
+        println!(
+            "Toggled the pixel view {}.",
+            if debug.show_pixels { "on" } else { "off" }
         )
     }
     if input.just_pressed(KeyCode::M) {

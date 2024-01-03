@@ -1,7 +1,8 @@
 use crate::{
     terrain::{Terrain, TerrainConfig},
     terrain_data::{
-        node_atlas::NodeAtlas, NodeCoordinate, INVALID_ATLAS_INDEX, INVALID_LOD, SIDE_COUNT,
+        node_atlas::NodeAtlas, sample_attachment_local, NodeCoordinate, INVALID_ATLAS_INDEX,
+        INVALID_LOD, SIDE_COUNT,
     },
     terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
 };
@@ -19,11 +20,11 @@ struct S2Coordinate {
 }
 
 impl S2Coordinate {
-    fn from_node_coordinate(node_coordinate: NodeCoordinate, node_count: f32) -> Self {
+    fn from_node_coordinate(node_coordinate: NodeCoordinate, node_count: u32) -> Self {
         let st = (Vec2::new(
             node_coordinate.x as f32 + 0.5,
             node_coordinate.y as f32 + 0.5,
-        )) / node_count;
+        )) / node_count as f32;
 
         Self {
             side: node_coordinate.side,
@@ -193,7 +194,7 @@ impl Default for QuadtreeNode {
 /// These entries are synced each frame with their equivalent representations in the
 /// [`GpuQuadtree`](super::gpu_quadtree::GpuQuadtree) for access on the GPU.
 #[repr(C)]
-#[derive(Clone, Copy, Zeroable, Pod)]
+#[derive(Clone, Copy, Debug, Zeroable, Pod)]
 pub(crate) struct QuadtreeEntry {
     /// The atlas index of the best entry.
     pub(crate) atlas_index: u32,
@@ -208,6 +209,22 @@ impl Default for QuadtreeEntry {
             atlas_lod: INVALID_LOD,
         }
     }
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct NodeLookup {
+    pub(crate) atlas_index: u32,
+    pub(crate) atlas_lod: u32,
+    pub(crate) atlas_coordinate: Vec2,
+}
+
+impl NodeLookup {
+    const INVALID: Self = Self {
+        atlas_index: INVALID_ATLAS_INDEX,
+        atlas_lod: INVALID_LOD,
+        atlas_coordinate: Vec2::ZERO,
+    };
 }
 
 /// A quadtree-like view of a terrain, that requests and releases nodes from the [`NodeAtlas`]
@@ -247,8 +264,13 @@ pub struct Quadtree {
     nodes: Array4<QuadtreeNode>,
     /// The distance (measured in node sizes) until which to request nodes to be loaded.
     load_distance: f32,
-    _height: f32,
-    _height_under_viewer: f32,
+    blend_distance: f32,
+    blend_range: f32,
+    inverse_model: Mat4,
+    view_local_position: Vec3,
+    min_height: f32,
+    max_height: f32,
+    approximate_height: f32,
 }
 
 impl Quadtree {
@@ -259,13 +281,26 @@ impl Quadtree {
     /// * `center_size` - The size of the smallest nodes (with lod 0).
     /// * `load_distance` - The distance (measured in node sizes) until which to request nodes to be loaded.
     /// * `height` - The height of the terrain.
-    pub fn new(lod_count: u32, quadtree_size: u32, load_distance: f32, height: f32) -> Self {
+    pub fn new(
+        lod_count: u32,
+        quadtree_size: u32,
+        load_distance: f32,
+        blend_distance: f32,
+        blend_range: f32,
+        min_height: f32,
+        max_height: f32,
+    ) -> Self {
         Self {
             lod_count,
             quadtree_size,
             load_distance,
-            _height: height,
-            _height_under_viewer: height / 2.0,
+            blend_distance,
+            blend_range,
+            inverse_model: default(),
+            min_height,
+            max_height,
+            approximate_height: (min_height + max_height) / 2.0,
+            view_local_position: default(),
             data: Array4::default((
                 SIDE_COUNT as usize,
                 lod_count as usize,
@@ -289,18 +324,29 @@ impl Quadtree {
             config.lod_count,
             view_config.quadtree_size,
             view_config.load_distance,
+            view_config.blend_distance,
+            view_config.blend_range,
+            config.min_height,
             config.max_height,
         )
     }
 
     #[inline]
-    fn node_count(&self, lod: u32) -> f32 {
-        (1 << (self.lod_count - lod - 1)) as f32
+    fn node_count(&self, lod: u32) -> u32 {
+        1 << (self.lod_count - lod - 1)
+    }
+
+    #[inline]
+    fn node_coordinate(&self, s2: S2Coordinate, lod: u32) -> Vec2 {
+        let node_count = self.node_count(lod) as f32;
+        let max_coordinate = Vec2::splat(node_count - 0.00001);
+
+        return (s2.st * node_count).clamp(Vec2::ZERO, max_coordinate);
     }
 
     fn origin(&self, quadtree_s2: S2Coordinate, lod: u32) -> UVec2 {
-        let origin_node_coordinate = quadtree_s2.st * self.node_count(lod);
-        let max_offset = self.node_count(lod).ceil() - self.quadtree_size as f32;
+        let origin_node_coordinate = self.node_coordinate(quadtree_s2, lod);
+        let max_offset = self.node_count(lod) as f32 - self.quadtree_size as f32;
 
         let quadtree_origin = (origin_node_coordinate - 0.5 * self.quadtree_size as f32)
             .round()
@@ -309,11 +355,8 @@ impl Quadtree {
         quadtree_origin.as_uvec2()
     }
 
-    fn world_to_local_position(&self, transform: &GlobalTransform, world_position: Vec3) -> Vec3 {
-        let transform = transform.compute_matrix();
-        let inverse_model = transform.inverse();
-
-        (inverse_model * world_position.extend(1.0)).xyz()
+    pub(crate) fn world_to_local_position(&self, world_position: Vec3) -> Vec3 {
+        (self.inverse_model * world_position.extend(1.0)).xyz()
     }
 
     pub(crate) fn compute_requests(
@@ -321,9 +364,10 @@ impl Quadtree {
         terrain_transform: &GlobalTransform,
         view_world_position: Vec3,
     ) {
-        let view_local_position =
-            self.world_to_local_position(terrain_transform, view_world_position);
-        let view_s2 = S2Coordinate::from_local_position(view_local_position);
+        self.inverse_model = terrain_transform.compute_matrix().inverse();
+
+        self.view_local_position = self.world_to_local_position(view_world_position);
+        let view_s2 = S2Coordinate::from_local_position(self.view_local_position);
 
         for side in 0..SIDE_COUNT {
             #[cfg(feature = "spherical")]
@@ -347,8 +391,8 @@ impl Quadtree {
                     let node_s2 = S2Coordinate::from_node_coordinate(node_coordinate, node_count);
                     let node_local_position = node_s2.to_local_position();
 
-                    let distance = node_local_position.distance(view_local_position);
-                    let node_distance = 0.5 * distance * node_count;
+                    let distance = node_local_position.distance(self.view_local_position);
+                    let node_distance = 0.5 * distance * node_count as f32;
 
                     let state = if node_distance < self.load_distance {
                         RequestState::Requested
@@ -390,6 +434,42 @@ impl Quadtree {
             }
         }
     }
+
+    pub(crate) fn compute_blend(&self, local_position: Vec3) -> (u32, f32) {
+        let view_distance = local_position.distance(self.view_local_position);
+        let blend_threshold_distance = self.blend_distance / (1 << (self.lod_count - 1)) as f32;
+        let log_distance = (view_distance / blend_threshold_distance).log2().max(0.0);
+        let ratio = 1.0 - (1.0 - log_distance % 1.0) / self.blend_range;
+
+        return (log_distance as u32, ratio);
+    }
+
+    pub(crate) fn lookup_node(&self, local_position: Vec3, lod: u32) -> NodeLookup {
+        let s2 = S2Coordinate::from_local_position(local_position);
+
+        let quadtree_lod = lod.min(self.lod_count - 1);
+
+        let mut node_coordinate = self.node_coordinate(s2, quadtree_lod);
+
+        let entry = self.data[[
+            s2.side as usize,
+            quadtree_lod as usize,
+            node_coordinate.x as usize % self.quadtree_size as usize,
+            node_coordinate.y as usize % self.quadtree_size as usize,
+        ]];
+
+        if entry.atlas_lod == INVALID_LOD {
+            return NodeLookup::INVALID;
+        }
+
+        node_coordinate /= (1 << (entry.atlas_lod - quadtree_lod)) as f32;
+
+        NodeLookup {
+            atlas_index: entry.atlas_index,
+            atlas_lod: entry.atlas_lod,
+            atlas_coordinate: node_coordinate % 1.0,
+        }
+    }
 }
 
 /// Traverses all quadtrees and updates the node states,
@@ -402,10 +482,9 @@ pub(crate) fn compute_quadtree_request(
     for ((terrain, terrain_transform), (view, view_transform)) in
         iter::zip(&terrain_query, &view_query)
     {
-        let view_position = view_transform.translation();
         let quadtree = quadtrees.get_mut(&(terrain, view)).unwrap();
 
-        quadtree.compute_requests(terrain_transform, view_position);
+        quadtree.compute_requests(terrain_transform, view_transform.translation());
     }
 }
 
@@ -422,5 +501,29 @@ pub(crate) fn adjust_quadtree(
         for (node, entry) in iter::zip(&quadtree.nodes, &mut quadtree.data) {
             *entry = node_atlas.get_best_node(node.node_coordinate, quadtree.lod_count);
         }
+    }
+}
+
+pub(crate) fn approximate_height(
+    mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
+    mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
+    view_query: Query<Entity, With<TerrainView>>,
+    mut terrain_query: Query<(Entity, &NodeAtlas), With<Terrain>>,
+) {
+    for ((terrain, node_atlas), view) in iter::zip(&mut terrain_query, &view_query) {
+        let quadtree = quadtrees.get_mut(&(terrain, view)).unwrap();
+        let view_config = view_configs.get_mut(&(terrain, view)).unwrap();
+
+        let local_position = Vec3::new(
+            quadtree.view_local_position.x,
+            quadtree.approximate_height,
+            quadtree.view_local_position.z,
+        );
+
+        let height = sample_attachment_local(quadtree, node_atlas, 0, local_position).x
+            * (quadtree.max_height - quadtree.min_height)
+            + quadtree.min_height;
+
+        (quadtree.approximate_height, view_config.approximate_height) = (height, height);
     }
 }

@@ -1,7 +1,5 @@
 use bevy::prelude::*;
 use bevy_terrain::prelude::*;
-use bevy_terrain::preprocess_gpu::preprocessor::{PreprocessDataset, Preprocessor};
-use bevy_terrain::preprocess_gpu::TerrainPreprocessPlugin;
 
 const PATH: &str = "terrains/planar";
 const TEXTURE_SIZE: u32 = 512;
