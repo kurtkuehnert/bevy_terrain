@@ -20,6 +20,7 @@ use bevy::prelude::*;
 use bevy::render::render_resource::*;
 use bincode::{Decode, Encode};
 use bytemuck::cast_slice;
+use itertools::iproduct;
 use std::{fmt, str::FromStr};
 
 pub mod gpu_node_atlas;
@@ -98,6 +99,34 @@ impl NodeCoordinate {
 pub const INVALID_ATLAS_INDEX: u32 = u32::MAX;
 pub const INVALID_LOD: u32 = u32::MAX;
 
+/// The file format used to store the terrain data.
+#[derive(Encode, Decode, Clone, Copy, Debug)]
+pub enum FileFormat {
+    TDF,
+    PNG,
+    TIF,
+    QOI,
+    DTM,
+}
+
+impl Default for FileFormat {
+    fn default() -> Self {
+        Self::TDF
+    }
+}
+
+impl FileFormat {
+    pub(crate) fn extension(&self) -> &str {
+        match self {
+            Self::TDF => "tdf",
+            Self::PNG => "png",
+            Self::TIF => "tif",
+            Self::QOI => "qoi",
+            Self::DTM => "dtm",
+        }
+    }
+}
+
 /// The data format of an attachment.
 #[derive(Encode, Decode, Clone, Copy, Debug)]
 pub enum AttachmentFormat {
@@ -148,82 +177,6 @@ impl AttachmentFormat {
     }
 }
 
-#[derive(Clone)]
-pub(crate) enum AttachmentData {
-    None,
-    /// Three channels  8 bit
-    // Rgb8(Vec<(u8, u8, u8)>), Can not be represented currently
-    /// Four  channels  8 bit
-    Rgba8(Vec<[u8; 4]>),
-    /// One   channel  16 bit
-    R16(Vec<u16>),
-    /// Two   channels 16 bit
-    Rg16(Vec<[u16; 2]>),
-}
-
-impl AttachmentData {
-    pub(crate) fn from_bytes(data: &[u8], format: AttachmentFormat) -> Self {
-        match format {
-            AttachmentFormat::Rgb8 => unimplemented!(),
-            AttachmentFormat::Rgba8 => Self::Rgba8(cast_slice(data).to_vec()),
-            AttachmentFormat::R16 => Self::R16(cast_slice(data).to_vec()),
-            AttachmentFormat::Rg16 => Self::Rg16(cast_slice(data).to_vec()),
-        }
-    }
-
-    pub(crate) fn bytes(&self) -> &[u8] {
-        match self {
-            AttachmentData::Rgba8(data) => cast_slice(data),
-            AttachmentData::R16(data) => cast_slice(data),
-            AttachmentData::Rg16(data) => cast_slice(data),
-            AttachmentData::None => panic!("Attachment has no data."),
-        }
-    }
-
-    pub(crate) fn sample(&self, coordinate: Vec2, size: u32) -> Vec4 {
-        let coordinate = (coordinate * size as f32).as_uvec2();
-
-        let index = coordinate.y * size + coordinate.x;
-
-        match self {
-            AttachmentData::None => Vec4::splat(0.0),
-            AttachmentData::Rgba8(_) => Vec4::splat(0.0),
-            AttachmentData::R16(data) => {
-                Vec4::new(data[index as usize] as f32 / u16::MAX as f32, 0.0, 0.0, 0.0)
-            }
-            AttachmentData::Rg16(_) => Vec4::splat(0.0),
-        }
-    }
-}
-
-/// The file format used to store the terrain data.
-#[derive(Encode, Decode, Clone, Copy, Debug)]
-pub enum FileFormat {
-    TDF,
-    PNG,
-    TIF,
-    QOI,
-    DTM,
-}
-
-impl Default for FileFormat {
-    fn default() -> Self {
-        Self::TDF
-    }
-}
-
-impl FileFormat {
-    pub(crate) fn extension(&self) -> &str {
-        match self {
-            Self::TDF => "tdf",
-            Self::PNG => "png",
-            Self::TIF => "tif",
-            Self::QOI => "qoi",
-            Self::DTM => "dtm",
-        }
-    }
-}
-
 /// Configures an attachment.
 #[derive(Encode, Decode, Clone, Debug)]
 pub struct AttachmentConfig {
@@ -259,6 +212,85 @@ impl AttachmentConfig {
             format,
             file_format: FileFormat::TDF,
         }
+    }
+}
+
+#[derive(Clone)]
+pub(crate) enum AttachmentData {
+    None,
+    /// Three channels  8 bit
+    // Rgb8(Vec<(u8, u8, u8)>), Can not be represented currently
+    /// Four  channels  8 bit
+    Rgba8(Vec<[u8; 4]>),
+    /// One   channel  16 bit
+    R16(Vec<u16>),
+    /// Two   channels 16 bit
+    Rg16(Vec<[u16; 2]>),
+}
+
+impl AttachmentData {
+    pub(crate) fn from_bytes(data: &[u8], format: AttachmentFormat) -> Self {
+        match format {
+            AttachmentFormat::Rgb8 => unimplemented!(),
+            AttachmentFormat::Rgba8 => Self::Rgba8(cast_slice(data).to_vec()),
+            AttachmentFormat::R16 => Self::R16(cast_slice(data).to_vec()),
+            AttachmentFormat::Rg16 => Self::Rg16(cast_slice(data).to_vec()),
+        }
+    }
+
+    pub(crate) fn bytes(&self) -> &[u8] {
+        match self {
+            AttachmentData::Rgba8(data) => cast_slice(data),
+            AttachmentData::R16(data) => cast_slice(data),
+            AttachmentData::Rg16(data) => cast_slice(data),
+            AttachmentData::None => panic!("Attachment has no data."),
+        }
+    }
+
+    // Todo: check the correctness of this interpolation code
+    pub(crate) fn sample(&self, coordinate: Vec2, size: u32) -> Vec4 {
+        let coordinate = coordinate * size as f32 - 0.5;
+
+        let remainder = coordinate % 1.0;
+        let coordinate = coordinate.as_ivec2();
+
+        let mut values = [[Vec4::ZERO; 2]; 2];
+
+        for (x, y) in iproduct!(0..2, 0..2) {
+            let index = (coordinate.y * y) * size as i32 + (coordinate.x + x);
+
+            values[x as usize][y as usize] = match self {
+                AttachmentData::None => Vec4::splat(0.0),
+                AttachmentData::Rgba8(data) => {
+                    let value = data[index as usize];
+                    Vec4::new(
+                        value[0] as f32 / u8::MAX as f32,
+                        value[1] as f32 / u8::MAX as f32,
+                        value[2] as f32 / u8::MAX as f32,
+                        value[3] as f32 / u8::MAX as f32,
+                    )
+                }
+                AttachmentData::R16(data) => {
+                    let value = data[index as usize];
+                    Vec4::new(value as f32 / u16::MAX as f32, 0.0, 0.0, 0.0)
+                }
+                AttachmentData::Rg16(data) => {
+                    let value = data[index as usize];
+                    Vec4::new(
+                        value[0] as f32 / u16::MAX as f32,
+                        value[1] as f32 / u16::MAX as f32,
+                        0.0,
+                        0.0,
+                    )
+                }
+            };
+        }
+
+        Vec4::lerp(
+            Vec4::lerp(values[1][1], values[1][0], remainder.y),
+            Vec4::lerp(values[0][1], values[0][0], remainder.y),
+            remainder.x,
+        )
     }
 }
 
