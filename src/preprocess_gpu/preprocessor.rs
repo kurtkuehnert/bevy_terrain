@@ -1,3 +1,5 @@
+use crate::terrain_data::node_atlas::AtlasNodeAttachment;
+use crate::terrain_data::INVALID_ATLAS_INDEX;
 use crate::{
     formats::tc::save_node_config,
     terrain::Terrain,
@@ -16,7 +18,7 @@ pub(crate) struct LoadingTile {
 }
 
 pub struct PreprocessDataset {
-    pub attachment_index: usize,
+    pub attachment_index: u32,
     pub path: String,
     pub side: u32,
 }
@@ -26,6 +28,7 @@ pub(crate) enum PreprocessTaskType {
     Split { tile: Handle<Image> },
     Stitch { neighbour_nodes: [AtlasNode; 8] },
     Downsample { parent_nodes: [AtlasNode; 4] },
+    Save,
     Barrier,
 }
 
@@ -33,125 +36,107 @@ pub(crate) enum PreprocessTaskType {
 // loop over all tasks, take n, allocate/load node and its dependencies, process task
 #[derive(Clone)]
 pub(crate) struct PreprocessTask {
+    pub(crate) node: AtlasNodeAttachment,
     pub(crate) task_type: PreprocessTaskType,
-    pub(crate) node: AtlasNode,
-    pub(crate) attachment_index: usize,
 }
 
-fn split(
-    attachment_index: usize,
-    node_atlas: &mut NodeAtlas,
-    tile: Handle<Image>,
-    node_coordinate: NodeCoordinate,
-) -> PreprocessTask {
-    let atlas_index = node_atlas.get_or_allocate(node_coordinate);
-
-    let node = AtlasNode {
-        atlas_index,
-        coordinate: node_coordinate,
-    };
-
-    PreprocessTask {
-        attachment_index,
-        task_type: PreprocessTaskType::Split { tile },
-        node,
-    }
-}
-
-fn stitch(
-    attachment_index: usize,
-    node_atlas: &mut NodeAtlas,
-    node_coordinate: NodeCoordinate,
-    node_count: u32,
-) -> PreprocessTask {
-    let atlas_index = node_atlas.get_or_allocate(node_coordinate);
-
-    let node = AtlasNode {
-        atlas_index,
-        coordinate: node_coordinate,
-    };
-
-    let offsets = [
-        IVec2::new(0, -1),
-        IVec2::new(1, 0),
-        IVec2::new(0, 1),
-        IVec2::new(-1, 0),
-        IVec2::new(-1, -1),
-        IVec2::new(1, -1),
-        IVec2::new(1, 1),
-        IVec2::new(-1, 1),
-    ];
-
-    let node_position = IVec2::new(node_coordinate.x as i32, node_coordinate.y as i32);
-
-    let mut neighbour_nodes = [AtlasNode::default(); 8];
-
-    for (index, &offset) in offsets.iter().enumerate() {
-        let neighbour_node_position = node_position + offset;
-
-        let neighbour_node_coordinate = NodeCoordinate::new(
-            node_coordinate.side,
-            node_coordinate.lod,
-            neighbour_node_position.x as u32,
-            neighbour_node_position.y as u32,
-        );
-
-        let neighbour_atlas_index = if neighbour_node_position.x < 0
-            || neighbour_node_position.y < 0
-            || neighbour_node_position.x >= node_count as i32
-            || neighbour_node_position.y >= node_count as i32
-        {
-            u32::MAX
-        } else {
-            node_atlas.get_or_allocate(neighbour_node_coordinate)
-        };
-
-        neighbour_nodes[index] = AtlasNode {
-            coordinate: neighbour_node_coordinate,
-            atlas_index: neighbour_atlas_index,
-        };
+impl PreprocessTask {
+    fn is_ready(&self, asset_server: &AssetServer, node_atlas: &NodeAtlas) -> bool {
+        match &self.task_type {
+            PreprocessTaskType::Split { tile } => {
+                asset_server.load_state(tile) == LoadState::Loaded
+            }
+            PreprocessTaskType::Stitch { .. } => true,
+            PreprocessTaskType::Downsample { .. } => true,
+            PreprocessTaskType::Barrier => {
+                node_atlas.state.download_slots == node_atlas.state.max_download_slots
+            }
+            PreprocessTaskType::Save => true,
+        }
     }
 
-    PreprocessTask {
-        attachment_index,
-        task_type: PreprocessTaskType::Stitch { neighbour_nodes },
-        node,
-    }
-}
-
-fn downsample(
-    attachment_index: usize,
-    node_atlas: &mut NodeAtlas,
-    node_coordinate: NodeCoordinate,
-) -> PreprocessTask {
-    let atlas_index = node_atlas.get_or_allocate(node_coordinate);
-
-    let node = AtlasNode {
-        atlas_index,
-        coordinate: node_coordinate,
-    };
-
-    let mut parent_nodes = [AtlasNode::default(); 4];
-
-    for index in 0..4 {
-        let parent_node_coordinate = NodeCoordinate::new(
-            node_coordinate.side,
-            node_coordinate.lod - 1,
-            2 * node_coordinate.x + index % 2,
-            2 * node_coordinate.y + index / 2,
-        );
-        let parent_atlas_index = node_atlas.get_or_allocate(parent_node_coordinate);
-
-        parent_nodes[index as usize] = AtlasNode {
-            coordinate: parent_node_coordinate,
-            atlas_index: parent_atlas_index,
-        };
+    fn barrier() -> Self {
+        Self {
+            node: default(),
+            task_type: PreprocessTaskType::Barrier,
+        }
     }
 
-    PreprocessTask {
-        attachment_index,
-        task_type: PreprocessTaskType::Downsample { parent_nodes },
-        node,
+    fn save(node: AtlasNodeAttachment) -> Self {
+        Self {
+            node,
+            task_type: PreprocessTaskType::Save,
+        }
+    }
+
+    fn split(node: AtlasNodeAttachment, tile: Handle<Image>) -> Self {
+        Self {
+            node,
+            task_type: PreprocessTaskType::Split { tile },
+        }
+    }
+
+    fn stitch(node: AtlasNodeAttachment, node_atlas: &mut NodeAtlas, node_count: u32) -> Self {
+        let offsets = [
+            IVec2::new(0, -1),
+            IVec2::new(1, 0),
+            IVec2::new(0, 1),
+            IVec2::new(-1, 0),
+            IVec2::new(-1, -1),
+            IVec2::new(1, -1),
+            IVec2::new(1, 1),
+            IVec2::new(-1, 1),
+        ];
+
+        let node_position = IVec2::new(node.coordinate.x as i32, node.coordinate.y as i32);
+
+        let mut neighbour_nodes = [AtlasNode::default(); 8];
+
+        for (index, &offset) in offsets.iter().enumerate() {
+            let neighbour_node_position = node_position + offset;
+
+            let neighbour_node_coordinate = NodeCoordinate::new(
+                node.coordinate.side,
+                node.coordinate.lod,
+                neighbour_node_position.x as u32,
+                neighbour_node_position.y as u32,
+            );
+
+            neighbour_nodes[index] = if neighbour_node_position.x < 0
+                || neighbour_node_position.y < 0
+                || neighbour_node_position.x >= node_count as i32
+                || neighbour_node_position.y >= node_count as i32
+            {
+                AtlasNode::new(neighbour_node_coordinate, INVALID_ATLAS_INDEX)
+            } else {
+                node_atlas.get_or_allocate(neighbour_node_coordinate)
+            };
+        }
+
+        Self {
+            node,
+            task_type: PreprocessTaskType::Stitch { neighbour_nodes },
+        }
+    }
+
+    fn downsample(node: AtlasNodeAttachment, node_atlas: &mut NodeAtlas) -> Self {
+        let mut parent_nodes = [AtlasNode::default(); 4];
+
+        for index in 0..4 {
+            let parent_node_coordinate = NodeCoordinate::new(
+                node.coordinate.side,
+                node.coordinate.lod - 1,
+                2 * node.coordinate.x + index % 2,
+                2 * node.coordinate.y + index / 2,
+            );
+
+            parent_nodes[index as usize] = node_atlas.get_or_allocate(parent_node_coordinate);
+        }
+
+        Self {
+            node,
+            task_type: PreprocessTaskType::Downsample { parent_nodes },
+        }
     }
 }
 
@@ -186,62 +171,67 @@ impl Preprocessor {
 
         self.loading_tiles.push(LoadingTile {
             id: tile_handle.id(),
-            format: node_atlas.attachments[dataset.attachment_index].format,
+            format: node_atlas.attachments[dataset.attachment_index as usize].format,
         });
 
         let lod_count = node_atlas.lod_count;
         let node_count = 1 << (lod_count - 1);
         let lod = 0;
 
+        let mut nodes = Vec::new();
+
         for (x, y) in iproduct!(0..node_count, 0..node_count) {
-            self.task_queue.push_back(split(
-                dataset.attachment_index,
-                node_atlas,
-                tile_handle.clone(),
-                NodeCoordinate::new(dataset.side, lod, x, y),
-            ));
+            let node = node_atlas
+                .get_or_allocate(NodeCoordinate::new(dataset.side, lod, x, y))
+                .attachment(dataset.attachment_index);
+
+            self.task_queue
+                .push_back(PreprocessTask::split(node, tile_handle.clone()));
         }
 
-        self.task_queue.push_back(PreprocessTask {
-            attachment_index: dataset.attachment_index,
-            task_type: PreprocessTaskType::Barrier,
-            node: Default::default(),
-        });
+        self.task_queue.push_back(PreprocessTask::barrier());
 
         for (x, y) in iproduct!(0..node_count, 0..node_count) {
-            self.task_queue.push_back(stitch(
-                dataset.attachment_index,
-                node_atlas,
-                NodeCoordinate::new(dataset.side, lod, x, y),
-                node_count,
-            ));
+            let node = node_atlas
+                .get_or_allocate(NodeCoordinate::new(dataset.side, lod, x, y))
+                .attachment(dataset.attachment_index);
+
+            self.task_queue
+                .push_back(PreprocessTask::stitch(node, node_atlas, node_count));
+
+            nodes.push(node);
         }
 
         for lod in 1..lod_count {
             let node_count = node_count >> lod;
 
             for (x, y) in iproduct!(0..node_count, 0..node_count) {
-                self.task_queue.push_back(downsample(
-                    dataset.attachment_index,
-                    node_atlas,
-                    NodeCoordinate::new(dataset.side, lod, x, y),
-                ));
+                let node = node_atlas
+                    .get_or_allocate(NodeCoordinate::new(dataset.side, lod, x, y))
+                    .attachment(dataset.attachment_index);
+
+                self.task_queue
+                    .push_back(PreprocessTask::downsample(node, node_atlas));
             }
 
-            self.task_queue.push_back(PreprocessTask {
-                attachment_index: dataset.attachment_index,
-                task_type: PreprocessTaskType::Barrier,
-                node: Default::default(),
-            });
+            self.task_queue.push_back(PreprocessTask::barrier());
 
             for (x, y) in iproduct!(0..node_count, 0..node_count) {
-                self.task_queue.push_back(stitch(
-                    dataset.attachment_index,
-                    node_atlas,
-                    NodeCoordinate::new(dataset.side, lod, x, y),
-                    node_count,
-                ));
+                let node = node_atlas
+                    .get_or_allocate(NodeCoordinate::new(dataset.side, lod, x, y))
+                    .attachment(dataset.attachment_index);
+
+                self.task_queue
+                    .push_back(PreprocessTask::stitch(node, node_atlas, node_count));
+
+                nodes.push(node);
             }
+        }
+
+        self.task_queue.push_back(PreprocessTask::barrier());
+
+        for node in nodes {
+            self.task_queue.push_back(PreprocessTask::save(node));
         }
     }
 }
@@ -259,7 +249,9 @@ pub(crate) fn select_ready_tasks(
             ..
         } = preprocessor.deref_mut();
 
-        if task_queue.is_empty() && node_atlas.state.slots == node_atlas.state.max_slots {
+        if task_queue.is_empty()
+            && node_atlas.state.download_slots == node_atlas.state.max_download_slots
+        {
             if let Some(start) = start_time {
                 let elapsed = start.elapsed();
                 *start_time = None;
@@ -272,29 +264,21 @@ pub(crate) fn select_ready_tasks(
 
         ready_tasks.clear();
 
-        while node_atlas.state.slots > 0 {
-            let ready = task_queue
-                .front()
-                .map_or(false, |task| match &task.task_type {
-                    PreprocessTaskType::Split { tile } => {
-                        asset_server.load_state(tile) == LoadState::Loaded
-                    }
-                    PreprocessTaskType::Stitch { .. } => true,
-                    PreprocessTaskType::Downsample { .. } => true,
-                    PreprocessTaskType::Barrier => {
-                        if node_atlas.state.slots == node_atlas.state.max_slots {
-                            dbg!("barrier complete");
-                        }
-                        node_atlas.state.slots == node_atlas.state.max_slots
-                    }
-                });
-
-            if ready {
+        loop {
+            if (node_atlas.state.download_slots > 0)
+                && task_queue
+                    .front()
+                    .map_or(false, |task| task.is_ready(&asset_server, &node_atlas))
+            {
                 let task = task_queue.pop_front().unwrap();
 
-                if !matches!(task.task_type, PreprocessTaskType::Barrier) {
+                if matches!(task.task_type, PreprocessTaskType::Save) {
+                    node_atlas.save(task.node);
+                } else if matches!(task.task_type, PreprocessTaskType::Barrier) {
+                    dbg!("barrier complete");
+                } else {
                     ready_tasks.push(task);
-                    node_atlas.state.slots -= 1;
+                    node_atlas.state.download_slots -= 1;
                 }
             } else {
                 break;

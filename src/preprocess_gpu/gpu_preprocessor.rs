@@ -122,7 +122,8 @@ impl GpuPreprocessor {
 
             while !gpu_preprocessor.ready_tasks.is_empty() {
                 let task = gpu_preprocessor.ready_tasks.back().unwrap();
-                let attachment = &mut gpu_node_atlas.attachments[task.attachment_index];
+                let attachment =
+                    &mut gpu_node_atlas.attachments[task.node.attachment_index as usize];
 
                 if let Some(section_index) = attachment.reserve_write_slot(task.node) {
                     let task = gpu_preprocessor.ready_tasks.pop_back().unwrap();
@@ -134,7 +135,7 @@ impl GpuPreprocessor {
                             let split_buffer = StaticBuffer::create(
                                 &device,
                                 &SplitData {
-                                    node: task.node,
+                                    node: task.node.into(),
                                     node_index: section_index,
                                 },
                                 BufferUsages::UNIFORM,
@@ -154,7 +155,7 @@ impl GpuPreprocessor {
                             let stitch_buffer = StaticBuffer::create(
                                 &device,
                                 &StitchData {
-                                    node: task.node,
+                                    node: task.node.into(),
                                     neighbour_nodes: *neighbour_nodes,
                                     node_index: section_index,
                                 },
@@ -171,7 +172,7 @@ impl GpuPreprocessor {
                             let downsample_buffer = StaticBuffer::create(
                                 &device,
                                 &DownsampleData {
-                                    node: task.node,
+                                    node: task.node.into(),
                                     parent_nodes: *parent_nodes,
                                     node_index: section_index,
                                 },

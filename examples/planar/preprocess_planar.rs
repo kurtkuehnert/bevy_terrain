@@ -44,15 +44,15 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         &asset_server,
         &mut terrain_bundle.node_atlas,
     );
-    preprocessor.preprocess_tile(
-        PreprocessDataset {
-            attachment_index: 1,
-            path: format!("{PATH}/source/albedo.png"),
-            side: 0,
-        },
-        &asset_server,
-        &mut terrain_bundle.node_atlas,
-    );
+    // preprocessor.preprocess_tile(
+    //     PreprocessDataset {
+    //         attachment_index: 1,
+    //         path: format!("{PATH}/source/albedo.png"),
+    //         side: 0,
+    //     },
+    //     &asset_server,
+    //     &mut terrain_bundle.node_atlas,
+    // );
 
     commands.spawn((terrain_bundle, preprocessor));
 }

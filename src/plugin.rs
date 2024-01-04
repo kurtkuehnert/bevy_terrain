@@ -5,14 +5,12 @@ use crate::{
         culling_bind_group::CullingBindGroup,
         shaders::load_terrain_shaders,
         terrain_bind_group::TerrainData,
-        terrain_view_bind_group::{TerrainViewConfigUniform, TerrainViewData},
+        terrain_view_bind_group::TerrainViewData,
     },
     terrain::{Terrain, TerrainComponents},
     terrain_data::{
-        gpu_node_atlas::GpuNodeAtlas,
-        gpu_quadtree::GpuQuadtree,
-        node_atlas::update_node_atlas,
-        quadtree::{adjust_quadtree, approximate_height, compute_quadtree_request, Quadtree},
+        gpu_node_atlas::GpuNodeAtlas, gpu_quadtree::GpuQuadtree, node_atlas::NodeAtlas,
+        quadtree::Quadtree,
     },
     terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
 };
@@ -39,10 +37,10 @@ impl Plugin for TerrainPlugin {
         .add_systems(
             Last,
             (
-                compute_quadtree_request,
-                update_node_atlas,
-                adjust_quadtree,
-                approximate_height,
+                Quadtree::compute_requests,
+                NodeAtlas::update,
+                Quadtree::adjust_to_node_atlas,
+                Quadtree::approximate_height,
             )
                 .chain(),
         );
@@ -52,7 +50,6 @@ impl Plugin for TerrainPlugin {
             .init_resource::<TerrainComponents<TerrainData>>()
             .init_resource::<TerrainViewComponents<GpuQuadtree>>()
             .init_resource::<TerrainViewComponents<TerrainViewData>>()
-            .init_resource::<TerrainViewComponents<TerrainViewConfigUniform>>()
             .init_resource::<TerrainViewComponents<CullingBindGroup>>()
             .add_systems(
                 ExtractSchedule,

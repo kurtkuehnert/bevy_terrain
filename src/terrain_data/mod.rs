@@ -1,13 +1,13 @@
 //! This module contains the two fundamental data structures of the terrain:
-//! the [`Quadtree`](quadtree::Quadtree) and the [`NodeAtlas`](node_atlas::NodeAtlas).
+//! the [`Quadtree`] and the [`NodeAtlas`].
 //!
 //! # Explanation
-//! Each terrain possesses one [`NodeAtlas`](node_atlas::NodeAtlas), which can be configured
-//! to store any [`AtlasAttachment`] required (eg. height, density, albedo, splat, edc.)
+//! Each terrain possesses one [`NodeAtlas`], which can be configured
+//! to store any [`AtlasAttachment`](node_atlas::AtlasAttachment) required (eg. height, density, albedo, splat, edc.)
 //! These attachments can vary in resolution and texture format.
 //!
 //! To decide which nodes should be currently loaded you can create multiple
-//! [`Quadtree`](quadtree::Quadtree) views that correspond to one node atlas.
+//! [`Quadtree`] views that correspond to one node atlas.
 //! These quadtrees request and release nodes from the node atlas based on their quality
 //! setting (`load_distance`).
 //! Additionally they are then used to access the best loaded data at any position.
@@ -15,7 +15,7 @@
 //! Both the node atlas and the quadtrees also have a corresponding GPU representation,
 //! which can be used to access the terrain data in shaders.
 
-use crate::prelude::{NodeAtlas, Quadtree};
+use crate::terrain_data::{node_atlas::NodeAtlas, quadtree::Quadtree};
 use bevy::prelude::*;
 use bevy::render::render_resource::*;
 use bincode::{Decode, Encode};
@@ -247,17 +247,16 @@ impl AttachmentData {
         }
     }
 
-    // Todo: check the correctness of this interpolation code
     pub(crate) fn sample(&self, coordinate: Vec2, size: u32) -> Vec4 {
         let coordinate = coordinate * size as f32 - 0.5;
 
-        let remainder = coordinate % 1.0;
+        let _remainder = coordinate % 1.0;
         let coordinate = coordinate.as_ivec2();
 
         let mut values = [[Vec4::ZERO; 2]; 2];
 
         for (x, y) in iproduct!(0..2, 0..2) {
-            let index = (coordinate.y * y) * size as i32 + (coordinate.x + x);
+            let index = (coordinate.y + y) * size as i32 + (coordinate.x + x);
 
             values[x as usize][y as usize] = match self {
                 AttachmentData::None => Vec4::splat(0.0),
@@ -286,11 +285,14 @@ impl AttachmentData {
             };
         }
 
-        Vec4::lerp(
-            Vec4::lerp(values[1][1], values[1][0], remainder.y),
-            Vec4::lerp(values[0][1], values[0][0], remainder.y),
-            remainder.x,
-        )
+        // Todo: check the correctness of this interpolation code
+        // Vec4::lerp(
+        //     Vec4::lerp(values[1][1], values[1][0], remainder.y),
+        //     Vec4::lerp(values[0][1], values[0][0], remainder.y),
+        //     remainder.x,
+        // )
+
+        (values[0][0] + values[0][1] + values[1][0] + values[1][1]) / 4.0
     }
 }
 

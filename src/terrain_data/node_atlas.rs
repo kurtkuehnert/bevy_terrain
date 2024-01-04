@@ -1,11 +1,10 @@
-use crate::formats::tc::load_node_config;
-use crate::terrain_data::quadtree::NodeLookup;
 use crate::{
+    formats::tc::load_node_config,
     prelude::{AttachmentConfig, AttachmentFormat},
     preprocess::{R16Image, Rg16Image, Rgba8Image},
     terrain::{Terrain, TerrainConfig},
     terrain_data::{
-        quadtree::{Quadtree, QuadtreeEntry},
+        quadtree::{NodeLookup, Quadtree, QuadtreeEntry},
         AttachmentData, NodeCoordinate, INVALID_ATLAS_INDEX, INVALID_LOD,
     },
     terrain_view::{TerrainView, TerrainViewComponents},
@@ -18,28 +17,58 @@ use bevy::{
 };
 use image::{io::Reader, DynamicImage};
 use itertools::Itertools;
-use std::{collections::VecDeque, mem};
+use std::{collections::VecDeque, mem, ops::DerefMut};
 
 #[derive(Copy, Clone, Debug, Default, ShaderType)]
-pub(crate) struct AtlasNode {
+pub struct AtlasNode {
     pub(crate) coordinate: NodeCoordinate,
     #[size(16)]
     pub(crate) atlas_index: u32,
 }
 
+impl AtlasNode {
+    pub fn new(node_coordinate: NodeCoordinate, atlas_index: u32) -> Self {
+        Self {
+            coordinate: node_coordinate,
+            atlas_index,
+        }
+    }
+    pub fn attachment(self, attachment_index: u32) -> AtlasNodeAttachment {
+        AtlasNodeAttachment {
+            coordinate: self.coordinate,
+            atlas_index: self.atlas_index,
+            attachment_index,
+        }
+    }
+}
+
+impl From<AtlasNodeAttachment> for AtlasNode {
+    fn from(node: AtlasNodeAttachment) -> Self {
+        Self {
+            coordinate: node.coordinate,
+            atlas_index: node.atlas_index,
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+pub struct AtlasNodeAttachment {
+    pub(crate) coordinate: NodeCoordinate,
+    pub(crate) atlas_index: u32,
+    pub(crate) attachment_index: u32,
+}
+
 #[derive(Clone)]
-pub(crate) struct NodeWithData {
-    pub(crate) node: AtlasNode,
+pub(crate) struct NodeAttachmentWithData {
+    pub(crate) node: AtlasNodeAttachment,
     pub(crate) data: AttachmentData,
     pub(crate) texture_size: u32,
 }
 
-impl NodeWithData {
-    pub(crate) fn start_saving(self, path: String) -> Task<AtlasNode> {
+impl NodeAttachmentWithData {
+    pub(crate) fn start_saving(self, path: String) -> Task<AtlasNodeAttachment> {
         AsyncComputeTaskPool::get().spawn(async move {
             let path = self.node.coordinate.path(&path, "png");
-
-            dbg!(&path);
 
             let image = match self.data {
                 AttachmentData::Rgba8(data) => {
@@ -69,7 +98,7 @@ impl NodeWithData {
     }
 
     pub(crate) fn start_loading(
-        node: AtlasNode,
+        node: AtlasNodeAttachment,
         path: String,
         format: AttachmentFormat,
     ) -> Task<Self> {
@@ -104,11 +133,10 @@ pub struct AtlasAttachment {
     pub(crate) format: AttachmentFormat,
     pub(crate) data: Vec<AttachmentData>,
 
-    pub(crate) saving_nodes: Vec<Task<AtlasNode>>,
-    pub(crate) loading_nodes: Vec<Task<NodeWithData>>,
-
-    pub(crate) upload_nodes: Vec<NodeWithData>,
-    pub(crate) download_nodes: Vec<Task<NodeWithData>>,
+    pub(crate) saving_nodes: Vec<Task<AtlasNodeAttachment>>,
+    pub(crate) loading_nodes: Vec<Task<NodeAttachmentWithData>>,
+    pub(crate) uploading_nodes: Vec<NodeAttachmentWithData>,
+    pub(crate) downloading_nodes: Vec<Task<NodeAttachmentWithData>>,
 }
 
 impl AtlasAttachment {
@@ -127,57 +155,59 @@ impl AtlasAttachment {
             mip_level_count: config.mip_level_count,
             format: config.format,
             data: vec![AttachmentData::None; node_atlas_size as usize],
-            upload_nodes: default(),
-            loading_nodes: default(),
             saving_nodes: default(),
-            download_nodes: default(),
+            loading_nodes: default(),
+            uploading_nodes: default(),
+            downloading_nodes: default(),
         }
     }
 
-    fn add_node_data(&mut self, data: AttachmentData, atlas_index: u32) {
-        self.data[atlas_index as usize] = data;
+    fn update(&mut self, atlas_state: &mut NodeAtlasState) {
+        self.loading_nodes.retain_mut(|node| {
+            future::block_on(future::poll_once(node)).map_or(true, |node| {
+                atlas_state.loaded_node_attachment(node.node);
+                self.uploading_nodes.push(node.clone());
+                self.data[node.node.atlas_index as usize] = node.data;
+
+                false
+            })
+        });
+
+        self.downloading_nodes.retain_mut(|node| {
+            future::block_on(future::poll_once(node)).map_or(true, |node| {
+                atlas_state.downloaded_node_attachment(node.node);
+                self.data[node.node.atlas_index as usize] = node.data;
+                false
+            })
+        });
+
+        self.saving_nodes.retain_mut(|task| {
+            future::block_on(future::poll_once(task)).map_or(true, |node| {
+                atlas_state.saved_node_attachment(node);
+                false
+            })
+        });
     }
 
-    fn update(&mut self, atlas_state: &mut NodeAtlasState) {
+    fn load(&mut self, node: AtlasNodeAttachment) {
         // Todo: build customizable loader abstraction
-        for &node in &atlas_state.start_loading_nodes {
-            self.loading_nodes.push(NodeWithData::start_loading(
+        self.loading_nodes
+            .push(NodeAttachmentWithData::start_loading(
                 node,
                 self.path.clone(),
                 self.format,
             ));
-        }
+    }
 
-        let mut loading_nodes = mem::take(&mut self.loading_nodes);
-        loading_nodes.retain_mut(|node| {
-            if let Some(node) = future::block_on(future::poll_once(node)) {
-                self.add_node_data(node.data.clone(), node.node.atlas_index);
-                atlas_state.loaded_node_attachment(node.node.coordinate, 0);
-                self.upload_nodes.push(node);
-                false
-            } else {
-                true
+    fn save(&mut self, node: AtlasNodeAttachment) {
+        self.saving_nodes.push(
+            NodeAttachmentWithData {
+                node,
+                data: self.data[node.atlas_index as usize].clone(),
+                texture_size: self.texture_size,
             }
-        });
-        self.loading_nodes = loading_nodes;
-
-        self.download_nodes.retain_mut(|nodes| {
-            if let Some(node) = future::block_on(future::poll_once(nodes)) {
-                self.saving_nodes.push(node.start_saving(self.path.clone()));
-                false
-            } else {
-                true
-            }
-        });
-
-        self.saving_nodes.retain_mut(|task| {
-            if future::block_on(future::poll_once(task)).is_some() {
-                atlas_state.slots += 1;
-                false
-            } else {
-                true
-            }
-        });
+            .start_saving(self.path.clone()),
+        );
     }
 
     fn sample(&self, lookup: NodeLookup) -> Vec4 {
@@ -221,10 +251,13 @@ pub(crate) struct NodeAtlasState {
 
     attachment_count: u32,
 
-    start_loading_nodes: Vec<AtlasNode>,
+    to_load: VecDeque<AtlasNodeAttachment>,
+    load_slots: u32,
+    to_save: VecDeque<AtlasNodeAttachment>,
+    save_slots: u32,
 
-    pub(crate) slots: u32,
-    pub(crate) max_slots: u32,
+    pub(crate) download_slots: u32,
+    pub(crate) max_download_slots: u32,
 }
 
 impl NodeAtlasState {
@@ -234,10 +267,7 @@ impl NodeAtlasState {
         existing_nodes: HashSet<NodeCoordinate>,
     ) -> Self {
         let unused_nodes = (0..atlas_size)
-            .map(|atlas_index| AtlasNode {
-                coordinate: NodeCoordinate::INVALID,
-                atlas_index,
-            })
+            .map(|atlas_index| AtlasNode::new(NodeCoordinate::INVALID, atlas_index))
             .collect();
 
         Self {
@@ -245,13 +275,39 @@ impl NodeAtlasState {
             unused_nodes,
             existing_nodes,
             attachment_count,
-            start_loading_nodes: default(),
-            slots: 16,
-            max_slots: 16,
+            to_save: default(),
+            to_load: default(),
+            save_slots: 16,
+            load_slots: 16,
+            download_slots: 64,
+            max_download_slots: 64,
         }
     }
-    fn loaded_node_attachment(&mut self, node_coordinate: NodeCoordinate, _attachment_index: u32) {
-        let node_state = self.node_states.get_mut(&node_coordinate).unwrap();
+
+    fn update(&mut self, attachments: &mut [AtlasAttachment]) {
+        while self.save_slots > 0 {
+            if let Some(node) = self.to_save.pop_front() {
+                attachments[node.attachment_index as usize].save(node.into());
+                self.save_slots -= 1;
+            } else {
+                break;
+            }
+        }
+
+        while self.load_slots > 0 {
+            if let Some(node) = self.to_load.pop_front() {
+                attachments[node.attachment_index as usize].load(node.into());
+                self.load_slots -= 1;
+            } else {
+                break;
+            }
+        }
+    }
+
+    fn loaded_node_attachment(&mut self, node: AtlasNodeAttachment) {
+        self.load_slots += 1;
+
+        let node_state = self.node_states.get_mut(&node.coordinate).unwrap();
 
         node_state.state = match node_state.state {
             LoadingState::Loading(1) => LoadingState::Loaded,
@@ -262,6 +318,14 @@ impl NodeAtlasState {
         };
     }
 
+    fn saved_node_attachment(&mut self, _node: AtlasNodeAttachment) {
+        self.save_slots += 1;
+    }
+
+    fn downloaded_node_attachment(&mut self, _node: AtlasNodeAttachment) {
+        self.download_slots += 1;
+    }
+
     fn allocate_node(&mut self) -> u32 {
         let unused_node = self.unused_nodes.pop_front().expect("Atlas out of indices");
 
@@ -270,8 +334,8 @@ impl NodeAtlasState {
         unused_node.atlas_index
     }
 
-    fn get_or_allocate(&mut self, node_coordinate: NodeCoordinate) -> u32 {
-        if let Some(node) = self.node_states.get(&node_coordinate) {
+    fn get_or_allocate(&mut self, node_coordinate: NodeCoordinate) -> AtlasNode {
+        let atlas_index = if let Some(node) = self.node_states.get(&node_coordinate) {
             node.atlas_index
         } else {
             let atlas_index = self.allocate_node();
@@ -286,7 +350,9 @@ impl NodeAtlasState {
             );
 
             atlas_index
-        }
+        };
+
+        AtlasNode::new(node_coordinate, atlas_index)
     }
 
     fn request_node(&mut self, node_coordinate: NodeCoordinate) {
@@ -318,10 +384,13 @@ impl NodeAtlasState {
                 },
             );
 
-            self.start_loading_nodes.push(AtlasNode {
-                coordinate: node_coordinate,
-                atlas_index,
-            });
+            for attachment_index in 0..self.attachment_count {
+                self.to_load.push_back(AtlasNodeAttachment {
+                    coordinate: node_coordinate,
+                    atlas_index,
+                    attachment_index,
+                });
+            }
         }
 
         self.node_states = node_states;
@@ -340,10 +409,8 @@ impl NodeAtlasState {
 
         if node.requests == 0 {
             // the node is not used anymore
-            self.unused_nodes.push_back(AtlasNode {
-                coordinate: node_coordinate,
-                atlas_index: node.atlas_index,
-            });
+            self.unused_nodes
+                .push_back(AtlasNode::new(node_coordinate, node.atlas_index));
         }
     }
 
@@ -434,11 +501,15 @@ impl NodeAtlas {
         )
     }
 
-    pub fn get_or_allocate(&mut self, node_coordinate: NodeCoordinate) -> u32 {
+    pub fn get_or_allocate(&mut self, node_coordinate: NodeCoordinate) -> AtlasNode {
         self.state.get_or_allocate(node_coordinate)
     }
 
-    pub(crate) fn get_best_node(
+    pub fn save(&mut self, node: AtlasNodeAttachment) {
+        self.state.to_save.push_back(node);
+    }
+
+    pub(super) fn get_best_node(
         &self,
         node_coordinate: NodeCoordinate,
         lod_count: u32,
@@ -446,47 +517,37 @@ impl NodeAtlas {
         self.state.get_best_node(node_coordinate, lod_count)
     }
 
-    pub(crate) fn sample_attachment(&self, node_lookup: NodeLookup, attachment_index: u32) -> Vec4 {
+    pub(super) fn sample_attachment(&self, node_lookup: NodeLookup, attachment_index: u32) -> Vec4 {
         self.attachments[attachment_index as usize].sample(node_lookup)
     }
 
-    fn update(&mut self) {
-        let NodeAtlas {
-            state, attachments, ..
-        } = self;
+    /// Updates the node atlas according to all corresponding quadtrees.
+    pub(crate) fn update(
+        mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
+        view_query: Query<Entity, With<TerrainView>>,
+        mut terrain_query: Query<(Entity, &mut NodeAtlas), With<Terrain>>,
+    ) {
+        for (terrain, mut node_atlas) in terrain_query.iter_mut() {
+            let NodeAtlas {
+                state, attachments, ..
+            } = node_atlas.deref_mut();
 
-        for attachment in attachments {
-            attachment.update(state);
-        }
+            state.update(attachments);
 
-        state.start_loading_nodes.clear();
-    }
+            for attachment in attachments {
+                attachment.update(state);
+            }
 
-    /// Adjusts the node atlas according to the requested and released nodes of the [`Quadtree`]
-    /// and starts loading not already present nodes.
-    fn fulfill_request(&mut self, quadtree: &mut Quadtree) {
-        for node_coordinate in quadtree.released_nodes.drain(..) {
-            self.state.release_node(node_coordinate);
-        }
+            for view in view_query.iter() {
+                if let Some(quadtree) = quadtrees.get_mut(&(terrain, view)) {
+                    for node_coordinate in quadtree.released_nodes.drain(..) {
+                        node_atlas.state.release_node(node_coordinate);
+                    }
 
-        for node_coordinate in quadtree.requested_nodes.drain(..) {
-            self.state.request_node(node_coordinate);
-        }
-    }
-}
-
-/// Updates the node atlas according to all corresponding quadtrees.
-pub(crate) fn update_node_atlas(
-    mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
-    view_query: Query<Entity, With<TerrainView>>,
-    mut terrain_query: Query<(Entity, &mut NodeAtlas), With<Terrain>>,
-) {
-    for (terrain, mut node_atlas) in terrain_query.iter_mut() {
-        node_atlas.update();
-
-        for view in view_query.iter() {
-            if let Some(quadtree) = quadtrees.get_mut(&(terrain, view)) {
-                node_atlas.fulfill_request(quadtree);
+                    for node_coordinate in quadtree.requested_nodes.drain(..) {
+                        node_atlas.state.request_node(node_coordinate);
+                    }
+                }
             }
         }
     }
