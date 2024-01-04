@@ -1,7 +1,7 @@
 use crate::{
     terrain::{Terrain, TerrainComponents},
     terrain_data::{
-        node_atlas::{AtlasAttachment, AtlasNode, NodeAtlas, NodeWithData},
+        node_atlas::{AtlasAttachment, AtlasNodeAttachment, NodeAtlas, NodeAttachmentWithData},
         AttachmentData, AttachmentFormat,
     },
     util::StaticBuffer,
@@ -179,11 +179,10 @@ pub(crate) struct GpuAtlasAttachment {
     pub(crate) download_buffers: Vec<StaticBuffer<()>>,
     pub(crate) bind_group: BindGroup,
 
-    pub(crate) max_slots: usize,
-    pub(crate) slots: Vec<AtlasNode>,
-
-    pub(crate) upload_nodes: Vec<NodeWithData>,
-    pub(crate) download_nodes: Vec<Task<NodeWithData>>,
+    pub(crate) max_atlas_write_slots: u32,
+    pub(crate) atlas_write_slots: Vec<AtlasNodeAttachment>,
+    pub(crate) upload_nodes: Vec<NodeAttachmentWithData>,
+    pub(crate) download_nodes: Vec<Task<NodeAttachmentWithData>>,
 }
 
 impl GpuAtlasAttachment {
@@ -192,7 +191,8 @@ impl GpuAtlasAttachment {
         attachment: &AtlasAttachment,
         node_atlas: &NodeAtlas,
     ) -> Self {
-        let max_slots = 16;
+        let max_atlas_write_slots = 8;
+        let atlas_write_slots = Vec::with_capacity(max_atlas_write_slots as usize);
 
         let buffer_info = AtlasBufferInfo::new(attachment, node_atlas.lod_count);
 
@@ -229,7 +229,7 @@ impl GpuAtlasAttachment {
 
         let atlas_write_section = StaticBuffer::empty_sized(
             device,
-            buffer_info.buffer_size(max_slots as u32) as BufferAddress,
+            buffer_info.buffer_size(max_atlas_write_slots) as BufferAddress,
             BufferUsages::COPY_DST | BufferUsages::COPY_SRC | BufferUsages::STORAGE,
         );
 
@@ -251,38 +251,29 @@ impl GpuAtlasAttachment {
         );
 
         Self {
-            slots: default(),
-            max_slots,
+            buffer_info,
             atlas_texture,
             atlas_write_section,
             download_buffers: default(),
             bind_group,
-            buffer_info,
-
+            max_atlas_write_slots,
+            atlas_write_slots,
             upload_nodes: default(),
             download_nodes: default(),
         }
     }
 
-    fn synchronize(&mut self, attachment: &mut AtlasAttachment) {
-        mem::swap(&mut attachment.upload_nodes, &mut self.upload_nodes);
-
-        attachment
-            .download_nodes
-            .extend(mem::take(&mut self.download_nodes));
-    }
-
-    pub(crate) fn reserve_write_slot(&mut self, node: AtlasNode) -> Option<u32> {
-        if self.slots.len() < self.max_slots - 1 {
-            self.slots.push(node);
-            Some(self.slots.len() as u32 - 1)
+    pub(crate) fn reserve_write_slot(&mut self, node: AtlasNodeAttachment) -> Option<u32> {
+        if self.atlas_write_slots.len() < self.max_atlas_write_slots as usize {
+            self.atlas_write_slots.push(node);
+            Some(self.atlas_write_slots.len() as u32 - 1)
         } else {
             None
         }
     }
 
     pub(crate) fn copy_nodes_to_write_section(&self, command_encoder: &mut CommandEncoder) {
-        for (section_index, node) in self.slots.iter().enumerate() {
+        for (section_index, node) in self.atlas_write_slots.iter().enumerate() {
             command_encoder.copy_texture_to_buffer(
                 self.buffer_info
                     .image_copy_texture(&self.atlas_texture, node.atlas_index, 0),
@@ -294,7 +285,7 @@ impl GpuAtlasAttachment {
     }
 
     pub(crate) fn copy_nodes_from_write_section(&self, command_encoder: &mut CommandEncoder) {
-        for (section_index, node) in self.slots.iter().enumerate() {
+        for (section_index, node) in self.atlas_write_slots.iter().enumerate() {
             command_encoder.copy_buffer_to_texture(
                 self.buffer_info
                     .image_copy_buffer(&self.atlas_write_section, section_index as u32),
@@ -305,7 +296,7 @@ impl GpuAtlasAttachment {
         }
     }
 
-    pub(crate) fn upload_nodes(&mut self, queue: &RenderQueue) {
+    fn upload_nodes(&mut self, queue: &RenderQueue) {
         for node in self.upload_nodes.drain(..) {
             queue.write_texture(
                 self.buffer_info
@@ -322,7 +313,7 @@ impl GpuAtlasAttachment {
     }
 
     pub(crate) fn download_nodes(&self, command_encoder: &mut CommandEncoder) {
-        for (node, download_buffer) in iter::zip(&self.slots, &self.download_buffers) {
+        for (node, download_buffer) in iter::zip(&self.atlas_write_slots, &self.download_buffers) {
             command_encoder.copy_texture_to_buffer(
                 self.buffer_info
                     .image_copy_texture(&self.atlas_texture, node.atlas_index, 0),
@@ -332,8 +323,8 @@ impl GpuAtlasAttachment {
         }
     }
 
-    pub(crate) fn create_download_buffers(&mut self, device: &RenderDevice) {
-        self.download_buffers = (0..self.slots.len())
+    fn create_download_buffers(&mut self, device: &RenderDevice) {
+        self.download_buffers = (0..self.atlas_write_slots.len())
             .map(|_| {
                 StaticBuffer::empty_sized(
                     device,
@@ -344,16 +335,16 @@ impl GpuAtlasAttachment {
             .collect_vec();
     }
 
-    pub(crate) fn start_downloading_nodes(&mut self) {
+    fn start_downloading_nodes(&mut self) {
         let buffer_info = self.buffer_info;
         let download_buffers = mem::take(&mut self.download_buffers);
-        let slots = mem::take(&mut self.slots);
+        let atlas_write_slots = mem::take(&mut self.atlas_write_slots);
 
-        if !slots.is_empty() {
-            println!("Started reading back {} nodes", slots.len());
+        if !atlas_write_slots.is_empty() {
+            println!("Started reading back {} nodes", atlas_write_slots.len());
         }
 
-        self.download_nodes = iter::zip(slots, download_buffers)
+        self.download_nodes = iter::zip(atlas_write_slots, download_buffers)
             .map(|(node, download_buffer)| {
                 AsyncComputeTaskPool::get().spawn(async move {
                     let (tx, rx) = async_channel::bounded(1);
@@ -390,7 +381,7 @@ impl GpuAtlasAttachment {
                         data.truncate(buffer_info.actual_node_size as usize);
                     }
 
-                    NodeWithData {
+                    NodeAttachmentWithData {
                         node,
                         data: AttachmentData::from_bytes(&data, buffer_info.format),
                         texture_size: buffer_info.texture_size,
@@ -448,7 +439,14 @@ impl GpuNodeAtlas {
             for (attachment, gpu_attachment) in
                 iter::zip(&mut node_atlas.attachments, &mut gpu_node_atlas.attachments)
             {
-                gpu_attachment.synchronize(attachment);
+                mem::swap(
+                    &mut attachment.uploading_nodes,
+                    &mut gpu_attachment.upload_nodes,
+                );
+
+                attachment
+                    .downloading_nodes
+                    .extend(mem::take(&mut gpu_attachment.download_nodes));
             }
         }
     }

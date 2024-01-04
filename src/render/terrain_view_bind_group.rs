@@ -79,12 +79,12 @@ struct Parameters {
 }
 
 #[derive(Default, ShaderType)]
-pub(crate) struct TerrainViewConfigUniform {
+struct TerrainViewConfigUniform {
     view_local_position: Vec3,
     approximate_height: f32,
     quadtree_size: u32,
     tile_count: u32,
-    pub(crate) refinement_count: u32,
+    refinement_count: u32,
     grid_size: f32,
     vertices_per_row: u32,
     vertices_per_tile: u32,
@@ -116,11 +116,12 @@ impl TerrainViewConfigUniform {
 }
 
 pub struct TerrainViewData {
-    pub(crate) view_config_buffer: StaticBuffer<TerrainViewConfigUniform>,
-    pub(crate) indirect_buffer: StaticBuffer<Indirect>,
-    pub(crate) prepare_indirect_bind_group: BindGroup,
-    pub(crate) refine_tiles_bind_group: BindGroup,
-    pub(crate) terrain_view_bind_group: BindGroup,
+    view_config_uniform: TerrainViewConfigUniform,
+    view_config_buffer: StaticBuffer<TerrainViewConfigUniform>,
+    pub(super) indirect_buffer: StaticBuffer<Indirect>,
+    pub(super) prepare_indirect_bind_group: BindGroup,
+    pub(super) refine_tiles_bind_group: BindGroup,
+    pub(super) terrain_view_bind_group: BindGroup,
 }
 
 impl TerrainViewData {
@@ -169,12 +170,17 @@ impl TerrainViewData {
         );
 
         Self {
-            indirect_buffer,
+            view_config_uniform: default(),
             view_config_buffer,
+            indirect_buffer,
             prepare_indirect_bind_group,
             refine_tiles_bind_group,
             terrain_view_bind_group,
         }
+    }
+
+    pub(super) fn refinement_count(&self) -> u32 {
+        self.view_config_uniform.refinement_count
     }
 
     pub(crate) fn initialize(
@@ -197,33 +203,32 @@ impl TerrainViewData {
     }
 
     pub(crate) fn extract(
-        mut view_config_uniforms: ResMut<TerrainViewComponents<TerrainViewConfigUniform>>,
+        mut terrain_view_data: ResMut<TerrainViewComponents<TerrainViewData>>,
         view_configs: Extract<Res<TerrainViewComponents<TerrainViewConfig>>>,
         view_query: Extract<Query<&GlobalTransform, With<TerrainView>>>,
         terrain_query: Extract<Query<&GlobalTransform, With<Terrain>>>,
     ) {
         for (&(terrain, view), view_config) in &view_configs.0 {
-            let view_world_position = view_query.get(view).unwrap().translation();
+            let view_world_position = view_query.get(view).unwrap();
             let terrain_transform = terrain_query.get(terrain).unwrap();
-            let model = terrain_transform.compute_matrix();
-            let inverse_model = model.inverse();
+            let terrain_view_data = terrain_view_data.get_mut(&(terrain, view)).unwrap();
 
-            let view_local_position = (inverse_model * view_world_position.extend(1.0)).xyz();
-            view_config_uniforms.insert(
-                (terrain, view),
-                TerrainViewConfigUniform::new(view_config, view_local_position),
-            )
+            let view_local_position = (terrain_transform.compute_matrix().inverse()
+                * view_world_position.translation().extend(1.0))
+            .xyz();
+
+            terrain_view_data.view_config_uniform =
+                TerrainViewConfigUniform::new(view_config, view_local_position);
         }
     }
 
     pub(crate) fn prepare(
         queue: Res<RenderQueue>,
         mut terrain_view_data: ResMut<TerrainViewComponents<TerrainViewData>>,
-        view_config_uniforms: Res<TerrainViewComponents<TerrainViewConfigUniform>>,
     ) {
-        for (&(terrain, view), data) in &mut terrain_view_data.0 {
-            let view_config_uniform = view_config_uniforms.get(&(terrain, view)).unwrap();
-            data.view_config_buffer.update(&queue, view_config_uniform);
+        for data in &mut terrain_view_data.0.values_mut() {
+            data.view_config_buffer
+                .update(&queue, &data.view_config_uniform);
         }
     }
 }

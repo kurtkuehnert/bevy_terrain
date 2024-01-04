@@ -5,8 +5,7 @@ use crate::{
         shaders::{PREPARE_INDIRECT_SHADER, REFINE_TILES_SHADER},
         terrain_bind_group::{create_terrain_layout, TerrainData},
         terrain_view_bind_group::{
-            create_prepare_indirect_layout, create_refine_tiles_layout, TerrainViewConfigUniform,
-            TerrainViewData,
+            create_prepare_indirect_layout, create_refine_tiles_layout, TerrainViewData,
         },
     },
     terrain::{Terrain, TerrainComponents},
@@ -212,7 +211,6 @@ impl TerrainComputeNode {
         view_data: &'a TerrainViewData,
         terrain_data: &'a TerrainData,
         culling_bind_group: &'a CullingBindGroup,
-        refinement_count: u32,
     ) {
         pass.set_bind_group(0, culling_bind_group, &[]);
         pass.set_bind_group(1, &view_data.refine_tiles_bind_group, &[]);
@@ -222,7 +220,7 @@ impl TerrainComputeNode {
         pass.set_pipeline(pipelines[TerrainComputePipelineId::PrepareRoot as usize]);
         pass.dispatch_workgroups(1, 1, 1);
 
-        for _ in 0..refinement_count {
+        for _ in 0..view_data.refinement_count() {
             pass.set_pipeline(pipelines[TerrainComputePipelineId::RefineTiles as usize]);
             pass.dispatch_workgroups_indirect(&view_data.indirect_buffer, 0);
 
@@ -252,8 +250,6 @@ impl render_graph::Node for TerrainComputeNode {
     ) -> Result<(), render_graph::NodeRunError> {
         let compute_pipelines = world.resource::<TerrainComputePipelines>();
         let pipeline_cache = world.resource::<PipelineCache>();
-        let view_config_uniforms =
-            world.resource::<TerrainViewComponents<TerrainViewConfigUniform>>();
         let terrain_data = world.resource::<TerrainComponents<TerrainData>>();
         let terrain_view_data = world.resource::<TerrainViewComponents<TerrainViewData>>();
         let culling_bind_groups = world.resource::<TerrainViewComponents<CullingBindGroup>>();
@@ -285,7 +281,6 @@ impl render_graph::Node for TerrainComputeNode {
             let terrain_data = terrain_data.get(&terrain).unwrap();
 
             for view in self.view_query.iter_manual(world) {
-                let view_config = view_config_uniforms.get(&(terrain, view)).unwrap();
                 let view_data = terrain_view_data.get(&(terrain, view)).unwrap();
                 let culling_bind_group = culling_bind_groups.get(&(terrain, view)).unwrap();
 
@@ -295,7 +290,6 @@ impl render_graph::Node for TerrainComputeNode {
                     view_data,
                     terrain_data,
                     culling_bind_group,
-                    view_config.refinement_count,
                 );
             }
         }

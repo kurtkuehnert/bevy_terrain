@@ -44,24 +44,6 @@ pub(crate) fn create_terrain_layout(device: &RenderDevice) -> BindGroupLayout {
     )
 }
 
-/// The terrain config data that is available in shaders.
-#[derive(Default, ShaderType)]
-struct TerrainConfigUniform {
-    lod_count: u32,
-    min_height: f32,
-    max_height: f32,
-}
-
-impl From<&TerrainConfig> for TerrainConfigUniform {
-    fn from(config: &TerrainConfig) -> Self {
-        Self {
-            lod_count: config.lod_count,
-            min_height: config.min_height,
-            max_height: config.max_height,
-        }
-    }
-}
-
 #[derive(Default, ShaderType)]
 struct AttachmentConfig {
     size: f32,
@@ -88,6 +70,24 @@ impl AttachmentUniform {
         }
 
         uniform
+    }
+}
+
+/// The terrain config data that is available in shaders.
+#[derive(Default, ShaderType)]
+struct TerrainConfigUniform {
+    lod_count: u32,
+    min_height: f32,
+    max_height: f32,
+}
+
+impl From<&TerrainConfig> for TerrainConfigUniform {
+    fn from(config: &TerrainConfig) -> Self {
+        Self {
+            lod_count: config.lod_count,
+            min_height: config.min_height,
+            max_height: config.max_height,
+        }
     }
 }
 

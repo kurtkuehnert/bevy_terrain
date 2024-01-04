@@ -15,8 +15,8 @@
 //! Therefore the terrain is subdivided into a giant quadtree, whose nodes store their
 //! section of these attachments.
 //! This crate uses the chunked clipmap data structure, which consist of two pieces working together.
-//! The wrapping [`Quadtree`] views together with
-//! the [`NodeAtlas`] (the data structure
+//! The wrapping [`Quadtree`](prelude::Quadtree) views together with
+//! the [`NodeAtlas`](prelude::NodeAtlas) (the data structure
 //! that stores all of the currently loaded data) can be used to efficiently retrieve
 //! the best currently available data at any position for terrains of any size.
 //! See the [`terrain_data`] module for more information.
@@ -35,7 +35,7 @@
 //! ## How to shade the terrain?
 //! The third and most important challenge of terrain rendering is the shading. This is a very
 //! project specific problem and thus there does not exist a one-size-fits-all solution.
-//! You can define your own terrain [Material] and shader with all the
+//! You can define your own terrain [Material](bevy::prelude::Material) and shader with all the
 //! detail textures tailored to your application.
 //! In the future this plugin will provide modular shader functions to make techniques like splat
 //! mapping, triplane mapping, etc. easier.

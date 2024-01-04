@@ -160,7 +160,8 @@ impl render_graph::Node for TerrainPreprocessNode {
                     .begin_compute_pass(&ComputePassDescriptor::default());
 
                 for task in &preprocess_data.processing_tasks {
-                    let attachment = &gpu_node_atlas.attachments[task.task.attachment_index];
+                    let attachment =
+                        &gpu_node_atlas.attachments[task.task.node.attachment_index as usize];
 
                     pass.set_bind_group(0, &attachment.bind_group, &[]);
 
@@ -203,10 +204,10 @@ impl render_graph::Node for TerrainPreprocessNode {
 
                 attachment.download_nodes(context.command_encoder());
 
-                if !attachment.slots.is_empty() {
+                if !attachment.atlas_write_slots.is_empty() {
                     println!(
                         "Ran preprocessing pipeline with {} nodes.",
-                        attachment.slots.len()
+                        attachment.atlas_write_slots.len()
                     )
                 }
             }
