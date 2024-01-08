@@ -191,7 +191,7 @@ impl GpuAtlasAttachment {
         attachment: &AtlasAttachment,
         node_atlas: &NodeAtlas,
     ) -> Self {
-        let max_atlas_write_slots = 8;
+        let max_atlas_write_slots = node_atlas.state.max_atlas_write_slots;
         let atlas_write_slots = Vec::with_capacity(max_atlas_write_slots as usize);
 
         let buffer_info = AtlasBufferInfo::new(attachment, node_atlas.lod_count);
@@ -339,10 +339,6 @@ impl GpuAtlasAttachment {
         let buffer_info = self.buffer_info;
         let download_buffers = mem::take(&mut self.download_buffers);
         let atlas_write_slots = mem::take(&mut self.atlas_write_slots);
-
-        if !atlas_write_slots.is_empty() {
-            println!("Started reading back {} nodes", atlas_write_slots.len());
-        }
 
         self.download_nodes = iter::zip(atlas_write_slots, download_buffers)
             .map(|(node, download_buffer)| {
