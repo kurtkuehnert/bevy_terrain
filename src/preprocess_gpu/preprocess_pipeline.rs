@@ -204,12 +204,12 @@ impl render_graph::Node for TerrainPreprocessNode {
 
                 attachment.download_nodes(context.command_encoder());
 
-                if !attachment.atlas_write_slots.is_empty() {
-                    println!(
-                        "Ran preprocessing pipeline with {} nodes.",
-                        attachment.atlas_write_slots.len()
-                    )
-                }
+                // if !attachment.atlas_write_slots.is_empty() {
+                //     println!(
+                //         "Ran preprocessing pipeline with {} nodes.",
+                //         attachment.atlas_write_slots.len()
+                //     )
+                // }
             }
         }
 

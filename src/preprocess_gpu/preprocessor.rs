@@ -1,11 +1,9 @@
-use crate::terrain_data::node_atlas::AtlasNodeAttachment;
-use crate::terrain_data::INVALID_ATLAS_INDEX;
 use crate::{
     formats::tc::save_node_config,
     terrain::Terrain,
     terrain_data::{
-        node_atlas::{AtlasNode, NodeAtlas},
-        AttachmentFormat, NodeCoordinate,
+        node_atlas::{AtlasNode, AtlasNodeAttachment, NodeAtlas},
+        AttachmentFormat, NodeCoordinate, INVALID_ATLAS_INDEX,
     },
 };
 use bevy::{asset::LoadState, prelude::*, render::texture::ImageSampler};
@@ -148,6 +146,7 @@ pub struct Preprocessor {
     pub(crate) ready_tasks: Vec<PreprocessTask>,
 
     pub(crate) start_time: Option<Instant>,
+    loaded: bool,
 }
 
 impl Preprocessor {
@@ -157,7 +156,8 @@ impl Preprocessor {
             loading_tiles: default(),
             task_queue: default(),
             ready_tasks: default(),
-            start_time: Some(Instant::now()),
+            start_time: None,
+            loaded: false,
         }
     }
 
@@ -178,8 +178,6 @@ impl Preprocessor {
         let node_count = 1 << (lod_count - 1);
         let lod = 0;
 
-        let mut nodes = Vec::new();
-
         for (x, y) in iproduct!(0..node_count, 0..node_count) {
             let node = node_atlas
                 .get_or_allocate(NodeCoordinate::new(dataset.side, lod, x, y))
@@ -198,8 +196,16 @@ impl Preprocessor {
 
             self.task_queue
                 .push_back(PreprocessTask::stitch(node, node_atlas, node_count));
+        }
 
-            nodes.push(node);
+        self.task_queue.push_back(PreprocessTask::barrier());
+
+        for (x, y) in iproduct!(0..node_count, 0..node_count) {
+            let node = node_atlas
+                .get_or_allocate(NodeCoordinate::new(dataset.side, lod, x, y))
+                .attachment(dataset.attachment_index);
+
+            self.task_queue.push_back(PreprocessTask::save(node));
         }
 
         for lod in 1..lod_count {
@@ -223,15 +229,17 @@ impl Preprocessor {
 
                 self.task_queue
                     .push_back(PreprocessTask::stitch(node, node_atlas, node_count));
-
-                nodes.push(node);
             }
-        }
 
-        self.task_queue.push_back(PreprocessTask::barrier());
+            self.task_queue.push_back(PreprocessTask::barrier());
 
-        for node in nodes {
-            self.task_queue.push_back(PreprocessTask::save(node));
+            for (x, y) in iproduct!(0..node_count, 0..node_count) {
+                let node = node_atlas
+                    .get_or_allocate(NodeCoordinate::new(dataset.side, lod, x, y))
+                    .attachment(dataset.attachment_index);
+
+                self.task_queue.push_back(PreprocessTask::save(node));
+            }
         }
     }
 }
@@ -249,17 +257,19 @@ pub(crate) fn select_ready_tasks(
             ..
         } = preprocessor.deref_mut();
 
-        if task_queue.is_empty()
-            && node_atlas.state.download_slots == node_atlas.state.max_download_slots
-        {
-            if let Some(start) = start_time {
-                let elapsed = start.elapsed();
-                *start_time = None;
-
-                dbg!(elapsed);
+        if let Some(time) = start_time {
+            if task_queue.is_empty()
+                && node_atlas.state.download_slots == node_atlas.state.max_download_slots
+                && node_atlas.state.save_slots == node_atlas.state.max_save_slots
+            {
+                println!("Preprocessing took {:?}", time.elapsed());
 
                 save_node_config(path);
+
+                *start_time = None;
             }
+        } else {
+            break;
         }
 
         ready_tasks.clear();
@@ -275,7 +285,7 @@ pub(crate) fn select_ready_tasks(
                 if matches!(task.task_type, PreprocessTaskType::Save) {
                     node_atlas.save(task.node);
                 } else if matches!(task.task_type, PreprocessTaskType::Barrier) {
-                    dbg!("barrier complete");
+                    // dbg!("barrier complete");
                 } else {
                     ready_tasks.push(task);
                     node_atlas.state.download_slots -= 1;
@@ -302,5 +312,11 @@ pub(crate) fn preprocessor_load_tile(
                 true
             }
         });
+
+        if !preprocessor.loaded && preprocessor.loading_tiles.is_empty() {
+            println!("finished_loading all tiles");
+            preprocessor.loaded = true;
+            preprocessor.start_time = Some(Instant::now());
+        }
     }
 }
