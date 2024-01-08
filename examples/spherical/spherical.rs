@@ -10,7 +10,7 @@ const PATH: &str = "terrains/spherical";
 const RADIUS: f32 = 50.0;
 const HEIGHT: f32 = 4.0 / RADIUS;
 const TEXTURE_SIZE: u32 = 512;
-const LOD_COUNT: u32 = 4;
+const LOD_COUNT: u32 = 5;
 
 #[derive(Asset, AsBindGroup, TypeUuid, TypePath, Clone)]
 #[uuid = "003e1d5d-241c-45a6-8c25-731dee22d820"]

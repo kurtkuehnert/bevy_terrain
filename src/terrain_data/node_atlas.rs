@@ -17,7 +17,7 @@ use bevy::{
 };
 use image::{io::Reader, DynamicImage};
 use itertools::Itertools;
-use std::{collections::VecDeque, mem, ops::DerefMut};
+use std::{collections::VecDeque, fs, mem, ops::DerefMut};
 
 #[derive(Copy, Clone, Debug, Default, ShaderType)]
 pub struct AtlasNode {
@@ -68,30 +68,40 @@ pub(crate) struct NodeAttachmentWithData {
 impl NodeAttachmentWithData {
     pub(crate) fn start_saving(self, path: String) -> Task<AtlasNodeAttachment> {
         AsyncComputeTaskPool::get().spawn(async move {
-            let path = self.node.coordinate.path(&path, "png");
+            if false {
+                let path = self.node.coordinate.path(&path, "png");
 
-            let image = match self.data {
-                AttachmentData::Rgba8(data) => {
-                    let data = data.into_iter().flatten().collect_vec();
-                    DynamicImage::from(
-                        Rgba8Image::from_raw(self.texture_size, self.texture_size, data).unwrap(),
-                    )
-                }
-                AttachmentData::R16(data) => DynamicImage::from(
-                    R16Image::from_raw(self.texture_size, self.texture_size, data).unwrap(),
-                ),
-                AttachmentData::Rg16(data) => {
-                    let data = data.into_iter().flatten().collect_vec();
-                    DynamicImage::from(
-                        Rg16Image::from_raw(self.texture_size, self.texture_size, data).unwrap(),
-                    )
-                }
-                AttachmentData::None => panic!("Attachment has not data."),
-            };
+                let image = match self.data {
+                    AttachmentData::Rgba8(data) => {
+                        let data = data.into_iter().flatten().collect_vec();
+                        DynamicImage::from(
+                            Rgba8Image::from_raw(self.texture_size, self.texture_size, data)
+                                .unwrap(),
+                        )
+                    }
+                    AttachmentData::R16(data) => DynamicImage::from(
+                        R16Image::from_raw(self.texture_size, self.texture_size, data).unwrap(),
+                    ),
+                    AttachmentData::Rg16(data) => {
+                        let data = data.into_iter().flatten().collect_vec();
+                        DynamicImage::from(
+                            Rg16Image::from_raw(self.texture_size, self.texture_size, data)
+                                .unwrap(),
+                        )
+                    }
+                    AttachmentData::None => panic!("Attachment has not data."),
+                };
 
-            image.save(&path).unwrap();
+                image.save(&path).unwrap();
 
-            println!("Finished saving node: {path}");
+                println!("Finished saving node: {path}");
+            } else {
+                let path = self.node.coordinate.path(&path, "bin");
+
+                fs::write(&path, self.data.bytes()).unwrap();
+
+                // println!("Finished saving node: {path}");
+            }
 
             self.node
         })
@@ -103,18 +113,25 @@ impl NodeAttachmentWithData {
         format: AttachmentFormat,
     ) -> Task<Self> {
         AsyncComputeTaskPool::get().spawn(async move {
-            let path = node.coordinate.path(&path, "png");
+            let data = if false {
+                let path = node.coordinate.path(&path, "png");
 
-            let mut reader = Reader::open(path).unwrap();
-            reader.no_limits();
-            let image = reader.decode().unwrap();
-            let texture_size = image.width();
-            let data = AttachmentData::from_bytes(image.as_bytes(), format);
+                let mut reader = Reader::open(path).unwrap();
+                reader.no_limits();
+                let image = reader.decode().unwrap();
+                AttachmentData::from_bytes(image.as_bytes(), format)
+            } else {
+                let path = node.coordinate.path(&path, "bin");
+
+                let bytes = fs::read(path).unwrap();
+
+                AttachmentData::from_bytes(&bytes, format)
+            };
 
             Self {
                 node,
                 data,
-                texture_size,
+                texture_size: 0,
             }
         })
     }
@@ -254,10 +271,13 @@ pub(crate) struct NodeAtlasState {
     to_load: VecDeque<AtlasNodeAttachment>,
     load_slots: u32,
     to_save: VecDeque<AtlasNodeAttachment>,
-    save_slots: u32,
+    pub(crate) save_slots: u32,
+    pub(crate) max_save_slots: u32,
 
     pub(crate) download_slots: u32,
     pub(crate) max_download_slots: u32,
+
+    pub(crate) max_atlas_write_slots: u32,
 }
 
 impl NodeAtlasState {
@@ -277,10 +297,12 @@ impl NodeAtlasState {
             attachment_count,
             to_save: default(),
             to_load: default(),
-            save_slots: 16,
-            load_slots: 16,
-            download_slots: 64,
-            max_download_slots: 64,
+            save_slots: 64,
+            max_save_slots: 64,
+            load_slots: 64,
+            download_slots: 128,
+            max_download_slots: 128,
+            max_atlas_write_slots: 32,
         }
     }
 

@@ -3,7 +3,7 @@ use bevy_terrain::prelude::*;
 
 const PATH: &str = "terrains/spherical";
 const TEXTURE_SIZE: u32 = 512;
-const LOD_COUNT: u32 = 4;
+const LOD_COUNT: u32 = 5;
 
 fn main() {
     App::new()
@@ -16,6 +16,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     let config = TerrainConfig {
         lod_count: LOD_COUNT,
         path: PATH.to_string(),
+        node_atlas_size: 2048,
         ..default()
     }
     .add_attachment(AttachmentConfig::new(
