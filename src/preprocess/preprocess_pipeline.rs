@@ -1,5 +1,5 @@
 use crate::{
-    preprocess_gpu::{
+    preprocess::{
         gpu_preprocessor::{
             create_downsample_layout, create_split_layout, create_stitch_layout, GpuPreprocessor,
         },

@@ -1,7 +1,6 @@
 use crate::{
     formats::tc::load_node_config,
     prelude::{AttachmentConfig, AttachmentFormat},
-    preprocess::{R16Image, Rg16Image, Rgba8Image},
     terrain::{Terrain, TerrainConfig},
     terrain_data::{
         coordinates::NodeCoordinate,
@@ -16,9 +15,14 @@ use bevy::{
     tasks::{futures_lite::future, AsyncComputeTaskPool, Task},
     utils::{HashMap, HashSet},
 };
-use image::{io::Reader, DynamicImage};
+use image::{io::Reader, DynamicImage, ImageBuffer, Luma, LumaA, Rgb, Rgba};
 use itertools::Itertools;
 use std::{collections::VecDeque, fs, mem, ops::DerefMut};
+
+pub type Rgb8Image = ImageBuffer<Rgb<u8>, Vec<u8>>;
+pub type Rgba8Image = ImageBuffer<Rgba<u8>, Vec<u8>>;
+pub type R16Image = ImageBuffer<Luma<u16>, Vec<u16>>;
+pub type Rg16Image = ImageBuffer<LumaA<u16>, Vec<u16>>;
 
 #[derive(Copy, Clone, Debug, Default, ShaderType)]
 pub struct AtlasNode {

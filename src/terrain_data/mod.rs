@@ -15,7 +15,6 @@
 //! Both the node atlas and the quadtrees also have a corresponding GPU representation,
 //! which can be used to access the terrain data in shaders.
 
-use crate::preprocess::file_io::FileFormat;
 use crate::terrain_data::{node_atlas::NodeAtlas, quadtree::Quadtree};
 use bevy::prelude::*;
 use bevy::render::render_resource::*;
@@ -100,8 +99,6 @@ pub struct AttachmentConfig {
     pub mip_level_count: u32,
     /// The format of the attachment.
     pub format: AttachmentFormat,
-    /// The file format of the attachment.
-    pub file_format: FileFormat,
 }
 
 impl AttachmentConfig {
@@ -120,7 +117,6 @@ impl AttachmentConfig {
             border_size,
             mip_level_count: 1,
             format,
-            file_format: FileFormat::TDF,
         }
     }
 }

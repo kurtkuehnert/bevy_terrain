@@ -1,5 +1,5 @@
 use crate::{
-    preprocess_gpu::preprocessor::{PreprocessTask, PreprocessTaskType, Preprocessor},
+    preprocess::preprocessor::{PreprocessTask, PreprocessTaskType, Preprocessor},
     terrain::{Terrain, TerrainComponents},
     terrain_data::{gpu_node_atlas::GpuNodeAtlas, node_atlas::AtlasNode},
     util::StaticBuffer,
