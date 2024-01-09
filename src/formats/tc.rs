@@ -1,11 +1,39 @@
-use crate::{
-    preprocess::file_io::{format_directory, iterate_directory},
-    terrain_data::coordinates::NodeCoordinate,
-};
+use crate::terrain_data::coordinates::NodeCoordinate;
 use anyhow::Result;
 use bevy::utils::HashSet;
 use bincode::{config, Decode, Encode};
 use std::{fs, path::Path};
+
+pub(crate) fn format_directory(path: &str, name: &str) -> String {
+    if path.starts_with('/') {
+        format!("{path}/data/{name}")
+    } else {
+        format!("assets/{path}/data/{name}")
+    }
+}
+
+#[allow(clippy::type_complexity)]
+pub(crate) fn iterate_directory(directory: &str) -> impl Iterator<Item = (String, String)> {
+    fs::read_dir(directory).unwrap().filter_map(|path| {
+        let path = path.unwrap().path();
+
+        let node_name = path
+            .with_extension("")
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
+
+        let path = path.into_os_string().into_string().unwrap();
+
+        if node_name.starts_with('.') {
+            None
+        } else {
+            Some((node_name, path))
+        }
+    })
+}
 
 #[derive(Encode, Decode, Debug)]
 pub struct TC {
