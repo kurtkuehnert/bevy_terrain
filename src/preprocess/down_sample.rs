@@ -1,11 +1,10 @@
-use crate::terrain_data::SIDE_COUNT;
 use crate::{
     preprocess::{
         file_io::{format_node_path, load_image, load_or_create_node, save_image},
         UVec2Utils,
     },
     skip_none,
-    terrain_data::{AttachmentConfig, AttachmentFormat, NodeCoordinate},
+    terrain_data::{coordinates::NodeCoordinate, AttachmentConfig, AttachmentFormat, SIDE_COUNT},
 };
 use bevy::prelude::*;
 use image::{DynamicImage, GenericImage, GenericImageView, Luma, LumaA, Pixel, Rgb, Rgba};

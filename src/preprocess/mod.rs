@@ -9,11 +9,11 @@ use crate::{
     formats::tc::save_node_config,
     preprocess::{
         down_sample::{down_sample_layer, linear},
-        file_io::{format_directory, reset_directory},
+        file_io::{format_directory, reset_directory, FileFormat},
         split::split_tiles,
         stitch::stitch_layer,
     },
-    terrain_data::{AttachmentConfig, AttachmentFormat, FileFormat},
+    terrain_data::{AttachmentConfig, AttachmentFormat},
 };
 use bevy::prelude::*;
 use image::{ImageBuffer, Luma, LumaA, Rgb, Rgba};

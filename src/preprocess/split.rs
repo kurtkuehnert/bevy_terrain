@@ -5,7 +5,7 @@ use crate::{
         },
         TileConfig, UVec2Utils,
     },
-    terrain_data::{AttachmentConfig, AttachmentFormat, NodeCoordinate},
+    terrain_data::{coordinates::NodeCoordinate, AttachmentConfig, AttachmentFormat},
 };
 use bevy::prelude::*;
 use image::{
