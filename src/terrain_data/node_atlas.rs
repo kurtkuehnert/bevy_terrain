@@ -103,7 +103,7 @@ impl NodeAttachmentWithData {
             } else {
                 let path = self.node.coordinate.path(&path, "bin");
 
-                fs::write(&path, self.data.bytes()).unwrap();
+                fs::write(path, self.data.bytes()).unwrap();
 
                 // println!("Finished saving node: {path}");
             }
@@ -238,10 +238,9 @@ impl AtlasAttachment {
         }
 
         let data = &self.data[lookup.atlas_index as usize];
-
         let coordinate = lookup.atlas_coordinate * self.scale + self.offset;
 
-        return data.sample(coordinate, self.texture_size);
+        data.sample(coordinate, self.texture_size)
     }
 }
 
@@ -314,7 +313,7 @@ impl NodeAtlasState {
     fn update(&mut self, attachments: &mut [AtlasAttachment]) {
         while self.save_slots > 0 {
             if let Some(node) = self.to_save.pop_front() {
-                attachments[node.attachment_index as usize].save(node.into());
+                attachments[node.attachment_index as usize].save(node);
                 self.save_slots -= 1;
             } else {
                 break;
@@ -323,7 +322,7 @@ impl NodeAtlasState {
 
         while self.load_slots > 0 {
             if let Some(node) = self.to_load.pop_front() {
-                attachments[node.attachment_index as usize].load(node.into());
+                attachments[node.attachment_index as usize].load(node);
                 self.load_slots -= 1;
             } else {
                 break;

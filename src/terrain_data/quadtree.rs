@@ -193,7 +193,7 @@ impl Quadtree {
         let node_count = self.node_count(lod) as f32;
         let max_coordinate = Vec2::splat(node_count - 0.00001);
 
-        return (s2.st * node_count).clamp(Vec2::ZERO, max_coordinate);
+        (s2.st * node_count).clamp(Vec2::ZERO, max_coordinate)
     }
 
     fn origin(&self, quadtree_s2: S2Coordinate, lod: u32) -> UVec2 {
@@ -217,7 +217,7 @@ impl Quadtree {
         let log_distance = (view_distance / blend_threshold_distance).log2().max(0.0);
         let ratio = 1.0 - (1.0 - log_distance % 1.0) / self.blend_range;
 
-        return (log_distance as u32, ratio);
+        (log_distance as u32, ratio)
     }
 
     pub(super) fn lookup_node(&self, local_position: Vec3, lod: u32) -> NodeLookup {
