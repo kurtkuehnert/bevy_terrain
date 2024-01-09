@@ -4,8 +4,9 @@ use crate::{
     preprocess::{R16Image, Rg16Image, Rgba8Image},
     terrain::{Terrain, TerrainConfig},
     terrain_data::{
+        coordinates::NodeCoordinate,
         quadtree::{NodeLookup, Quadtree, QuadtreeEntry},
-        AttachmentData, NodeCoordinate, INVALID_ATLAS_INDEX, INVALID_LOD,
+        AttachmentData, INVALID_ATLAS_INDEX, INVALID_LOD,
     },
     terrain_view::{TerrainView, TerrainViewComponents},
 };
@@ -357,6 +358,10 @@ impl NodeAtlasState {
     }
 
     fn get_or_allocate(&mut self, node_coordinate: NodeCoordinate) -> AtlasNode {
+        if node_coordinate == NodeCoordinate::INVALID {
+            return AtlasNode::new(node_coordinate, INVALID_ATLAS_INDEX);
+        }
+
         let atlas_index = if let Some(node) = self.node_states.get(&node_coordinate) {
             node.atlas_index
         } else {

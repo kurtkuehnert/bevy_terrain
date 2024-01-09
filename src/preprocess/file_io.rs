@@ -1,8 +1,9 @@
 use crate::{
     formats::tdf::TDF,
     preprocess::{R16Image, Rg16Image, Rgb8Image, Rgba8Image},
-    terrain_data::{AttachmentConfig, AttachmentFormat, FileFormat, NodeCoordinate},
+    terrain_data::{coordinates::NodeCoordinate, AttachmentConfig, AttachmentFormat},
 };
+use bincode::{Decode, Encode};
 use bytemuck::cast_slice;
 use dtm::DTM;
 use image::{io::Reader, DynamicImage};
@@ -12,6 +13,34 @@ use std::{
     iter::FilterMap,
     path::Path,
 };
+
+/// The file format used to store the terrain data.
+#[derive(Encode, Decode, Clone, Copy, Debug)]
+pub enum FileFormat {
+    TDF,
+    PNG,
+    TIF,
+    QOI,
+    DTM,
+}
+
+impl Default for FileFormat {
+    fn default() -> Self {
+        Self::TDF
+    }
+}
+
+impl FileFormat {
+    pub(crate) fn extension(&self) -> &str {
+        match self {
+            Self::TDF => "tdf",
+            Self::PNG => "png",
+            Self::TIF => "tif",
+            Self::QOI => "qoi",
+            Self::DTM => "dtm",
+        }
+    }
+}
 
 #[allow(clippy::type_complexity)]
 pub(crate) fn iterate_directory(

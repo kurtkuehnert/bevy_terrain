@@ -5,7 +5,7 @@ use crate::{
         UVec2Utils,
     },
     skip_none,
-    terrain_data::{AttachmentConfig, AttachmentFormat, NodeCoordinate},
+    terrain_data::{coordinates::NodeCoordinate, AttachmentConfig, AttachmentFormat},
 };
 use bevy::prelude::*;
 use image::DynamicImage;

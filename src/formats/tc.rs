@@ -1,6 +1,6 @@
 use crate::{
     preprocess::file_io::{format_directory, iterate_directory},
-    terrain_data::NodeCoordinate,
+    terrain_data::coordinates::NodeCoordinate,
 };
 use anyhow::Result;
 use bevy::utils::HashSet;

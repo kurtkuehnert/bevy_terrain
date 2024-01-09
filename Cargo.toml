@@ -61,6 +61,7 @@ description = "Renders a flat terrain with the base attachment and an albedo tex
 [[example]]
 name = "preprocess_spherical"
 path = "examples/spherical/preprocess_spherical.rs"
+required-features = ["spherical"]
 
 [package.metadata.example.preprocess_spherical]
 name = "Preprocess Spherical"

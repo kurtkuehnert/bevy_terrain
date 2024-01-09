@@ -230,12 +230,9 @@ fn s2_project_to_side(s2: S2Coordinate, side: u32) -> S2Coordinate {
     );
 
     let index = (6u + side - s2.side) % 6u;
+    let info: vec2<u32> = select(ODD_LIST[index], EVEN_LIST[index], s2.side % 2u == 0u);
 
-    var info: vec2<u32>;
     var st: vec2<f32>;
-
-    if (s2.side % 2u == 0u) { info = EVEN_LIST[index]; }
-    else                    { info =  ODD_LIST[index]; }
 
     if (info.x == F0)      { st.x = 0.0; }
     else if (info.x == F1) { st.x = 1.0; }
