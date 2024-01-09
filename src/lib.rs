@@ -69,7 +69,7 @@ pub mod prelude {
         terrain::{Terrain, TerrainConfig},
         terrain_data::{
             node_atlas::NodeAtlas, quadtree::Quadtree, sample_attachment, AttachmentConfig,
-            AttachmentFormat, FileFormat,
+            AttachmentFormat,
         },
         terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
     };

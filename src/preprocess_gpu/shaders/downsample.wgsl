@@ -8,7 +8,7 @@ struct AtlasNode {
 
 struct DownsampleData {
     node: AtlasNode,
-    parent_nodes: array<AtlasNode, 4u>,
+    child_nodes: array<AtlasNode, 4u>,
     node_index: u32,
 }
 
@@ -21,16 +21,16 @@ override fn pixel_value(coords: vec2<u32>) -> vec4<f32> {
     }
 
     let node_coords = coords - vec2<u32>(attachment.border_size);
-    let parent_size = attachment.center_size / 2u;
-    let parent_coords = 2u * (node_coords % parent_size) + vec2<u32>(attachment.border_size);
-    let parent_index  = node_coords.x / parent_size + 2u * (node_coords.y / parent_size);
+    let child_size = attachment.center_size / 2u;
+    let child_coords = 2u * (node_coords % child_size) + vec2<u32>(attachment.border_size);
+    let child_index  = node_coords.x / child_size + 2u * (node_coords.y / child_size);
 
-    let parent_node = downsample_data.parent_nodes[parent_index];
+    let child_node = downsample_data.child_nodes[child_index];
 
-    return (textureLoad(atlas, parent_coords + vec2<u32>(0u, 0u), parent_node.atlas_index, 0) +
-            textureLoad(atlas, parent_coords + vec2<u32>(0u, 1u), parent_node.atlas_index, 0) +
-            textureLoad(atlas, parent_coords + vec2<u32>(1u, 0u), parent_node.atlas_index, 0) +
-            textureLoad(atlas, parent_coords + vec2<u32>(1u, 1u), parent_node.atlas_index, 0) ) / 4.0;
+    return (textureLoad(atlas, child_coords + vec2<u32>(0u, 0u), child_node.atlas_index, 0) +
+            textureLoad(atlas, child_coords + vec2<u32>(0u, 1u), child_node.atlas_index, 0) +
+            textureLoad(atlas, child_coords + vec2<u32>(1u, 0u), child_node.atlas_index, 0) +
+            textureLoad(atlas, child_coords + vec2<u32>(1u, 1u), child_node.atlas_index, 0) ) / 4.0;
 }
 
 // Todo: respect memory coalescing

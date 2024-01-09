@@ -36,7 +36,7 @@ struct StitchData {
 #[derive(Clone, Debug, ShaderType)]
 struct DownsampleData {
     node: AtlasNode,
-    parent_nodes: [AtlasNode; 4],
+    child_nodes: [AtlasNode; 4],
     node_index: u32,
 }
 
@@ -168,12 +168,12 @@ impl GpuPreprocessor {
                                 &BindGroupEntries::single(&stitch_buffer),
                             ))
                         }
-                        PreprocessTaskType::Downsample { parent_nodes } => {
+                        PreprocessTaskType::Downsample { child_nodes } => {
                             let downsample_buffer = StaticBuffer::create(
                                 &device,
                                 &DownsampleData {
                                     node: task.node.into(),
-                                    parent_nodes: *parent_nodes,
+                                    child_nodes: *child_nodes,
                                     node_index: section_index,
                                 },
                                 BufferUsages::UNIFORM,

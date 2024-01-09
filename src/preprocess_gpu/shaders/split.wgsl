@@ -5,13 +5,13 @@ struct AtlasNode {
     @size(16) atlas_index: u32,
 }
 
-struct SplitTileData {
+struct SplitData {
     node: AtlasNode,
     node_index: u32,
 }
 
 @group(1) @binding(0)
-var<uniform> split_tile_data: SplitTileData;
+var<uniform> split_data: SplitData;
 @group(1) @binding(1)
 var tile: texture_2d<f32>;
 @group(1) @binding(2)
@@ -22,7 +22,7 @@ override fn pixel_value(coords: vec2<u32>) -> vec4<f32> {
         return vec4<f32>(0.0);
     }
 
-    let node_coordinate = split_tile_data.node.coordinate;
+    let node_coordinate = split_data.node.coordinate;
     let node_offset =  vec2<f32>(f32(node_coordinate.x), f32(node_coordinate.y));
     let node_coords = vec2<f32>(coords - vec2<u32>(attachment.border_size)) / f32(attachment.center_size);
     let node_scale = f32(1u << (attachment.lod_count - node_coordinate.lod - 1u));
@@ -35,5 +35,5 @@ override fn pixel_value(coords: vec2<u32>) -> vec4<f32> {
 // Todo: respect memory coalescing
 @compute @workgroup_size(8, 8, 1)
 fn split(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
-    process_entry(vec3<u32>(invocation_id.xy, split_tile_data.node_index));
+    process_entry(vec3<u32>(invocation_id.xy, split_data.node_index));
 }

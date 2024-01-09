@@ -30,17 +30,15 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 
     let mut preprocessor = Preprocessor::new(PATH.to_string());
 
-    for side in 0..6 {
-        preprocessor.preprocess_tile(
-            PreprocessDataset {
-                attachment_index: 0,
-                path: format!("{PATH}/source/height/face{side}.png"),
-                side,
-            },
-            &asset_server,
-            &mut terrain_bundle.node_atlas,
-        );
-    }
+    preprocessor.preprocess_spherical(
+        PreprocessDataset {
+            attachment_index: 0,
+            path: PATH.to_string(),
+            side: 0,
+        },
+        &asset_server,
+        &mut terrain_bundle.node_atlas,
+    );
 
     commands.spawn((terrain_bundle, preprocessor));
 }

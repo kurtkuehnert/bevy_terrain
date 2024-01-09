@@ -2,12 +2,13 @@ use crate::{
     formats::tc::save_node_config,
     terrain::Terrain,
     terrain_data::{
+        coordinates::NodeCoordinate,
         node_atlas::{AtlasNode, AtlasNodeAttachment, NodeAtlas},
-        AttachmentFormat, NodeCoordinate, INVALID_ATLAS_INDEX,
+        AttachmentFormat,
     },
 };
 use bevy::{asset::LoadState, prelude::*, render::texture::ImageSampler};
-use itertools::iproduct;
+use itertools::{iproduct, Itertools};
 use std::{collections::VecDeque, ops::DerefMut, time::Instant};
 
 pub(crate) struct LoadingTile {
@@ -25,7 +26,7 @@ pub struct PreprocessDataset {
 pub(crate) enum PreprocessTaskType {
     Split { tile: Handle<Image> },
     Stitch { neighbour_nodes: [AtlasNode; 8] },
-    Downsample { parent_nodes: [AtlasNode; 4] },
+    Downsample { child_nodes: [AtlasNode; 4] },
     Save,
     Barrier,
 }
@@ -74,42 +75,15 @@ impl PreprocessTask {
         }
     }
 
-    fn stitch(node: AtlasNodeAttachment, node_atlas: &mut NodeAtlas, node_count: u32) -> Self {
-        let offsets = [
-            IVec2::new(0, -1),
-            IVec2::new(1, 0),
-            IVec2::new(0, 1),
-            IVec2::new(-1, 0),
-            IVec2::new(-1, -1),
-            IVec2::new(1, -1),
-            IVec2::new(1, 1),
-            IVec2::new(-1, 1),
-        ];
-
-        let node_position = IVec2::new(node.coordinate.x as i32, node.coordinate.y as i32);
-
-        let mut neighbour_nodes = [AtlasNode::default(); 8];
-
-        for (index, &offset) in offsets.iter().enumerate() {
-            let neighbour_node_position = node_position + offset;
-
-            let neighbour_node_coordinate = NodeCoordinate::new(
-                node.coordinate.side,
-                node.coordinate.lod,
-                neighbour_node_position.x as u32,
-                neighbour_node_position.y as u32,
-            );
-
-            neighbour_nodes[index] = if neighbour_node_position.x < 0
-                || neighbour_node_position.y < 0
-                || neighbour_node_position.x >= node_count as i32
-                || neighbour_node_position.y >= node_count as i32
-            {
-                AtlasNode::new(neighbour_node_coordinate, INVALID_ATLAS_INDEX)
-            } else {
-                node_atlas.get_or_allocate(neighbour_node_coordinate)
-            };
-        }
+    fn stitch(node: AtlasNodeAttachment, node_atlas: &mut NodeAtlas) -> Self {
+        let neighbour_nodes = node
+            .coordinate
+            .neighbours(node_atlas.lod_count)
+            .iter()
+            .map(|&coordinate| node_atlas.get_or_allocate(coordinate))
+            .collect_vec()
+            .try_into()
+            .unwrap();
 
         Self {
             node,
@@ -118,22 +92,18 @@ impl PreprocessTask {
     }
 
     fn downsample(node: AtlasNodeAttachment, node_atlas: &mut NodeAtlas) -> Self {
-        let mut parent_nodes = [AtlasNode::default(); 4];
-
-        for index in 0..4 {
-            let parent_node_coordinate = NodeCoordinate::new(
-                node.coordinate.side,
-                node.coordinate.lod - 1,
-                2 * node.coordinate.x + index % 2,
-                2 * node.coordinate.y + index / 2,
-            );
-
-            parent_nodes[index as usize] = node_atlas.get_or_allocate(parent_node_coordinate);
-        }
+        let child_nodes = node
+            .coordinate
+            .children()
+            .iter()
+            .map(|&coordinate| node_atlas.get_or_allocate(coordinate))
+            .collect_vec()
+            .try_into()
+            .unwrap();
 
         Self {
             node,
-            task_type: PreprocessTaskType::Downsample { parent_nodes },
+            task_type: PreprocessTaskType::Downsample { child_nodes },
         }
     }
 }
@@ -175,8 +145,8 @@ impl Preprocessor {
         });
 
         let lod_count = node_atlas.lod_count;
-        let node_count = 1 << (lod_count - 1);
         let lod = 0;
+        let node_count = 1 << (lod_count - lod - 1);
 
         for (x, y) in iproduct!(0..node_count, 0..node_count) {
             let node = node_atlas
@@ -187,38 +157,8 @@ impl Preprocessor {
                 .push_back(PreprocessTask::split(node, tile_handle.clone()));
         }
 
-        self.task_queue.push_back(PreprocessTask::barrier());
-
-        for (x, y) in iproduct!(0..node_count, 0..node_count) {
-            let node = node_atlas
-                .get_or_allocate(NodeCoordinate::new(dataset.side, lod, x, y))
-                .attachment(dataset.attachment_index);
-
-            self.task_queue
-                .push_back(PreprocessTask::stitch(node, node_atlas, node_count));
-        }
-
-        self.task_queue.push_back(PreprocessTask::barrier());
-
-        for (x, y) in iproduct!(0..node_count, 0..node_count) {
-            let node = node_atlas
-                .get_or_allocate(NodeCoordinate::new(dataset.side, lod, x, y))
-                .attachment(dataset.attachment_index);
-
-            self.task_queue.push_back(PreprocessTask::save(node));
-        }
-
         for lod in 1..lod_count {
-            let node_count = node_count >> lod;
-
-            for (x, y) in iproduct!(0..node_count, 0..node_count) {
-                let node = node_atlas
-                    .get_or_allocate(NodeCoordinate::new(dataset.side, lod, x, y))
-                    .attachment(dataset.attachment_index);
-
-                self.task_queue
-                    .push_back(PreprocessTask::downsample(node, node_atlas));
-            }
+            let node_count = 1 << (lod_count - lod - 1);
 
             self.task_queue.push_back(PreprocessTask::barrier());
 
@@ -228,7 +168,22 @@ impl Preprocessor {
                     .attachment(dataset.attachment_index);
 
                 self.task_queue
-                    .push_back(PreprocessTask::stitch(node, node_atlas, node_count));
+                    .push_back(PreprocessTask::downsample(node, node_atlas));
+            }
+        }
+
+        self.task_queue.push_back(PreprocessTask::barrier());
+
+        for lod in 0..lod_count {
+            let node_count = 1 << (lod_count - lod - 1);
+
+            for (x, y) in iproduct!(0..node_count, 0..node_count) {
+                let node = node_atlas
+                    .get_or_allocate(NodeCoordinate::new(dataset.side, lod, x, y))
+                    .attachment(dataset.attachment_index);
+
+                self.task_queue
+                    .push_back(PreprocessTask::stitch(node, node_atlas));
             }
 
             self.task_queue.push_back(PreprocessTask::barrier());
@@ -239,6 +194,54 @@ impl Preprocessor {
                     .attachment(dataset.attachment_index);
 
                 self.task_queue.push_back(PreprocessTask::save(node));
+            }
+        }
+    }
+
+    pub fn preprocess_spherical(
+        &mut self,
+        dataset: PreprocessDataset,
+        asset_server: &AssetServer,
+        node_atlas: &mut NodeAtlas,
+    ) {
+        for side in 0..6 {
+            self.preprocess_tile(
+                PreprocessDataset {
+                    attachment_index: dataset.attachment_index,
+                    path: format!("{}/source/height/face{}.png", dataset.path, side),
+                    side,
+                },
+                asset_server,
+                node_atlas,
+            );
+        }
+
+        let lod_count = node_atlas.lod_count;
+
+        self.task_queue.push_back(PreprocessTask::barrier());
+
+        for side in 0..6 {
+            for lod in 0..lod_count {
+                let node_count = 1 << (lod_count - lod - 1);
+
+                for (x, y) in iproduct!(0..node_count, 0..node_count) {
+                    let node = node_atlas
+                        .get_or_allocate(NodeCoordinate::new(side, lod, x, y))
+                        .attachment(dataset.attachment_index);
+
+                    self.task_queue
+                        .push_back(PreprocessTask::stitch(node, node_atlas));
+                }
+
+                self.task_queue.push_back(PreprocessTask::barrier());
+
+                for (x, y) in iproduct!(0..node_count, 0..node_count) {
+                    let node = node_atlas
+                        .get_or_allocate(NodeCoordinate::new(side, lod, x, y))
+                        .attachment(dataset.attachment_index);
+
+                    self.task_queue.push_back(PreprocessTask::save(node));
+                }
             }
         }
     }
