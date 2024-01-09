@@ -48,7 +48,6 @@ pub mod debug;
 pub mod formats;
 pub mod plugin;
 pub mod preprocess;
-pub mod preprocess_gpu;
 pub mod render;
 pub mod terrain;
 pub mod terrain_data;
@@ -62,7 +61,7 @@ pub mod prelude {
         bundle::TerrainBundle,
         debug::{camera::DebugCamera, TerrainDebugPlugin},
         plugin::TerrainPlugin,
-        preprocess_gpu::{
+        preprocess::{
             preprocessor::PreprocessDataset, preprocessor::Preprocessor, TerrainPreprocessPlugin,
         },
         render::render_pipeline::TerrainMaterialPlugin,
