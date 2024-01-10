@@ -20,13 +20,23 @@ pub struct PreprocessDataset {
     pub attachment_index: u32,
     pub path: String,
     pub side: u32,
+    pub top_left: Vec2,
+    pub bottom_right: Vec2,
 }
 
 #[derive(Clone)]
 pub(crate) enum PreprocessTaskType {
-    Split { tile: Handle<Image> },
-    Stitch { neighbour_nodes: [AtlasNode; 8] },
-    Downsample { child_nodes: [AtlasNode; 4] },
+    Split {
+        tile: Handle<Image>,
+        top_left: Vec2,
+        bottom_right: Vec2,
+    },
+    Stitch {
+        neighbour_nodes: [AtlasNode; 8],
+    },
+    Downsample {
+        child_nodes: [AtlasNode; 4],
+    },
     Save,
     Barrier,
 }
@@ -42,7 +52,7 @@ pub(crate) struct PreprocessTask {
 impl PreprocessTask {
     fn is_ready(&self, asset_server: &AssetServer, node_atlas: &NodeAtlas) -> bool {
         match &self.task_type {
-            PreprocessTaskType::Split { tile } => {
+            PreprocessTaskType::Split { tile, .. } => {
                 asset_server.load_state(tile) == LoadState::Loaded
             }
             PreprocessTaskType::Stitch { .. } => true,
@@ -68,10 +78,19 @@ impl PreprocessTask {
         }
     }
 
-    fn split(node: AtlasNodeAttachment, tile: Handle<Image>) -> Self {
+    fn split(
+        node: AtlasNodeAttachment,
+        tile: Handle<Image>,
+        top_left: Vec2,
+        bottom_right: Vec2,
+    ) -> Self {
         Self {
             node,
-            task_type: PreprocessTaskType::Split { tile },
+            task_type: PreprocessTaskType::Split {
+                tile,
+                top_left,
+                bottom_right,
+            },
         }
     }
 
@@ -153,8 +172,12 @@ impl Preprocessor {
                 .get_or_allocate(NodeCoordinate::new(dataset.side, lod, x, y))
                 .attachment(dataset.attachment_index);
 
-            self.task_queue
-                .push_back(PreprocessTask::split(node, tile_handle.clone()));
+            self.task_queue.push_back(PreprocessTask::split(
+                node,
+                tile_handle.clone(),
+                dataset.top_left,
+                dataset.bottom_right,
+            ));
         }
 
         for lod in 1..lod_count {
@@ -208,8 +231,11 @@ impl Preprocessor {
             self.preprocess_tile(
                 PreprocessDataset {
                     attachment_index: dataset.attachment_index,
-                    path: format!("{}/source/height/face{}.png", dataset.path, side),
+                    path: format!("{}/source/height/face{}.tif", dataset.path, side),
                     side,
+
+                    top_left: Vec2::splat(0.0),
+                    bottom_right: Vec2::splat(1.0),
                 },
                 asset_server,
                 node_atlas,

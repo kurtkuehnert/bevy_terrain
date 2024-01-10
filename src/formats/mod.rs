@@ -4,6 +4,7 @@
 
 pub mod tc;
 pub mod tdf;
+pub mod tiff;
 
 use crate::formats::tdf::TDF;
 use bevy::{

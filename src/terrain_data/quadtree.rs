@@ -254,78 +254,82 @@ impl Quadtree {
         view_query: Query<(Entity, &GlobalTransform), With<TerrainView>>,
         terrain_query: Query<(Entity, &GlobalTransform), With<Terrain>>,
     ) {
-        for ((terrain, terrain_transform), (view, view_transform)) in
-            iter::zip(&terrain_query, &view_query)
-        {
-            let quadtree = quadtrees.get_mut(&(terrain, view)).unwrap();
+        for (terrain, terrain_transform) in &terrain_query {
+            for (view, view_transform) in &view_query {
+                let quadtree = quadtrees.get_mut(&(terrain, view)).unwrap();
 
-            let view_world_position = view_transform.translation();
-            quadtree.inverse_model = terrain_transform.compute_matrix().inverse();
+                let view_world_position = view_transform.translation();
+                quadtree.inverse_model = terrain_transform.compute_matrix().inverse();
 
-            quadtree.view_local_position = quadtree.world_to_local_position(view_world_position);
-            let view_s2 = S2Coordinate::from_local_position(quadtree.view_local_position);
+                quadtree.view_local_position =
+                    quadtree.world_to_local_position(view_world_position);
+                let view_s2 = S2Coordinate::from_local_position(quadtree.view_local_position);
 
-            for side in 0..SIDE_COUNT {
-                #[cfg(feature = "spherical")]
-                let quadtree_s2 = view_s2.project_to_side(side);
+                for side in 0..SIDE_COUNT {
+                    #[cfg(feature = "spherical")]
+                    let quadtree_s2 = view_s2.project_to_side(side);
 
-                #[cfg(not(feature = "spherical"))]
-                let quadtree_s2 = view_s2;
+                    #[cfg(not(feature = "spherical"))]
+                    let quadtree_s2 = view_s2;
 
-                for lod in 0..quadtree.lod_count {
-                    let node_count = quadtree.node_count(lod);
-                    let quadtree_origin: UVec2 = quadtree.origin(quadtree_s2, lod);
+                    for lod in 0..quadtree.lod_count {
+                        let node_count = quadtree.node_count(lod);
+                        let quadtree_origin: UVec2 = quadtree.origin(quadtree_s2, lod);
 
-                    for (x, y) in iproduct!(0..quadtree.quadtree_size, 0..quadtree.quadtree_size) {
-                        let node_coordinate = NodeCoordinate {
-                            side,
-                            lod,
-                            x: quadtree_origin.x + x,
-                            y: quadtree_origin.y + y,
-                        };
+                        for (x, y) in
+                            iproduct!(0..quadtree.quadtree_size, 0..quadtree.quadtree_size)
+                        {
+                            let node_coordinate = NodeCoordinate {
+                                side,
+                                lod,
+                                x: quadtree_origin.x + x,
+                                y: quadtree_origin.y + y,
+                            };
 
-                        let node_s2 =
-                            S2Coordinate::from_node_coordinate(node_coordinate, node_count);
-                        let node_local_position = node_s2.to_local_position();
+                            let node_s2 =
+                                S2Coordinate::from_node_coordinate(node_coordinate, node_count);
+                            let node_local_position = node_s2.to_local_position();
 
-                        let distance = node_local_position.distance(quadtree.view_local_position);
-                        let node_distance = 0.5 * distance * node_count as f32;
+                            let distance =
+                                node_local_position.distance(quadtree.view_local_position);
+                            let node_distance = 0.5 * distance * node_count as f32;
 
-                        let state = if node_distance < quadtree.load_distance {
-                            RequestState::Requested
-                        } else {
-                            RequestState::Released
-                        };
+                            let state = if node_distance < quadtree.load_distance {
+                                RequestState::Requested
+                            } else {
+                                RequestState::Released
+                            };
 
-                        let node = &mut quadtree.nodes[[
-                            side as usize,
-                            lod as usize,
-                            (node_coordinate.x % quadtree.quadtree_size) as usize,
-                            (node_coordinate.y % quadtree.quadtree_size) as usize,
-                        ]];
+                            let node = &mut quadtree.nodes[[
+                                side as usize,
+                                lod as usize,
+                                (node_coordinate.x % quadtree.quadtree_size) as usize,
+                                (node_coordinate.y % quadtree.quadtree_size) as usize,
+                            ]];
 
-                        // check if quadtree slot refers to a new node
-                        if node_coordinate != node.node_coordinate {
-                            // release old node
-                            if node.state == RequestState::Requested {
-                                node.state = RequestState::Released;
-                                quadtree.released_nodes.push(node.node_coordinate);
+                            // check if quadtree slot refers to a new node
+                            if node_coordinate != node.node_coordinate {
+                                // release old node
+                                if node.state == RequestState::Requested {
+                                    node.state = RequestState::Released;
+                                    quadtree.released_nodes.push(node.node_coordinate);
+                                }
+
+                                node.node_coordinate = node_coordinate;
                             }
 
-                            node.node_coordinate = node_coordinate;
-                        }
-
-                        // request or release node based on its distance to the view
-                        match (node.state, state) {
-                            (RequestState::Released, RequestState::Requested) => {
-                                node.state = RequestState::Requested;
-                                quadtree.requested_nodes.push(node.node_coordinate);
+                            // request or release node based on its distance to the view
+                            match (node.state, state) {
+                                (RequestState::Released, RequestState::Requested) => {
+                                    node.state = RequestState::Requested;
+                                    quadtree.requested_nodes.push(node.node_coordinate);
+                                }
+                                (RequestState::Requested, RequestState::Released) => {
+                                    node.state = RequestState::Released;
+                                    quadtree.released_nodes.push(node.node_coordinate);
+                                }
+                                (_, _) => {}
                             }
-                            (RequestState::Requested, RequestState::Released) => {
-                                node.state = RequestState::Released;
-                                quadtree.released_nodes.push(node.node_coordinate);
-                            }
-                            (_, _) => {}
                         }
                     }
                 }
@@ -340,11 +344,13 @@ impl Quadtree {
         view_query: Query<Entity, With<TerrainView>>,
         mut terrain_query: Query<(Entity, &NodeAtlas), With<Terrain>>,
     ) {
-        for ((terrain, node_atlas), view) in iter::zip(&mut terrain_query, &view_query) {
-            let quadtree = quadtrees.get_mut(&(terrain, view)).unwrap();
+        for (terrain, node_atlas) in &mut terrain_query {
+            for view in &view_query {
+                let quadtree = quadtrees.get_mut(&(terrain, view)).unwrap();
 
-            for (node, entry) in iter::zip(&quadtree.nodes, &mut quadtree.data) {
-                *entry = node_atlas.get_best_node(node.node_coordinate, quadtree.lod_count);
+                for (node, entry) in iter::zip(&quadtree.nodes, &mut quadtree.data) {
+                    *entry = node_atlas.get_best_node(node.node_coordinate, quadtree.lod_count);
+                }
             }
         }
     }
@@ -355,21 +361,23 @@ impl Quadtree {
         view_query: Query<Entity, With<TerrainView>>,
         mut terrain_query: Query<(Entity, &NodeAtlas), With<Terrain>>,
     ) {
-        for ((terrain, node_atlas), view) in iter::zip(&mut terrain_query, &view_query) {
-            let quadtree = quadtrees.get_mut(&(terrain, view)).unwrap();
-            let view_config = view_configs.get_mut(&(terrain, view)).unwrap();
+        for (terrain, node_atlas) in &mut terrain_query {
+            for view in &view_query {
+                let quadtree = quadtrees.get_mut(&(terrain, view)).unwrap();
+                let view_config = view_configs.get_mut(&(terrain, view)).unwrap();
 
-            let local_position = Vec3::new(
-                quadtree.view_local_position.x,
-                quadtree.approximate_height,
-                quadtree.view_local_position.z,
-            );
+                let local_position = Vec3::new(
+                    quadtree.view_local_position.x,
+                    quadtree.approximate_height,
+                    quadtree.view_local_position.z,
+                );
 
-            let height = sample_attachment_local(quadtree, node_atlas, 0, local_position).x
-                * (quadtree.max_height - quadtree.min_height)
-                + quadtree.min_height;
+                let height = sample_attachment_local(quadtree, node_atlas, 0, local_position).x
+                    * (quadtree.max_height - quadtree.min_height)
+                    + quadtree.min_height;
 
-            (quadtree.approximate_height, view_config.approximate_height) = (height, height);
+                (quadtree.approximate_height, view_config.approximate_height) = (height, height);
+            }
         }
     }
 }

@@ -22,6 +22,12 @@ fn sample_attachment2(lookup: NodeLookup) -> vec4<f32> {
     return textureSampleLevel(attachment2_atlas, atlas_sampler, coordinate, lookup.atlas_index, 0.0);
 }
 
+fn sample_attachment1_gather0(lookup: NodeLookup) -> vec4<f32> {
+    let attachment = attachments.data[1];
+    let coordinate = lookup.atlas_coordinate * attachment.scale + attachment.offset;
+    return textureGather(0, attachment1_atlas, atlas_sampler, coordinate, lookup.atlas_index);
+}
+
 fn sample_height(lookup: NodeLookup) -> f32 {
     let height = sample_attachment0(lookup).x;
 

@@ -24,6 +24,8 @@ pub type Rgba8Image = ImageBuffer<Rgba<u8>, Vec<u8>>;
 pub type R16Image = ImageBuffer<Luma<u16>, Vec<u16>>;
 pub type Rg16Image = ImageBuffer<LumaA<u16>, Vec<u16>>;
 
+const STORE_PNG: bool = false;
+
 #[derive(Copy, Clone, Debug, Default, ShaderType)]
 pub struct AtlasNode {
     pub(crate) coordinate: NodeCoordinate,
@@ -73,7 +75,7 @@ pub(crate) struct NodeAttachmentWithData {
 impl NodeAttachmentWithData {
     pub(crate) fn start_saving(self, path: String) -> Task<AtlasNodeAttachment> {
         AsyncComputeTaskPool::get().spawn(async move {
-            if false {
+            if STORE_PNG {
                 let path = self.node.coordinate.path(&path, "png");
 
                 let image = match self.data {
@@ -118,7 +120,7 @@ impl NodeAttachmentWithData {
         format: AttachmentFormat,
     ) -> Task<Self> {
         AsyncComputeTaskPool::get().spawn(async move {
-            let data = if false {
+            let data = if STORE_PNG {
                 let path = node.coordinate.path(&path, "png");
 
                 let mut reader = Reader::open(path).unwrap();

@@ -1,9 +1,10 @@
-use crate::preprocess::shaders::load_preprocess_shaders;
 use crate::{
+    formats::tiff::TiffLoader,
     preprocess::{
         gpu_preprocessor::GpuPreprocessor,
         preprocess_pipeline::{TerrainPreprocessNode, TerrainPreprocessPipelines},
         preprocessor::{preprocessor_load_tile, select_ready_tasks},
+        shaders::load_preprocess_shaders,
     },
     terrain::TerrainComponents,
     terrain_data::gpu_node_atlas::GpuNodeAtlas,
@@ -25,7 +26,8 @@ pub struct TerrainPreprocessPlugin;
 
 impl Plugin for TerrainPreprocessPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (select_ready_tasks, preprocessor_load_tile));
+        app.init_asset_loader::<TiffLoader>()
+            .add_systems(Update, (select_ready_tasks, preprocessor_load_tile));
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
             render_app
