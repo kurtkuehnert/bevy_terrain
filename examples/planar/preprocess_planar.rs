@@ -40,15 +40,29 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             attachment_index: 0,
             path: format!("{PATH}/source/height.png"),
             side: 0,
+            top_left: Vec2::splat(0.0),
+            bottom_right: Vec2::splat(1.0),
         },
         &asset_server,
         &mut terrain_bundle.node_atlas,
     );
+    // preprocessor.preprocess_tile(
+    //     PreprocessDataset {
+    //         attachment_index: 1,
+    //         path: format!("{PATH}/source/albedo.png"),
+    //         side: 0,
+    //     },
+    //     &asset_server,
+    //     &mut terrain_bundle.node_atlas,
+    // );
+
     preprocessor.preprocess_tile(
         PreprocessDataset {
-            attachment_index: 1,
-            path: format!("{PATH}/source/albedo.png"),
+            attachment_index: 0,
+            path: "terrains/planar/source/height.png".to_string(),
             side: 0,
+            top_left: Vec2::new(0.3, 0.1),
+            bottom_right: Vec2::new(0.7, 0.5),
         },
         &asset_server,
         &mut terrain_bundle.node_atlas,
