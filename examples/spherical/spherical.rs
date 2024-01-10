@@ -1,5 +1,4 @@
 use bevy::{
-    asset::LoadState,
     prelude::*,
     reflect::{TypePath, TypeUuid},
     render::render_resource::*,
@@ -8,7 +7,8 @@ use bevy_terrain::prelude::*;
 
 const PATH: &str = "terrains/spherical";
 const RADIUS: f32 = 50.0;
-const HEIGHT: f32 = 4.0 / RADIUS;
+const MIN_HEIGHT: f32 = -12.0 / 6371.0;
+const MAX_HEIGHT: f32 = 9.0 / 6371.0;
 const TEXTURE_SIZE: u32 = 512;
 const LOD_COUNT: u32 = 5;
 
@@ -16,8 +16,12 @@ const LOD_COUNT: u32 = 5;
 #[uuid = "003e1d5d-241c-45a6-8c25-731dee22d820"]
 pub struct TerrainMaterial {
     #[texture(0, dimension = "1d")]
-    #[sampler(1)]
     gradient: Handle<Image>,
+    #[texture(1, dimension = "1d")]
+    #[sampler(2)]
+    gradient2: Handle<Image>,
+    #[uniform(3)]
+    index: u32,
 }
 
 impl Material for TerrainMaterial {
@@ -51,21 +55,28 @@ fn setup(
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
 ) {
     let gradient = asset_server.load("textures/gradient.png");
+    let gradient2 = asset_server.load("textures/gradient2.png");
 
     commands.insert_resource(LoadingTextures {
-        is_loaded: false,
-        gradient: gradient.clone(),
+        textures: vec![gradient.clone(), gradient2.clone()],
     });
 
     // Configure all the important properties of the terrain, as well as its attachments.
     let config = TerrainConfig {
         lod_count: LOD_COUNT,
-        max_height: HEIGHT,
+        min_height: MIN_HEIGHT,
+        max_height: MAX_HEIGHT,
         path: PATH.to_string(),
         ..default()
     }
     .add_attachment(AttachmentConfig::new(
         "height".to_string(),
+        TEXTURE_SIZE,
+        2,
+        AttachmentFormat::R16,
+    ))
+    .add_attachment(AttachmentConfig::new(
+        "height2".to_string(),
         TEXTURE_SIZE,
         2,
         AttachmentFormat::R16,
@@ -87,6 +98,8 @@ fn setup(
             TerrainBundle::new(config.clone(), Vec3::new(20.0, 30.0, -100.0), RADIUS),
             materials.add(TerrainMaterial {
                 gradient: gradient.clone(),
+                gradient2: gradient2.clone(),
+                index: 0,
             }),
         ))
         .id();
@@ -99,6 +112,44 @@ fn setup(
     let quadtree = Quadtree::from_configs(&config, &view_config);
     view_configs.insert((terrain, view), view_config.clone());
     quadtrees.insert((terrain, view), quadtree);
+
+    // {
+    //     // Configure all the important properties of the terrain, as well as its attachments.
+    //     let config = TerrainConfig {
+    //         lod_count: LOD_COUNT,
+    //         min_height: MIN_HEIGHT,
+    //         max_height: MAX_HEIGHT,
+    //         path: PATH.to_string(),
+    //         ..default()
+    //     }
+    //     .add_attachment(AttachmentConfig::new(
+    //         "height2".to_string(),
+    //         TEXTURE_SIZE,
+    //         2,
+    //         AttachmentFormat::R16,
+    //     ));
+    //
+    //     // Create the terrain.
+    //     let terrain = commands
+    //         .spawn((
+    //             TerrainBundle::new(
+    //                 config.clone(),
+    //                 Vec3::new(20.0, 30.0, -100.0),
+    //                 RADIUS + 0.001,
+    //             ),
+    //             materials.add(TerrainMaterial {
+    //                 gradient: gradient.clone(),
+    //                 index: 1,
+    //             }),
+    //         ))
+    //         .id();
+    //
+    //     // Store the quadtree and the view config for the terrain and view.
+    //     // This will hopefully be way nicer once the ECS can handle relations.
+    //     let quadtree = Quadtree::from_configs(&config, &view_config);
+    //     view_configs.insert((terrain, view), view_config.clone());
+    //     quadtrees.insert((terrain, view), quadtree);
+    // }
 
     // Create a sunlight for the physical based lighting.
     let light_direction = Vec3::new(-1.0, 0.0, 0.0);
@@ -132,8 +183,7 @@ fn setup(
 
 #[derive(Resource)]
 struct LoadingTextures {
-    is_loaded: bool,
-    gradient: Handle<Image>,
+    textures: Vec<Handle<Image>>,
 }
 
 fn create_array_texture(
@@ -141,14 +191,13 @@ fn create_array_texture(
     mut loading_textures: ResMut<LoadingTextures>,
     mut images: ResMut<Assets<Image>>,
 ) {
-    if loading_textures.is_loaded
-        || asset_server.load_state(&loading_textures.gradient) != LoadState::Loaded
-    {
-        return;
-    }
-
-    loading_textures.is_loaded = true;
-
-    let image = images.get_mut(&loading_textures.gradient).unwrap();
-    image.texture_descriptor.dimension = TextureDimension::D1;
+    loading_textures.textures.retain(|handle| {
+        if asset_server.is_loaded_with_dependencies(handle) {
+            let image = images.get_mut(handle).unwrap();
+            image.texture_descriptor.dimension = TextureDimension::D1;
+            false
+        } else {
+            true
+        }
+    });
 }

@@ -22,8 +22,10 @@ pub(crate) struct ProcessingTask {
 
 #[derive(Clone, Debug, ShaderType)]
 pub(crate) struct SplitData {
-    pub(crate) node: AtlasNode,
-    pub(crate) node_index: u32,
+    node: AtlasNode,
+    top_left: Vec2,
+    bottom_right: Vec2,
+    node_index: u32,
 }
 
 #[derive(Clone, Debug, ShaderType)]
@@ -129,13 +131,19 @@ impl GpuPreprocessor {
                     let task = gpu_preprocessor.ready_tasks.pop_back().unwrap();
 
                     let bind_group = match &task.task_type {
-                        PreprocessTaskType::Split { tile } => {
+                        PreprocessTaskType::Split {
+                            tile,
+                            top_left,
+                            bottom_right,
+                        } => {
                             let tile = images.get(tile).unwrap();
 
                             let split_buffer = StaticBuffer::create(
                                 &device,
                                 &SplitData {
                                     node: task.node.into(),
+                                    top_left: *top_left,
+                                    bottom_right: *bottom_right,
                                     node_index: section_index,
                                 },
                                 BufferUsages::UNIFORM,

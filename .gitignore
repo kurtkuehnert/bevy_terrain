@@ -10,3 +10,5 @@ assets/terrains/utsira
 assets/terrains/spherical_large
 assets/shaders/argeo.wgsl
 examples/argeo.rs
+
+assets/terrains/spherical/source/height/200m.tif
