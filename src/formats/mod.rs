@@ -10,7 +10,7 @@ use crate::formats::tdf::TDF;
 use bevy::{
     asset::{io::Reader, AssetLoader, AsyncReadExt, LoadContext},
     prelude::*,
-    render::render_resource::*,
+    render::{render_asset::RenderAssetPersistencePolicy, render_resource::*},
     utils::BoxedFuture,
 };
 
@@ -59,6 +59,7 @@ impl AssetLoader for TDFAssetLoader {
                 },
                 sampler: Default::default(),
                 texture_view_descriptor: None,
+                cpu_persistent_access: RenderAssetPersistencePolicy::Keep,
             };
 
             Ok(image)

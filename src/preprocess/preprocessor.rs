@@ -4,16 +4,18 @@ use crate::{
     terrain_data::{
         coordinates::NodeCoordinate,
         node_atlas::{AtlasNode, AtlasNodeAttachment, NodeAtlas},
-        AttachmentFormat,
     },
 };
-use bevy::{asset::LoadState, prelude::*, render::texture::ImageSampler};
+use bevy::{
+    asset::LoadState,
+    prelude::*,
+    render::texture::{ImageLoaderSettings, ImageSampler},
+};
 use itertools::{iproduct, Itertools};
 use std::{collections::VecDeque, ops::DerefMut, time::Instant};
 
 pub(crate) struct LoadingTile {
     id: AssetId<Image>,
-    format: AttachmentFormat,
 }
 
 pub struct PreprocessDataset {
@@ -22,6 +24,18 @@ pub struct PreprocessDataset {
     pub side: u32,
     pub top_left: Vec2,
     pub bottom_right: Vec2,
+}
+
+impl Default for PreprocessDataset {
+    fn default() -> Self {
+        Self {
+            attachment_index: 0,
+            path: "".to_string(),
+            side: 0,
+            top_left: Vec2::splat(0.0),
+            bottom_right: Vec2::splat(1.0),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -156,11 +170,18 @@ impl Preprocessor {
         asset_server: &AssetServer,
         node_atlas: &mut NodeAtlas,
     ) {
-        let tile_handle = asset_server.load(dataset.path);
+        let format = node_atlas.attachments[dataset.attachment_index as usize].format;
+
+        let tile_handle = asset_server.load_with_settings(
+            dataset.path,
+            move |settings: &mut ImageLoaderSettings| {
+                settings.texture_format = Some(format.processing_format());
+                settings.sampler = ImageSampler::linear()
+            },
+        );
 
         self.loading_tiles.push(LoadingTile {
             id: tile_handle.id(),
-            format: node_atlas.attachments[dataset.attachment_index as usize].format,
         });
 
         let lod_count = node_atlas.lod_count;
@@ -331,16 +352,9 @@ pub(crate) fn preprocessor_load_tile(
     mut images: ResMut<Assets<Image>>,
 ) {
     for mut preprocessor in terrain_query.iter_mut() {
-        preprocessor.loading_tiles.retain_mut(|tile| {
-            if let Some(image) = images.get_mut(tile.id) {
-                image.texture_descriptor.format = tile.format.processing_format();
-                image.sampler = ImageSampler::linear();
-
-                false
-            } else {
-                true
-            }
-        });
+        preprocessor
+            .loading_tiles
+            .retain_mut(|tile| images.get_mut(tile.id).is_none());
 
         if !preprocessor.loaded && preprocessor.loading_tiles.is_empty() {
             println!("finished_loading all tiles");
