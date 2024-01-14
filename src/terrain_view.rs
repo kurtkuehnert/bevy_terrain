@@ -1,5 +1,6 @@
 //! Types for configuring terrain views.
 
+use crate::{prelude::Quadtree, terrain::TerrainConfig};
 use bevy::{prelude::*, render::extract_component::ExtractComponent, utils::HashMap};
 
 /// Resource that stores components that are associated to a terrain entity and a view entity.
@@ -70,4 +71,17 @@ impl Default for TerrainViewConfig {
             blend_range: 0.2,
         }
     }
+}
+
+pub fn initialize_terrain_view(
+    terrain: Entity,
+    view: Entity,
+    config: &TerrainConfig,
+    view_config: TerrainViewConfig,
+    quadtrees: &mut TerrainViewComponents<Quadtree>,
+    view_configs: &mut TerrainViewComponents<TerrainViewConfig>,
+) {
+    let quadtree = Quadtree::from_configs(&config, &view_config);
+    view_configs.insert((terrain, view), view_config);
+    quadtrees.insert((terrain, view), quadtree);
 }

@@ -43,7 +43,6 @@
 //!
 //! [^note]: Some of these claims are not yet fully implemented.
 
-pub mod bundle;
 pub mod debug;
 pub mod formats;
 pub mod plugin;
@@ -58,18 +57,19 @@ pub mod prelude {
     //! `use bevy_terrain::prelude::*;` to import common components, bundles, and plugins.
     // #[doc(hidden)]
     pub use crate::{
-        bundle::TerrainBundle,
         debug::{camera::DebugCamera, TerrainDebugPlugin},
         plugin::TerrainPlugin,
         preprocess::{
             preprocessor::PreprocessDataset, preprocessor::Preprocessor, TerrainPreprocessPlugin,
         },
         render::render_pipeline::TerrainMaterialPlugin,
-        terrain::{Terrain, TerrainConfig},
+        terrain::{Terrain, TerrainBundle, TerrainConfig},
         terrain_data::{
             node_atlas::NodeAtlas, quadtree::Quadtree, sample_attachment, AttachmentConfig,
             AttachmentFormat,
         },
-        terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
+        terrain_view::{
+            initialize_terrain_view, TerrainView, TerrainViewComponents, TerrainViewConfig,
+        },
     };
 }

@@ -27,8 +27,8 @@ pub(crate) fn create_terrain_layout(device: &RenderDevice) -> BindGroupLayout {
         &BindGroupLayoutEntries::sequential(
             ShaderStages::all(),
             (
-                storage_buffer::<MeshUniform>(false),          // mesh
-                uniform_buffer::<TerrainConfigUniform>(false), // terrain config
+                storage_buffer_read_only::<MeshUniform>(false), // mesh
+                uniform_buffer::<TerrainConfigUniform>(false),  // terrain config
                 uniform_buffer::<AttachmentUniform>(false),
                 sampler(SamplerBindingType::Filtering), // atlas sampler
                 texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment 1
@@ -174,12 +174,21 @@ impl TerrainData {
 
             let transform = transform.affine();
             let previous_transform = previous_transform.map(|t| t.0).unwrap_or(transform);
-            let transforms = MeshTransforms {
+            let mesh_transforms = MeshTransforms {
                 transform: (&transform).into(),
                 previous_transform: (&previous_transform).into(),
                 flags: 0,
             };
-            let mesh_uniform = (&transforms).into();
+            let (inverse_transpose_model_a, inverse_transpose_model_b) =
+                mesh_transforms.transform.inverse_transpose_3x3();
+            let mesh_uniform = MeshUniform {
+                transform: mesh_transforms.transform.to_transpose(),
+                previous_transform: mesh_transforms.previous_transform.to_transpose(),
+                lightmap_uv_rect: UVec2::ZERO,
+                inverse_transpose_model_a,
+                inverse_transpose_model_b,
+                flags: mesh_transforms.flags,
+            };
             let config_uniform = config.into();
 
             let gpu_node_atlas = gpu_node_atlases.get(&terrain).unwrap();
@@ -202,14 +211,14 @@ pub struct SetTerrainBindGroup<const I: usize>;
 
 impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetTerrainBindGroup<I> {
     type Param = SRes<TerrainComponents<TerrainData>>;
-    type ViewWorldQuery = ();
-    type ItemWorldQuery = ();
+    type ViewData = ();
+    type ItemData = ();
 
     #[inline]
     fn render<'w>(
         item: &P,
-        _: ROQueryItem<'w, Self::ViewWorldQuery>,
-        _: ROQueryItem<'w, Self::ItemWorldQuery>,
+        _: ROQueryItem<'w, Self::ViewData>,
+        _: ROQueryItem<'w, Self::ItemData>,
         terrain_data: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {

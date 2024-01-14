@@ -1,5 +1,5 @@
 use bevy::{input::mouse::MouseMotion, prelude::*};
-use dolly::prelude::*;
+use dolly::{glam as dg, prelude::*};
 
 #[derive(Component)]
 pub struct DebugRig {
@@ -25,7 +25,7 @@ impl Default for DebugCamera {
             camera: default(),
             rig: DebugRig {
                 rig: CameraRig::builder()
-                    .with(Position::new(Vec3::new(-150.0, 0.0, 0.0)))
+                    .with(Position::new(dg::Vec3::new(-150.0, 0.0, 0.0)))
                     .with(YawPitch {
                         yaw_degrees: -90.0,
                         pitch_degrees: 0.0,
@@ -47,7 +47,7 @@ impl DebugCamera {
             camera: default(),
             rig: DebugRig {
                 rig: CameraRig::builder()
-                    .with(Position::new(position))
+                    .with(Position::new(position.to_array().into()))
                     .with(YawPitch {
                         yaw_degrees,
                         pitch_degrees,
@@ -66,7 +66,7 @@ impl DebugCamera {
 pub(crate) fn debug_camera_control(
     time: Res<Time>,
     mut motion_events: EventReader<MouseMotion>,
-    keys: Res<Input<KeyCode>>,
+    input: Res<ButtonInput<KeyCode>>,
     mut debug_rig_query: Query<(&mut Transform, &mut DebugRig)>,
 ) {
     let delta_time = time.delta_seconds();
@@ -74,45 +74,46 @@ pub(crate) fn debug_camera_control(
     if let Some((_, mut rig)) = debug_rig_query.iter_mut().find(|(_, camera)| camera.active) {
         let mut speed_factor = 1.0;
         let mut rotation_delta = Vec2::ZERO;
-        let mut translation_delta = Vec3::ZERO;
+        let mut translation_delta = dg::Vec3::ZERO;
 
         for motion in motion_events.read() {
             rotation_delta += -motion.delta;
         }
 
-        if keys.pressed(KeyCode::Left) {
+        if input.pressed(KeyCode::ArrowLeft) {
             translation_delta.x -= 1.0;
         }
-        if keys.pressed(KeyCode::Right) {
+        if input.pressed(KeyCode::ArrowRight) {
             translation_delta.x += 1.0;
         }
-        if keys.pressed(KeyCode::PageUp) {
+        if input.pressed(KeyCode::PageUp) {
             translation_delta.y += 1.0;
         }
-        if keys.pressed(KeyCode::PageDown) {
+        if input.pressed(KeyCode::PageDown) {
             translation_delta.y -= 1.0;
         }
-        if keys.pressed(KeyCode::Up) {
+        if input.pressed(KeyCode::ArrowUp) {
             translation_delta.z -= 1.0;
         }
-        if keys.pressed(KeyCode::Down) {
+        if input.pressed(KeyCode::ArrowDown) {
             translation_delta.z += 1.0;
         }
-        if keys.pressed(KeyCode::Home) {
+        if input.pressed(KeyCode::Home) {
             speed_factor = 1.0 / rig.acceleration;
         }
-        if keys.pressed(KeyCode::End) {
+        if input.pressed(KeyCode::End) {
             speed_factor = rig.acceleration / 1.0;
         }
 
         rig.translation_speed *= speed_factor;
 
-        if translation_delta != Vec3::ZERO {
+        if translation_delta != dg::Vec3::ZERO {
             translation_delta = translation_delta.normalize();
         }
 
-        let euler = rig.rig.final_transform.rotation.to_euler(EulerRot::YXZ);
-        translation_delta = Quat::from_euler(EulerRot::YXZ, euler.0, 0.0, 0.0) * translation_delta;
+        let euler = rig.rig.final_transform.rotation.to_euler(dg::EulerRot::YXZ);
+        translation_delta =
+            dg::Quat::from_euler(dg::EulerRot::YXZ, euler.0, 0.0, 0.0) * translation_delta;
 
         translation_delta = translation_delta * rig.translation_speed * delta_time;
         rotation_delta = rotation_delta * rig.rotation_speed * delta_time;
@@ -128,7 +129,7 @@ pub(crate) fn debug_camera_control(
     }
 
     for (mut transform, mut rig) in &mut debug_rig_query {
-        if keys.just_pressed(KeyCode::T) {
+        if input.just_pressed(KeyCode::KeyT) {
             rig.active = !rig.active;
         }
 
