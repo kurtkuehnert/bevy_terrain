@@ -59,34 +59,21 @@ fn setup(
         ..default()
     };
 
-    // Create the terrain.
     let terrain = commands
         .spawn((
-            TerrainBundle::new(config.clone(), Vec3::new(20.0, -30.0, -100.0), TERRAIN_SIZE),
+            TerrainBundle::new(config.clone(), default(), TERRAIN_SIZE),
             materials.add(TerrainMaterial {}),
         ))
         .id();
 
-    // Create the view.
     let view = commands.spawn((TerrainView, DebugCamera::default())).id();
 
-    // Store the quadtree and the view config for the terrain and view.
-    // This will hopefully be way nicer once the ECS can handle relations.
-    let quadtree = Quadtree::from_configs(&config, &view_config);
-    view_configs.insert((terrain, view), view_config);
-    quadtrees.insert((terrain, view), quadtree);
-
-    // Create a sunlight for the physical based lighting.
-    commands.spawn(DirectionalLightBundle {
-        directional_light: DirectionalLight {
-            illuminance: 20000.0,
-            ..default()
-        },
-        transform: Transform::from_xyz(1.0, 1.0, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
-        ..default()
-    });
-    commands.insert_resource(AmbientLight {
-        brightness: 0.2,
-        ..default()
-    });
+    initialize_terrain_view(
+        terrain,
+        view,
+        &config,
+        view_config,
+        &mut quadtrees,
+        &mut view_configs,
+    );
 }

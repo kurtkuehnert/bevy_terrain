@@ -1,8 +1,7 @@
 use bevy::{
-    asset::LoadState,
     prelude::*,
     reflect::{TypePath, TypeUuid},
-    render::render_resource::*,
+    render::{render_resource::*, texture::ImageLoaderSettings},
 };
 use bevy_terrain::prelude::*;
 
@@ -35,22 +34,20 @@ fn main() {
             TerrainMaterialPlugin::<TerrainMaterial>::default(),
         ))
         .add_systems(Startup, setup)
-        .add_systems(Update, create_array_texture)
         .run();
 }
 
 fn setup(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
     mut materials: ResMut<Assets<TerrainMaterial>>,
     mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
+    asset_server: Res<AssetServer>,
 ) {
-    let gradient = asset_server.load("textures/gradient.png");
-    commands.insert_resource(LoadingTexture {
-        is_loaded: false,
-        gradient: gradient.clone(),
-    });
+    let gradient = asset_server.load_with_settings(
+        "textures/gradient.png",
+        |settings: &mut ImageLoaderSettings| settings.dimension = Some(TextureDimension::D1),
+    );
 
     // Configure all the important properties of the terrain, as well as its attachments.
     let config = TerrainConfig {
@@ -82,7 +79,6 @@ fn setup(
         ..default()
     };
 
-    // Create the terrain.
     let terrain = commands
         .spawn((
             TerrainBundle::new(config.clone(), default(), TERRAIN_SIZE),
@@ -90,49 +86,14 @@ fn setup(
         ))
         .id();
 
-    // Create the view.
     let view = commands.spawn((TerrainView, DebugCamera::default())).id();
 
-    // Store the quadtree and the view config for the terrain and view.
-    // This will hopefully be way nicer once the ECS can handle relations.
-    let quadtree = Quadtree::from_configs(&config, &view_config);
-    view_configs.insert((terrain, view), view_config);
-    quadtrees.insert((terrain, view), quadtree);
-
-    // Create a sunlight for the physical based lighting.
-    commands.spawn(DirectionalLightBundle {
-        directional_light: DirectionalLight {
-            illuminance: 20000.0,
-            ..default()
-        },
-        transform: Transform::from_xyz(1.0, 1.0, 0.0).looking_at(Vec3::ZERO, Vec3::Y),
-        ..default()
-    });
-    commands.insert_resource(AmbientLight {
-        brightness: 0.2,
-        ..default()
-    });
-}
-
-#[derive(Resource)]
-struct LoadingTexture {
-    is_loaded: bool,
-    gradient: Handle<Image>,
-}
-
-fn create_array_texture(
-    asset_server: Res<AssetServer>,
-    mut loading_texture: ResMut<LoadingTexture>,
-    mut images: ResMut<Assets<Image>>,
-) {
-    if loading_texture.is_loaded
-        || asset_server.load_state(loading_texture.gradient.clone()) != LoadState::Loaded
-    {
-        return;
-    }
-
-    loading_texture.is_loaded = true;
-
-    let image = images.get_mut(&loading_texture.gradient).unwrap();
-    image.texture_descriptor.dimension = TextureDimension::D1;
+    initialize_terrain_view(
+        terrain,
+        view,
+        &config,
+        view_config,
+        &mut quadtrees,
+        &mut view_configs,
+    );
 }

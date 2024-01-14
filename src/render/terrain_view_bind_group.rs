@@ -38,7 +38,7 @@ pub(crate) fn create_refine_tiles_layout(device: &RenderDevice) -> BindGroupLayo
             ShaderStages::COMPUTE,
             (
                 uniform_buffer::<TerrainViewConfigUniform>(false), // terrain view config
-                storage_buffer_sized(false, None),                 // quadtree
+                storage_buffer_read_only_sized(false, None),       // quadtree
                 storage_buffer_sized(false, TILE_BUFFER_MIN_SIZE), // final tiles
                 storage_buffer_sized(false, TILE_BUFFER_MIN_SIZE), // temporary tiles
                 storage_buffer::<Parameters>(false),               // parameters
@@ -54,7 +54,7 @@ pub(crate) fn create_terrain_view_layout(device: &RenderDevice) -> BindGroupLayo
             ShaderStages::VERTEX_FRAGMENT,
             (
                 uniform_buffer::<TerrainViewConfigUniform>(false), // terrain view config
-                storage_buffer_sized(false, None),                 // quadtree
+                storage_buffer_read_only_sized(false, None),       // quadtree
                 storage_buffer_read_only_sized(false, TILE_BUFFER_MIN_SIZE), // tiles
             ),
         ),
@@ -238,14 +238,14 @@ pub struct SetTerrainViewBindGroup<const I: usize>;
 
 impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetTerrainViewBindGroup<I> {
     type Param = SRes<TerrainViewComponents<TerrainViewData>>;
-    type ViewWorldQuery = Entity;
-    type ItemWorldQuery = ();
+    type ViewData = Entity;
+    type ItemData = ();
 
     #[inline]
     fn render<'w>(
         item: &P,
-        view: ROQueryItem<'w, Self::ViewWorldQuery>,
-        _: ROQueryItem<'w, Self::ItemWorldQuery>,
+        view: ROQueryItem<'w, Self::ViewData>,
+        _: ROQueryItem<'w, Self::ItemData>,
         terrain_view_data: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
@@ -263,14 +263,14 @@ pub(crate) struct DrawTerrainCommand;
 
 impl<P: PhaseItem> RenderCommand<P> for DrawTerrainCommand {
     type Param = SRes<TerrainViewComponents<TerrainViewData>>;
-    type ViewWorldQuery = Entity;
-    type ItemWorldQuery = ();
+    type ViewData = Entity;
+    type ItemData = ();
 
     #[inline]
     fn render<'w>(
         item: &P,
-        view: ROQueryItem<'w, Self::ViewWorldQuery>,
-        _: ROQueryItem<'w, Self::ItemWorldQuery>,
+        view: ROQueryItem<'w, Self::ViewData>,
+        _: ROQueryItem<'w, Self::ItemData>,
         terrain_view_data: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {

@@ -15,7 +15,7 @@ repository = "https://github.com/kurtkuehnert/bevy_terrain"
 spherical = []
 
 [dependencies]
-bevy = { git="https://github.com/bevyengine/bevy" }
+bevy = { git="https://github.com/kurtkuehnert/bevy/", branch="image_loader_settings" }
 dtm = "0.1"
 rapid-qoi = "0.6"
 ndarray = "0.15"
