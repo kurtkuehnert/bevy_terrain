@@ -19,7 +19,7 @@ struct FragmentOutput {
     @location(0)             color: vec4<f32>
 }
 
-fn fragment_output(input: FragmentInput, color: vec4<f32>, lookup: NodeLookup) -> FragmentOutput {
+fn fragment_output(input: FragmentInput, color: vec4<f32>, normal: vec3<f32>, lookup: NodeLookup) -> FragmentOutput {
     var output: FragmentOutput;
 
     output.color = color;
@@ -38,6 +38,9 @@ fn fragment_output(input: FragmentInput, color: vec4<f32>, lookup: NodeLookup) -
 #endif
 #ifdef SHOW_PIXELS
     output.color = mix(output.color, show_pixels(input.local_position, lookup.atlas_lod), 0.5);
+#endif
+#ifdef SHOW_NORMALS
+    output.color = vec4<f32>(normal, 1.0);
 #endif
 
     return output;
@@ -70,5 +73,5 @@ fn default_fragment(input: FragmentInput) -> FragmentOutput {
     color = apply_pbr_lighting(pbr_input);
 #endif
 
-    return fragment_output(input, color, lookup);
+    return fragment_output(input, color, normal, lookup);
 }

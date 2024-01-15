@@ -78,16 +78,17 @@ bitflags::bitflags! {
         const SHOW_TILES         = (1 <<  4);
         const SHOW_QUADTREE      = (1 <<  5);
         const SHOW_PIXELS        = (1 <<  6);
-        const MESH_MORPH         = (1 <<  7);
-        const LAYER_BLEND        = (1 <<  8);
-        const QUADTREE_LOD       = (1 <<  9);
-        const ALBEDO             = (1 << 10);
-        const BRIGHT             = (1 << 11);
-        const LIGHTING           = (1 << 12);
-        const SAMPLE_GRAD        = (1 << 13);
-        const TEST1              = (1 << 14);
-        const TEST2              = (1 << 15);
-        const TEST3              = (1 << 16);
+        const SHOW_NORMALS       = (1 <<  7);
+        const MESH_MORPH         = (1 <<  8);
+        const LAYER_BLEND        = (1 <<  9);
+        const QUADTREE_LOD       = (1 << 10);
+        const ALBEDO             = (1 << 11);
+        const BRIGHT             = (1 << 12);
+        const LIGHTING           = (1 << 13);
+        const SAMPLE_GRAD        = (1 << 14);
+        const TEST1              = (1 << 15);
+        const TEST2              = (1 << 16);
+        const TEST3              = (1 << 17);
 
         const MSAA_RESERVED_BITS = TerrainPipelineFlags::MSAA_MASK_BITS << TerrainPipelineFlags::MSAA_SHIFT_BITS;
     }
@@ -123,6 +124,9 @@ impl TerrainPipelineFlags {
         if debug.show_pixels {
             key |= TerrainPipelineFlags::SHOW_PIXELS;
         }
+        if debug.show_normals {
+            key |= TerrainPipelineFlags::SHOW_NORMALS;
+        }
         if debug.mesh_morph {
             key |= TerrainPipelineFlags::MESH_MORPH;
         }
@@ -134,9 +138,6 @@ impl TerrainPipelineFlags {
         }
         if debug.albedo {
             key |= TerrainPipelineFlags::ALBEDO;
-        }
-        if debug.bright {
-            key |= TerrainPipelineFlags::BRIGHT;
         }
         if debug.lighting {
             key |= TerrainPipelineFlags::LIGHTING;
@@ -188,6 +189,9 @@ impl TerrainPipelineFlags {
         }
         if (self.bits() & TerrainPipelineFlags::SHOW_PIXELS.bits()) != 0 {
             shader_defs.push("SHOW_PIXELS".into())
+        }
+        if (self.bits() & TerrainPipelineFlags::SHOW_NORMALS.bits()) != 0 {
+            shader_defs.push("SHOW_NORMALS".into())
         }
         if (self.bits() & TerrainPipelineFlags::MESH_MORPH.bits()) != 0 {
             shader_defs.push("MESH_MORPH".into());

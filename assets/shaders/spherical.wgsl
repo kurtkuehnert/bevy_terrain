@@ -15,6 +15,8 @@ var gradient2: texture_1d<f32>;
 var gradient_sampler: sampler;
 @group(3) @binding(3)
 var<uniform> material_index: u32;
+@group(3) @binding(4)
+var<uniform> super_elevation: f32;
 
 fn sample_height(lookup: NodeLookup) -> vec2<f32> {
     let gather = sample_attachment1_gather0(lookup);
@@ -48,8 +50,8 @@ fn sample_color(lookup: NodeLookup) -> vec4<f32> {
         }
     }
     else {
-        let min = -3806.439 / 6371000.0;
-        let max = -197.742 / 6371000.0;
+        let min = -3806.439 / 6371000.0 * super_elevation;
+        let max = -197.742 / 6371000.0 * super_elevation;
 
         let scale = (height.x - min) / (max - min);
 
@@ -102,5 +104,5 @@ fn fragment(input: FragmentInput) -> FragmentOutput {
     color = apply_pbr_lighting(pbr_input);
 #endif
 
-    return fragment_output(input, color, lookup);
+    return fragment_output(input, color, normal, lookup);
 }

@@ -48,5 +48,5 @@ fn fragment(input: FragmentInput) -> FragmentOutput {
     color = apply_pbr_lighting(pbr_input);
 #endif
 
-    return fragment_output(input, color, lookup);
+    return fragment_output(input, color, normal, lookup);
 }

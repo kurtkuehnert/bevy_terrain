@@ -40,26 +40,40 @@ fn sample_normal(lookup: NodeLookup, local_position: vec3<f32>) -> vec3<f32> {
     let height_coordinate = lookup.atlas_coordinate * height_attachment.scale + height_attachment.offset;
 
 #ifdef SPHERICAL
-    let normal = normalize(local_position);
-    let tangent = cross(vec3(0.0, 1.0, 0.0), normal);
-    let bitangent = -cross(tangent, normal);
-    let TBN = mat3x3<f32>(tangent, bitangent, normal);
+    var FACE_UP = array<vec3<f32>, 6u>(
+        vec3<f32>( 0.0, 1.0,  0.0),
+        vec3<f32>( 0.0, 1.0,  0.0),
+        vec3<f32>( 0.0, 0.0, -1.0),
+        vec3<f32>( 0.0, 0.0, -1.0),
+        vec3<f32>(-1.0, 0.0,  0.0),
+        vec3<f32>(-1.0, 0.0,  0.0),
+    );
 
-    // Todo: this is only an approximation of the S2 distance
-    // local circumference / pixels per circumference
-    let distance_between_samples = 3.14159265359 / (4.0 * height_attachment.size * f32(node_count(lookup.atlas_lod)));
+    let face_up = FACE_UP[lookup.side];
+
+    let normal    = normalize(local_position);
+    let tangent   = cross(face_up, normal);
+    let bitangent = cross(normal, tangent);
+    let TBN       = mat3x3<f32>(tangent, bitangent, normal);
+
+    let side_length = 3.14159265359 / 4.0;
 #else
-    let TBN = mat3x3<f32>(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0);
+    let TBN = mat3x3<f32>(1.0, 0.0, 0.0,
+                          0.0, 0.0, 1.0,
+                          0.0, 1.0, 0.0);
 
-    let distance_between_samples = 4.0 * 1.0 / (height_attachment.size * f32(node_count(lookup.atlas_lod)));
+    let side_length = 1.0;
 #endif
+    // Todo: this is only an approximation of the S2 distance (pixels are not spaced evenly)
+    let pixels_per_side = height_attachment.size * f32(node_count(lookup.atlas_lod));
+    let distance_between_samples = side_length / pixels_per_side;
 
     let left  = mix(config.min_height, config.max_height, textureSampleLevel(attachment0_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0, vec2<i32>(-1,  0)).x);
     let up    = mix(config.min_height, config.max_height, textureSampleLevel(attachment0_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0, vec2<i32>( 0, -1)).x);
     let right = mix(config.min_height, config.max_height, textureSampleLevel(attachment0_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0, vec2<i32>( 1,  0)).x);
     let down  = mix(config.min_height, config.max_height, textureSampleLevel(attachment0_atlas, atlas_sampler, height_coordinate, lookup.atlas_index, 0.0, vec2<i32>( 0,  1)).x);
 
-    let surface_normal = normalize(vec3<f32>(right - left, down - up, distance_between_samples));
+    let surface_normal = normalize(vec3<f32>(left - right, down - up, 2.0 * distance_between_samples));
 
     return normalize(TBN * surface_normal);
 }

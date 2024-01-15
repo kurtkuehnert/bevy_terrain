@@ -34,11 +34,11 @@ pub struct DebugTerrain {
     pub show_tiles: bool,
     pub show_quadtree: bool,
     pub show_pixels: bool,
+    pub show_normals: bool,
     pub mesh_morph: bool,
     pub layer_blend: bool,
     pub quadtree_lod: bool,
     pub albedo: bool,
-    pub bright: bool,
     pub lighting: bool,
     pub sample_grad: bool,
     pub freeze: bool,
@@ -56,17 +56,17 @@ impl Default for DebugTerrain {
             show_tiles: false,
             show_quadtree: false,
             show_pixels: false,
+            show_normals: false,
             mesh_morph: true,
             layer_blend: true,
             quadtree_lod: false,
             albedo: false,
-            bright: false,
             lighting: true,
             sample_grad: true,
             freeze: false,
             test1: false,
             test2: false,
-            test3: true,
+            test3: false,
         }
     }
 }
@@ -118,6 +118,13 @@ pub fn toggle_debug(input: Res<ButtonInput<KeyCode>>, mut debug: ResMut<DebugTer
             if debug.show_pixels { "on" } else { "off" }
         )
     }
+    if input.just_pressed(KeyCode::KeyB) {
+        debug.show_normals = !debug.show_normals;
+        println!(
+            "Toggled the normals view {}.",
+            if debug.show_normals { "on" } else { "off" }
+        )
+    }
     if input.just_pressed(KeyCode::KeyM) {
         debug.mesh_morph = !debug.mesh_morph;
         println!(
@@ -144,13 +151,6 @@ pub fn toggle_debug(input: Res<ButtonInput<KeyCode>>, mut debug: ResMut<DebugTer
         println!(
             "Toggled the albedo {}.",
             if debug.albedo { "on" } else { "off" }
-        )
-    }
-    if input.just_pressed(KeyCode::KeyB) {
-        debug.bright = !debug.bright;
-        println!(
-            "Toggled the base color to {}.",
-            if debug.bright { "white" } else { "black" }
         )
     }
     if input.just_pressed(KeyCode::KeyS) {

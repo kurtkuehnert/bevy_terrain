@@ -10,6 +10,7 @@ const PATH: &str = "terrains/spherical";
 const RADIUS: f32 = 50.0;
 const MIN_HEIGHT: f32 = -12.0 / 6371.0;
 const MAX_HEIGHT: f32 = 9.0 / 6371.0;
+const SUPER_ELEVATION: f32 = 10.0;
 const TEXTURE_SIZE: u32 = 512;
 const LOD_COUNT: u32 = 5;
 
@@ -23,6 +24,8 @@ pub struct TerrainMaterial {
     gradient2: Handle<Image>,
     #[uniform(3)]
     index: u32,
+    #[uniform(4)]
+    super_elevation: f32,
 }
 
 impl Material for TerrainMaterial {
@@ -66,8 +69,8 @@ fn setup(
     // Configure all the important properties of the terrain, as well as its attachments.
     let config = TerrainConfig {
         lod_count: LOD_COUNT,
-        min_height: MIN_HEIGHT,
-        max_height: MAX_HEIGHT,
+        min_height: MIN_HEIGHT * SUPER_ELEVATION,
+        max_height: MAX_HEIGHT * SUPER_ELEVATION,
         path: PATH.to_string(),
         ..default()
     }
@@ -101,6 +104,7 @@ fn setup(
                 gradient: gradient.clone(),
                 gradient2: gradient2.clone(),
                 index: 0,
+                super_elevation: SUPER_ELEVATION,
             }),
         ))
         .id();
