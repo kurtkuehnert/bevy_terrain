@@ -326,5 +326,5 @@ fn lookup_node(local_position: vec3<f32>, lod: u32) -> NodeLookup {
     let atlas_index      = entry.atlas_index;
     let atlas_coordinate = node_coordinate % 1.0;
 
-    return NodeLookup(atlas_index, atlas_lod, atlas_coordinate);
+    return NodeLookup(atlas_index, atlas_lod, atlas_coordinate, s2.side);
 }

@@ -66,6 +66,7 @@ struct NodeLookup {
     atlas_index: u32,
     atlas_lod: u32,
     atlas_coordinate: vec2<f32>,
+    side: u32,
 }
 
 struct AttachmentConfig {
