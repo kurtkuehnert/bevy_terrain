@@ -66,29 +66,12 @@ impl NodeCoordinate {
             IVec2::new(-1, 1),
         ];
 
-        let node_count = 1 << (lod_count - self.lod - 1);
-
         offsets
             .iter()
             .map(|&offset| {
                 let neighbour_position = IVec2::new(self.x as i32, self.y as i32) + offset;
 
-                match neighbour_position {
-                    IVec2 { x, y } if x < 0 && y < 0 => Self::INVALID,
-                    IVec2 { x, y } if x < 0 && y >= node_count => Self::INVALID,
-                    IVec2 { x, y } if x >= node_count && y < 0 => Self::INVALID,
-                    IVec2 { x, y } if x >= node_count && y >= node_count => Self::INVALID,
-                    IVec2 { x, .. } if x < 0 => self.wrap_neighbour(lod_count, 0),
-                    IVec2 { y, .. } if y < 0 => self.wrap_neighbour(lod_count, 1),
-                    IVec2 { x, .. } if x >= node_count => self.wrap_neighbour(lod_count, 2),
-                    IVec2 { y, .. } if y >= node_count => self.wrap_neighbour(lod_count, 3),
-                    _ => NodeCoordinate::new(
-                        self.side,
-                        self.lod,
-                        neighbour_position.x as u32,
-                        neighbour_position.y as u32,
-                    ),
-                }
+                self.neighbour_coordinate(neighbour_position, lod_count)
             })
             .collect_vec()
     }
@@ -98,35 +81,70 @@ impl NodeCoordinate {
     }
 
     #[cfg(feature = "spherical")]
-    fn wrap_neighbour(self, lod_count: u32, index: u32) -> Self {
-        let neighbouring_sides = [
-            [4, 2, 1, 5],
-            [0, 2, 3, 5],
-            [0, 4, 3, 1],
-            [2, 4, 5, 1],
-            [2, 0, 5, 3],
-            [4, 0, 1, 3],
-        ];
-
+    fn neighbour_coordinate(self, neighbour_position: IVec2, lod_count: u32) -> Self {
         let node_count = 1 << (lod_count - self.lod - 1);
 
-        let neighbour_side = neighbouring_sides[self.side as usize][index as usize];
+        let edge_index = match neighbour_position {
+            IVec2 { x, y }
+                if x < 0 && y < 0
+                    || x < 0 && y >= node_count
+                    || x >= node_count && y < 0
+                    || x >= node_count && y >= node_count =>
+            {
+                return Self::INVALID
+            }
+            IVec2 { x, .. } if x < 0 => 1,
+            IVec2 { y, .. } if y < 0 => 2,
+            IVec2 { x, .. } if x >= node_count => 3,
+            IVec2 { y, .. } if y >= node_count => 4,
+            _ => 0,
+        };
+
+        let neighbour_position = neighbour_position
+            .clamp(IVec2::ZERO, IVec2::splat(node_count - 1))
+            .as_uvec2();
+
+        let neighbouring_sides = [
+            [0, 4, 2, 1, 5],
+            [1, 0, 2, 3, 5],
+            [2, 0, 4, 3, 1],
+            [3, 2, 4, 5, 1],
+            [4, 2, 0, 5, 3],
+            [5, 4, 0, 1, 3],
+        ];
+
+        let neighbour_side = neighbouring_sides[self.side as usize][edge_index];
 
         let info = SideInfo::project_to_side(self.side, neighbour_side);
 
         let [x, y] = info.map(|info| match info {
             SideInfo::Fixed0 => 0,
-            SideInfo::Fixed1 => node_count - 1,
-            SideInfo::PositiveS => self.x,
-            SideInfo::PositiveT => self.y,
+            SideInfo::Fixed1 => node_count as u32 - 1,
+            SideInfo::PositiveS => neighbour_position.x,
+            SideInfo::PositiveT => neighbour_position.y,
         });
 
         Self::new(neighbour_side, self.lod, x, y)
     }
 
     #[cfg(not(feature = "spherical"))]
-    fn wrap_neighbour(self, _lod_count: u32, _index: u32) -> Self {
-        Self::INVALID
+    fn neighbour_coordinate(self, neighbour_position: IVec2, lod_count: u32) -> Self {
+        let node_count = 1 << (lod_count - self.lod - 1);
+
+        if neighbour_position.x < 0
+            || neighbour_position.y < 0
+            || neighbour_position.x >= node_count
+            || neighbour_position.y >= node_count
+        {
+            Self::INVALID
+        } else {
+            Self::new(
+                self.side,
+                self.lod,
+                neighbour_position.x as u32,
+                neighbour_position.y as u32,
+            )
+        }
     }
 }
 
