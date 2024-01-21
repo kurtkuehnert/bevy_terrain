@@ -42,16 +42,17 @@ fn setup(
         path: PATH.to_string(),
         ..default()
     }
-    .add_attachment(AttachmentConfig::new(
-        "height".to_string(),
-        TEXTURE_SIZE,
-        2,
-        AttachmentFormat::R16,
-    ));
+    .add_attachment(AttachmentConfig {
+        name: "height".to_string(),
+        texture_size: TEXTURE_SIZE,
+        border_size: 2,
+        mip_level_count: 4,
+        format: AttachmentFormat::R16,
+    });
 
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
     let view_config = TerrainViewConfig {
-        grid_size: 16,
+        grid_size: 32,
         quadtree_size: 8,
         load_distance: 3.0,
         morph_distance: 8.0,

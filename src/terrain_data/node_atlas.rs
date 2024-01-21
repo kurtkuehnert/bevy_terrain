@@ -117,10 +117,12 @@ impl NodeAttachmentWithData {
     pub(crate) fn start_loading(
         node: AtlasNodeAttachment,
         path: String,
+        texture_size: u32,
         format: AttachmentFormat,
+        mip_level_count: u32,
     ) -> Task<Self> {
         AsyncComputeTaskPool::get().spawn(async move {
-            let data = if STORE_PNG {
+            let mut data = if STORE_PNG {
                 let path = node.coordinate.path(&path, "png");
 
                 let mut reader = Reader::open(path).unwrap();
@@ -134,6 +136,8 @@ impl NodeAttachmentWithData {
 
                 AttachmentData::from_bytes(&bytes, format)
             };
+
+            data.generate_mipmaps(texture_size, mip_level_count);
 
             Self {
                 node,
@@ -167,14 +171,15 @@ impl AtlasAttachment {
     fn new(config: &AttachmentConfig, node_atlas_size: u32, path: &str) -> Self {
         let name = config.name.clone();
         let path = format!("assets/{path}/data/{name}");
+        let center_size = config.texture_size - 2 * config.border_size;
 
         Self {
             name,
             path,
             texture_size: config.texture_size,
-            center_size: config.center_size,
+            center_size,
             border_size: config.border_size,
-            scale: config.center_size as f32 / config.texture_size as f32,
+            scale: center_size as f32 / config.texture_size as f32,
             offset: config.border_size as f32 / config.texture_size as f32,
             mip_level_count: config.mip_level_count,
             format: config.format,
@@ -219,7 +224,9 @@ impl AtlasAttachment {
             .push(NodeAttachmentWithData::start_loading(
                 node,
                 self.path.clone(),
+                self.texture_size,
                 self.format,
+                self.mip_level_count,
             ));
     }
 

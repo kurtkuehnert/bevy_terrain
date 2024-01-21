@@ -1,8 +1,8 @@
 #import bevy_terrain::types::NodeLookup
 #import bevy_terrain::bindings::config
 #import bevy_terrain::functions::{vertex_local_position, lookup_node, compute_blend}
-#import bevy_terrain::attachments::{sample_height, sample_normal, sample_attachment1 as sample_albedo}
-#import bevy_terrain::fragment::{FragmentInput, FragmentOutput, fragment_output}
+#import bevy_terrain::attachments::{sample_height_grad, sample_normal_grad, sample_attachment1_grad as sample_albedo_grad}
+#import bevy_terrain::fragment::{FragmentInput, FragmentOutput, lookup_info_fragment, fragment_output}
 #import bevy_pbr::pbr_types::{PbrInput, pbr_input_new}
 #import bevy_pbr::pbr_functions::{calculate_view, apply_pbr_lighting}
 
@@ -11,11 +11,11 @@ var gradient: texture_1d<f32>;
 @group(3) @binding(1)
 var gradient_sampler: sampler;
 
-fn sample_color(lookup: NodeLookup) -> vec4<f32> {
+fn sample_color_grad(lookup: NodeLookup) -> vec4<f32> {
 #ifdef ALBEDO
-    return sample_albedo(lookup);
+    return sample_albedo_grad(lookup);
 #else
-    let height = sample_height(lookup);
+    let height = sample_height_grad(lookup);
 
     return textureSampleLevel(gradient, gradient_sampler, pow(height, 0.9), 0.0);
 #endif
@@ -23,16 +23,16 @@ fn sample_color(lookup: NodeLookup) -> vec4<f32> {
 
 @fragment
 fn fragment(input: FragmentInput) -> FragmentOutput {
-    let blend = compute_blend(input.local_position);
+    let info = lookup_info_fragment(input.local_position);
 
-    let lookup = lookup_node(input.local_position, blend.lod);
-    var normal = sample_normal(lookup, input.local_position);
-    var color  = sample_color(lookup);
+    let lookup = lookup_node(info, 0u);
+    var normal = sample_normal_grad(lookup, input.local_position);
+    var color  = sample_color_grad(lookup);
 
-    if (blend.ratio > 0.0) {
-        let lookup2 = lookup_node(input.local_position, blend.lod + 1u);
-        normal      = mix(normal, sample_normal(lookup2, input.local_position), blend.ratio);
-        color       = mix(color,  sample_color(lookup2),                        blend.ratio);
+    if (info.blend_ratio > 0.0) {
+        let lookup2 = lookup_node(info, 1u);
+        normal      = mix(normal, sample_normal_grad(lookup2, input.local_position), info.blend_ratio);
+        color       = mix(color,  sample_color_grad(lookup2),                        info.blend_ratio);
     }
 
 #ifdef LIGHTING
