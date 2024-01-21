@@ -1,7 +1,7 @@
 #define_import_path bevy_terrain::functions
 
 #import bevy_terrain::bindings::{config, view_config, tiles, quadtree}
-#import bevy_terrain::types::{Tile, Quadtree, NodeLookup, Morph, Blend, S2Coordinate}
+#import bevy_terrain::types::{Tile, Quadtree, NodeLookup, Morph, Blend, LookupInfo, S2Coordinate}
 #import bevy_pbr::mesh_view_bindings::view
 #import bevy_pbr::mesh_bindings::mesh
 #import bevy_render::maths::affine_to_square
@@ -24,12 +24,18 @@ fn compute_morph(tile: Tile, local_position: vec3<f32>) -> Morph {
 }
 
 fn compute_blend(local_position: vec3<f32>) -> Blend {
+#ifdef QUADTREE_LOD
+    let lod = quadtree_lod(local_position);
+    let ratio = 0.0;
+#else
     let view_distance = distance(local_position, view_config.view_local_position);
     let blend_threshold_distance = view_config.blend_distance / f32(1u << (config.lod_count - 1u));
     let log_distance = max(log2(view_distance / blend_threshold_distance), 0.0);
-    let ratio = 1.0 - (1.0 - log_distance % 1.0) / view_config.blend_range;
+    let lod = min(u32(log_distance), config.lod_count - 1u);
+    let ratio = select(1.0 - (1.0 - log_distance % 1.0) / view_config.blend_range, 0.0, lod == config.lod_count - 1u);
+#endif
 
-    return Blend(u32(log_distance), ratio);
+    return Blend(lod, ratio);
 }
 
 fn grid_offset(grid_index: u32) -> vec2<u32>{
@@ -301,30 +307,25 @@ fn quadtree_lod(frag_local_position: vec3<f32>) -> u32 {
     return lod;
 }
 
-fn lookup_node(local_position: vec3<f32>, lod: u32) -> NodeLookup {
-    let s2 = s2_from_local_position(local_position);
-
-#ifdef QUADTREE_LOD
-    let quadtree_lod        = quadtree_lod(local_position);
-#else
-    let quadtree_lod        = min(lod, config.lod_count - 1u);
-#endif
-
-    var node_coordinate = node_coordinate(s2, quadtree_lod);
-
-    let quadtree_side       = s2.side;
+fn lookup_node(info: LookupInfo, lod_offset: u32) -> NodeLookup {
+    let quadtree_lod        = info.lod + lod_offset;
+    var node_coordinate     = node_coordinate(info.coordinate, quadtree_lod);
+    let quadtree_side       = info.coordinate.side;
     let quadtree_coordinate = vec2<u32>(node_coordinate) % view_config.quadtree_size;
-    let quadtree_index      = ((quadtree_side          * config.lod_count +
-                                quadtree_lod)          * view_config.quadtree_size +
-                                quadtree_coordinate.x) * view_config.quadtree_size +
+    let quadtree_index      = ((quadtree_side            * config.lod_count +
+                                quadtree_lod)            * view_config.quadtree_size +
+                                quadtree_coordinate.x)   * view_config.quadtree_size +
                                 quadtree_coordinate.y;
 
-    let entry = quadtree.data[quadtree_index];
-    node_coordinate /= f32(1u << (entry.atlas_lod - quadtree_lod));
+    let entry               = quadtree.data[quadtree_index];
+    let node_count          = f32(node_count(entry.atlas_lod));
+    node_coordinate        /= f32(1u << (entry.atlas_lod - quadtree_lod));
 
-    let atlas_lod        = entry.atlas_lod;
-    let atlas_index      = entry.atlas_index;
-    let atlas_coordinate = node_coordinate % 1.0;
+    let atlas_lod           = entry.atlas_lod;
+    let atlas_index         = entry.atlas_index;
+    let atlas_coordinate    = node_coordinate % 1.0;
+    let atlas_ddx           = info.ddx * node_count;
+    let atlas_ddy           = info.ddy * node_count;
 
-    return NodeLookup(atlas_index, atlas_lod, atlas_coordinate, s2.side);
+    return NodeLookup(atlas_index, atlas_lod, atlas_coordinate, atlas_ddx, atlas_ddy, quadtree_side);
 }

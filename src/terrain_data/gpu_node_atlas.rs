@@ -59,6 +59,7 @@ pub(crate) struct AtlasBufferInfo {
     pub(crate) border_size: u32,
     pub(crate) center_size: u32,
     format: AttachmentFormat,
+    mip_level_count: u32,
 
     pixels_per_entry: u32,
 
@@ -85,6 +86,7 @@ impl AtlasBufferInfo {
         let texture_size = attachment.texture_size;
         let border_size = attachment.border_size;
         let center_size = attachment.center_size;
+        let mip_level_count = attachment.mip_level_count;
 
         let pixel_size = format.pixel_size();
         let entry_size = mem::size_of::<u32>() as u32;
@@ -105,6 +107,7 @@ impl AtlasBufferInfo {
             border_size,
             center_size,
             texture_size,
+            mip_level_count,
             pixels_per_entry,
             entries_per_side,
             entries_per_node,
@@ -298,17 +301,30 @@ impl GpuAtlasAttachment {
 
     fn upload_nodes(&mut self, queue: &RenderQueue) {
         for node in self.upload_nodes.drain(..) {
-            queue.write_texture(
-                self.buffer_info
-                    .image_copy_texture(&self.atlas_texture, node.node.atlas_index, 0),
-                node.data.bytes(),
-                ImageDataLayout {
-                    offset: 0,
-                    bytes_per_row: Some(self.buffer_info.actual_side_size),
-                    rows_per_image: Some(self.buffer_info.actual_side_size),
-                },
-                self.buffer_info.image_copy_size(0),
-            );
+            let mut start = 0;
+
+            for mip_level in 0..self.buffer_info.mip_level_count {
+                let side_size = self.buffer_info.actual_side_size >> mip_level;
+                let texture_size = self.buffer_info.texture_size >> mip_level;
+                let end = start + (side_size * texture_size) as usize;
+
+                queue.write_texture(
+                    self.buffer_info.image_copy_texture(
+                        &self.atlas_texture,
+                        node.node.atlas_index,
+                        mip_level,
+                    ),
+                    &node.data.bytes()[start..end],
+                    ImageDataLayout {
+                        offset: 0,
+                        bytes_per_row: Some(side_size),
+                        rows_per_image: Some(texture_size),
+                    },
+                    self.buffer_info.image_copy_size(mip_level),
+                );
+
+                start = end;
+            }
         }
     }
 

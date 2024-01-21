@@ -61,11 +61,21 @@ struct Quadtree {
     data: array<QuadtreeEntry>,
 }
 
+struct LookupInfo {
+    coordinate: S2Coordinate,
+    lod: u32,
+    blend_ratio: f32,
+    ddx: vec2<f32>,
+    ddy: vec2<f32>,
+}
+
 // A lookup of a node inside the node atlas based on the view of a quadtree.
 struct NodeLookup {
     atlas_index: u32,
     atlas_lod: u32,
     atlas_coordinate: vec2<f32>,
+    ddx: vec2<f32>,
+    ddy: vec2<f32>,
     side: u32,
 }
 

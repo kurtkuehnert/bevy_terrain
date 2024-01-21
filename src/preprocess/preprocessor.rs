@@ -248,34 +248,73 @@ impl Preprocessor {
         asset_server: &AssetServer,
         node_atlas: &mut NodeAtlas,
     ) {
-        for side in 0..6 {
-            self.preprocess_tile(
-                PreprocessDataset {
-                    attachment_index: dataset.attachment_index,
-                    path: format!("{}/source/height/face{}.tif", dataset.path, side),
-                    side,
-
-                    top_left: Vec2::splat(0.0),
-                    bottom_right: Vec2::splat(1.0),
-                },
-                asset_server,
-                node_atlas,
-            );
-        }
-
         let lod_count = node_atlas.lod_count;
+        let lod = 0;
+        let node_count = 1 << (lod_count - lod - 1);
+
+        for side in 0..6 {
+            let dataset = PreprocessDataset {
+                attachment_index: dataset.attachment_index,
+                path: format!("{}/source/height/face{}.tif", dataset.path, side),
+                side,
+
+                top_left: Vec2::splat(0.0),
+                bottom_right: Vec2::splat(1.0),
+            };
+
+            let format = node_atlas.attachments[dataset.attachment_index as usize].format;
+
+            let tile_handle = asset_server.load_with_settings(
+                dataset.path,
+                move |settings: &mut ImageLoaderSettings| {
+                    settings.texture_format = Some(format.processing_format());
+                    settings.sampler = ImageSampler::linear()
+                },
+            );
+
+            self.loading_tiles.push(LoadingTile {
+                id: tile_handle.id(),
+            });
+
+            for (x, y) in iproduct!(0..node_count, 0..node_count) {
+                let node = node_atlas
+                    .get_or_allocate(NodeCoordinate::new(dataset.side, lod, x, y))
+                    .attachment(dataset.attachment_index);
+
+                self.task_queue.push_back(PreprocessTask::split(
+                    node,
+                    tile_handle.clone(),
+                    dataset.top_left,
+                    dataset.bottom_right,
+                ));
+            }
+
+            for lod in 1..lod_count {
+                let node_count = 1 << (lod_count - lod - 1);
+
+                self.task_queue.push_back(PreprocessTask::barrier());
+
+                for (x, y) in iproduct!(0..node_count, 0..node_count) {
+                    let node = node_atlas
+                        .get_or_allocate(NodeCoordinate::new(dataset.side, lod, x, y))
+                        .attachment(dataset.attachment_index);
+
+                    self.task_queue
+                        .push_back(PreprocessTask::downsample(node, node_atlas));
+                }
+            }
+        }
 
         self.task_queue.push_back(PreprocessTask::barrier());
 
-        for side in 0..6 {
-            for lod in 0..lod_count {
-                let node_count = 1 << (lod_count - lod - 1);
+        for lod in 0..lod_count {
+            let node_count = 1 << (lod_count - lod - 1);
 
+            for side in 0..6 {
                 for (x, y) in iproduct!(0..node_count, 0..node_count) {
                     let node = node_atlas
                         .get_or_allocate(NodeCoordinate::new(side, lod, x, y))
                         .attachment(dataset.attachment_index);
-
                     self.task_queue
                         .push_back(PreprocessTask::stitch(node, node_atlas));
                 }
@@ -357,7 +396,7 @@ pub(crate) fn preprocessor_load_tile(
             .retain_mut(|tile| images.get_mut(tile.id).is_none());
 
         if !preprocessor.loaded && preprocessor.loading_tiles.is_empty() {
-            println!("finished_loading all tiles");
+            println!("finished loading all tiles");
             preprocessor.loaded = true;
             preprocessor.start_time = Some(Instant::now());
         }

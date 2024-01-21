@@ -4,7 +4,7 @@ use bevy::{
     render::{
         render_asset::RenderAssetPersistencePolicy,
         render_resource::{Extent3d, TextureDimension, TextureFormat},
-        texture::TextureError,
+        texture::{ImageLoaderSettings, TextureError},
     },
 };
 use bytemuck::cast_slice;
@@ -15,12 +15,12 @@ use tiff::decoder::{Decoder, DecodingResult};
 pub struct TiffLoader;
 impl AssetLoader for TiffLoader {
     type Asset = Image;
-    type Settings = ();
+    type Settings = ImageLoaderSettings;
     type Error = TextureError;
     fn load<'a>(
         &'a self,
         reader: &'a mut Reader,
-        _settings: &'a Self::Settings,
+        settings: &'a Self::Settings,
         _load_context: &'a mut LoadContext,
     ) -> bevy::utils::BoxedFuture<'a, Result<Image, Self::Error>> {
         Box::pin(async move {
@@ -44,7 +44,7 @@ impl AssetLoader for TiffLoader {
                 DecodingResult::I64(data) => cast_slice(&data).to_vec(),
             };
 
-            Ok(Image::new(
+            let mut image = Image::new(
                 Extent3d {
                     width,
                     height,
@@ -54,7 +54,21 @@ impl AssetLoader for TiffLoader {
                 data,
                 TextureFormat::R16Unorm,
                 RenderAssetPersistencePolicy::Keep,
-            ))
+            );
+
+            image.texture_descriptor.sample_count = settings
+                .sample_count
+                .unwrap_or(image.texture_descriptor.sample_count);
+            image.texture_descriptor.dimension = settings
+                .dimension
+                .unwrap_or(image.texture_descriptor.dimension);
+            image.texture_descriptor.format = settings
+                .texture_format
+                .unwrap_or(image.texture_descriptor.format);
+            image.texture_descriptor.usage =
+                settings.usage.unwrap_or(image.texture_descriptor.usage);
+
+            Ok(image)
         })
     }
 

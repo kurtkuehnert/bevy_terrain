@@ -1,9 +1,9 @@
 #import bevy_terrain::types::NodeLookup
 #import bevy_terrain::bindings::config
-#import bevy_terrain::functions::{vertex_local_position, lookup_node, compute_blend}
-#import bevy_terrain::attachments::{sample_attachment0, sample_attachment1, sample_normal, sample_attachment1_gather0}
-#import bevy_terrain::vertex::{VertexInput, VertexOutput, vertex_output}
-#import bevy_terrain::fragment::{FragmentInput, FragmentOutput, fragment_output}
+#import bevy_terrain::functions::{s2_from_local_position, vertex_local_position, lookup_node, compute_blend}
+#import bevy_terrain::attachments::{sample_attachment0, sample_attachment1, sample_height, sample_height_grad, sample_normal_grad, sample_attachment1_gather0}
+#import bevy_terrain::vertex::{VertexInput, VertexOutput, lookup_info_vertex, vertex_output}
+#import bevy_terrain::fragment::{FragmentInput, FragmentOutput, lookup_info_fragment, fragment_output}
 #import bevy_pbr::pbr_types::{PbrInput, pbr_input_new}
 #import bevy_pbr::pbr_functions::{calculate_view, apply_pbr_lighting}
 
@@ -18,44 +18,20 @@ var<uniform> material_index: u32;
 @group(3) @binding(4)
 var<uniform> super_elevation: f32;
 
-fn sample_height(lookup: NodeLookup) -> vec2<f32> {
-    let gather = sample_attachment1_gather0(lookup);
-    let is_valid = all(gather != vec4<f32>(0.0));
-
-    if (is_valid) {
-        let height1 = sample_attachment1(lookup).x;
-        return vec2<f32>(mix(config.min_height, config.max_height, height1), 1.0);
-    }
-    else {
-        var height0 = sample_attachment0(lookup).x;
-        return vec2<f32>(mix(config.min_height, config.max_height, height0), 0.0);
-    }
-}
-
-fn sample_color(lookup: NodeLookup) -> vec4<f32> {
-    let height = sample_height(lookup);
+fn sample_color_grad(lookup: NodeLookup) -> vec4<f32> {
+    let height = sample_height_grad(lookup);
 
     var color: vec4<f32>;
 
-    if (height.y == 0.0) {
-        if (height.x < 0.0) {
-            color = textureSampleLevel(gradient, gradient_sampler, mix(0.0, 0.075, pow(height.x / config.min_height, 0.25)), 0.0);
-        }
-        else {
-            color = textureSampleLevel(gradient, gradient_sampler, mix(0.09, 1.0, pow(height.x / config.max_height * 2.0, 1.0)), 0.0);
-        }
-
-        if (material_index == 1u) {
-            color = vec4<f32>(1.0 - color.x, 1.0 - color.y, 1.0 - color.z, 1.0);
-        }
+    if (height < 0.0) {
+        color = textureSampleLevel(gradient, gradient_sampler, mix(0.0, 0.075, pow(height / config.min_height, 0.25)), 0.0);
     }
     else {
-        let min = -3806.439 / 6371000.0 * super_elevation;
-        let max = -197.742 / 6371000.0 * super_elevation;
+        color = textureSampleLevel(gradient, gradient_sampler, mix(0.09, 1.0, pow(height / config.max_height * 2.0, 1.0)), 0.0);
+    }
 
-        let scale = (height.x - min) / (max - min);
-
-        color = textureSampleLevel(gradient2, gradient_sampler, scale, 0.0);
+    if (material_index == 1u) {
+        color = vec4<f32>(1.0 - color.x, 1.0 - color.y, 1.0 - color.z, 1.0);
     }
 
     return color;
@@ -64,14 +40,14 @@ fn sample_color(lookup: NodeLookup) -> vec4<f32> {
 @vertex
 fn vertex(input: VertexInput) -> VertexOutput {
     let local_position = vertex_local_position(input.vertex_index);
-    let blend = compute_blend(local_position);
+    let info = lookup_info_vertex(local_position);
 
-    let lookup = lookup_node(local_position, blend.lod);
-    var height = sample_height(lookup).x;
+    let lookup = lookup_node(info, 0u);
+    var height = sample_height(lookup);
 
-    if (blend.ratio > 0.0) {
-        let lookup2 = lookup_node(local_position, blend.lod + 1u);
-        height      = mix(height, sample_height(lookup2).x, blend.ratio);
+    if (info.blend_ratio > 0.0) {
+        let lookup2 = lookup_node(info, 1u);
+        height      = mix(height, sample_height(lookup2), info.blend_ratio);
     }
 
     return vertex_output(input, local_position, height);
@@ -79,16 +55,16 @@ fn vertex(input: VertexInput) -> VertexOutput {
 
 @fragment
 fn fragment(input: FragmentInput) -> FragmentOutput {
-    let blend = compute_blend(input.local_position);
+    let info = lookup_info_fragment(input.local_position);
 
-    let lookup = lookup_node(input.local_position, blend.lod);
-    var normal = sample_normal(lookup, input.local_position);
-    var color  = sample_color(lookup);
+    let lookup = lookup_node(info, 0u);
+    var normal = sample_normal_grad(lookup, input.local_position);
+    var color  = sample_color_grad(lookup);
 
-    if (blend.ratio > 0.0) {
-        let lookup2 = lookup_node(input.local_position, blend.lod + 1u);
-        normal      = mix(normal, sample_normal(lookup2, input.local_position), blend.ratio);
-        color       = mix(color,  sample_color(lookup2),                        blend.ratio);
+    if (info.blend_ratio > 0.0) {
+        let lookup2 = lookup_node(info, 1u);
+        normal      = mix(normal, sample_normal_grad(lookup2, input.local_position), info.blend_ratio);
+        color       = mix(color,  sample_color_grad(lookup2),                        info.blend_ratio);
     }
 
 #ifdef LIGHTING
