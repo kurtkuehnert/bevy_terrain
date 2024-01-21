@@ -20,7 +20,8 @@ use bevy::prelude::*;
 use bevy::render::render_resource::*;
 use bincode::{Decode, Encode};
 use bytemuck::cast_slice;
-use itertools::iproduct;
+use itertools::{iproduct, Itertools};
+use std::iter;
 
 pub mod coordinates;
 pub mod gpu_node_atlas;
@@ -92,8 +93,6 @@ pub struct AttachmentConfig {
     /// The name of the attachment.
     pub name: String,
     pub texture_size: u32,
-    /// The none overlapping center size in pixels.
-    pub center_size: u32,
     /// The overlapping border size around the node, used to prevent sampling artifacts.
     pub border_size: u32,
     pub mip_level_count: u32,
@@ -101,22 +100,14 @@ pub struct AttachmentConfig {
     pub format: AttachmentFormat,
 }
 
-impl AttachmentConfig {
-    pub fn new(
-        name: String,
-        texture_size: u32,
-        border_size: u32,
-        format: AttachmentFormat,
-    ) -> Self {
-        let center_size = texture_size - 2 * border_size;
-
+impl Default for AttachmentConfig {
+    fn default() -> Self {
         Self {
-            name,
-            texture_size,
-            center_size,
-            border_size,
+            name: "".to_string(),
+            texture_size: 512,
+            border_size: 1,
             mip_level_count: 1,
-            format,
+            format: AttachmentFormat::R16,
         }
     }
 }
@@ -150,6 +141,81 @@ impl AttachmentData {
             AttachmentData::R16(data) => cast_slice(data),
             AttachmentData::Rg16(data) => cast_slice(data),
             AttachmentData::None => panic!("Attachment has no data."),
+        }
+    }
+
+    pub(crate) fn generate_mipmaps(&mut self, texture_size: u32, mip_level_count: u32) {
+        fn generate_mipmap_rgba8(
+            data: &mut Vec<[u8; 4]>,
+            parent_size: usize,
+            child_size: usize,
+            start: usize,
+        ) {
+            for (child_y, child_x) in iproduct!(0..child_size, 0..child_size) {
+                let mut value = [0u64; 4];
+
+                for i in 0..4 {
+                    let parent_x = (child_x << 1) + (i >> 1);
+                    let parent_y = (child_y << 1) + (i & 1);
+
+                    let index = start + parent_y * parent_size + parent_x;
+
+                    iter::zip(&mut value, data[index]).for_each(|(value, v)| *value += v as u64);
+                }
+
+                let value = value
+                    .iter()
+                    .map(|value| (value / 4) as u8)
+                    .collect_vec()
+                    .try_into()
+                    .unwrap();
+
+                data.push(value);
+            }
+        }
+
+        fn generate_mipmap_r16(
+            data: &mut Vec<u16>,
+            parent_size: usize,
+            child_size: usize,
+            start: usize,
+        ) {
+            for (child_y, child_x) in iproduct!(0..child_size, 0..child_size) {
+                let mut value = 0;
+
+                for i in 0..4 {
+                    let parent_x = (child_x << 1) + (i >> 1);
+                    let parent_y = (child_y << 1) + (i & 1);
+
+                    let index = start + parent_y * parent_size + parent_x;
+
+                    value += data[index] as u64;
+                }
+
+                let value = (value / 4) as u16;
+
+                data.push(value);
+            }
+        }
+
+        let mut start = 0;
+        let mut parent_size = texture_size as usize;
+
+        for _mip_level in 1..mip_level_count {
+            let child_size = parent_size >> 1;
+
+            match self {
+                AttachmentData::Rgba8(data) => {
+                    generate_mipmap_rgba8(data, parent_size, child_size, start)
+                }
+                AttachmentData::R16(data) => {
+                    generate_mipmap_r16(data, parent_size, child_size, start)
+                }
+                _ => {}
+            }
+
+            start += parent_size * parent_size;
+            parent_size = child_size;
         }
     }
 

@@ -18,18 +18,20 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         path: PATH.to_string(),
         ..default()
     }
-    .add_attachment(AttachmentConfig::new(
-        "height".to_string(),
-        TEXTURE_SIZE,
-        2,
-        AttachmentFormat::R16,
-    ))
-    .add_attachment(AttachmentConfig::new(
-        "albedo".to_string(),
-        TEXTURE_SIZE,
-        1,
-        AttachmentFormat::Rgba8,
-    ));
+    .add_attachment(AttachmentConfig {
+        name: "height".to_string(),
+        texture_size: TEXTURE_SIZE,
+        border_size: 2,
+        format: AttachmentFormat::R16,
+        ..default()
+    })
+    .add_attachment(AttachmentConfig {
+        name: "albedo".to_string(),
+        texture_size: TEXTURE_SIZE,
+        border_size: 2,
+        format: AttachmentFormat::Rgba8,
+        ..default()
+    });
 
     let mut terrain_bundle = TerrainBundle::new(config, Vec3::ZERO, 0.0);
 
