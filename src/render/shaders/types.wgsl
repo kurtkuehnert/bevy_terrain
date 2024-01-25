@@ -22,7 +22,7 @@ struct TerrainViewConfig {
 }
 
 struct Tile {
-    uv: vec2<f32>, // [0..1]
+    st: vec2<f32>, // [0..1]
     size: f32, // [0..1]
     side: u32, // [0..6]
 }
@@ -63,6 +63,7 @@ struct Quadtree {
 
 struct LookupInfo {
     coordinate: S2Coordinate,
+    view_distance: f32,
     lod: u32,
     blend_ratio: f32,
     ddx: vec2<f32>,
