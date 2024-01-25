@@ -59,8 +59,7 @@ fn sample_height_grad(lookup: NodeLookup) -> f32 {
     return mix(config.min_height, config.max_height, height);
 }
 
-// Todo: fix this faulty implementation
-fn sample_normal_grad(lookup: NodeLookup, local_position: vec3<f32>) -> vec3<f32> {
+fn sample_normal_grad(lookup: NodeLookup, vertex_normal: vec3<f32>) -> vec3<f32> {
     let height_attachment = attachments.data[0];
     let height_coordinate = lookup.atlas_coordinate * height_attachment.scale + height_attachment.offset;
 
@@ -76,7 +75,7 @@ fn sample_normal_grad(lookup: NodeLookup, local_position: vec3<f32>) -> vec3<f32
 
     let face_up = FACE_UP[lookup.side];
 
-    let normal    = normalize(local_position);
+    let normal    = normalize(vertex_normal);
     let tangent   = cross(face_up, normal);
     let bitangent = cross(normal, tangent);
     let TBN       = mat3x3<f32>(tangent, bitangent, normal);
@@ -89,7 +88,8 @@ fn sample_normal_grad(lookup: NodeLookup, local_position: vec3<f32>) -> vec3<f32
 
     let side_length = 1.0;
 #endif
-    // Todo: this is only an approximation of the S2 distance (pixels are not spaced evenly)
+
+    // Todo: this is only an approximation of the S2 distance (pixels are not spaced evenly and they are not perpendicular)
     let pixels_per_side = height_attachment.size * f32(node_count(lookup.atlas_lod));
     let distance_between_samples = side_length / pixels_per_side;
     let offset = 0.5 / height_attachment.size;

@@ -14,7 +14,8 @@ fn world_to_clip_position(world_position: vec4<f32>) -> vec4<f32> {
     return view.view_proj * world_position;
 }
 
-fn compute_morph(tile: Tile, local_position: vec3<f32>) -> Morph {
+fn compute_morph(tile: Tile, st: vec2<f32>) -> Morph {
+    let local_position = local_position_from_coordinate(S2Coordinate(tile.side, st), view_config.approximate_height);
     let view_distance = distance(local_position, view_config.view_local_position);
     let morph_threshold_distance = view_config.morph_distance * tile.size;
     let threshold_distance = 2.0 * morph_threshold_distance;
@@ -23,17 +24,11 @@ fn compute_morph(tile: Tile, local_position: vec3<f32>) -> Morph {
     return Morph(ratio);
 }
 
-fn compute_blend(local_position: vec3<f32>) -> Blend {
-#ifdef QUADTREE_LOD
-    let lod = quadtree_lod(local_position);
-    let ratio = 0.0;
-#else
-    let view_distance = distance(local_position, view_config.view_local_position);
+fn compute_blend(view_distance: f32) -> Blend {
     let blend_threshold_distance = view_config.blend_distance / f32(1u << (config.lod_count - 1u));
     let log_distance = max(log2(view_distance / blend_threshold_distance), 0.0);
     let lod = min(u32(log_distance), config.lod_count - 1u);
     let ratio = select(1.0 - (1.0 - log_distance % 1.0) / view_config.blend_range, 0.0, lod == config.lod_count - 1u);
-#endif
 
     return Blend(lod, ratio);
 }
@@ -46,81 +41,66 @@ fn grid_offset(grid_index: u32) -> vec2<u32>{
     return vec2<u32>(column_index + (row_index & 1u), row_index >> 1u);
 }
 
-fn tile_local_position(tile: Tile, uv_offset: vec2<f32>, approximate_height: f32) -> vec3<f32> {
-#ifdef SPHERICAL
-    var COORDINATE_ARRAY = array<vec3<f32>, 6u>(vec3<f32>(-1.0,  1.0, -1.0),
-                                                vec3<f32>(-1.0, -1.0, -1.0),
-                                                vec3<f32>(-1.0, -1.0, -1.0),
-                                                vec3<f32>( 1.0, -1.0, -1.0),
-                                                vec3<f32>(-1.0, -1.0, -1.0),
-                                                vec3<f32>(-1.0, -1.0,  1.0));
-    var U_ARRAY          = array<vec3<f32>, 6u>(vec3<f32>( 2.0,  0.0,  0.0),
-                                                vec3<f32>( 0.0,  0.0,  2.0),
-                                                vec3<f32>( 0.0,  2.0,  0.0),
-                                                vec3<f32>( 0.0,  0.0,  2.0),
-                                                vec3<f32>( 2.0,  0.0,  0.0),
-                                                vec3<f32>( 0.0,  2.0,  0.0));
-    var V_ARRAY          = array<vec3<f32>, 6u>(vec3<f32>( 0.0,  0.0,  2.0),
-                                                vec3<f32>( 2.0,  0.0,  0.0),
-                                                vec3<f32>( 0.0,  0.0,  2.0),
-                                                vec3<f32>( 0.0,  2.0,  0.0),
-                                                vec3<f32>( 0.0,  2.0,  0.0),
-                                                vec3<f32>( 2.0,  0.0,  0.0));
-#else
-    var COORDINATE_ARRAY = array<vec3<f32>, 1u>(vec3<f32>(-1.0,  0.0, -1.0));
-    var U_ARRAY          = array<vec3<f32>, 1u>(vec3<f32>( 2.0,  0.0,  0.0));
-    var V_ARRAY          = array<vec3<f32>, 1u>(vec3<f32>( 0.0,  0.0,  2.0));
-#endif
-
-    let uv = tile.uv + tile.size * uv_offset;
-    var local_position = COORDINATE_ARRAY[tile.side] + uv.x * U_ARRAY[tile.side] + uv.y * V_ARRAY[tile.side];
-
-#ifdef SPHERICAL
-    let p = local_position;
-    let p2 = p * p;
-
-    local_position = vec3<f32>(p.x * sqrt(1.0 - (p2.y + p2.z) / 2.0 + p2.y * p2.z / 3.0),
-                               p.y * sqrt(1.0 - (p2.x + p2.z) / 2.0 + p2.x * p2.z / 3.0),
-                               p.z * sqrt(1.0 - (p2.x + p2.y) / 2.0 + p2.x * p2.y / 3.0));
-#endif
-
-    return local_position_apply_height(local_position, approximate_height);
-}
-
-fn vertex_local_position(vertex_index: u32) -> vec3<f32> {
+fn vertex_coordinate(vertex_index: u32) -> S2Coordinate {
     let tile_index = vertex_index / view_config.vertices_per_tile;
     let grid_index = vertex_index % view_config.vertices_per_tile;
 
-    let tile = tiles.data[tile_index];
-
+    let tile        = tiles.data[tile_index];
+    let grid_scale  = tile.size / view_config.grid_size;
     let grid_offset = grid_offset(grid_index);
-    let grid_uv = vec2<f32>(grid_offset) / view_config.grid_size;
-    var local_position = tile_local_position(tile, grid_uv, view_config.approximate_height);
+    var st          = tile.st + vec2<f32>(grid_offset) * grid_scale;
 
 #ifdef MESH_MORPH
-    let morph = compute_morph(tile, local_position);
-
+    let morph = compute_morph(tile, st);
     let even_grid_offset = grid_offset & vec2<u32>(4294967294u); // set last bit to zero
-    let even_grid_uv = vec2<f32>(even_grid_offset) / view_config.grid_size;
-    let even_local_position = tile_local_position(tile, even_grid_uv, view_config.approximate_height);
+    let even_st = tile.st + vec2<f32>(even_grid_offset) * grid_scale;
 
-    local_position = mix(local_position, even_local_position, morph.ratio);
+    st = mix(st, even_st, morph.ratio);
 #endif
 
-    return local_position;
+    return S2Coordinate(tile.side, st);
 }
 
-fn local_position_apply_height(local_position: vec3<f32>, height: f32) -> vec3<f32> {
+fn local_position_from_coordinate(coordinate: S2Coordinate, height: f32) -> vec3<f32> {
 #ifdef SPHERICAL
-    return normalize(local_position) * (1.0 + height);
+    var ORIGIN_ARRAY = array<vec3<f32>, 6u>(vec3<f32>(-1.0,  0.0,  0.0),
+                                            vec3<f32>( 0.0,  0.0,  1.0),
+                                            vec3<f32>( 0.0,  1.0,  0.0),
+                                            vec3<f32>( 1.0,  0.0,  0.0),
+                                            vec3<f32>( 0.0,  0.0, -1.0),
+                                            vec3<f32>( 0.0, -1.0,  0.0));
+    var U_ARRAY      = array<vec3<f32>, 6u>(vec3<f32>( 0.0,  0.0,  1.0),
+                                            vec3<f32>( 1.0,  0.0,  0.0),
+                                            vec3<f32>( 1.0,  0.0,  0.0),
+                                            vec3<f32>( 0.0, -1.0,  0.0),
+                                            vec3<f32>( 0.0, -1.0,  0.0),
+                                            vec3<f32>( 0.0,  0.0,  1.0));
+    var V_ARRAY      = array<vec3<f32>, 6u>(vec3<f32>( 0.0, -1.0,  0.0),
+                                            vec3<f32>( 0.0, -1.0,  0.0),
+                                            vec3<f32>( 0.0,  0.0,  1.0),
+                                            vec3<f32>( 0.0,  0.0,  1.0),
+                                            vec3<f32>( 1.0,  0.0,  0.0),
+                                            vec3<f32>( 1.0,  0.0,  0.0));
+
+    var u: f32; var v: f32;
+
+    if (coordinate.st.x > 0.5) { u =       (4.0 * pow(coordinate.st.x, 2.0) - 1.0) / 3.0; }
+    else                       { u = (1.0 - 4.0 * pow(1.0 - coordinate.st.x, 2.0)) / 3.0; }
+
+    if (coordinate.st.y > 0.5) { v =       (4.0 * pow(coordinate.st.y, 2.0) - 1.0) / 3.0; }
+    else                       { v = (1.0 - 4.0 * pow(1.0 - coordinate.st.y, 2.0)) / 3.0; }
+
+    return (1.0 + height) * normalize(ORIGIN_ARRAY[coordinate.side] +
+                                           U_ARRAY[coordinate.side] * u +
+                                           V_ARRAY[coordinate.side] * v);
 #else
-    return vec3<f32>(local_position.x, height, local_position.z);
+    let uv = 2.0 * coordinate.st - 1.0;
+
+    return vec3<f32>(uv.x, height, uv.y);
 #endif
 }
 
-// https://docs.s2cell.aliddell.com/en/stable/s2_concepts.html#lat-lon-to-s2-cell-id
-// uses adjusted logic to match bevys coordinate system
-fn s2_from_local_position(local_position: vec3<f32>) -> S2Coordinate {
+fn coordinate_from_local_position(local_position: vec3<f32>) -> S2Coordinate {
 #ifdef SPHERICAL
     let normal = normalize(local_position);
     let abs_normal = abs(normal);
@@ -175,44 +155,7 @@ fn s2_from_local_position(local_position: vec3<f32>) -> S2Coordinate {
 #endif
 }
 
-fn s2_to_local_position(s2: S2Coordinate) -> vec3<f32> {
-#ifdef SPHERICAL
-    var uv = vec2<f32>(0.0);
-
-    if (s2.st.x > 0.5) { uv.x =       (4.0 * pow(s2.st.x, 2.0) - 1.0) / 3.0; }
-    else               { uv.x = (1.0 - 4.0 * pow(1.0 - s2.st.x, 2.0)) / 3.0; }
-
-    if (s2.st.y > 0.5) { uv.y =       (4.0 * pow(s2.st.y, 2.0) - 1.0) / 3.0; }
-    else               { uv.y = (1.0 - 4.0 * pow(1.0 - s2.st.y, 2.0)) / 3.0; }
-
-    var local_position: vec3<f32>;
-
-    if (s2.side == 0u) {
-        local_position = vec3<f32>(-1.0, -uv.y, uv.x);
-    }
-    else if (s2.side == 1u) {
-        local_position = vec3<f32>(uv.x, -uv.y, 1.0);
-    }
-    else if (s2.side == 2u) {
-        local_position = vec3<f32>(uv.x, 1.0, uv.y);
-    }
-    else if (s2.side == 3u) {
-        local_position = vec3<f32>(1.0, -uv.x, uv.y);
-    }
-    else if (s2.side == 4u) {
-        local_position = vec3<f32>(uv.y, -uv.x, -1.0);
-    }
-    else if (s2.side == 5u) {
-        local_position = vec3<f32>(uv.y, -1.0, uv.x);
-    }
-
-    return normalize(local_position);
-#else
-    return vec3<f32>(2.0 * s2.st.x - 1.0, 0.0, 2.0 * s2.st.y - 1.0);
-#endif
-}
-
-fn s2_project_to_side(s2: S2Coordinate, side: u32) -> S2Coordinate {
+fn coordinate_project_to_side(coordinate: S2Coordinate, side: u32) -> S2Coordinate {
     let F0 = 0u;
     let F1 = 1u;
     let PS = 2u;
@@ -235,20 +178,20 @@ fn s2_project_to_side(s2: S2Coordinate, side: u32) -> S2Coordinate {
         vec2<u32>(F1, PT),
     );
 
-    let index = (6u + side - s2.side) % 6u;
-    let info: vec2<u32> = select(ODD_LIST[index], EVEN_LIST[index], s2.side % 2u == 0u);
+    let index = (6u + side - coordinate.side) % 6u;
+    let info: vec2<u32> = select(ODD_LIST[index], EVEN_LIST[index], coordinate.side % 2u == 0u);
 
     var st: vec2<f32>;
 
     if (info.x == F0)      { st.x = 0.0; }
     else if (info.x == F1) { st.x = 1.0; }
-    else if (info.x == PS) { st.x = s2.st.x; }
-    else if (info.x == PT) { st.x = s2.st.y; }
+    else if (info.x == PS) { st.x = coordinate.st.x; }
+    else if (info.x == PT) { st.x = coordinate.st.y; }
 
     if (info.y == F0)      { st.y = 0.0; }
     else if (info.y == F1) { st.y = 1.0; }
-    else if (info.y == PS) { st.y = s2.st.x; }
-    else if (info.y == PT) { st.y = s2.st.y; }
+    else if (info.y == PS) { st.y = coordinate.st.x; }
+    else if (info.y == PT) { st.y = coordinate.st.y; }
 
     return S2Coordinate(side, st);
 }
@@ -257,11 +200,11 @@ fn node_count(lod: u32) -> u32 {
     return 1u << (config.lod_count - lod - 1u);
 }
 
-fn node_coordinate(s2: S2Coordinate, lod: u32) -> vec2<f32> {
+fn node_coordinate(coordinate: S2Coordinate, lod: u32) -> vec2<f32> {
     let node_count = f32(node_count(lod));
     let max_coordinate  = vec2<f32>(node_count - 0.00001);
 
-    return clamp(s2.st * node_count, vec2<f32>(0.0), max_coordinate);
+    return clamp(coordinate.st * node_count, vec2<f32>(0.0), max_coordinate);
 }
 
 fn inside_square(position: vec2<f32>, origin: vec2<f32>, size: f32) -> f32 {
@@ -270,41 +213,38 @@ fn inside_square(position: vec2<f32>, origin: vec2<f32>, size: f32) -> f32 {
     return inside.x * inside.y;
 }
 
-fn quadtree_origin(quadtree_s2: S2Coordinate, lod: u32) -> vec2<f32> {
-    let quadtree_coordinate = node_coordinate(quadtree_s2, lod);
+fn quadtree_origin(quadtree_coordinate: S2Coordinate, lod: u32) -> vec2<f32> {
+    let node_coordinate = node_coordinate(quadtree_coordinate, lod);
     let max_offset          = f32(node_count(lod)) - f32(view_config.quadtree_size);
 
-    return clamp(round(quadtree_coordinate - 0.5 * f32(view_config.quadtree_size)), vec2<f32>(0.0), vec2<f32>(max_offset));
+    return clamp(round(node_coordinate - 0.5 * f32(view_config.quadtree_size)), vec2<f32>(0.0), vec2<f32>(max_offset));
 }
 
-fn inside_quadtree(view_s2: S2Coordinate, frag_s2: S2Coordinate, lod: u32) -> f32 {
+fn inside_quadtree(view_coordinate: S2Coordinate, frag_coordinate: S2Coordinate, lod: u32) -> f32 {
 #ifdef SPHERICAL
-    let quadtree_s2 = s2_project_to_side(view_s2, frag_s2.side);
+    let quadtree_coordinate = coordinate_project_to_side(view_coordinate, frag_coordinate.side);
 #else
-    let quadtree_s2 = view_s2;
+    let quadtree_coordinate = view_coordinate;
 #endif
 
-    let frag_coordinate = floor(node_coordinate(frag_s2,     lod));
-    let quadtree_origin = floor(quadtree_origin(quadtree_s2, lod));
+    let node_coordinate = floor(node_coordinate(frag_coordinate,     lod));
+    let quadtree_origin = floor(quadtree_origin(quadtree_coordinate, lod));
 
-    let dist = frag_coordinate - quadtree_origin;
+    let node_distance = node_coordinate - quadtree_origin;
 
-    return inside_square(dist, vec2<f32>(0.0), f32(view_config.quadtree_size - 1u));
+    return inside_square(node_distance, vec2<f32>(0.0), f32(view_config.quadtree_size - 1u));
 }
 
-fn quadtree_lod(frag_local_position: vec3<f32>) -> u32 {
-    let view_s2 = s2_from_local_position(view_config.view_local_position);
-    let frag_s2 = s2_from_local_position(frag_local_position);
+fn quadtree_lod(frag_coordinate: S2Coordinate) -> u32 {
+    let view_coordinate = coordinate_from_local_position(view_config.view_local_position);
 
-    var lod = 0u;
-
-    loop {
-        if (inside_quadtree(view_s2, frag_s2, lod) == 1.0 || lod == config.lod_count - 1u) { break; }
-
-        lod = lod + 1u;
+    for (var lod = 0u; lod < config.lod_count; lod = lod + 1u) {
+        if (inside_quadtree(view_coordinate, frag_coordinate, lod) == 1.0) {
+            return lod;
+        }
     }
 
-    return lod;
+    return config.lod_count - 1u;
 }
 
 fn lookup_node(info: LookupInfo, lod_offset: u32) -> NodeLookup {

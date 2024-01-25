@@ -38,6 +38,8 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 
     let mut preprocessor = Preprocessor::new(PATH.to_string());
 
+    preprocessor.clear_attachment(0, &mut terrain_bundle.node_atlas);
+
     preprocessor.preprocess_spherical(
         PreprocessDataset {
             attachment_index: 0,

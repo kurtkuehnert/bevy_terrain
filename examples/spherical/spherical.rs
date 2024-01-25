@@ -1,8 +1,7 @@
-use bevy::render::texture::ImageLoaderSettings;
 use bevy::{
     prelude::*,
     reflect::{TypePath, TypeUuid},
-    render::render_resource::*,
+    render::{render_resource::*, texture::ImageLoaderSettings},
 };
 use bevy_terrain::prelude::*;
 
