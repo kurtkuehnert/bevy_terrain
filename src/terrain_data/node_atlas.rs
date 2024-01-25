@@ -277,7 +277,7 @@ struct NodeState {
 pub(crate) struct NodeAtlasState {
     node_states: HashMap<NodeCoordinate, NodeState>,
     unused_nodes: VecDeque<AtlasNode>,
-    existing_nodes: HashSet<NodeCoordinate>,
+    pub(crate) existing_nodes: HashSet<NodeCoordinate>,
 
     attachment_count: u32,
 

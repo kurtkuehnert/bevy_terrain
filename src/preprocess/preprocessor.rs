@@ -12,7 +12,13 @@ use bevy::{
     render::texture::{ImageLoaderSettings, ImageSampler},
 };
 use itertools::{iproduct, Itertools};
-use std::{collections::VecDeque, ops::DerefMut, time::Instant};
+use std::{collections::VecDeque, fs, ops::DerefMut, time::Instant};
+
+pub fn reset_directory(directory: &str) {
+    fs::remove_file(format!("{directory}/../../config.tc")).unwrap();
+    let _ = fs::remove_dir_all(directory);
+    fs::create_dir_all(directory).unwrap();
+}
 
 pub(crate) struct LoadingTile {
     id: AssetId<Image>,
@@ -162,6 +168,12 @@ impl Preprocessor {
             start_time: None,
             loaded: false,
         }
+    }
+
+    pub fn clear_attachment(&self, attachment_index: u32, node_atlas: &mut NodeAtlas) {
+        let attachment = &mut node_atlas.attachments[attachment_index as usize];
+        node_atlas.state.existing_nodes.clear();
+        reset_directory(&attachment.path);
     }
 
     pub fn preprocess_tile(

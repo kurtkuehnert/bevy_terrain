@@ -1,6 +1,6 @@
-#import bevy_terrain::types::{TerrainConfig, TerrainViewConfig, Tile, TileList, Parameters, NodeLookup}
+#import bevy_terrain::types::{TerrainConfig, TerrainViewConfig, Tile, TileList, Parameters, NodeLookup, S2Coordinate}
 #import bevy_terrain::bindings::config
-#import bevy_terrain::functions::tile_local_position
+#import bevy_terrain::functions::local_position_from_coordinate
 
 struct CullingData {
     world_position: vec3<f32>,
@@ -46,10 +46,11 @@ fn should_be_divided(tile: Tile) -> bool {
     var min_view_distance = 3.40282347E+38; // f32::MAX
 
     for (var i: u32 = 0u; i < 4u; i = i + 1u) {
-        let local_position = tile_local_position(tile, vec2<f32>(f32(i & 1u), f32(i >> 1u & 1u)), view_config.approximate_height);
-        let view_distance = distance(local_position, view_config.view_local_position);
+        let corner_coordinate = S2Coordinate(tile.side, tile.st + tile.size * vec2<f32>(f32(i & 1u), f32(i >> 1u & 1u)));
+        let corner_local_position = local_position_from_coordinate(corner_coordinate, view_config.approximate_height);
+        let corner_view_distance = distance(corner_local_position, view_config.view_local_position);
 
-        min_view_distance = min(min_view_distance, view_distance);
+        min_view_distance = min(min_view_distance, corner_view_distance);
     }
 
     return min_view_distance < morph_threshold_distance(tile);
@@ -59,9 +60,9 @@ fn subdivide(tile: Tile) {
     let child_size = 0.5 * tile.size;
 
     for (var i: u32 = 0u; i < 4u; i = i + 1u) {
-        let child_uv = tile.uv + child_size * vec2<f32>(f32(i & 1u), f32(i >> 1u & 1u));
+        let child_st = tile.st + child_size * vec2<f32>(f32(i & 1u), f32(i >> 1u & 1u));
 
-        temporary_tiles.data[child_index()] = Tile(child_uv, child_size, tile.side);
+        temporary_tiles.data[child_index()] = Tile(child_st, child_size, tile.side);
     }
 }
 
