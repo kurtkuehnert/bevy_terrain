@@ -1,6 +1,6 @@
 use bevy::{
     prelude::*,
-    reflect::{TypePath, TypeUuid},
+    reflect::TypePath,
     render::{render_resource::*, texture::ImageLoaderSettings},
 };
 use bevy_terrain::prelude::*;
@@ -11,8 +11,7 @@ const HEIGHT: f32 = 500.0 / TERRAIN_SIZE;
 const TEXTURE_SIZE: u32 = 512;
 const LOD_COUNT: u32 = 4;
 
-#[derive(Asset, AsBindGroup, TypeUuid, TypePath, Clone)]
-#[uuid = "4ccc53dd-2cfd-48ba-b659-c0e1a9bc0bdb"]
+#[derive(Asset, AsBindGroup, TypePath, Clone)]
 pub struct TerrainMaterial {
     #[texture(0, dimension = "1d")]
     #[sampler(1)]
@@ -45,8 +44,10 @@ fn setup(
     asset_server: Res<AssetServer>,
 ) {
     let gradient = asset_server.load_with_settings(
-        "textures/gradient.png",
-        |settings: &mut ImageLoaderSettings| settings.dimension = Some(TextureDimension::D1),
+        "textures/gradient2.png",
+        |settings: &mut ImageLoaderSettings| {
+            settings.texture_dimension = Some(TextureDimension::D1)
+        },
     );
 
     // Configure all the important properties of the terrain, as well as its attachments.
@@ -72,14 +73,7 @@ fn setup(
     });
 
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
-    let view_config = TerrainViewConfig {
-        grid_size: 32,
-        quadtree_size: 8,
-        load_distance: 3.0,
-        morph_distance: 8.0,
-        blend_distance: 1.5,
-        ..default()
-    };
+    let view_config = TerrainViewConfig::default();
 
     let terrain = commands
         .spawn((

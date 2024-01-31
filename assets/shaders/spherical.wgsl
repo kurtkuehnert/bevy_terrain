@@ -10,12 +10,8 @@
 @group(3) @binding(0)
 var gradient: texture_1d<f32>;
 @group(3) @binding(1)
-var gradient2: texture_1d<f32>;
-@group(3) @binding(2)
 var gradient_sampler: sampler;
-@group(3) @binding(3)
-var<uniform> material_index: u32;
-@group(3) @binding(4)
+@group(3) @binding(2)
 var<uniform> super_elevation: f32;
 
 fn sample_color_grad(lookup: NodeLookup) -> vec4<f32> {
@@ -28,10 +24,6 @@ fn sample_color_grad(lookup: NodeLookup) -> vec4<f32> {
     }
     else {
         color = textureSampleLevel(gradient, gradient_sampler, mix(0.09, 1.0, pow(height / config.max_height * 2.0, 1.0)), 0.0);
-    }
-
-    if (material_index == 1u) {
-        color = vec4<f32>(1.0 - color.x, 1.0 - color.y, 1.0 - color.z, 1.0);
     }
 
     return color;

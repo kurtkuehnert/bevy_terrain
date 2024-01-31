@@ -15,7 +15,7 @@ use itertools::{iproduct, Itertools};
 use std::{collections::VecDeque, fs, ops::DerefMut, time::Instant};
 
 pub fn reset_directory(directory: &str) {
-    fs::remove_file(format!("{directory}/../../config.tc")).unwrap();
+    let _ = fs::remove_file(format!("{directory}/../../config.tc"));
     let _ = fs::remove_dir_all(directory);
     fs::create_dir_all(directory).unwrap();
 }

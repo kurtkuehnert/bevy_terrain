@@ -1,6 +1,6 @@
 use bevy::{
     prelude::*,
-    reflect::{TypePath, TypeUuid},
+    reflect::TypePath,
     render::{render_resource::*, texture::ImageLoaderSettings},
 };
 use bevy_terrain::prelude::*;
@@ -13,17 +13,12 @@ const SUPER_ELEVATION: f32 = 10.0;
 const TEXTURE_SIZE: u32 = 512;
 const LOD_COUNT: u32 = 5;
 
-#[derive(Asset, AsBindGroup, TypeUuid, TypePath, Clone)]
-#[uuid = "003e1d5d-241c-45a6-8c25-731dee22d820"]
+#[derive(Asset, AsBindGroup, TypePath, Clone)]
 pub struct TerrainMaterial {
     #[texture(0, dimension = "1d")]
+    #[sampler(1)]
     gradient: Handle<Image>,
-    #[texture(1, dimension = "1d")]
-    #[sampler(2)]
-    gradient2: Handle<Image>,
-    #[uniform(3)]
-    index: u32,
-    #[uniform(4)]
+    #[uniform(2)]
     super_elevation: f32,
 }
 
@@ -58,11 +53,9 @@ fn setup(
 ) {
     let gradient = asset_server.load_with_settings(
         "textures/gradient.png",
-        |settings: &mut ImageLoaderSettings| settings.dimension = Some(TextureDimension::D1),
-    );
-    let gradient2 = asset_server.load_with_settings(
-        "textures/gradient2.png",
-        |settings: &mut ImageLoaderSettings| settings.dimension = Some(TextureDimension::D1),
+        |settings: &mut ImageLoaderSettings| {
+            settings.texture_dimension = Some(TextureDimension::D1)
+        },
     );
 
     // Configure all the important properties of the terrain, as well as its attachments.
@@ -80,31 +73,15 @@ fn setup(
         mip_level_count: 4,
         format: AttachmentFormat::R16,
     });
-    //.add_attachment(AttachmentConfig {
-    //    name: "height2".to_string(),
-    //    texture_size: TEXTURE_SIZE,
-    //    border_size: 2,
-    //    mip_level_count: 4,
-    //    format: AttachmentFormat::R16,
-    //});
 
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
-    let view_config = TerrainViewConfig {
-        grid_size: 32,
-        quadtree_size: 8,
-        load_distance: 3.0,
-        morph_distance: 8.0,
-        blend_distance: 1.5,
-        ..default()
-    };
+    let view_config = TerrainViewConfig::default();
 
     let terrain = commands
         .spawn((
-            TerrainBundle::new(config.clone(), Vec3::new(20.0, 30.0, -100.0), RADIUS),
+            TerrainBundle::new(config.clone(), Vec3::new(100.0, 100.0, 100.0), RADIUS),
             materials.add(TerrainMaterial {
                 gradient: gradient.clone(),
-                gradient2: gradient2.clone(),
-                index: 0,
                 super_elevation: SUPER_ELEVATION,
             }),
         ))
@@ -123,16 +100,15 @@ fn setup(
 
     commands.spawn(PbrBundle {
         mesh: meshes.add(Mesh::from(shape::UVSphere {
-            radius: 50.0,
-            sectors: 50,
-            stacks: 10,
+            radius: 100.0,
+            ..default()
         })),
-        transform: Transform::from_xyz(1000.0, 1000.0, 0.0),
+        transform: Transform::from_xyz(-1000.0, 1000.0, -1000.0),
         ..default()
     });
 
     commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Cube { size: 1.0 })),
+        mesh: meshes.add(Mesh::from(shape::Cube::default())),
         ..default()
     });
 }
