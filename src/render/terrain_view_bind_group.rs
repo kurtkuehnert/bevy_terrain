@@ -238,14 +238,14 @@ pub struct SetTerrainViewBindGroup<const I: usize>;
 
 impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetTerrainViewBindGroup<I> {
     type Param = SRes<TerrainViewComponents<TerrainViewData>>;
-    type ViewData = Entity;
-    type ItemData = ();
+    type ViewQuery = Entity;
+    type ItemQuery = ();
 
     #[inline]
     fn render<'w>(
         item: &P,
-        view: ROQueryItem<'w, Self::ViewData>,
-        _: ROQueryItem<'w, Self::ItemData>,
+        view: ROQueryItem<'w, Self::ViewQuery>,
+        _: ROQueryItem<'w, Self::ItemQuery>,
         terrain_view_data: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
@@ -263,14 +263,14 @@ pub(crate) struct DrawTerrainCommand;
 
 impl<P: PhaseItem> RenderCommand<P> for DrawTerrainCommand {
     type Param = SRes<TerrainViewComponents<TerrainViewData>>;
-    type ViewData = Entity;
-    type ItemData = ();
+    type ViewQuery = Entity;
+    type ItemQuery = ();
 
     #[inline]
     fn render<'w>(
         item: &P,
-        view: ROQueryItem<'w, Self::ViewData>,
-        _: ROQueryItem<'w, Self::ItemData>,
+        view: ROQueryItem<'w, Self::ViewQuery>,
+        _: ROQueryItem<'w, Self::ItemQuery>,
         terrain_view_data: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {

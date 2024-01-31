@@ -1,8 +1,4 @@
-use bevy::{
-    prelude::*,
-    reflect::{TypePath, TypeUuid},
-    render::render_resource::*,
-};
+use bevy::{prelude::*, reflect::TypePath, render::render_resource::*};
 use bevy_terrain::prelude::*;
 
 const PATH: &str = "terrains/planar";
@@ -11,8 +7,7 @@ const HEIGHT: f32 = 500.0 / TERRAIN_SIZE;
 const TEXTURE_SIZE: u32 = 512;
 const LOD_COUNT: u32 = 4;
 
-#[derive(Asset, AsBindGroup, TypeUuid, TypePath, Clone)]
-#[uuid = "003e1d5d-241c-45a6-8c25-731dee22d820"]
+#[derive(Asset, AsBindGroup, TypePath, Clone)]
 pub struct TerrainMaterial {}
 
 impl Material for TerrainMaterial {}
@@ -51,14 +46,7 @@ fn setup(
     });
 
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
-    let view_config = TerrainViewConfig {
-        grid_size: 32,
-        quadtree_size: 8,
-        load_distance: 3.0,
-        morph_distance: 8.0,
-        blend_distance: 1.5,
-        ..default()
-    };
+    let view_config = TerrainViewConfig::default();
 
     let terrain = commands
         .spawn((

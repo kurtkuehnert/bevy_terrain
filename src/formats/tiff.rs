@@ -1,8 +1,8 @@
+use bevy::render::render_asset::RenderAssetUsages;
 use bevy::{
     asset::{io::Reader, AssetLoader, AsyncReadExt, LoadContext},
     prelude::*,
     render::{
-        render_asset::RenderAssetPersistencePolicy,
         render_resource::{Extent3d, TextureDimension, TextureFormat},
         texture::{ImageLoaderSettings, TextureError},
     },
@@ -53,20 +53,10 @@ impl AssetLoader for TiffLoader {
                 TextureDimension::D2,
                 data,
                 TextureFormat::R16Unorm,
-                RenderAssetPersistencePolicy::Keep,
+                RenderAssetUsages::default(),
             );
 
-            image.texture_descriptor.sample_count = settings
-                .sample_count
-                .unwrap_or(image.texture_descriptor.sample_count);
-            image.texture_descriptor.dimension = settings
-                .dimension
-                .unwrap_or(image.texture_descriptor.dimension);
-            image.texture_descriptor.format = settings
-                .texture_format
-                .unwrap_or(image.texture_descriptor.format);
-            image.texture_descriptor.usage =
-                settings.usage.unwrap_or(image.texture_descriptor.usage);
+            settings.apply_to(&mut image.texture_descriptor);
 
             Ok(image)
         })

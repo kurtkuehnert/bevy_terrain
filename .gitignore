@@ -3,12 +3,3 @@ target
 assets/**/data/*
 assets/**/config.tc
 Cargo.lock
-
-assets/terrains/los
-assets/terrains/epsg
-assets/terrains/utsira
-assets/terrains/spherical_large
-assets/shaders/argeo.wgsl
-examples/argeo.rs
-
-assets/terrains/spherical/source/height/200m.tif
