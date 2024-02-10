@@ -4,13 +4,10 @@ use crate::{
     terrain_data::{
         coordinates::NodeCoordinate,
         node_atlas::{AtlasNode, AtlasNodeAttachment, NodeAtlas},
+        AttachmentFormat,
     },
 };
-use bevy::{
-    asset::LoadState,
-    prelude::*,
-    render::texture::{ImageLoaderSettings, ImageSampler},
-};
+use bevy::{asset::LoadState, prelude::*, render::texture::ImageSampler};
 use itertools::{iproduct, Itertools};
 use std::{collections::VecDeque, fs, ops::DerefMut, time::Instant};
 
@@ -22,6 +19,7 @@ pub fn reset_directory(directory: &str) {
 
 pub(crate) struct LoadingTile {
     id: AssetId<Image>,
+    format: AttachmentFormat,
 }
 
 pub struct PreprocessDataset {
@@ -184,16 +182,11 @@ impl Preprocessor {
     ) {
         let format = node_atlas.attachments[dataset.attachment_index as usize].format;
 
-        let tile_handle = asset_server.load_with_settings(
-            dataset.path,
-            move |settings: &mut ImageLoaderSettings| {
-                settings.texture_format = Some(format.processing_format());
-                settings.sampler = ImageSampler::linear()
-            },
-        );
+        let tile_handle = asset_server.load(dataset.path);
 
         self.loading_tiles.push(LoadingTile {
             id: tile_handle.id(),
+            format,
         });
 
         let lod_count = node_atlas.lod_count;
@@ -276,16 +269,11 @@ impl Preprocessor {
 
             let format = node_atlas.attachments[dataset.attachment_index as usize].format;
 
-            let tile_handle = asset_server.load_with_settings(
-                dataset.path,
-                move |settings: &mut ImageLoaderSettings| {
-                    settings.texture_format = Some(format.processing_format());
-                    settings.sampler = ImageSampler::linear()
-                },
-            );
+            let tile_handle = asset_server.load(dataset.path);
 
             self.loading_tiles.push(LoadingTile {
                 id: tile_handle.id(),
+                format,
             });
 
             for (x, y) in iproduct!(0..node_count, 0..node_count) {
@@ -403,9 +391,15 @@ pub(crate) fn preprocessor_load_tile(
     mut images: ResMut<Assets<Image>>,
 ) {
     for mut preprocessor in terrain_query.iter_mut() {
-        preprocessor
-            .loading_tiles
-            .retain_mut(|tile| images.get_mut(tile.id).is_none());
+        preprocessor.loading_tiles.retain_mut(|tile| {
+            if let Some(image) = images.get_mut(tile.id) {
+                image.texture_descriptor.format = tile.format.processing_format();
+                image.sampler = ImageSampler::linear();
+                return false;
+            } else {
+                return true;
+            }
+        });
 
         if !preprocessor.loaded && preprocessor.loading_tiles.is_empty() {
             println!("finished loading all tiles");

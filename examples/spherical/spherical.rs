@@ -1,8 +1,4 @@
-use bevy::{
-    prelude::*,
-    reflect::TypePath,
-    render::{render_resource::*, texture::ImageLoaderSettings},
-};
+use bevy::{prelude::*, reflect::TypePath, render::render_resource::*};
 use bevy_terrain::prelude::*;
 
 const PATH: &str = "terrains/spherical";
@@ -45,17 +41,18 @@ fn main() {
 
 fn setup(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
+    mut images: ResMut<LoadingImages>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<TerrainMaterial>>,
     mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
+    asset_server: Res<AssetServer>,
 ) {
-    let gradient = asset_server.load_with_settings(
-        "textures/gradient.png",
-        |settings: &mut ImageLoaderSettings| {
-            settings.texture_dimension = Some(TextureDimension::D1)
-        },
+    let gradient = asset_server.load("textures/gradient.png");
+    images.load_image(
+        &gradient,
+        TextureDimension::D1,
+        TextureFormat::Rgba8UnormSrgb,
     );
 
     // Configure all the important properties of the terrain, as well as its attachments.
@@ -99,16 +96,13 @@ fn setup(
     );
 
     commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::UVSphere {
-            radius: 100.0,
-            ..default()
-        })),
+        mesh: meshes.add(Sphere::new(100.0).mesh().build()),
         transform: Transform::from_xyz(-1000.0, 1000.0, -1000.0),
         ..default()
     });
 
     commands.spawn(PbrBundle {
-        mesh: meshes.add(Mesh::from(shape::Cube::default())),
+        mesh: meshes.add(Cuboid::default().mesh()),
         ..default()
     });
 }

@@ -57,7 +57,7 @@ pub mod prelude {
     //! `use bevy_terrain::prelude::*;` to import common components, bundles, and plugins.
     // #[doc(hidden)]
     pub use crate::{
-        debug::{camera::DebugCamera, TerrainDebugPlugin},
+        debug::{camera::DebugCamera, LoadingImages, TerrainDebugPlugin},
         plugin::TerrainPlugin,
         preprocess::{
             preprocessor::PreprocessDataset, preprocessor::Preprocessor, TerrainPreprocessPlugin,

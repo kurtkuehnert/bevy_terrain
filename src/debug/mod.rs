@@ -4,6 +4,8 @@ use crate::{
     debug::camera::debug_camera_control,
     terrain_view::{TerrainViewComponents, TerrainViewConfig},
 };
+use bevy::asset::LoadState;
+use bevy::render::render_resource::{TextureDimension, TextureFormat};
 use bevy::{
     prelude::*,
     render::{Extract, RenderApp},
@@ -17,8 +19,17 @@ pub struct TerrainDebugPlugin;
 impl Plugin for TerrainDebugPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<DebugTerrain>()
+            .init_resource::<LoadingImages>()
             .add_systems(Startup, debug_lighting)
-            .add_systems(Update, (debug_camera_control, toggle_debug, change_config));
+            .add_systems(
+                Update,
+                (
+                    debug_camera_control,
+                    toggle_debug,
+                    change_config,
+                    finish_loading_images,
+                ),
+            );
 
         app.sub_app_mut(RenderApp)
             .init_resource::<DebugTerrain>()
@@ -255,5 +266,37 @@ pub(crate) fn debug_lighting(mut commands: Commands) {
     commands.insert_resource(AmbientLight {
         brightness: 20.0,
         ..default()
+    });
+}
+
+#[derive(Resource, Default)]
+pub struct LoadingImages(Vec<(AssetId<Image>, TextureDimension, TextureFormat)>);
+
+impl LoadingImages {
+    pub fn load_image(
+        &mut self,
+        handle: &Handle<Image>,
+        dimension: TextureDimension,
+        format: TextureFormat,
+    ) {
+        self.0.push((handle.id(), dimension, format))
+    }
+}
+
+fn finish_loading_images(
+    asset_server: Res<AssetServer>,
+    mut loading_images: ResMut<LoadingImages>,
+    mut images: ResMut<Assets<Image>>,
+) {
+    loading_images.0.retain(|&(id, dimension, format)| {
+        if asset_server.load_state(id) == LoadState::Loaded {
+            let image = images.get_mut(id).unwrap();
+            image.texture_descriptor.dimension = dimension;
+            image.texture_descriptor.format = format;
+
+            false
+        } else {
+            true
+        }
     });
 }

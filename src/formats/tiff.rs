@@ -20,7 +20,7 @@ impl AssetLoader for TiffLoader {
     fn load<'a>(
         &'a self,
         reader: &'a mut Reader,
-        settings: &'a Self::Settings,
+        _settings: &'a Self::Settings,
         _load_context: &'a mut LoadContext,
     ) -> bevy::utils::BoxedFuture<'a, Result<Image, Self::Error>> {
         Box::pin(async move {
@@ -44,7 +44,7 @@ impl AssetLoader for TiffLoader {
                 DecodingResult::I64(data) => cast_slice(&data).to_vec(),
             };
 
-            let mut image = Image::new(
+            Ok(Image::new(
                 Extent3d {
                     width,
                     height,
@@ -54,11 +54,7 @@ impl AssetLoader for TiffLoader {
                 data,
                 TextureFormat::R16Unorm,
                 RenderAssetUsages::default(),
-            );
-
-            settings.apply_to(&mut image.texture_descriptor);
-
-            Ok(image)
+            ))
         })
     }
 

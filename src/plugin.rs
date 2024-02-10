@@ -1,6 +1,6 @@
 use crate::{
     render::{
-        compute_pipelines::{TerrainComputeNode, TerrainComputePipelines},
+        compute_pipelines::{TerrainComputeLabel, TerrainComputeNode, TerrainComputePipelines},
         culling_bind_group::CullingBindGroup,
         shaders::load_terrain_shaders,
         terrain_bind_group::TerrainData,
@@ -16,7 +16,7 @@ use crate::{
 use bevy::{
     prelude::*,
     render::{
-        extract_component::ExtractComponentPlugin, main_graph::node::CAMERA_DRIVER,
+        extract_component::ExtractComponentPlugin, graph::CameraDriverLabel,
         render_graph::RenderGraph, render_resource::*, Render, RenderApp, RenderSet,
     },
 };
@@ -88,9 +88,8 @@ impl Plugin for TerrainPlugin {
             .init_resource::<SpecializedComputePipelines<TerrainComputePipelines>>();
 
         let compute_node = TerrainComputeNode::from_world(&mut render_app.world);
-
         let mut render_graph = render_app.world.resource_mut::<RenderGraph>();
-        render_graph.add_node("terrain_compute", compute_node);
-        render_graph.add_node_edge("terrain_compute", CAMERA_DRIVER);
+        render_graph.add_node(TerrainComputeLabel, compute_node);
+        render_graph.add_node_edge(TerrainComputeLabel, CameraDriverLabel);
     }
 }

@@ -12,13 +12,16 @@ use crate::{
 use bevy::{
     prelude::*,
     render::{
-        render_graph::{self},
+        render_graph::{self, RenderLabel},
         render_resource::*,
         renderer::{RenderContext, RenderDevice},
     },
 };
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
+
+#[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
+pub struct TerrainPreprocessLabel;
 
 type TerrainPreprocessPipelineKey = TerrainPreprocessPipelineId;
 
