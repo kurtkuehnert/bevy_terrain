@@ -2,7 +2,9 @@ use crate::{
     formats::tiff::TiffLoader,
     preprocess::{
         gpu_preprocessor::GpuPreprocessor,
-        preprocess_pipeline::{TerrainPreprocessNode, TerrainPreprocessPipelines},
+        preprocess_pipeline::{
+            TerrainPreprocessLabel, TerrainPreprocessNode, TerrainPreprocessPipelines,
+        },
         preprocessor::{preprocessor_load_tile, select_ready_tasks},
         shaders::load_preprocess_shaders,
     },
@@ -12,7 +14,7 @@ use crate::{
 use bevy::{
     prelude::*,
     render::{
-        main_graph::node::CAMERA_DRIVER, render_graph::RenderGraph,
+        graph::CameraDriverLabel, render_graph::RenderGraph,
         render_resource::SpecializedComputePipelines, Render, RenderApp, RenderSet,
     },
 };
@@ -57,9 +59,8 @@ impl Plugin for TerrainPreprocessPlugin {
             .init_resource::<TerrainPreprocessPipelines>();
 
         let preprocess_node = TerrainPreprocessNode::from_world(&mut render_app.world);
-
         let mut render_graph = render_app.world.resource_mut::<RenderGraph>();
-        render_graph.add_node("terrain_preprocess", preprocess_node);
-        render_graph.add_node_edge("terrain_preprocess", CAMERA_DRIVER);
+        render_graph.add_node(TerrainPreprocessLabel, preprocess_node);
+        render_graph.add_node_edge(TerrainPreprocessLabel, CameraDriverLabel);
     }
 }
