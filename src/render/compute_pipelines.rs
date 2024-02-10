@@ -14,13 +14,16 @@ use crate::{
 use bevy::{
     prelude::*,
     render::{
-        render_graph::{self},
+        render_graph::{self, RenderLabel},
         render_resource::*,
         renderer::{RenderContext, RenderDevice},
     },
 };
 use strum::{EnumCount, IntoEnumIterator};
 use strum_macros::{EnumCount, EnumIter};
+
+#[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
+pub struct TerrainComputeLabel;
 
 type TerrainComputePipelineKey = (TerrainComputePipelineId, TerrainComputePipelineFlags);
 

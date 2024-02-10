@@ -412,11 +412,11 @@ pub(crate) fn queue_terrain<M: Material>(
                 let pipeline_id = pipelines.specialize(&pipeline_cache, &terrain_pipeline, key);
 
                 opaque_phase.add(Opaque3d {
+                    asset_id: AssetId::invalid(),
                     entity,
                     pipeline: pipeline_id,
                     batch_range: 0..1,
                     draw_function,
-                    distance: f32::MIN, // draw terrain first
                     dynamic_offset: None,
                 });
             }
