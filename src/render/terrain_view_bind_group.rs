@@ -133,14 +133,15 @@ impl TerrainViewData {
         let tile_buffer_size = 32 + TILE_SIZE * view_config.tile_count as BufferAddress;
 
         let view_config_buffer =
-            StaticBuffer::empty(device, BufferUsages::UNIFORM | BufferUsages::COPY_DST);
+            StaticBuffer::empty(None, device, BufferUsages::UNIFORM | BufferUsages::COPY_DST);
         let indirect_buffer =
-            StaticBuffer::empty(device, BufferUsages::STORAGE | BufferUsages::INDIRECT);
-        let parameter_buffer = StaticBuffer::<Parameters>::empty(device, BufferUsages::STORAGE);
+            StaticBuffer::empty(None, device, BufferUsages::STORAGE | BufferUsages::INDIRECT);
+        let parameter_buffer =
+            StaticBuffer::<Parameters>::empty(None, device, BufferUsages::STORAGE);
         let temporary_tile_buffer =
-            StaticBuffer::<()>::empty_sized(device, tile_buffer_size, BufferUsages::STORAGE);
+            StaticBuffer::<()>::empty_sized(None, device, tile_buffer_size, BufferUsages::STORAGE);
         let final_tile_buffer =
-            StaticBuffer::<()>::empty_sized(device, tile_buffer_size, BufferUsages::STORAGE);
+            StaticBuffer::<()>::empty_sized(None, device, tile_buffer_size, BufferUsages::STORAGE);
 
         let prepare_indirect_bind_group = device.create_bind_group(
             "prepare_indirect_bind_group",

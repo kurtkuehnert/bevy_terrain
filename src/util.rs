@@ -46,9 +46,14 @@ pub struct StaticBuffer<T> {
 }
 
 impl<T> StaticBuffer<T> {
-    pub fn empty_sized(device: &RenderDevice, size: BufferAddress, usage: BufferUsages) -> Self {
+    pub fn empty_sized<'a>(
+        label: impl Into<Option<&'a str>>,
+        device: &RenderDevice,
+        size: BufferAddress,
+        usage: BufferUsages,
+    ) -> Self {
         let buffer = device.create_buffer(&BufferDescriptor {
-            label: None,
+            label: label.into(),
             size,
             usage,
             mapped_at_creation: false,
@@ -67,9 +72,13 @@ impl<T> StaticBuffer<T> {
 }
 
 impl<T: ShaderType + Default> StaticBuffer<T> {
-    pub fn empty(device: &RenderDevice, usage: BufferUsages) -> Self {
+    pub fn empty<'a>(
+        label: impl Into<Option<&'a str>>,
+        device: &RenderDevice,
+        usage: BufferUsages,
+    ) -> Self {
         let buffer = device.create_buffer(&BufferDescriptor {
-            label: None,
+            label: label.into(),
             size: T::min_size().get(),
             usage,
             mapped_at_creation: false,
@@ -84,12 +93,17 @@ impl<T: ShaderType + Default> StaticBuffer<T> {
 }
 
 impl<T: ShaderType + WriteInto> StaticBuffer<T> {
-    pub fn create(device: &RenderDevice, value: &T, usage: BufferUsages) -> Self {
+    pub fn create<'a>(
+        label: impl Into<Option<&'a str>>,
+        device: &RenderDevice,
+        value: &T,
+        usage: BufferUsages,
+    ) -> Self {
         let mut scratch = Scratch::new(usage);
         scratch.write(&value);
 
         let buffer = device.create_buffer_with_data(&BufferInitDescriptor {
-            label: None,
+            label: label.into(),
             usage,
             contents: scratch.contents(),
         });

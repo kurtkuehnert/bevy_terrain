@@ -1,5 +1,4 @@
 use crate::{
-    formats::tiff::TiffLoader,
     preprocess::{
         gpu_preprocessor::GpuPreprocessor,
         preprocess_pipeline::{
@@ -28,7 +27,7 @@ pub struct TerrainPreprocessPlugin;
 
 impl Plugin for TerrainPreprocessPlugin {
     fn build(&self, app: &mut App) {
-        app.init_asset_loader::<TiffLoader>()
+        app // .init_asset_loader::<TiffLoader>()
             .add_systems(Update, (select_ready_tasks, preprocessor_load_tile));
 
         if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
