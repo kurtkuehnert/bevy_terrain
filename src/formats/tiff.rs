@@ -1,8 +1,8 @@
-use bevy::render::render_asset::RenderAssetUsages;
 use bevy::{
     asset::{io::Reader, AssetLoader, AsyncReadExt, LoadContext},
     prelude::*,
     render::{
+        render_asset::RenderAssetUsages,
         render_resource::{Extent3d, TextureDimension, TextureFormat},
         texture::{ImageLoaderSettings, TextureError},
     },

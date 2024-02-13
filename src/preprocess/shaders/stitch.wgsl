@@ -1,11 +1,4 @@
-#import bevy_terrain::preprocessing::{NodeCoordinate, atlas, attachment, inside, pixel_coords, pixel_value, process_entry}
-
-const INVALID_ATLAS_INDEX: u32 = 4294967295u;
-
-struct AtlasNode {
-    coordinate: NodeCoordinate,
-    @size(16) atlas_index: u32,
-}
+#import bevy_terrain::preprocessing::{AtlasNode, INVALID_ATLAS_INDEX, atlas, attachment, inside, pixel_coords, pixel_value, process_entry, is_border}
 
 struct StitchData {
     node: AtlasNode,
@@ -110,7 +103,7 @@ fn repeat_data(coords: vec2<u32>) -> vec4<f32> {
 }
 
 override fn pixel_value(coords: vec2<u32>) -> vec4<f32> {
-    if (inside(coords, vec4<u32>(attachment.border_size, attachment.border_size, attachment.center_size, attachment.center_size))) {
+    if (!is_border(coords)) {
         return textureLoad(atlas, coords, stitch_data.node.atlas_index, 0);
     }
 

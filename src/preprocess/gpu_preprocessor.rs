@@ -139,6 +139,7 @@ impl GpuPreprocessor {
                             let tile = images.get(tile).unwrap();
 
                             let split_buffer = StaticBuffer::create(
+                                format!("{}_split_buffer", attachment.name).as_str(),
                                 &device,
                                 &SplitData {
                                     node: task.node.into(),
@@ -150,7 +151,7 @@ impl GpuPreprocessor {
                             );
 
                             Some(device.create_bind_group(
-                                "split_bind_group",
+                                format!("{}_split_bind_group", attachment.name).as_str(),
                                 &create_split_layout(&device),
                                 &BindGroupEntries::sequential((
                                     &split_buffer,
@@ -161,6 +162,7 @@ impl GpuPreprocessor {
                         }
                         PreprocessTaskType::Stitch { neighbour_nodes } => {
                             let stitch_buffer = StaticBuffer::create(
+                                format!("{}_stitch_buffer", attachment.name).as_str(),
                                 &device,
                                 &StitchData {
                                     node: task.node.into(),
@@ -171,13 +173,14 @@ impl GpuPreprocessor {
                             );
 
                             Some(device.create_bind_group(
-                                "stitch_bind_group",
+                                format!("{}_stitch_bind_group", attachment.name).as_str(),
                                 &create_stitch_layout(&device),
                                 &BindGroupEntries::single(&stitch_buffer),
                             ))
                         }
                         PreprocessTaskType::Downsample { child_nodes } => {
                             let downsample_buffer = StaticBuffer::create(
+                                format!("{}_downsample_buffer", attachment.name).as_str(),
                                 &device,
                                 &DownsampleData {
                                     node: task.node.into(),
@@ -188,7 +191,7 @@ impl GpuPreprocessor {
                             );
 
                             Some(device.create_bind_group(
-                                "downsample_bind_group",
+                                format!("{}_downsample_bind_group", attachment.name).as_str(),
                                 &create_downsample_layout(&device),
                                 &BindGroupEntries::single(&downsample_buffer),
                             ))

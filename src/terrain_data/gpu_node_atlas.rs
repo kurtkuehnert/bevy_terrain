@@ -175,6 +175,7 @@ impl AtlasBufferInfo {
 }
 
 pub(crate) struct GpuAtlasAttachment {
+    pub(crate) name: String,
     pub(crate) buffer_info: AtlasBufferInfo,
 
     pub(crate) atlas_texture: Texture,
@@ -194,6 +195,7 @@ impl GpuAtlasAttachment {
         attachment: &AtlasAttachment,
         node_atlas: &NodeAtlas,
     ) -> Self {
+        let name = attachment.name.clone();
         let max_atlas_write_slots = node_atlas.state.max_atlas_write_slots;
         let atlas_write_slots = Vec::with_capacity(max_atlas_write_slots as usize);
 
@@ -202,7 +204,7 @@ impl GpuAtlasAttachment {
         // dbg!(&buffer_info);
 
         let atlas_texture = device.create_texture(&TextureDescriptor {
-            label: Some(&(attachment.name.to_string() + "_attachment")),
+            label: Some(&format!("{name}_attachment")),
             size: Extent3d {
                 width: buffer_info.texture_size,
                 height: buffer_info.texture_size,
@@ -231,19 +233,21 @@ impl GpuAtlasAttachment {
         });
 
         let atlas_write_section = StaticBuffer::empty_sized(
+            format!("{name}_atlas_write_section").as_str(),
             device,
             buffer_info.buffer_size(max_atlas_write_slots) as BufferAddress,
             BufferUsages::COPY_DST | BufferUsages::COPY_SRC | BufferUsages::STORAGE,
         );
 
         let attachment_meta_buffer = StaticBuffer::create(
+            format!("{name}_attachment_meta").as_str(),
             device,
             &buffer_info.attachment_meta(),
             BufferUsages::UNIFORM,
         );
 
         let bind_group = device.create_bind_group(
-            "attachment_bind_group",
+            format!("{name}attachment_bind_group").as_str(),
             &create_attachment_layout(device),
             &BindGroupEntries::sequential((
                 &atlas_write_section,
@@ -254,6 +258,7 @@ impl GpuAtlasAttachment {
         );
 
         Self {
+            name,
             buffer_info,
             atlas_texture,
             atlas_write_section,
@@ -341,8 +346,9 @@ impl GpuAtlasAttachment {
 
     fn create_download_buffers(&mut self, device: &RenderDevice) {
         self.download_buffers = (0..self.atlas_write_slots.len())
-            .map(|_| {
+            .map(|i| {
                 StaticBuffer::empty_sized(
+                    format!("{}_download_buffer_{i}", self.name).as_str(),
                     device,
                     self.buffer_info.aligned_node_size as BufferAddress,
                     BufferUsages::COPY_DST | BufferUsages::MAP_READ,

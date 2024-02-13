@@ -1,10 +1,4 @@
-#import bevy_terrain::preprocessing::{NodeCoordinate, atlas, attachment, inside, pixel_coords, pixel_value, process_entry}
-
-// Todo: move this once naga oil does not mess up the size attribute anymore
-struct AtlasNode {
-    coordinate: NodeCoordinate,
-    @size(16) atlas_index: u32,
-}
+#import bevy_terrain::preprocessing::{AtlasNode, atlas, attachment, inside, pixel_coords, pixel_value, process_entry, is_border}
 
 struct DownsampleData {
     node: AtlasNode,
@@ -16,7 +10,7 @@ struct DownsampleData {
 var<uniform> downsample_data: DownsampleData;
 
 override fn pixel_value(coords: vec2<u32>) -> vec4<f32> {
-    if (!inside(coords, vec4<u32>(attachment.border_size, attachment.border_size, attachment.center_size, attachment.center_size))) {
+    if (is_border(coords)) {
         return vec4<f32>(0.0);
     }
 
