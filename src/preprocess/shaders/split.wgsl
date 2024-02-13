@@ -1,10 +1,5 @@
-#import bevy_terrain::preprocessing::{NodeCoordinate, atlas, attachment, inside, pixel_coords, pixel_value, process_entry}
+#import bevy_terrain::preprocessing::{AtlasNode, atlas, attachment, pixel_coords, pixel_value, process_entry, is_border, inverse_mix}
 #import bevy_terrain::functions::inside_square;
-
-struct AtlasNode {
-    coordinate: NodeCoordinate,
-    @size(16) atlas_index: u32,
-}
 
 struct SplitData {
     node: AtlasNode,
@@ -20,12 +15,8 @@ var tile: texture_2d<f32>;
 @group(1) @binding(2)
 var tile_sampler: sampler;
 
-fn inverse_mix(lower: vec2<f32>, upper: vec2<f32>, value: vec2<f32>) -> vec2<f32> {
-    return (value - lower) / (upper - lower);
-}
-
 override fn pixel_value(coords: vec2<u32>) -> vec4<f32> {
-    if (!inside(coords, vec4<u32>(attachment.border_size, attachment.border_size, attachment.center_size, attachment.center_size))) {
+    if (is_border(coords)) {
         return vec4<f32>(0.0);
     }
 
@@ -40,10 +31,10 @@ override fn pixel_value(coords: vec2<u32>) -> vec4<f32> {
 
     let value = textureSampleLevel(tile, tile_sampler, tile_coords, 0.0);
 
-    let gather = textureGather(0u, tile, tile_sampler, tile_coords);
-    let is_valid = all(gather != vec4<f32>(0.0));
+    let is_valid  = all(textureGather(0u, tile, tile_sampler, tile_coords) != vec4<f32>(0.0));
+    let is_inside = inside_square(tile_coords, vec2<f32>(0.0), 1.0) == 1.0;
 
-    if ((inside_square(tile_coords, vec2<f32>(0.0), 1.0) == 1.0) && is_valid) {
+    if (is_valid && is_inside) {
         return value;
     }
     else {

@@ -177,14 +177,14 @@ impl render_graph::Node for TerrainPreprocessNode {
                             );
                         }
                         PreprocessTaskType::Stitch { .. } => {
-                            //  dbg!("running stitch shader");
+                            // dbg!("running stitch shader");
 
                             pass.set_pipeline(
                                 pipelines[TerrainPreprocessPipelineId::Stitch as usize],
                             );
                         }
                         PreprocessTaskType::Downsample { .. } => {
-                            //  dbg!("running downsample shader");
+                            // dbg!("running downsample shader");
 
                             pass.set_pipeline(
                                 pipelines[TerrainPreprocessPipelineId::Downsample as usize],

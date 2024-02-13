@@ -30,6 +30,7 @@ pub struct GpuQuadtree {
 impl GpuQuadtree {
     fn new(device: &RenderDevice, quadtree: &Quadtree) -> Self {
         let quadtree_buffer = StaticBuffer::empty_sized(
+            None,
             device,
             (quadtree.data.len() * mem::size_of::<QuadtreeEntry>()) as BufferAddress,
             BufferUsages::STORAGE | BufferUsages::COPY_DST,

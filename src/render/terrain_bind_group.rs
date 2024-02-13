@@ -103,9 +103,9 @@ impl TerrainData {
         mesh_uniform: MeshUniform,
         gpu_node_atlas: &GpuNodeAtlas,
     ) -> Self {
-        let mesh_buffer = StaticBuffer::create(device, &mesh_uniform, BufferUsages::STORAGE);
+        let mesh_buffer = StaticBuffer::create(None, device, &mesh_uniform, BufferUsages::STORAGE);
         let terrain_config_buffer =
-            StaticBuffer::create(device, &config_uniform, BufferUsages::UNIFORM);
+            StaticBuffer::create(None, device, &config_uniform, BufferUsages::UNIFORM);
 
         let atlas_sampler = device.create_sampler(&SamplerDescriptor {
             mag_filter: FilterMode::Linear,
@@ -128,7 +128,7 @@ impl TerrainData {
 
         let attachment_uniform = AttachmentUniform::new(gpu_node_atlas);
         let attachment_buffer =
-            StaticBuffer::create(device, &attachment_uniform, BufferUsages::UNIFORM);
+            StaticBuffer::create(None, device, &attachment_uniform, BufferUsages::UNIFORM);
 
         let terrain_bind_group = device.create_bind_group(
             "terrain_bind_group",
