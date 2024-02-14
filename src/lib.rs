@@ -60,7 +60,9 @@ pub mod prelude {
         debug::{camera::DebugCamera, LoadingImages, TerrainDebugPlugin},
         plugin::TerrainPlugin,
         preprocess::{
-            preprocessor::PreprocessDataset, preprocessor::Preprocessor, TerrainPreprocessPlugin,
+            preprocessor::Preprocessor,
+            preprocessor::{PreprocessDataset, SphericalDataset},
+            TerrainPreprocessPlugin,
         },
         render::render_pipeline::TerrainMaterialPlugin,
         terrain::{Terrain, TerrainBundle, TerrainConfig},

@@ -1,8 +1,6 @@
 use bevy::{prelude::*, render::render_resource::ShaderType};
 use bincode::{Decode, Encode};
-use itertools::Itertools;
-use std::fmt;
-use std::str::FromStr;
+use std::{fmt, str::FromStr};
 
 // Todo: consider storing the lod count on each node coordinate
 
@@ -41,21 +39,19 @@ impl NodeCoordinate {
         }
     }
 
-    pub fn children(self) -> Vec<Self> {
-        (0..4)
-            .map(|index| {
-                NodeCoordinate::new(
-                    self.side,
-                    self.lod - 1,
-                    (self.x << 1) + index % 2,
-                    (self.y << 1) + index / 2,
-                )
-            })
-            .collect_vec()
+    pub fn children(self) -> impl Iterator<Item = Self> {
+        (0..4).map(move |index| {
+            NodeCoordinate::new(
+                self.side,
+                self.lod - 1,
+                (self.x << 1) + index % 2,
+                (self.y << 1) + index / 2,
+            )
+        })
     }
 
-    pub fn neighbours(self, lod_count: u32) -> Vec<Self> {
-        let offsets = [
+    pub fn neighbours(self, lod_count: u32) -> impl Iterator<Item = Self> {
+        const OFFSETS: [IVec2; 8] = [
             IVec2::new(0, -1),
             IVec2::new(1, 0),
             IVec2::new(0, 1),
@@ -66,14 +62,11 @@ impl NodeCoordinate {
             IVec2::new(-1, 1),
         ];
 
-        offsets
-            .iter()
-            .map(|&offset| {
-                let neighbour_position = IVec2::new(self.x as i32, self.y as i32) + offset;
+        OFFSETS.iter().map(move |&offset| {
+            let neighbour_position = IVec2::new(self.x as i32, self.y as i32) + offset;
 
-                self.neighbour_coordinate(neighbour_position, lod_count)
-            })
-            .collect_vec()
+            self.neighbour_coordinate(neighbour_position, lod_count)
+        })
     }
 
     pub fn path(self, path: &str, extension: &str) -> String {
