@@ -9,6 +9,7 @@ use crate::{
 };
 use bevy::{asset::LoadState, prelude::*, render::texture::ImageSampler};
 use itertools::{iproduct, Itertools};
+use std::ops::Range;
 use std::{collections::VecDeque, fs, ops::DerefMut, time::Instant};
 
 pub fn reset_directory(directory: &str) {
@@ -22,12 +23,19 @@ pub(crate) struct LoadingTile {
     format: AttachmentFormat,
 }
 
+pub struct SphericalDataset {
+    pub attachment_index: u32,
+    pub paths: Vec<String>,
+    pub lod_range: Range<u32>,
+}
+
 pub struct PreprocessDataset {
     pub attachment_index: u32,
     pub path: String,
     pub side: u32,
     pub top_left: Vec2,
     pub bottom_right: Vec2,
+    pub lod_range: Range<u32>,
 }
 
 impl Default for PreprocessDataset {
@@ -38,7 +46,24 @@ impl Default for PreprocessDataset {
             side: 0,
             top_left: Vec2::splat(0.0),
             bottom_right: Vec2::splat(1.0),
+            lod_range: 0..1,
         }
+    }
+}
+
+impl PreprocessDataset {
+    fn overlapping_nodes(
+        &self,
+        lod: u32,
+        lod_count: u32,
+    ) -> impl Iterator<Item = NodeCoordinate> + '_ {
+        let node_count = 1 << (lod_count - lod - 1);
+
+        let lower = (self.top_left * node_count as f32).as_uvec2();
+        let upper = (self.bottom_right * node_count as f32).ceil().as_uvec2();
+
+        iproduct!(lower.x..upper.x, lower.y..upper.y)
+            .map(move |(x, y)| NodeCoordinate::new(self.side, lod, x, y))
     }
 }
 
@@ -89,7 +114,15 @@ impl PreprocessTask {
         }
     }
 
-    fn save(node: AtlasNodeAttachment) -> Self {
+    fn save(
+        node_coordinate: NodeCoordinate,
+        node_atlas: &mut NodeAtlas,
+        dataset: &PreprocessDataset,
+    ) -> Self {
+        let node = node_atlas
+            .get_or_allocate(node_coordinate)
+            .attachment(dataset.attachment_index);
+
         Self {
             node,
             task_type: PreprocessTaskType::Save,
@@ -97,27 +130,38 @@ impl PreprocessTask {
     }
 
     fn split(
-        node: AtlasNodeAttachment,
+        node_coordinate: NodeCoordinate,
+        node_atlas: &mut NodeAtlas,
+        dataset: &PreprocessDataset,
         tile: Handle<Image>,
-        top_left: Vec2,
-        bottom_right: Vec2,
     ) -> Self {
+        let node = node_atlas
+            .get_or_allocate(node_coordinate)
+            .attachment(dataset.attachment_index);
+
         Self {
             node,
             task_type: PreprocessTaskType::Split {
                 tile,
-                top_left,
-                bottom_right,
+                top_left: dataset.top_left,
+                bottom_right: dataset.bottom_right,
             },
         }
     }
 
-    fn stitch(node: AtlasNodeAttachment, node_atlas: &mut NodeAtlas) -> Self {
+    fn stitch(
+        node_coordinate: NodeCoordinate,
+        node_atlas: &mut NodeAtlas,
+        dataset: &PreprocessDataset,
+    ) -> Self {
+        let node = node_atlas
+            .get_or_allocate(node_coordinate)
+            .attachment(dataset.attachment_index);
+
         let neighbour_nodes = node
             .coordinate
             .neighbours(node_atlas.lod_count)
-            .iter()
-            .map(|&coordinate| node_atlas.get_or_allocate(coordinate))
+            .map(|coordinate| node_atlas.get_or_allocate(coordinate))
             .collect_vec()
             .try_into()
             .unwrap();
@@ -128,12 +172,19 @@ impl PreprocessTask {
         }
     }
 
-    fn downsample(node: AtlasNodeAttachment, node_atlas: &mut NodeAtlas) -> Self {
+    fn downsample(
+        node_coordinate: NodeCoordinate,
+        node_atlas: &mut NodeAtlas,
+        dataset: &PreprocessDataset,
+    ) -> Self {
+        let node = node_atlas
+            .get_or_allocate(node_coordinate)
+            .attachment(dataset.attachment_index);
+
         let child_nodes = node
             .coordinate
             .children()
-            .iter()
-            .map(|&coordinate| node_atlas.get_or_allocate(coordinate))
+            .map(|coordinate| node_atlas.get_or_allocate(coordinate))
             .collect_vec()
             .try_into()
             .unwrap();
@@ -174,160 +225,105 @@ impl Preprocessor {
         reset_directory(&attachment.path);
     }
 
+    fn split_and_downsample(
+        &mut self,
+        dataset: &PreprocessDataset,
+        asset_server: &AssetServer,
+        node_atlas: &mut NodeAtlas,
+    ) {
+        let tile_handle = asset_server.load(&dataset.path);
+
+        self.loading_tiles.push(LoadingTile {
+            id: tile_handle.id(),
+            format: node_atlas.attachments[dataset.attachment_index as usize].format,
+        });
+
+        for node_coordinate in
+            dataset.overlapping_nodes(dataset.lod_range.start, node_atlas.lod_count)
+        {
+            self.task_queue.push_back(PreprocessTask::split(
+                node_coordinate,
+                node_atlas,
+                dataset,
+                tile_handle.clone(),
+            ));
+        }
+
+        for lod in dataset.lod_range.clone().skip(1) {
+            self.task_queue.push_back(PreprocessTask::barrier());
+
+            for node_coordinate in dataset.overlapping_nodes(lod, node_atlas.lod_count) {
+                self.task_queue.push_back(PreprocessTask::downsample(
+                    node_coordinate,
+                    node_atlas,
+                    dataset,
+                ));
+            }
+        }
+    }
+
+    fn stitch_and_save_layer(
+        &mut self,
+        dataset: &PreprocessDataset,
+        node_atlas: &mut NodeAtlas,
+        lod: u32,
+    ) {
+        for node_coordinate in dataset.overlapping_nodes(lod, node_atlas.lod_count) {
+            self.task_queue.push_back(PreprocessTask::stitch(
+                node_coordinate,
+                node_atlas,
+                &dataset,
+            ));
+        }
+
+        self.task_queue.push_back(PreprocessTask::barrier());
+
+        for node_coordinate in dataset.overlapping_nodes(lod, node_atlas.lod_count) {
+            self.task_queue
+                .push_back(PreprocessTask::save(node_coordinate, node_atlas, &dataset));
+        }
+    }
+
     pub fn preprocess_tile(
         &mut self,
         dataset: PreprocessDataset,
         asset_server: &AssetServer,
         node_atlas: &mut NodeAtlas,
     ) {
-        let format = node_atlas.attachments[dataset.attachment_index as usize].format;
-
-        let tile_handle = asset_server.load(dataset.path);
-
-        self.loading_tiles.push(LoadingTile {
-            id: tile_handle.id(),
-            format,
-        });
-
-        let lod_count = node_atlas.lod_count;
-        let lod = 0;
-        let node_count = 1 << (lod_count - lod - 1);
-
-        for (x, y) in iproduct!(0..node_count, 0..node_count) {
-            let node = node_atlas
-                .get_or_allocate(NodeCoordinate::new(dataset.side, lod, x, y))
-                .attachment(dataset.attachment_index);
-
-            self.task_queue.push_back(PreprocessTask::split(
-                node,
-                tile_handle.clone(),
-                dataset.top_left,
-                dataset.bottom_right,
-            ));
-        }
-
-        for lod in 1..lod_count {
-            let node_count = 1 << (lod_count - lod - 1);
-
-            self.task_queue.push_back(PreprocessTask::barrier());
-
-            for (x, y) in iproduct!(0..node_count, 0..node_count) {
-                let node = node_atlas
-                    .get_or_allocate(NodeCoordinate::new(dataset.side, lod, x, y))
-                    .attachment(dataset.attachment_index);
-
-                self.task_queue
-                    .push_back(PreprocessTask::downsample(node, node_atlas));
-            }
-        }
-
+        self.split_and_downsample(&dataset, asset_server, node_atlas);
         self.task_queue.push_back(PreprocessTask::barrier());
 
-        for lod in 0..lod_count {
-            let node_count = 1 << (lod_count - lod - 1);
-
-            for (x, y) in iproduct!(0..node_count, 0..node_count) {
-                let node = node_atlas
-                    .get_or_allocate(NodeCoordinate::new(dataset.side, lod, x, y))
-                    .attachment(dataset.attachment_index);
-
-                self.task_queue
-                    .push_back(PreprocessTask::stitch(node, node_atlas));
-            }
-
-            self.task_queue.push_back(PreprocessTask::barrier());
-
-            for (x, y) in iproduct!(0..node_count, 0..node_count) {
-                let node = node_atlas
-                    .get_or_allocate(NodeCoordinate::new(dataset.side, lod, x, y))
-                    .attachment(dataset.attachment_index);
-
-                self.task_queue.push_back(PreprocessTask::save(node));
-            }
+        for lod in dataset.lod_range.clone().skip(1) {
+            self.stitch_and_save_layer(&dataset, node_atlas, lod);
         }
     }
 
     pub fn preprocess_spherical(
         &mut self,
-        dataset: PreprocessDataset,
+        dataset: SphericalDataset,
         asset_server: &AssetServer,
         node_atlas: &mut NodeAtlas,
     ) {
-        let lod_count = node_atlas.lod_count;
-        let lod = 0;
-        let node_count = 1 << (lod_count - lod - 1);
-
-        for side in 0..6 {
-            let dataset = PreprocessDataset {
+        let side_datasets = (0..6)
+            .map(|side| PreprocessDataset {
                 attachment_index: dataset.attachment_index,
-                path: format!("{}/source/height/face{}.tif", dataset.path, side),
+                path: dataset.paths[side as usize].clone(),
                 side,
-
                 top_left: Vec2::splat(0.0),
                 bottom_right: Vec2::splat(1.0),
-            };
+                lod_range: dataset.lod_range.clone(),
+            })
+            .collect_vec();
 
-            let format = node_atlas.attachments[dataset.attachment_index as usize].format;
-
-            let tile_handle = asset_server.load(dataset.path);
-
-            self.loading_tiles.push(LoadingTile {
-                id: tile_handle.id(),
-                format,
-            });
-
-            for (x, y) in iproduct!(0..node_count, 0..node_count) {
-                let node = node_atlas
-                    .get_or_allocate(NodeCoordinate::new(dataset.side, lod, x, y))
-                    .attachment(dataset.attachment_index);
-
-                self.task_queue.push_back(PreprocessTask::split(
-                    node,
-                    tile_handle.clone(),
-                    dataset.top_left,
-                    dataset.bottom_right,
-                ));
-            }
-
-            for lod in 1..lod_count {
-                let node_count = 1 << (lod_count - lod - 1);
-
-                self.task_queue.push_back(PreprocessTask::barrier());
-
-                for (x, y) in iproduct!(0..node_count, 0..node_count) {
-                    let node = node_atlas
-                        .get_or_allocate(NodeCoordinate::new(dataset.side, lod, x, y))
-                        .attachment(dataset.attachment_index);
-
-                    self.task_queue
-                        .push_back(PreprocessTask::downsample(node, node_atlas));
-                }
-            }
+        for dataset in &side_datasets {
+            self.split_and_downsample(&dataset, asset_server, node_atlas);
         }
 
         self.task_queue.push_back(PreprocessTask::barrier());
 
-        for lod in 0..lod_count {
-            let node_count = 1 << (lod_count - lod - 1);
-
-            for side in 0..6 {
-                for (x, y) in iproduct!(0..node_count, 0..node_count) {
-                    let node = node_atlas
-                        .get_or_allocate(NodeCoordinate::new(side, lod, x, y))
-                        .attachment(dataset.attachment_index);
-                    self.task_queue
-                        .push_back(PreprocessTask::stitch(node, node_atlas));
-                }
-
-                self.task_queue.push_back(PreprocessTask::barrier());
-
-                for (x, y) in iproduct!(0..node_count, 0..node_count) {
-                    let node = node_atlas
-                        .get_or_allocate(NodeCoordinate::new(side, lod, x, y))
-                        .attachment(dataset.attachment_index);
-
-                    self.task_queue.push_back(PreprocessTask::save(node));
-                }
+        for lod in dataset.lod_range.skip(1) {
+            for dataset in &side_datasets {
+                self.stitch_and_save_layer(&dataset, node_atlas, lod);
             }
         }
     }
