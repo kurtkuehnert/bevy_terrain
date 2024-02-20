@@ -2,18 +2,16 @@
 
 struct TerrainConfig {
     lod_count: u32,
-    height: f32,
-    leaf_node_size: u32,
-    terrain_size: u32,
+    min_height: f32,
+    max_height: f32,
 }
 
 struct TerrainViewConfig {
+    view_local_position: vec3<f32>,
     approximate_height: f32,
-    node_count: u32,
-
+    quadtree_size: u32,
     tile_count: u32,
     refinement_count: u32,
-    tile_scale: f32,
     grid_size: f32,
     vertices_per_row: u32,
     vertices_per_tile: u32,
@@ -24,8 +22,9 @@ struct TerrainViewConfig {
 }
 
 struct Tile {
-    coords: vec2<u32>,
-    size: u32,
+    st: vec2<f32>, // [0..1]
+    size: f32, // [0..1]
+    side: u32, // [0..6]
 }
 
 struct TileList {
@@ -39,41 +38,13 @@ struct Parameters {
     final_index: atomic<i32>,
 }
 
-// A lookup of a node inside the node atlas based on the view of a quadtree.
-struct NodeLookup {
-    atlas_lod: u32,
-    atlas_index: i32,
-    atlas_coords: vec2<f32>,
+struct S2Coordinate {
+    side: u32,
+    st: vec2<f32>,
 }
 
-struct VertexInput {
-    @builtin(instance_index) instance: u32,
-    @builtin(vertex_index)   vertex_index: u32,
-}
-
-struct VertexOutput {
-    @builtin(position)       frag_coord: vec4<f32>,
-    @location(0)             local_position: vec2<f32>,
-    @location(1)             world_position: vec4<f32>,
-    @location(2)             debug_color: vec4<f32>,
-}
-
-struct FragmentInput {
-    @builtin(front_facing)   is_front: bool,
-    @builtin(position)       frag_coord: vec4<f32>,
-    @location(0)             local_position: vec2<f32>,
-    @location(1)             world_position: vec4<f32>,
-    @location(2)             debug_color: vec4<f32>,
-}
-
-struct FragmentOutput {
-    @location(0)             color: vec4<f32>
-}
-
-// The processed fragment consisting of the color and a flag whether or not to discard this fragment.
-struct Fragment {
-    color: vec4<f32>,
-    do_discard: bool,
+struct Morph {
+    ratio: f32,
 }
 
 struct Blend {
@@ -81,3 +52,41 @@ struct Blend {
     ratio: f32,
 }
 
+struct QuadtreeEntry {
+    atlas_index: u32,
+    atlas_lod: u32,
+}
+
+struct Quadtree {
+    data: array<QuadtreeEntry>,
+}
+
+struct LookupInfo {
+    coordinate: S2Coordinate,
+    view_distance: f32,
+    lod: u32,
+    blend_ratio: f32,
+    ddx: vec2<f32>,
+    ddy: vec2<f32>,
+}
+
+// A lookup of a node inside the node atlas based on the view of a quadtree.
+struct NodeLookup {
+    atlas_index: u32,
+    atlas_lod: u32,
+    atlas_coordinate: vec2<f32>,
+    ddx: vec2<f32>,
+    ddy: vec2<f32>,
+    side: u32,
+}
+
+struct AttachmentConfig {
+    size: f32,
+    scale: f32,
+    offset: f32,
+    _padding: u32,
+}
+
+struct AttachmentList {
+    data: array<AttachmentConfig, 8u>,
+}
