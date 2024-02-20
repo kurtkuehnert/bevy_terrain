@@ -1,98 +1,86 @@
 #define_import_path bevy_terrain::debug
 
-#import bevy_terrain::types Tile
-#import bevy_terrain::bindings config, view_config
-#import bevy_terrain::functions calculate_morph, minmax, node_size
-#import bevy_pbr::mesh_view_bindings view
+#import bevy_terrain::types::{S2Coordinate}
+#import bevy_terrain::bindings::{config, view_config, tiles, attachments}
+#import bevy_terrain::functions::{compute_morph, compute_blend, quadtree_lod, inside_square, node_count, node_coordinate, coordinate_from_local_position}
 
-fn lod_color(lod: u32) -> vec4<f32> {
-    if (lod % 6u == 0u) {
-        return vec4<f32>(1.0, 0.0, 0.0, 1.0);
-    }
-    if (lod % 6u == 1u) {
-        return vec4<f32>(0.0, 1.0, 0.0, 1.0);
-    }
-    if (lod % 6u == 2u) {
-        return vec4<f32>(0.0, 0.0, 1.0, 1.0);
-    }
-    if (lod % 6u == 3u) {
-        return vec4<f32>(1.0, 1.0, 0.0, 1.0);
-    }
-    if (lod % 6u == 4u) {
-        return vec4<f32>(1.0, 0.0, 1.0, 1.0);
-    }
-    if (lod % 6u == 5u) {
-        return vec4<f32>(0.0, 1.0, 1.0, 1.0);
-    }
+fn index_color(index: u32) -> vec4<f32> {
+    var COLOR_ARRAY = array<vec4<f32>, 6u>(
+        vec4<f32>(1.0, 0.0, 0.0, 1.0),
+        vec4<f32>(0.0, 1.0, 0.0, 1.0),
+        vec4<f32>(0.0, 0.0, 1.0, 1.0),
+        vec4<f32>(1.0, 1.0, 0.0, 1.0),
+        vec4<f32>(1.0, 0.0, 1.0, 1.0),
+        vec4<f32>(0.0, 1.0, 1.0, 1.0),
+    );
 
-    return vec4<f32>(0.0);
+    return COLOR_ARRAY[index % 6u];
 }
 
-fn show_tiles(tile: Tile, world_position: vec4<f32>) -> vec4<f32> {
+fn show_tiles(coordinate: S2Coordinate, vertex_index: u32) -> vec4<f32> {
+    let tile_index = vertex_index / view_config.vertices_per_tile;
+    let tile = tiles.data[tile_index];
+
     var color: vec4<f32>;
 
-    if ((tile.coords.x + tile.coords.y) % 2u == 0u) {
-        color = vec4<f32>(0.5, 0.5, 0.5, 1.0);
-    }
-    else {
-        color = vec4<f32>(0.1, 0.1, 0.1, 1.0);
-    }
+    let is_even = u32((tile.st.x + tile.st.y) / tile.size) % 2u == 0u;
 
-    let lod = u32(ceil(log2(f32(tile.size))));
-    color = mix(color, lod_color(lod), 0.5);
+    if (is_even) { color = vec4<f32>(0.5, 0.5, 0.5, 1.0); }
+    else {         color = vec4<f32>(0.1, 0.1, 0.1, 1.0); }
+
+    let lod = u32(log2(1.0 / tile.size));
+    color = mix(color, index_color(lod), 0.5);
 
 #ifdef MESH_MORPH
-    let morph = calculate_morph(tile, world_position);
-    color = color + vec4<f32>(1.0, 1.0, 1.0, 1.0) * morph;
+    let morph = compute_morph(tile, coordinate.st);
+    color = mix(color, vec4<f32>(1.0), 0.3 * morph.ratio);
 #endif
 
-    return vec4<f32>(color.xyz, 0.5);
-}
-
-fn show_minmax_error(tile: Tile, height: f32) -> vec4<f32> {
-    let size = f32(tile.size) * view_config.tile_scale;
-    let local_position = (vec2<f32>(tile.coords) + 0.5) * size;
-    let lod = u32(ceil(log2(size))) + 1u;
-    let minmax = minmax(local_position, size);
-
-    var color = vec4<f32>(0.0,
-                          clamp((minmax.y - height) / size / 2.0, 0.0, 1.0),
-                          clamp((height - minmax.x) / size / 2.0, 0.0, 1.0),
-                          0.5);
-
-    let tolerance = 0.00001;
-
-    if (height < minmax.x - tolerance || height > minmax.y + tolerance || lod >= config.lod_count) {
-        color = vec4<f32>(1.0, 0.0, 0.0, 0.5);
-    }
+#ifdef SPHERICAL
+    color = mix(color, index_color(tile.side), 0.5);
+#endif
 
     return color;
 }
 
-fn show_lod(lod: u32, world_position: vec3<f32>) -> vec4<f32> {
-    var color = lod_color(lod);
-
-    for (var i = 0u; i < config.lod_count; i = i + 1u) {
-        let viewer_distance = distance(view.world_position.xyz, world_position);
-        let circle = f32(1u << i) * view_config.blend_distance;
-
-        if (viewer_distance < circle && circle - f32(8 << i) < viewer_distance) {
-            color = lod_color(i) * 10.0;
-        }
-
-#ifdef SHOW_NODES
-        let node_size = node_size(i);
-        let grid_position = floor(view.world_position.xz / node_size + 0.5 - f32(view_config.node_count >> 1u)) * node_size;
-        let grid_size = node_size * f32(view_config.node_count);
-        let thickness = f32(8u << i);
-
-        let grid_outer = step(grid_position, world_position.xz) * step(world_position.xz, grid_position + grid_size);
-        let grid_inner = step(grid_position + thickness, world_position.xz) * step(world_position.xz, grid_position + grid_size - thickness);
-        let outline = grid_outer.x * grid_outer.y - grid_inner.x * grid_inner.y;
-
-        color = mix(color, lod_color(i) * 10.0, outline);
+fn show_lod(coordinate: S2Coordinate, view_distance: f32, lod: u32) -> vec4<f32> {
+#ifdef QUADTREE_LOD
+    let is_outline = quadtree_outlines(coordinate, lod);
+    var color = mix(index_color(lod), vec4<f32>(0.0), is_outline);
+#else
+    let blend = compute_blend(view_distance);
+    let is_outline = quadtree_outlines(coordinate, blend.lod);
+    var color = mix(index_color(blend.lod), vec4<f32>(1.0), blend.ratio);
+    color = mix(color, 0.1 * color, is_outline);
 #endif
-    }
 
     return color;
+}
+
+fn quadtree_outlines(coordinate: S2Coordinate, lod: u32) -> f32 {
+    let node_coordinate = node_coordinate(coordinate, lod) % 1.0;
+
+    let thickness = 0.02;
+    let outer = inside_square(node_coordinate, vec2<f32>(0.0)            , 1.0);
+    let inner = inside_square(node_coordinate, vec2<f32>(0.0) + thickness, 1.0 - 2.0 * thickness);
+
+    return outer - inner;
+}
+
+fn show_quadtree(coordinate: S2Coordinate) -> vec4<f32> {
+    let lod = quadtree_lod(coordinate);
+    let is_outline = quadtree_outlines(coordinate, lod);
+
+    return mix(index_color(lod), vec4<f32>(0.0), is_outline);
+}
+
+fn show_pixels(coordinate: S2Coordinate, lod: u32) -> vec4<f32> {
+    let pixel_size = 4.0;
+    let pixels_per_side = attachments.data[0].size * f32(node_count(lod));
+    let pixel_coordinate = coordinate.st * f32(pixels_per_side) / pixel_size;
+
+    let is_even = (u32(pixel_coordinate.x) + u32(pixel_coordinate.y)) % 2u == 0u;
+
+    if (is_even) { return vec4<f32>(0.5, 0.5, 0.5, 1.0); }
+    else {         return vec4<f32>(0.1, 0.1, 0.1, 1.0); }
 }

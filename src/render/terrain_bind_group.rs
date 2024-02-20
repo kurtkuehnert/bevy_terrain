@@ -1,155 +1,231 @@
 use crate::{
-    terrain::{Terrain, TerrainComponents},
-    TerrainConfig,
+    terrain::{Terrain, TerrainComponents, TerrainConfig},
+    terrain_data::gpu_node_atlas::GpuNodeAtlas,
+    util::StaticBuffer,
 };
 use bevy::{
     ecs::{
         query::ROQueryItem,
         system::{lifetimeless::SRes, SystemParamItem},
     },
-    pbr::MeshUniform,
+    pbr::{MeshTransforms, MeshUniform, PreviousGlobalTransform},
     prelude::*,
     render::{
-        render_asset::RenderAssets,
         render_phase::{PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass},
-        render_resource::*,
+        render_resource::{binding_types::*, *},
         renderer::RenderDevice,
         texture::FallbackImage,
         Extract,
     },
 };
+use itertools::Itertools;
+use std::iter;
+
+pub(crate) fn create_terrain_layout(device: &RenderDevice) -> BindGroupLayout {
+    device.create_bind_group_layout(
+        None,
+        &BindGroupLayoutEntries::sequential(
+            ShaderStages::all(),
+            (
+                storage_buffer_read_only::<MeshUniform>(false), // mesh
+                uniform_buffer::<TerrainConfigUniform>(false),  // terrain config
+                uniform_buffer::<AttachmentUniform>(false),
+                sampler(SamplerBindingType::Filtering), // atlas sampler
+                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment 1
+                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment 2
+                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment 3
+                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment 4
+                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment 5
+                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment 6
+                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment 7
+                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment 8
+            ),
+        ),
+    )
+}
+
+#[derive(Default, ShaderType)]
+struct AttachmentConfig {
+    size: f32,
+    scale: f32,
+    offset: f32,
+    _padding: u32,
+}
+
+#[derive(Default, ShaderType)]
+struct AttachmentUniform {
+    data: [AttachmentConfig; 8],
+}
+
+impl AttachmentUniform {
+    fn new(atlas: &GpuNodeAtlas) -> Self {
+        let mut uniform = Self::default();
+
+        for (config, attachment) in iter::zip(&mut uniform.data, &atlas.attachments) {
+            config.size = attachment.buffer_info.center_size as f32;
+            config.scale = attachment.buffer_info.center_size as f32
+                / attachment.buffer_info.texture_size as f32;
+            config.offset = attachment.buffer_info.border_size as f32
+                / attachment.buffer_info.texture_size as f32;
+        }
+
+        uniform
+    }
+}
 
 /// The terrain config data that is available in shaders.
-#[derive(Clone, Default, ShaderType)]
+#[derive(Default, ShaderType)]
 struct TerrainConfigUniform {
     lod_count: u32,
-    height: f32,
-    chunk_size: u32,
-    terrain_size: u32,
+    min_height: f32,
+    max_height: f32,
 }
 
 impl From<&TerrainConfig> for TerrainConfigUniform {
     fn from(config: &TerrainConfig) -> Self {
         Self {
             lod_count: config.lod_count,
-            height: config.height,
-            chunk_size: config.leaf_node_size,
-            terrain_size: config.terrain_size,
+            min_height: config.min_height,
+            max_height: config.max_height,
         }
     }
 }
 
-#[derive(AsBindGroup)]
-struct TerrainData {
-    #[uniform(0, visibility(all))]
-    mesh: MeshUniform,
-    #[uniform(1, visibility(all))]
-    config: TerrainConfigUniform,
-    #[sampler(2, visibility(all))]
-    #[texture(3, dimension = "2d_array", visibility(all))]
-    attachment_1: Option<Handle<Image>>,
-    #[texture(4, dimension = "2d_array", visibility(all))]
-    attachment_2: Option<Handle<Image>>,
-    #[texture(5, dimension = "2d_array", visibility(all))]
-    attachment_3: Option<Handle<Image>>,
-    #[texture(6, dimension = "2d_array", visibility(all))]
-    attachment_4: Option<Handle<Image>>,
-    #[texture(7, dimension = "2d_array", visibility(all))]
-    attachment_5: Option<Handle<Image>>,
-    #[texture(8, dimension = "2d_array", visibility(all))]
-    attachment_6: Option<Handle<Image>>,
-    #[texture(9, dimension = "2d_array", visibility(all))]
-    attachment_7: Option<Handle<Image>>,
-    #[texture(10, dimension = "2d_array", visibility(all))]
-    attachment_8: Option<Handle<Image>>,
+pub struct TerrainData {
+    pub(crate) terrain_bind_group: BindGroup,
 }
 
-pub struct TerrainBindGroup(PreparedBindGroup<()>);
-
-impl TerrainBindGroup {
+impl TerrainData {
     fn new(
-        config: &TerrainConfig,
         device: &RenderDevice,
-        images: &RenderAssets<Image>,
         fallback_image: &FallbackImage,
+        config_uniform: TerrainConfigUniform,
+        mesh_uniform: MeshUniform,
+        gpu_node_atlas: &GpuNodeAtlas,
     ) -> Self {
-        // Todo: pipe this properly
-        let mesh = MeshUniform {
-            transform: Default::default(),
-            previous_transform: Default::default(),
-            inverse_transpose_model: Default::default(),
-            flags: 0,
-        };
+        let mesh_buffer = StaticBuffer::create(None, device, &mesh_uniform, BufferUsages::STORAGE);
+        let terrain_config_buffer =
+            StaticBuffer::create(None, device, &config_uniform, BufferUsages::UNIFORM);
 
-        let attachments = &config.attachments;
+        let atlas_sampler = device.create_sampler(&SamplerDescriptor {
+            mag_filter: FilterMode::Linear,
+            min_filter: FilterMode::Linear,
+            mipmap_filter: FilterMode::Linear,
+            anisotropy_clamp: 16, // Todo: make this customisable
+            ..default()
+        });
 
-        let terrain_data = TerrainData {
-            mesh,
-            attachment_1: attachments.get(0).map(|a| a.handle.clone()),
-            attachment_2: attachments.get(1).map(|a| a.handle.clone()),
-            attachment_3: attachments.get(2).map(|a| a.handle.clone()),
-            attachment_4: attachments.get(3).map(|a| a.handle.clone()),
-            attachment_5: attachments.get(4).map(|a| a.handle.clone()),
-            attachment_6: attachments.get(5).map(|a| a.handle.clone()),
-            attachment_7: attachments.get(6).map(|a| a.handle.clone()),
-            attachment_8: attachments.get(7).map(|a| a.handle.clone()),
-            config: config.into(),
-        };
+        let attachments = (0..8)
+            .map(|i| {
+                gpu_node_atlas
+                    .attachments
+                    .get(i)
+                    .map_or(fallback_image.d2_array.texture_view.clone(), |attachment| {
+                        attachment.atlas_texture.create_view(&default())
+                    })
+            })
+            .collect_vec();
 
-        let layout = Self::layout(&device);
+        let attachment_uniform = AttachmentUniform::new(gpu_node_atlas);
+        let attachment_buffer =
+            StaticBuffer::create(None, device, &attachment_uniform, BufferUsages::UNIFORM);
 
-        let bind_group = terrain_data
-            .as_bind_group(&layout, &device, &images, &fallback_image)
-            .ok()
-            .unwrap();
+        let terrain_bind_group = device.create_bind_group(
+            "terrain_bind_group",
+            &create_terrain_layout(device),
+            &BindGroupEntries::sequential((
+                &mesh_buffer,
+                &terrain_config_buffer,
+                &attachment_buffer,
+                &atlas_sampler,
+                &attachments[0],
+                &attachments[1],
+                &attachments[2],
+                &attachments[3],
+                &attachments[4],
+                &attachments[5],
+                &attachments[6],
+                &attachments[7],
+            )),
+        );
 
-        Self(bind_group)
+        Self { terrain_bind_group }
     }
 
-    pub(crate) fn bind_group(&self) -> &BindGroup {
-        &self.0.bind_group
-    }
+    #[allow(clippy::type_complexity)]
+    pub(crate) fn initialize(
+        device: Res<RenderDevice>,
+        fallback_image: Res<FallbackImage>,
+        mut terrain_data: ResMut<TerrainComponents<TerrainData>>,
+        gpu_node_atlases: Res<TerrainComponents<GpuNodeAtlas>>,
+        terrain_query: Extract<
+            Query<
+                (
+                    Entity,
+                    &TerrainConfig,
+                    &GlobalTransform,
+                    Option<&PreviousGlobalTransform>,
+                ),
+                Added<Terrain>,
+            >,
+        >,
+    ) {
+        for (terrain, config, transform, previous_transform) in terrain_query.iter() {
+            // Todo: update the transform each frame
 
-    pub(crate) fn layout(device: &RenderDevice) -> BindGroupLayout {
-        TerrainData::bind_group_layout(device)
-    }
-}
+            let transform = transform.affine();
+            let previous_transform = previous_transform.map(|t| t.0).unwrap_or(transform);
+            let mesh_transforms = MeshTransforms {
+                transform: (&transform).into(),
+                previous_transform: (&previous_transform).into(),
+                flags: 0,
+            };
+            let (inverse_transpose_model_a, inverse_transpose_model_b) =
+                mesh_transforms.transform.inverse_transpose_3x3();
+            let mesh_uniform = MeshUniform {
+                transform: mesh_transforms.transform.to_transpose(),
+                previous_transform: mesh_transforms.previous_transform.to_transpose(),
+                lightmap_uv_rect: UVec2::ZERO,
+                inverse_transpose_model_a,
+                inverse_transpose_model_b,
+                flags: mesh_transforms.flags,
+            };
+            let config_uniform = config.into();
 
-pub(crate) fn initialize_terrain_bind_group(
-    device: Res<RenderDevice>,
-    images: Res<RenderAssets<Image>>,
-    fallback_image: Res<FallbackImage>,
-    mut terrain_bind_groups: ResMut<TerrainComponents<TerrainBindGroup>>,
-    terrain_query: Extract<Query<(Entity, &TerrainConfig), Added<Terrain>>>,
-) {
-    for (terrain, config) in terrain_query.iter() {
-        let terrain_bind_group = TerrainBindGroup::new(config, &device, &images, &fallback_image);
+            let gpu_node_atlas = gpu_node_atlases.get(&terrain).unwrap();
 
-        terrain_bind_groups.insert(terrain, terrain_bind_group);
+            terrain_data.insert(
+                terrain,
+                TerrainData::new(
+                    &device,
+                    &fallback_image,
+                    config_uniform,
+                    mesh_uniform,
+                    gpu_node_atlas,
+                ),
+            );
+        }
     }
 }
 
 pub struct SetTerrainBindGroup<const I: usize>;
 
 impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetTerrainBindGroup<I> {
-    type Param = SRes<TerrainComponents<TerrainBindGroup>>;
-    type ViewWorldQuery = ();
-    type ItemWorldQuery = ();
+    type Param = SRes<TerrainComponents<TerrainData>>;
+    type ViewQuery = ();
+    type ItemQuery = ();
 
     #[inline]
     fn render<'w>(
         item: &P,
-        _: ROQueryItem<'w, Self::ViewWorldQuery>,
-        _: ROQueryItem<'w, Self::ItemWorldQuery>,
-        terrain_bind_groups: SystemParamItem<'w, '_, Self::Param>,
+        _: ROQueryItem<'w, Self::ViewQuery>,
+        _: Option<ROQueryItem<'w, Self::ItemQuery>>,
+        terrain_data: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let terrain_bind_group = terrain_bind_groups
-            .into_inner()
-            .get(&item.entity())
-            .unwrap();
+        let data = terrain_data.into_inner().get(&item.entity()).unwrap();
 
-        pass.set_bind_group(I, &terrain_bind_group.bind_group(), &[]);
+        pass.set_bind_group(I, &data.terrain_bind_group, &[]);
         RenderCommandResult::Success
     }
 }

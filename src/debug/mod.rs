@@ -1,20 +1,41 @@
 //! Contains a debug resource and systems controlling it to visualize different internal
 //! data of the plugin.
-use crate::{debug::camera::debug_camera_control, TerrainViewComponents, TerrainViewConfig};
+use crate::{
+    debug::camera::debug_camera_control,
+    prelude::TerrainMaterialPlugin,
+    terrain_view::{TerrainViewComponents, TerrainViewConfig},
+};
 use bevy::{
+    asset::LoadState,
     prelude::*,
-    render::{Extract, RenderApp},
+    render::{render_resource::*, Extract, RenderApp},
 };
 
 pub mod camera;
+
+#[derive(Asset, AsBindGroup, TypePath, Clone, Default)]
+pub struct DebugTerrainMaterial {}
+
+impl Material for DebugTerrainMaterial {}
 
 /// Adds a terrain debug config, a debug camera and debug control systems.
 pub struct TerrainDebugPlugin;
 
 impl Plugin for TerrainDebugPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<DebugTerrain>()
-            .add_systems(Update, (debug_camera_control, toggle_debug, change_config));
+        app.add_plugins(TerrainMaterialPlugin::<DebugTerrainMaterial>::default())
+            .init_resource::<DebugTerrain>()
+            .init_resource::<LoadingImages>()
+            .add_systems(Startup, debug_lighting)
+            .add_systems(
+                Update,
+                (
+                    debug_camera_control,
+                    toggle_debug,
+                    change_config,
+                    finish_loading_images,
+                ),
+            );
 
         app.sub_app_mut(RenderApp)
             .init_resource::<DebugTerrain>()
@@ -25,15 +46,16 @@ impl Plugin for TerrainDebugPlugin {
 #[derive(Clone, Resource)]
 pub struct DebugTerrain {
     pub wireframe: bool,
-    pub show_tiles: bool,
     pub show_lod: bool,
     pub show_uv: bool,
-    pub show_nodes: bool,
-    pub show_minmax_error: bool,
-    pub minmax: bool,
+    pub show_tiles: bool,
+    pub show_quadtree: bool,
+    pub show_pixels: bool,
+    pub show_normals: bool,
     pub mesh_morph: bool,
+    pub layer_blend: bool,
+    pub quadtree_lod: bool,
     pub albedo: bool,
-    pub bright: bool,
     pub lighting: bool,
     pub sample_grad: bool,
     pub freeze: bool,
@@ -46,21 +68,22 @@ impl Default for DebugTerrain {
     fn default() -> Self {
         Self {
             wireframe: false,
-            show_tiles: false,
             show_lod: false,
             show_uv: false,
-            show_nodes: false,
-            show_minmax_error: false,
-            minmax: false,
+            show_tiles: false,
+            show_quadtree: false,
+            show_pixels: false,
+            show_normals: false,
             mesh_morph: true,
+            layer_blend: true,
+            quadtree_lod: false,
             albedo: false,
-            bright: false,
             lighting: true,
             sample_grad: true,
             freeze: false,
             test1: false,
             test2: false,
-            test3: true,
+            test3: false,
         }
     }
 }
@@ -69,113 +92,120 @@ pub fn extract_debug(mut debug: ResMut<DebugTerrain>, extracted_debug: Extract<R
     *debug = extracted_debug.clone();
 }
 
-pub fn toggle_debug(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTerrain>) {
-    if input.just_pressed(KeyCode::W) {
+pub fn toggle_debug(input: Res<ButtonInput<KeyCode>>, mut debug: ResMut<DebugTerrain>) {
+    if input.just_pressed(KeyCode::KeyW) {
         debug.wireframe = !debug.wireframe;
         println!(
             "Toggled the wireframe view {}.",
             if debug.wireframe { "on" } else { "off" }
         )
     }
-    if input.just_pressed(KeyCode::P) {
-        debug.show_tiles = !debug.show_tiles;
-        println!(
-            "Toggled the tile view {}.",
-            if debug.show_tiles { "on" } else { "off" }
-        )
-    }
-    if input.just_pressed(KeyCode::L) {
+    if input.just_pressed(KeyCode::KeyL) {
         debug.show_lod = !debug.show_lod;
         println!(
             "Toggled the lod view {}.",
             if debug.show_lod { "on" } else { "off" }
         )
     }
-    if input.just_pressed(KeyCode::U) {
+    if input.just_pressed(KeyCode::KeyU) {
         debug.show_uv = !debug.show_uv;
         println!(
             "Toggled the uv view {}.",
             if debug.show_uv { "on" } else { "off" }
         )
     }
-    if input.just_pressed(KeyCode::C) {
-        debug.show_nodes = !debug.show_nodes;
+    if input.just_pressed(KeyCode::KeyY) {
+        debug.show_tiles = !debug.show_tiles;
         println!(
-            "Toggled the node view {}.",
-            if debug.show_nodes { "on" } else { "off" }
+            "Toggled the tile view {}.",
+            if debug.show_tiles { "on" } else { "off" }
         )
     }
-    if input.just_pressed(KeyCode::Y) {
-        debug.show_minmax_error = !debug.show_minmax_error;
+    if input.just_pressed(KeyCode::KeyQ) {
+        debug.show_quadtree = !debug.show_quadtree;
         println!(
-            "Toggled the minmax error view {}.",
-            if debug.show_minmax_error { "on" } else { "off" }
+            "Toggled the quadtree view {}.",
+            if debug.show_quadtree { "on" } else { "off" }
         )
     }
-    if input.just_pressed(KeyCode::M) {
-        debug.minmax = !debug.minmax;
+    if input.just_pressed(KeyCode::KeyP) {
+        debug.show_pixels = !debug.show_pixels;
         println!(
-            "Toggled the minmax view {}.",
-            if debug.minmax { "on" } else { "off" }
+            "Toggled the pixel view {}.",
+            if debug.show_pixels { "on" } else { "off" }
         )
     }
-    if input.just_pressed(KeyCode::D) {
+    if input.just_pressed(KeyCode::KeyB) {
+        debug.show_normals = !debug.show_normals;
+        println!(
+            "Toggled the normals view {}.",
+            if debug.show_normals { "on" } else { "off" }
+        )
+    }
+    if input.just_pressed(KeyCode::KeyM) {
         debug.mesh_morph = !debug.mesh_morph;
         println!(
             "Toggled the mesh morph {}.",
             if debug.mesh_morph { "on" } else { "off" }
         )
     }
-    if input.just_pressed(KeyCode::A) {
+    if input.just_pressed(KeyCode::KeyK) {
+        debug.layer_blend = !debug.layer_blend;
+        println!(
+            "Toggled the layer blend {}.",
+            if debug.layer_blend { "on" } else { "off" }
+        )
+    }
+    if input.just_pressed(KeyCode::KeyH) {
+        debug.quadtree_lod = !debug.quadtree_lod;
+        println!(
+            "Toggled the quadtree lod {}.",
+            if debug.quadtree_lod { "on" } else { "off" }
+        )
+    }
+    if input.just_pressed(KeyCode::KeyA) {
         debug.albedo = !debug.albedo;
         println!(
             "Toggled the albedo {}.",
             if debug.albedo { "on" } else { "off" }
         )
     }
-    if input.just_pressed(KeyCode::B) {
-        debug.bright = !debug.bright;
-        println!(
-            "Toggled the base color to {}.",
-            if debug.bright { "white" } else { "black" }
-        )
-    }
-    if input.just_pressed(KeyCode::S) {
+    if input.just_pressed(KeyCode::KeyS) {
         debug.lighting = !debug.lighting;
         println!(
             "Toggled the lighting {}.",
             if debug.lighting { "on" } else { "off" }
         )
     }
-    if input.just_pressed(KeyCode::G) {
+    if input.just_pressed(KeyCode::KeyG) {
         debug.sample_grad = !debug.sample_grad;
         println!(
             "Toggled the texture sampling using gradients {}.",
             if debug.sample_grad { "on" } else { "off" }
         )
     }
-    if input.just_pressed(KeyCode::F) {
+    if input.just_pressed(KeyCode::KeyF) {
         debug.freeze = !debug.freeze;
         println!(
             "{} the view frustum.",
             if debug.freeze { "Froze" } else { "Unfroze" }
         )
     }
-    if input.just_pressed(KeyCode::Key1) {
+    if input.just_pressed(KeyCode::Digit1) {
         debug.test1 = !debug.test1;
         println!(
             "Toggled the debug flag 1 {}.",
             if debug.test1 { "on" } else { "off" }
         )
     }
-    if input.just_pressed(KeyCode::Key2) {
+    if input.just_pressed(KeyCode::Digit2) {
         debug.test2 = !debug.test2;
         println!(
             "Toggled the debug flag 2 {}.",
             if debug.test2 { "on" } else { "off" }
         )
     }
-    if input.just_pressed(KeyCode::Key3) {
+    if input.just_pressed(KeyCode::Digit3) {
         debug.test3 = !debug.test3;
         println!(
             "Toggled the debug flag 3 {}.",
@@ -185,41 +215,94 @@ pub fn toggle_debug(input: Res<Input<KeyCode>>, mut debug: ResMut<DebugTerrain>)
 }
 
 pub fn change_config(
-    input: Res<Input<KeyCode>>,
+    input: Res<ButtonInput<KeyCode>>,
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
 ) {
     for view_config in &mut view_configs.0.values_mut() {
-        if input.just_pressed(KeyCode::H) && view_config.tile_scale > 0.25 {
-            view_config.tile_scale /= 2.0;
-            println!("Decreased the tile scale to {}.", view_config.tile_scale);
-        }
-        if input.just_pressed(KeyCode::J) {
-            view_config.tile_scale *= 2.0;
-            println!("Increased the tile scale to {}.", view_config.tile_scale)
-        }
-
-        if input.just_pressed(KeyCode::I) {
-            view_config.view_distance -= 0.25;
+        if input.just_pressed(KeyCode::KeyN) {
+            view_config.blend_distance -= 0.25;
             println!(
-                "Decreased the view distance to {}.",
-                view_config.view_distance
+                "Decreased the blend distance to {}.",
+                view_config.blend_distance
             );
         }
-        if input.just_pressed(KeyCode::O) {
-            view_config.view_distance += 0.25;
+        if input.just_pressed(KeyCode::KeyE) {
+            view_config.blend_distance += 0.25;
             println!(
-                "Increased the view distance to {}.",
-                view_config.view_distance
+                "Increased the blend distance to {}.",
+                view_config.blend_distance
             );
         }
 
-        if input.just_pressed(KeyCode::N) && view_config.grid_size > 2 {
+        if input.just_pressed(KeyCode::KeyI) {
+            view_config.morph_distance -= 0.25;
+            println!(
+                "Decreased the morph distance to {}.",
+                view_config.morph_distance
+            );
+        }
+        if input.just_pressed(KeyCode::KeyO) {
+            view_config.morph_distance += 0.25;
+            println!(
+                "Increased the morph distance to {}.",
+                view_config.morph_distance
+            );
+        }
+
+        if input.just_pressed(KeyCode::KeyX) && view_config.grid_size > 2 {
             view_config.grid_size -= 2;
             println!("Decreased the grid size to {}.", view_config.grid_size);
         }
-        if input.just_pressed(KeyCode::E) {
+        if input.just_pressed(KeyCode::KeyJ) {
             view_config.grid_size += 2;
             println!("Increased the grid size to {}.", view_config.grid_size);
         }
     }
+}
+
+pub(crate) fn debug_lighting(mut commands: Commands) {
+    commands.spawn(DirectionalLightBundle {
+        directional_light: DirectionalLight {
+            illuminance: 5000.0,
+            ..default()
+        },
+        transform: Transform::from_xyz(-1.0, 1.0, -1.0).looking_at(Vec3::ZERO, Vec3::Y),
+        ..default()
+    });
+    commands.insert_resource(AmbientLight {
+        brightness: 100.0,
+        ..default()
+    });
+}
+
+#[derive(Resource, Default)]
+pub struct LoadingImages(Vec<(AssetId<Image>, TextureDimension, TextureFormat)>);
+
+impl LoadingImages {
+    pub fn load_image(
+        &mut self,
+        handle: &Handle<Image>,
+        dimension: TextureDimension,
+        format: TextureFormat,
+    ) {
+        self.0.push((handle.id(), dimension, format))
+    }
+}
+
+fn finish_loading_images(
+    asset_server: Res<AssetServer>,
+    mut loading_images: ResMut<LoadingImages>,
+    mut images: ResMut<Assets<Image>>,
+) {
+    loading_images.0.retain(|&(id, dimension, format)| {
+        if asset_server.load_state(id) == LoadState::Loaded {
+            let image = images.get_mut(id).unwrap();
+            image.texture_descriptor.dimension = dimension;
+            image.texture_descriptor.format = format;
+
+            false
+        } else {
+            true
+        }
+    });
 }

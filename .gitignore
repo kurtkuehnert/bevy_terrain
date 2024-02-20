@@ -1,6 +1,5 @@
 .idea
 target
-assets/terrain/data/*
-assets/terrain/config.tc
-examples/test.rs
-Cargo.lock
+assets/**/data/*
+assets/**/config.tc
+assets/terrains/spherical/source/height/200m.tif
