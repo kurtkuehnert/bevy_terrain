@@ -1,5 +1,5 @@
 use crate::{
-    formats::tc::load_node_config,
+    formats::TC,
     prelude::{AttachmentConfig, AttachmentFormat},
     terrain::{Terrain, TerrainConfig},
     terrain_data::{
@@ -374,6 +374,8 @@ impl NodeAtlasState {
             return AtlasNode::new(node_coordinate, INVALID_ATLAS_INDEX);
         }
 
+        self.existing_nodes.insert(node_coordinate);
+
         let atlas_index = if let Some(node) = self.node_states.get(&node_coordinate) {
             node.atlas_index
         } else {
@@ -498,6 +500,7 @@ impl NodeAtlasState {
 pub struct NodeAtlas {
     pub(crate) attachments: Vec<AtlasAttachment>, // stores the attachment data
     pub(crate) state: NodeAtlasState,
+    pub(crate) path: String,
     pub(crate) atlas_size: u32,
     pub(crate) lod_count: u32,
 }
@@ -518,13 +521,14 @@ impl NodeAtlas {
             .map(|attachment| AtlasAttachment::new(attachment, atlas_size, path))
             .collect_vec();
 
-        let existing_nodes = load_node_config(path);
+        let existing_nodes = Self::load_node_config(path);
 
         let state = NodeAtlasState::new(atlas_size, attachments.len() as u32, existing_nodes);
 
         Self {
             attachments,
             state,
+            path: path.to_string(),
             atlas_size,
             lod_count,
         }
@@ -588,6 +592,33 @@ impl NodeAtlas {
                     }
                 }
             }
+        }
+    }
+
+    /// Saves the node configuration of the terrain, which stores the [`NodeCoordinate`]s of all the nodes
+    /// of the terrain.
+    pub(crate) fn save_node_config(&self) {
+        let tc = TC {
+            nodes: self
+                .state
+                .existing_nodes
+                .iter()
+                .map(|&node_coordinate| node_coordinate)
+                .collect_vec(),
+        };
+
+        tc.save_file(format!("assets/{}/config.tc", &self.path))
+            .unwrap();
+    }
+
+    /// Loads the node configuration of the terrain, which stores the [`NodeCoordinate`]s of all the nodes
+    /// of the terrain.
+    pub(crate) fn load_node_config(path: &str) -> HashSet<NodeCoordinate> {
+        if let Ok(tc) = TC::load_file(format!("assets/{}/config.tc", path)) {
+            tc.nodes.into_iter().collect()
+        } else {
+            println!("Node config not found.");
+            HashSet::default()
         }
     }
 }

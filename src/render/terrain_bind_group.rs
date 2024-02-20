@@ -219,7 +219,7 @@ impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetTerrainBindGroup<I> {
     fn render<'w>(
         item: &P,
         _: ROQueryItem<'w, Self::ViewQuery>,
-        _: ROQueryItem<'w, Self::ItemQuery>,
+        _: Option<ROQueryItem<'w, Self::ItemQuery>>,
         terrain_data: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
