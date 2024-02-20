@@ -82,6 +82,14 @@ pub struct TerrainComputePipelines {
 }
 
 impl TerrainComputePipelines {
+    pub(crate) fn pipelines<'a>(
+        &'a self,
+        pipeline_cache: &'a PipelineCache,
+    ) -> Option<Vec<&ComputePipeline>> {
+        TerrainComputePipelineId::iter()
+            .map(|id| pipeline_cache.get_compute_pipeline(self.pipelines[id as usize].unwrap()))
+            .collect::<Option<Vec<_>>>()
+    }
     pub(crate) fn queue(
         debug: Option<Res<DebugTerrain>>,
         pipeline_cache: Res<PipelineCache>,
@@ -265,13 +273,7 @@ impl render_graph::Node for TerrainComputeNode {
             }
         }
 
-        let pipelines = &match TerrainComputePipelineId::iter()
-            .map(|id| {
-                pipeline_cache
-                    .get_compute_pipeline(compute_pipelines.pipelines[id as usize].unwrap())
-            })
-            .collect::<Option<Vec<_>>>()
-        {
+        let pipelines = match compute_pipelines.pipelines(pipeline_cache) {
             None => return Ok(()), // some pipelines are not loaded yet
             Some(pipelines) => pipelines,
         };
@@ -281,19 +283,19 @@ impl render_graph::Node for TerrainComputeNode {
             .begin_compute_pass(&ComputePassDescriptor::default());
 
         for terrain in self.terrain_query.iter_manual(world) {
-            let terrain_data = terrain_data.get(&terrain).unwrap();
+            if let Some(terrain_data) = terrain_data.get(&terrain) {
+                for view in self.view_query.iter_manual(world) {
+                    let view_data = terrain_view_data.get(&(terrain, view)).unwrap();
+                    let culling_bind_group = culling_bind_groups.get(&(terrain, view)).unwrap();
 
-            for view in self.view_query.iter_manual(world) {
-                let view_data = terrain_view_data.get(&(terrain, view)).unwrap();
-                let culling_bind_group = culling_bind_groups.get(&(terrain, view)).unwrap();
-
-                TerrainComputeNode::tessellate_terrain(
-                    pass,
-                    pipelines,
-                    view_data,
-                    terrain_data,
-                    culling_bind_group,
-                );
+                    TerrainComputeNode::tessellate_terrain(
+                        pass,
+                        &pipelines,
+                        view_data,
+                        terrain_data,
+                        culling_bind_group,
+                    );
+                }
             }
         }
 

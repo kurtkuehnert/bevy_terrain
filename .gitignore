@@ -2,5 +2,4 @@
 target
 assets/**/data/*
 assets/**/config.tc
-Cargo.lock
 assets/terrains/spherical/source/height/200m.tif

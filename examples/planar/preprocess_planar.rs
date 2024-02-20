@@ -33,30 +33,31 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         ..default()
     });
 
-    let mut terrain_bundle = TerrainBundle::new(config, Vec3::ZERO, 0.0);
+    let mut node_atlas = NodeAtlas::from_config(&config);
 
-    let mut preprocessor = Preprocessor::new(PATH.to_string());
+    let preprocessor = Preprocessor::new()
+        .clear_attachment(0, &mut node_atlas)
+        .clear_attachment(1, &mut node_atlas)
+        .preprocess_tile(
+            PreprocessDataset {
+                attachment_index: 0,
+                path: format!("{PATH}/source/height.png"),
+                lod_range: 0..LOD_COUNT,
+                ..default()
+            },
+            &asset_server,
+            &mut node_atlas,
+        )
+        .preprocess_tile(
+            PreprocessDataset {
+                attachment_index: 1,
+                path: format!("{PATH}/source/albedo.png"),
+                lod_range: 0..LOD_COUNT,
+                ..default()
+            },
+            &asset_server,
+            &mut node_atlas,
+        );
 
-    preprocessor.clear_attachment(0, &mut terrain_bundle.node_atlas);
-    preprocessor.clear_attachment(1, &mut terrain_bundle.node_atlas);
-    preprocessor.preprocess_tile(
-        PreprocessDataset {
-            attachment_index: 0,
-            path: format!("{PATH}/source/height.png"),
-            ..default()
-        },
-        &asset_server,
-        &mut terrain_bundle.node_atlas,
-    );
-    preprocessor.preprocess_tile(
-        PreprocessDataset {
-            attachment_index: 1,
-            path: format!("{PATH}/source/albedo.png"),
-            ..default()
-        },
-        &asset_server,
-        &mut terrain_bundle.node_atlas,
-    );
-
-    commands.spawn((terrain_bundle, preprocessor));
+    commands.spawn((Terrain, node_atlas, preprocessor));
 }

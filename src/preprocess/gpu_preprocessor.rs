@@ -1,5 +1,8 @@
 use crate::{
-    preprocess::preprocessor::{PreprocessTask, PreprocessTaskType, Preprocessor},
+    preprocess::{
+        preprocess_pipeline::TerrainPreprocessPipelines,
+        preprocessor::{PreprocessTask, PreprocessTaskType, Preprocessor},
+    },
     terrain::{Terrain, TerrainComponents},
     terrain_data::{gpu_node_atlas::GpuNodeAtlas, node_atlas::AtlasNode},
     util::StaticBuffer,
@@ -110,12 +113,25 @@ impl GpuPreprocessor {
     }
 
     pub(crate) fn prepare(
+        mut not_first: Local<bool>,
         device: Res<RenderDevice>,
         images: Res<RenderAssets<Image>>,
         mut gpu_preprocessors: ResMut<TerrainComponents<GpuPreprocessor>>,
         mut gpu_node_atlases: ResMut<TerrainComponents<GpuNodeAtlas>>,
+        preprocess_pipelines: Res<TerrainPreprocessPipelines>,
+        pipeline_cache: Res<PipelineCache>,
         terrain_query: Query<Entity, With<Terrain>>,
     ) {
+        // Todo: fix this (only here to skip the first invocation, to prevent preprocess_pipelines.loaded from panicing
+        if !*not_first {
+            *not_first = true;
+            return;
+        }
+
+        if !preprocess_pipelines.loaded(&pipeline_cache) {
+            return;
+        }
+
         for terrain in terrain_query.iter() {
             let gpu_preprocessor = gpu_preprocessors.get_mut(&terrain).unwrap();
             let gpu_node_atlas = gpu_node_atlases.get_mut(&terrain).unwrap();

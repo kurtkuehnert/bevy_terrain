@@ -2,23 +2,29 @@
 //! data of the plugin.
 use crate::{
     debug::camera::debug_camera_control,
+    prelude::TerrainMaterialPlugin,
     terrain_view::{TerrainViewComponents, TerrainViewConfig},
 };
-use bevy::asset::LoadState;
-use bevy::render::render_resource::{TextureDimension, TextureFormat};
 use bevy::{
+    asset::LoadState,
     prelude::*,
-    render::{Extract, RenderApp},
+    render::{render_resource::*, Extract, RenderApp},
 };
 
 pub mod camera;
+
+#[derive(Asset, AsBindGroup, TypePath, Clone, Default)]
+pub struct DebugTerrainMaterial {}
+
+impl Material for DebugTerrainMaterial {}
 
 /// Adds a terrain debug config, a debug camera and debug control systems.
 pub struct TerrainDebugPlugin;
 
 impl Plugin for TerrainDebugPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<DebugTerrain>()
+        app.add_plugins(TerrainMaterialPlugin::<DebugTerrainMaterial>::default())
+            .init_resource::<DebugTerrain>()
             .init_resource::<LoadingImages>()
             .add_systems(Startup, debug_lighting)
             .add_systems(
@@ -257,14 +263,14 @@ pub fn change_config(
 pub(crate) fn debug_lighting(mut commands: Commands) {
     commands.spawn(DirectionalLightBundle {
         directional_light: DirectionalLight {
-            illuminance: 1000.0,
+            illuminance: 5000.0,
             ..default()
         },
         transform: Transform::from_xyz(-1.0, 1.0, -1.0).looking_at(Vec3::ZERO, Vec3::Y),
         ..default()
     });
     commands.insert_resource(AmbientLight {
-        brightness: 20.0,
+        brightness: 100.0,
         ..default()
     });
 }

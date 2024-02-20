@@ -1,5 +1,4 @@
 use crate::{
-    formats::tc::save_node_config,
     terrain::Terrain,
     terrain_data::{
         coordinates::NodeCoordinate,
@@ -7,10 +6,14 @@ use crate::{
         AttachmentFormat,
     },
 };
-use bevy::{asset::LoadState, prelude::*, render::texture::ImageSampler};
+use bevy::{prelude::*, render::texture::ImageSampler};
 use itertools::{iproduct, Itertools};
-use std::ops::Range;
-use std::{collections::VecDeque, fs, ops::DerefMut, time::Instant};
+use std::{
+    collections::VecDeque,
+    fs,
+    ops::{DerefMut, Range},
+    time::Instant,
+};
 
 pub fn reset_directory(directory: &str) {
     let _ = fs::remove_file(format!("{directory}/../../config.tc"));
@@ -96,7 +99,7 @@ impl PreprocessTask {
     fn is_ready(&self, asset_server: &AssetServer, node_atlas: &NodeAtlas) -> bool {
         match &self.task_type {
             PreprocessTaskType::Split { tile, .. } => {
-                asset_server.load_state(tile) == LoadState::Loaded
+                asset_server.is_loaded_with_dependencies(tile)
             }
             PreprocessTaskType::Stitch { .. } => true,
             PreprocessTaskType::Downsample { .. } => true,
@@ -104,6 +107,23 @@ impl PreprocessTask {
                 node_atlas.state.download_slots == node_atlas.state.max_download_slots
             }
             PreprocessTaskType::Save => true,
+        }
+    }
+
+    #[allow(dead_code)]
+    fn debug(&self) {
+        match &self.task_type {
+            PreprocessTaskType::Split { .. } => {
+                println!("Splitting node: {}", self.node.coordinate)
+            }
+            PreprocessTaskType::Stitch { .. } => {
+                println!("Stitching node: {}", self.node.coordinate)
+            }
+            PreprocessTaskType::Downsample { .. } => {
+                println!("Downsampling node: {}", self.node.coordinate)
+            }
+            PreprocessTaskType::Save => println!("Started saving node: {}", self.node.coordinate),
+            PreprocessTaskType::Barrier => println!("Barrier"),
         }
     }
 
@@ -198,7 +218,6 @@ impl PreprocessTask {
 
 #[derive(Component)]
 pub struct Preprocessor {
-    pub(crate) path: String,
     pub(crate) loading_tiles: Vec<LoadingTile>,
     pub(crate) task_queue: VecDeque<PreprocessTask>,
     pub(crate) ready_tasks: Vec<PreprocessTask>,
@@ -208,21 +227,14 @@ pub struct Preprocessor {
 }
 
 impl Preprocessor {
-    pub fn new(path: String) -> Self {
+    pub fn new() -> Self {
         Self {
-            path,
             loading_tiles: default(),
             task_queue: default(),
             ready_tasks: default(),
             start_time: None,
             loaded: false,
         }
-    }
-
-    pub fn clear_attachment(&self, attachment_index: u32, node_atlas: &mut NodeAtlas) {
-        let attachment = &mut node_atlas.attachments[attachment_index as usize];
-        node_atlas.state.existing_nodes.clear();
-        reset_directory(&attachment.path);
     }
 
     fn split_and_downsample(
@@ -284,34 +296,44 @@ impl Preprocessor {
         }
     }
 
+    pub fn clear_attachment(self, attachment_index: u32, node_atlas: &mut NodeAtlas) -> Self {
+        let attachment = &mut node_atlas.attachments[attachment_index as usize];
+        node_atlas.state.existing_nodes.clear();
+        reset_directory(&attachment.path);
+
+        self
+    }
+
     pub fn preprocess_tile(
-        &mut self,
+        mut self,
         dataset: PreprocessDataset,
         asset_server: &AssetServer,
         node_atlas: &mut NodeAtlas,
-    ) {
+    ) -> Self {
+        self.task_queue.push_back(PreprocessTask::barrier());
         self.split_and_downsample(&dataset, asset_server, node_atlas);
         self.task_queue.push_back(PreprocessTask::barrier());
 
-        for lod in dataset.lod_range.clone().skip(1) {
+        for lod in dataset.lod_range.clone() {
             self.stitch_and_save_layer(&dataset, node_atlas, lod);
         }
+
+        self
     }
 
     pub fn preprocess_spherical(
-        &mut self,
+        mut self,
         dataset: SphericalDataset,
         asset_server: &AssetServer,
         node_atlas: &mut NodeAtlas,
-    ) {
+    ) -> Self {
         let side_datasets = (0..6)
             .map(|side| PreprocessDataset {
                 attachment_index: dataset.attachment_index,
                 path: dataset.paths[side as usize].clone(),
                 side,
-                top_left: Vec2::splat(0.0),
-                bottom_right: Vec2::splat(1.0),
                 lod_range: dataset.lod_range.clone(),
+                ..default()
             })
             .collect_vec();
 
@@ -321,11 +343,13 @@ impl Preprocessor {
 
         self.task_queue.push_back(PreprocessTask::barrier());
 
-        for lod in dataset.lod_range.skip(1) {
+        for lod in dataset.lod_range {
             for dataset in &side_datasets {
                 self.stitch_and_save_layer(&dataset, node_atlas, lod);
             }
         }
+
+        self
     }
 }
 
@@ -335,7 +359,6 @@ pub(crate) fn select_ready_tasks(
 ) {
     for (mut preprocessor, mut node_atlas) in terrain_query.iter_mut() {
         let Preprocessor {
-            path,
             task_queue,
             ready_tasks,
             start_time,
@@ -349,7 +372,7 @@ pub(crate) fn select_ready_tasks(
             {
                 println!("Preprocessing took {:?}", time.elapsed());
 
-                save_node_config(path);
+                node_atlas.save_node_config();
 
                 *start_time = None;
             }
@@ -367,10 +390,10 @@ pub(crate) fn select_ready_tasks(
             {
                 let task = task_queue.pop_front().unwrap();
 
+                // task.debug();
+
                 if matches!(task.task_type, PreprocessTaskType::Save) {
                     node_atlas.save(task.node);
-                } else if matches!(task.task_type, PreprocessTaskType::Barrier) {
-                    // dbg!("barrier complete");
                 } else {
                     ready_tasks.push(task);
                     node_atlas.state.download_slots -= 1;

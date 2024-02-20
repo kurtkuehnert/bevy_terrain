@@ -15,7 +15,7 @@ repository = "https://github.com/kurtkuehnert/bevy_terrain"
 spherical = []
 
 [dependencies]
-bevy = { git="https://github.com/bevyengine/bevy/", branch="main" }
+bevy = "0.13.0" #{ git="https://github.com/bevyengine/bevy/", branch="main" }
 ndarray = "0.15"
 itertools = "0.12"
 image = "0.24"
