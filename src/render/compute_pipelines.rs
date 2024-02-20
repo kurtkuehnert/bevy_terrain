@@ -117,14 +117,15 @@ impl TerrainComputePipelines {
 impl FromWorld for TerrainComputePipelines {
     fn from_world(world: &mut World) -> Self {
         let device = world.resource::<RenderDevice>();
+        let asset_server = world.resource::<AssetServer>();
 
         let prepare_indirect_layout = create_prepare_indirect_layout(device);
         let refine_tiles_layout = create_refine_tiles_layout(device);
         let culling_data_layout = create_culling_layout(device);
         let terrain_layout = create_terrain_layout(device);
 
-        let prepare_indirect_shader = PREPARE_INDIRECT_SHADER;
-        let refine_tiles_shader = REFINE_TILES_SHADER;
+        let prepare_indirect_shader = asset_server.load(PREPARE_INDIRECT_SHADER);
+        let refine_tiles_shader = asset_server.load(REFINE_TILES_SHADER);
 
         TerrainComputePipelines {
             prepare_indirect_layout,

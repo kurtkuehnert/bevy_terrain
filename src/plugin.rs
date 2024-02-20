@@ -12,6 +12,7 @@ use crate::{
         quadtree::Quadtree,
     },
     terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
+    util::InternalShaders,
 };
 use bevy::{
     prelude::*,
@@ -30,6 +31,7 @@ impl Plugin for TerrainPlugin {
             ExtractComponentPlugin::<Terrain>::default(),
             ExtractComponentPlugin::<TerrainView>::default(),
         ))
+        .init_resource::<InternalShaders>()
         .init_resource::<TerrainViewComponents<Quadtree>>()
         .init_resource::<TerrainViewComponents<TerrainViewConfig>>()
         .add_systems(
