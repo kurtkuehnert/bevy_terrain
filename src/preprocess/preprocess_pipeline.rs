@@ -17,6 +17,7 @@ use bevy::{
         renderer::{RenderContext, RenderDevice},
     },
 };
+use itertools::Itertools;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
@@ -41,6 +42,25 @@ pub struct TerrainPreprocessPipelines {
     pipelines: Vec<CachedComputePipelineId>,
 }
 
+impl TerrainPreprocessPipelines {
+    pub(crate) fn loaded(&self, pipeline_cache: &PipelineCache) -> bool {
+        TerrainPreprocessPipelineId::iter().all(|id| {
+            pipeline_cache
+                .get_compute_pipeline(self.pipelines[id as usize])
+                .is_some()
+        })
+    }
+
+    pub(crate) fn pipelines<'a>(
+        &'a self,
+        pipeline_cache: &'a PipelineCache,
+    ) -> Option<Vec<&ComputePipeline>> {
+        TerrainPreprocessPipelineId::iter()
+            .map(|id| pipeline_cache.get_compute_pipeline(self.pipelines[id as usize]))
+            .collect::<Option<Vec<_>>>()
+    }
+}
+
 impl FromWorld for TerrainPreprocessPipelines {
     fn from_world(world: &mut World) -> Self {
         let device = world.resource::<RenderDevice>();
@@ -60,9 +80,9 @@ impl FromWorld for TerrainPreprocessPipelines {
 
         world.resource_scope(|world: &mut World,mut pipelines: Mut<SpecializedComputePipelines<TerrainPreprocessPipelines>>| {
             let pipeline_cache = world.resource::<PipelineCache>();
-            for id in TerrainPreprocessPipelineId::iter() {
-                preprocess_pipelines.pipelines.push(pipelines.specialize(pipeline_cache, &preprocess_pipelines, id));
-            }
+            preprocess_pipelines.pipelines = TerrainPreprocessPipelineId::iter().map(|id|
+                pipelines.specialize(pipeline_cache, &preprocess_pipelines, id)).collect_vec();
+
         });
 
         preprocess_pipelines
@@ -139,12 +159,7 @@ impl render_graph::Node for TerrainPreprocessNode {
         let preprocess_data = world.resource::<TerrainComponents<GpuPreprocessor>>();
         let gpu_node_atlases = world.resource::<TerrainComponents<GpuNodeAtlas>>();
 
-        let pipelines = &match TerrainPreprocessPipelineId::iter()
-            .map(|id| {
-                pipeline_cache.get_compute_pipeline(preprocess_pipelines.pipelines[id as usize])
-            })
-            .collect::<Option<Vec<_>>>()
-        {
+        let pipelines = match preprocess_pipelines.pipelines(pipeline_cache) {
             None => return Ok(()), // some pipelines are not loaded yet
             Some(pipelines) => pipelines,
         };
