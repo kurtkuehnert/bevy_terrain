@@ -1,10 +1,9 @@
 //! Types for configuring terrains.
 
-use crate::terrain_data::{AtlasAttachment, NodeId};
+use crate::{terrain_data::node_atlas::NodeAtlas, terrain_data::AttachmentConfig};
 use bevy::{
-    prelude::*,
-    render::extract_component::ExtractComponent,
-    utils::{HashMap, HashSet},
+    prelude::*, render::extract_component::ExtractComponent, render::view::NoFrustumCulling,
+    utils::HashMap,
 };
 
 /// Resource that stores components that are associated to a terrain entity.
@@ -44,17 +43,67 @@ pub struct Terrain;
 pub struct TerrainConfig {
     /// The count of level of detail layers.
     pub lod_count: u32,
-    /// The maximum height of the terrain. // Todo: reconsider this
-    pub height: f32,
-    /// The size of the smallest nodes (with lod 0).
-    pub leaf_node_size: u32, // Todo: reconsider this
-    /// The size of the terrain.
-    pub terrain_size: u32, // Todo: reconsider this
+    /// The minimum height of the terrain.
+    pub min_height: f32,
+    /// The maximum height of the terrain.
+    pub max_height: f32,
     /// The amount of nodes the can be loaded simultaneously in the node atlas.
     pub node_atlas_size: u32,
     /// The path to the terrain folder inside the assets directory.
     pub path: String,
     /// The attachments of the terrain.
-    pub attachments: Vec<AtlasAttachment>,
-    pub nodes: HashSet<NodeId>,
+    pub attachments: Vec<AttachmentConfig>,
+}
+
+impl Default for TerrainConfig {
+    fn default() -> Self {
+        Self {
+            lod_count: 1,
+            min_height: 0.0,
+            max_height: 1.0,
+            node_atlas_size: 1024,
+            path: default(),
+            attachments: default(),
+        }
+    }
+}
+
+impl TerrainConfig {
+    pub fn add_attachment(mut self, attachment_config: AttachmentConfig) -> Self {
+        self.attachments.push(attachment_config);
+        self
+    }
+}
+
+/// The components of a terrain.
+///
+/// Does not include loader(s) and a material.
+#[derive(Bundle)]
+pub struct TerrainBundle {
+    pub terrain: Terrain,
+    pub node_atlas: NodeAtlas,
+    pub config: TerrainConfig,
+    pub transform: Transform,
+    pub global_transform: GlobalTransform,
+    pub visibility_bundle: VisibilityBundle,
+    pub no_frustum_culling: NoFrustumCulling,
+}
+
+impl TerrainBundle {
+    /// Creates a new terrain bundle from the config.
+    pub fn new(config: TerrainConfig, translation: Vec3, scale: f32) -> Self {
+        Self {
+            terrain: Terrain,
+            node_atlas: NodeAtlas::from_config(&config),
+            config,
+            transform: Transform {
+                translation,
+                scale: Vec3::splat(scale),
+                ..default()
+            },
+            global_transform: default(),
+            visibility_bundle: default(),
+            no_frustum_culling: NoFrustumCulling,
+        }
+    }
 }

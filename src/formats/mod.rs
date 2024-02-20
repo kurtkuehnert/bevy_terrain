@@ -1,72 +1,34 @@
-//! The custom Terrain Data Format (TDF) that losslessly compresses the terrain data.
-//!
-//! It is based on the DTM and QOI format internally.
+use crate::terrain_data::coordinates::NodeCoordinate;
+use anyhow::Result;
+use bincode::{config, Decode, Encode};
+use std::{fs, path::Path};
 
-pub mod tc;
-pub mod tdf;
-
-use crate::formats::tdf::TDF;
-use bevy::{
-    asset::{AssetLoader, Error, LoadedAsset},
-    prelude::*,
-    render::render_resource::*,
-};
-
-struct TDFAssetLoader;
-
-impl AssetLoader for TDFAssetLoader {
-    fn load<'a>(
-        &'a self,
-        bytes: &'a [u8],
-        load_context: &'a mut bevy::asset::LoadContext,
-    ) -> bevy::utils::BoxedFuture<'a, Result<(), Error>> {
-        Box::pin(async move {
-            let (descriptor, mut data) = TDF::decode_alloc(bytes, true).unwrap();
-
-            // extend alpha channel
-            if descriptor.channel_count == 3 && descriptor.pixel_size == 1 {
-                data = data
-                    .chunks_exact(3)
-                    .flat_map(|pixel| [pixel[0], pixel[1], pixel[2], u8::MAX])
-                    .collect();
-            };
-
-            let image = Image {
-                data,
-                texture_descriptor: TextureDescriptor {
-                    label: None,
-                    size: Extent3d {
-                        width: descriptor.size,
-                        height: descriptor.size,
-                        ..default()
-                    },
-                    mip_level_count: descriptor.mip_level_count,
-                    sample_count: 1,
-                    dimension: TextureDimension::D2,
-                    format: TextureFormat::R8Unorm,
-                    usage: TextureUsages::TEXTURE_BINDING | TextureUsages::COPY_DST,
-                    view_formats: &[],
-                },
-                sampler_descriptor: Default::default(),
-                texture_view_descriptor: None,
-            };
-
-            load_context.set_default_asset(LoadedAsset::new(image));
-
-            Ok(())
-        })
-    }
-
-    fn extensions(&self) -> &[&str] {
-        &["tdf"]
-    }
+#[derive(Encode, Decode, Debug)]
+pub struct TC {
+    pub nodes: Vec<NodeCoordinate>,
 }
 
-/// Plugin that registers the `TDFAssetLoader`.
-pub struct TDFPlugin;
+impl TC {
+    pub fn decode_alloc(encoded: &[u8]) -> Result<Self> {
+        let config = config::standard();
+        let decoded = bincode::decode_from_slice(encoded, config)?;
+        Ok(decoded.0)
+    }
 
-impl Plugin for TDFPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_asset_loader(TDFAssetLoader);
+    pub fn encode_alloc(&self) -> Result<Vec<u8>> {
+        let config = config::standard();
+        let encoded = bincode::encode_to_vec(self, config)?;
+        Ok(encoded)
+    }
+
+    pub fn load_file<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let encoded = fs::read(path)?;
+        Self::decode_alloc(&encoded)
+    }
+
+    pub fn save_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
+        let encoded = self.encode_alloc()?;
+        fs::write(path, encoded)?;
+        Ok(())
     }
 }

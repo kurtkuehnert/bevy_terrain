@@ -73,8 +73,15 @@ Use them to fly over the terrain, experiment with the quality settings and enter
 --->
  
 
+## Attribution
+The planar terrain dataset is generated using the free version of the Gaia Terrain Generator.
+The spherical terrain example dataset is a reprojected version of the GEBCO_2023 Grid dataset.
+
+GEBCO Compilation Group (2023) GEBCO 2023 Grid (doi:10.5285/f98b053b-0cbc-6c23-e053-6c86abc0af7b)
+
+
 ## License
-Bevy Terrain is dual-licensed under either
+Bevy Terrain source code (this excludes the datasets in the assets directory) is dual-licensed under either
 
 * MIT License (LICENSE-MIT or http://opensource.org/licenses/MIT)
 * Apache License, Version 2.0 (LICENSE-APACHE or http://www.apache.org/licenses/LICENSE-2.0)

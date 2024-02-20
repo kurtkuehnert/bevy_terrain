@@ -1,13 +1,12 @@
-#import bevy_terrain::types VertexInput, VertexOutput, FragmentInput, FragmentOutput
-#import bevy_terrain::vertex vertex_fn
-#import bevy_terrain::fragment fragment_fn
+#import bevy_terrain::vertex::{VertexInput, VertexOutput, default_vertex}
+#import bevy_terrain::fragment::{FragmentInput, FragmentOutput, default_fragment}
 
 @vertex
-fn vertex(in: VertexInput) -> VertexOutput {
-    return vertex_fn(in);
+fn vertex(input: VertexInput) -> VertexOutput {
+    return default_vertex(input);
 }
 
 @fragment
-fn fragment(in: FragmentInput) -> FragmentOutput {
-    return fragment_fn(in);
+fn fragment(input: FragmentInput) -> FragmentOutput {
+    return default_fragment(input);
 }

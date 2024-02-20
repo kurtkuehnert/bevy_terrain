@@ -1,11 +1,7 @@
 //! Types for configuring terrain views.
 
-use bevy::{
-    prelude::*,
-    render::extract_component::ExtractComponent,
-    utils::{HashMap, Uuid},
-};
-use std::str::FromStr;
+use crate::{prelude::Quadtree, terrain::TerrainConfig};
+use bevy::{prelude::*, render::extract_component::ExtractComponent, utils::HashMap};
 
 /// Resource that stores components that are associated to a terrain entity and a view entity.
 #[derive(Clone, Resource)]
@@ -40,26 +36,20 @@ pub struct TerrainView;
 /// A terrain view describes the quality settings the corresponding terrain will be rendered with.
 #[derive(Clone, Component)]
 pub struct TerrainViewConfig {
-    /// A handle to the quadtree texture.
-    pub quadtree_handle: Handle<Image>,
     /// The current height under the viewer.
-    pub height_under_viewer: f32,
-    /// The distance (measured in multiples of the node size) until which to request nodes to be loaded.
-    pub load_distance: f32,
+    pub approximate_height: f32,
     /// The count of nodes in x and y direction per quadtree layer.
-    pub node_count: u32,
+    pub quadtree_size: u32,
     /// The size of the tile buffer.
     pub tile_count: u32,
     /// The amount of steps the tile list will be refined.
     pub refinement_count: u32,
-    /// The amount of steps the tiles will be further refined than there are new LOD layers.
-    pub additional_refinement: u32,
-    /// A factor that scales tiles smaller or larger.
-    pub tile_scale: f32,
     /// The number of rows and columns of the tile grid.
     pub grid_size: u32,
-    /// The distance (measured in multiples of the node size) at which the LOD changes.
-    pub view_distance: f32,
+    // Todo: set scale for these appropriately
+    pub load_distance: f32,
+    pub morph_distance: f32,
+    pub blend_distance: f32,
     /// The morph percentage of the mesh.
     pub morph_range: f32,
     /// The blend percentage in the vertex and fragment shader.
@@ -69,22 +59,29 @@ pub struct TerrainViewConfig {
 impl Default for TerrainViewConfig {
     fn default() -> Self {
         Self {
-            quadtree_handle: HandleUntyped::weak_from_u64(
-                Uuid::from_str("6ea26da6-6cf8-4ea2-9986-1d7bf6c17d6f").unwrap(),
-                fastrand::u64(..),
-            )
-            .typed(), // Todo: fix this awful hack
-            height_under_viewer: 0.0,
-            load_distance: 5.0,
-            node_count: 10,
+            approximate_height: 0.0,
+            quadtree_size: 8,
             tile_count: 1000000,
             refinement_count: 20,
-            additional_refinement: 0,
-            tile_scale: 32.0,
-            grid_size: 8,
-            view_distance: 4.0,
+            grid_size: 32,
+            load_distance: 3.0,
+            morph_distance: 8.0,
+            blend_distance: 1.5,
             morph_range: 0.2,
             blend_range: 0.2,
         }
     }
+}
+
+pub fn initialize_terrain_view(
+    terrain: Entity,
+    view: Entity,
+    config: &TerrainConfig,
+    view_config: TerrainViewConfig,
+    quadtrees: &mut TerrainViewComponents<Quadtree>,
+    view_configs: &mut TerrainViewComponents<TerrainViewConfig>,
+) {
+    let quadtree = Quadtree::from_configs(&config, &view_config);
+    view_configs.insert((terrain, view), view_config);
+    quadtrees.insert((terrain, view), quadtree);
 }

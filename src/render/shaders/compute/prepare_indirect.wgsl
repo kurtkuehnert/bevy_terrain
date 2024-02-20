@@ -1,16 +1,16 @@
-#import bevy_terrain::types TerrainViewConfig, Tile, TileList, Parameters
+#import bevy_terrain::types::{TerrainViewConfig, Tile, TileList, Parameters}
 
 struct IndirectBuffer {
     workgroup_count: vec3<u32>,
 }
 
-@group(0) @binding(0)
+@group(1) @binding(0)
 var<uniform> view_config: TerrainViewConfig;
-@group(0) @binding(2)
+@group(1) @binding(2)
 var<storage, read_write> final_tiles: TileList;
-@group(0) @binding(3)
+@group(1) @binding(3)
 var<storage, read_write> temporary_tiles: TileList;
-@group(0) @binding(4)
+@group(1) @binding(4)
 var<storage, read_write> parameters: Parameters;
 
 @group(3) @binding(0)
@@ -18,12 +18,21 @@ var<storage, read_write> indirect_buffer: IndirectBuffer;
 
 @compute @workgroup_size(1, 1, 1)
 fn prepare_root() {
-    parameters.counter = 1;
-    atomicStore(&parameters.child_index, 1);
+    parameters.counter = -1;
+    atomicStore(&parameters.child_index, i32(view_config.tile_count - 1u));
+    atomicStore(&parameters.final_index, 0);
 
-    let size = 1u << (view_config.refinement_count - 1u);
+#ifdef SPHERICAL
+    parameters.tile_count = 6u;
 
-    temporary_tiles.data[0] = Tile(vec2<u32>(0u), size);
+    for (var i: u32 = 0u; i < 6u; i = i + 1u) {
+        temporary_tiles.data[i] = Tile(vec2<f32>(0.0), 1.0, i);
+    }
+#else
+    parameters.tile_count = 1u;
+
+    temporary_tiles.data[0] = Tile(vec2<f32>(0.0), 1.0, 0u);
+#endif
 
     indirect_buffer.workgroup_count = vec3<u32>(1u, 1u, 1u);
 }
@@ -43,7 +52,7 @@ fn prepare_next() {
 
 @compute @workgroup_size(1, 1, 1)
 fn prepare_render() {
-    let tile_count = u32(atomicExchange(&parameters.final_index, 0));
+    let tile_count = u32(atomicLoad(&parameters.final_index));
     let vertex_count = view_config.vertices_per_tile * tile_count;
 
     indirect_buffer.workgroup_count = vec3<u32>(vertex_count, 1u, 0u);

@@ -15,8 +15,8 @@
 //! Therefore the terrain is subdivided into a giant quadtree, whose nodes store their
 //! section of these attachments.
 //! This crate uses the chunked clipmap data structure, which consist of two pieces working together.
-//! The wrapping [`Quadtree`] views together with
-//! the [`NodeAtlas`] (the data structure
+//! The wrapping [`Quadtree`](prelude::Quadtree) views together with
+//! the [`NodeAtlas`](prelude::NodeAtlas) (the data structure
 //! that stores all of the currently loaded data) can be used to efficiently retrieve
 //! the best currently available data at any position for terrains of any size.
 //! See the [`terrain_data`] module for more information.
@@ -35,7 +35,7 @@
 //! ## How to shade the terrain?
 //! The third and most important challenge of terrain rendering is the shading. This is a very
 //! project specific problem and thus there does not exist a one-size-fits-all solution.
-//! You can define your own terrain [Material] and shader with all the
+//! You can define your own terrain [Material](bevy::prelude::Material) and shader with all the
 //! detail textures tailored to your application.
 //! In the future this plugin will provide modular shader functions to make techniques like splat
 //! mapping, triplane mapping, etc. easier.
@@ -43,19 +43,6 @@
 //!
 //! [^note]: Some of these claims are not yet fully implemented.
 
-extern crate core;
-
-use crate::{
-    debug::DebugTerrain,
-    render::compute_pipelines::TerrainComputePipelines,
-    terrain::{Terrain, TerrainComponents, TerrainConfig},
-    terrain_data::node_atlas::NodeAtlas,
-    terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
-};
-
-use bevy::{prelude::*, render::view::NoFrustumCulling};
-
-pub mod attachment_loader;
 pub mod debug;
 pub mod formats;
 pub mod plugin;
@@ -64,51 +51,27 @@ pub mod render;
 pub mod terrain;
 pub mod terrain_data;
 pub mod terrain_view;
+pub mod util;
 
 pub mod prelude {
     //! `use bevy_terrain::prelude::*;` to import common components, bundles, and plugins.
     // #[doc(hidden)]
     pub use crate::{
-        attachment_loader::AttachmentFromDiskLoader,
-        debug::{camera::DebugCamera, TerrainDebugPlugin},
-        plugin::{TerrainPlugin, TerrainPluginConfig},
-        preprocess::{BaseConfig, Preprocessor, TileConfig},
-        render::render_pipeline::TerrainMaterialPlugin,
-        terrain::{Terrain, TerrainConfig},
-        terrain_data::{
-            node_atlas::NodeAtlas, quadtree::Quadtree, AttachmentConfig, AttachmentFormat,
-            FileFormat,
+        debug::{camera::DebugCamera, DebugTerrainMaterial, LoadingImages, TerrainDebugPlugin},
+        plugin::TerrainPlugin,
+        preprocess::{
+            preprocessor::Preprocessor,
+            preprocessor::{PreprocessDataset, SphericalDataset},
+            TerrainPreprocessPlugin,
         },
-        terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
-        TerrainBundle,
+        render::render_pipeline::TerrainMaterialPlugin,
+        terrain::{Terrain, TerrainBundle, TerrainConfig},
+        terrain_data::{
+            node_atlas::NodeAtlas, quadtree::Quadtree, sample_attachment, AttachmentConfig,
+            AttachmentFormat,
+        },
+        terrain_view::{
+            initialize_terrain_view, TerrainView, TerrainViewComponents, TerrainViewConfig,
+        },
     };
-}
-
-/// The components of a terrain.
-///
-/// Does not include loader(s) and a material.
-#[derive(Bundle)]
-pub struct TerrainBundle {
-    terrain: Terrain,
-    node_atlas: NodeAtlas,
-    config: TerrainConfig,
-    transform: Transform,
-    global_transform: GlobalTransform,
-    visibility_bundle: VisibilityBundle,
-    no_frustum_culling: NoFrustumCulling,
-}
-
-impl TerrainBundle {
-    /// Creates a new terrain bundle from the config.
-    pub fn new(config: TerrainConfig) -> Self {
-        Self {
-            terrain: Terrain,
-            node_atlas: NodeAtlas::from_config(&config),
-            config,
-            transform: default(),
-            global_transform: default(),
-            visibility_bundle: default(),
-            no_frustum_culling: NoFrustumCulling,
-        }
-    }
 }
