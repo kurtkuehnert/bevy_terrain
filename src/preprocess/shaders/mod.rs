@@ -1,19 +1,19 @@
-use bevy::{asset::load_internal_asset, prelude::*};
+use crate::util::InternalShaders;
+use bevy::{asset::embedded_asset, prelude::*};
 
-const PREPROCESSING_SHADER: Handle<Shader> = Handle::weak_from_u128(234753841217987793618);
-pub(crate) const SPLIT_SHADER: Handle<Shader> = Handle::weak_from_u128(1284335798564325835856);
-pub(crate) const STITCH_SHADER: Handle<Shader> = Handle::weak_from_u128(7314687437789154378358);
-pub(crate) const DOWNSAMPLE_SHADER: Handle<Shader> =
-    Handle::weak_from_u128(84231267615315384379763);
+pub(crate) const SPLIT_SHADER: &str = "embedded://bevy_terrain/preprocess/shaders/split.wgsl";
+pub(crate) const STITCH_SHADER: &str = "embedded://bevy_terrain/preprocess/shaders/stitch.wgsl";
+pub(crate) const DOWNSAMPLE_SHADER: &str =
+    "embedded://bevy_terrain/preprocess/shaders/downsample.wgsl";
 
 pub(crate) fn load_preprocess_shaders(app: &mut App) {
-    load_internal_asset!(
+    embedded_asset!(app, "preprocessing.wgsl");
+    embedded_asset!(app, "split.wgsl");
+    embedded_asset!(app, "stitch.wgsl");
+    embedded_asset!(app, "downsample.wgsl");
+
+    InternalShaders::load(
         app,
-        PREPROCESSING_SHADER,
-        "preprocessing.wgsl",
-        Shader::from_wgsl
+        &["embedded://bevy_terrain/preprocess/shaders/preprocessing.wgsl"],
     );
-    load_internal_asset!(app, SPLIT_SHADER, "split.wgsl", Shader::from_wgsl);
-    load_internal_asset!(app, STITCH_SHADER, "stitch.wgsl", Shader::from_wgsl);
-    load_internal_asset!(app, DOWNSAMPLE_SHADER, "downsample.wgsl", Shader::from_wgsl);
 }

@@ -39,6 +39,9 @@ pub struct TerrainPreprocessPipelines {
     split_layout: BindGroupLayout,
     stitch_layout: BindGroupLayout,
     downsample_layout: BindGroupLayout,
+    split_shader: Handle<Shader>,
+    stitch_shader: Handle<Shader>,
+    downsample_shader: Handle<Shader>,
     pipelines: Vec<CachedComputePipelineId>,
 }
 
@@ -64,17 +67,25 @@ impl TerrainPreprocessPipelines {
 impl FromWorld for TerrainPreprocessPipelines {
     fn from_world(world: &mut World) -> Self {
         let device = world.resource::<RenderDevice>();
+        let asset_server = world.resource::<AssetServer>();
 
         let attachment_layout = create_attachment_layout(device);
         let split_layout = create_split_layout(device);
         let stitch_layout = create_stitch_layout(device);
         let downsample_layout = create_downsample_layout(device);
 
+        let split_shader = asset_server.load(SPLIT_SHADER);
+        let stitch_shader = asset_server.load(STITCH_SHADER);
+        let downsample_shader = asset_server.load(DOWNSAMPLE_SHADER);
+
         let mut preprocess_pipelines = TerrainPreprocessPipelines {
             attachment_layout,
             split_layout,
             stitch_layout,
             downsample_layout,
+            split_shader,
+            stitch_shader,
+            downsample_shader,
             pipelines: vec![],
         };
 
@@ -102,12 +113,12 @@ impl SpecializedComputePipeline for TerrainPreprocessPipelines {
         match key {
             TerrainPreprocessPipelineId::Split => {
                 layout = vec![self.attachment_layout.clone(), self.split_layout.clone()];
-                shader = SPLIT_SHADER;
+                shader = self.split_shader.clone();
                 entry_point = "split".into();
             }
             TerrainPreprocessPipelineId::Stitch => {
                 layout = vec![self.attachment_layout.clone(), self.stitch_layout.clone()];
-                shader = STITCH_SHADER;
+                shader = self.stitch_shader.clone();
                 entry_point = "stitch".into();
             }
             TerrainPreprocessPipelineId::Downsample => {
@@ -115,7 +126,7 @@ impl SpecializedComputePipeline for TerrainPreprocessPipelines {
                     self.attachment_layout.clone(),
                     self.downsample_layout.clone(),
                 ];
-                shader = DOWNSAMPLE_SHADER;
+                shader = self.downsample_shader.clone();
                 entry_point = "downsample".into();
             }
         }
