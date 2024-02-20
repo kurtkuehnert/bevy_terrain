@@ -258,13 +258,13 @@ impl<M: Material> FromWorld for TerrainRenderPipeline<M> {
         let material_layout = M::bind_group_layout(device);
 
         let vertex_shader = match M::vertex_shader() {
-            ShaderRef::Default => DEFAULT_SHADER,
+            ShaderRef::Default => asset_server.load(DEFAULT_SHADER),
             ShaderRef::Handle(handle) => handle,
             ShaderRef::Path(path) => asset_server.load(path),
         };
 
         let fragment_shader = match M::fragment_shader() {
-            ShaderRef::Default => DEFAULT_SHADER,
+            ShaderRef::Default => asset_server.load(DEFAULT_SHADER),
             ShaderRef::Handle(handle) => handle,
             ShaderRef::Path(path) => asset_server.load(path),
         };
