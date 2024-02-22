@@ -1,8 +1,6 @@
 use bevy::{prelude::*, render::render_resource::ShaderType};
 use bincode::{Decode, Encode};
-use std::{fmt, str::FromStr};
-
-// Todo: consider storing the lod count on each node coordinate
+use std::{fmt};
 
 /// The global coordinate and identifier of a node.
 #[derive(Copy, Clone, Default, Debug, Hash, Eq, PartialEq, ShaderType, Encode, Decode)]
@@ -30,27 +28,31 @@ impl NodeCoordinate {
         Self { side, lod, x, y }
     }
 
+    pub fn node_count(lod: u32) -> u32 {
+        1 << lod
+    }
+
     pub fn parent(self) -> Self {
         Self {
             side: self.side,
-            lod: self.lod + 1,
+            lod: self.lod.wrapping_sub(1),
             x: self.x >> 1,
             y: self.y >> 1,
         }
     }
 
-    pub fn children(self) -> impl Iterator<Item = Self> {
+    pub fn children(self) -> impl Iterator<Item=Self> {
         (0..4).map(move |index| {
             NodeCoordinate::new(
                 self.side,
-                self.lod - 1,
+                self.lod + 1,
                 (self.x << 1) + index % 2,
                 (self.y << 1) + index / 2,
             )
         })
     }
 
-    pub fn neighbours(self, lod_count: u32) -> impl Iterator<Item = Self> {
+    pub fn neighbours(self) -> impl Iterator<Item=Self> {
         const OFFSETS: [IVec2; 8] = [
             IVec2::new(0, -1),
             IVec2::new(1, 0),
@@ -65,7 +67,7 @@ impl NodeCoordinate {
         OFFSETS.iter().map(move |&offset| {
             let neighbour_position = IVec2::new(self.x as i32, self.y as i32) + offset;
 
-            self.neighbour_coordinate(neighbour_position, lod_count)
+            self.neighbour_coordinate(neighbour_position)
         })
     }
 
@@ -73,70 +75,69 @@ impl NodeCoordinate {
         format!("{path}/{self}.{extension}")
     }
 
-    #[cfg(feature = "spherical")]
-    fn neighbour_coordinate(self, neighbour_position: IVec2, lod_count: u32) -> Self {
-        let node_count = 1 << (lod_count - self.lod - 1);
 
-        let edge_index = match neighbour_position {
-            IVec2 { x, y }
+    fn neighbour_coordinate(self, neighbour_position: IVec2) -> Self {
+        let node_count = Self::node_count(self.lod) as i32;
+
+        #[cfg(feature = "spherical")] {
+            let edge_index = match neighbour_position {
+                IVec2 { x, y }
                 if x < 0 && y < 0
                     || x < 0 && y >= node_count
                     || x >= node_count && y < 0
                     || x >= node_count && y >= node_count =>
+                    {
+                        return Self::INVALID;
+                    }
+                IVec2 { x, .. } if x < 0 => 1,
+                IVec2 { y, .. } if y < 0 => 2,
+                IVec2 { x, .. } if x >= node_count => 3,
+                IVec2 { y, .. } if y >= node_count => 4,
+                _ => 0,
+            };
+
+            let neighbour_position = neighbour_position
+                .clamp(IVec2::ZERO, IVec2::splat(node_count - 1))
+                .as_uvec2();
+
+            let neighbouring_sides = [
+                [0, 4, 2, 1, 5],
+                [1, 0, 2, 3, 5],
+                [2, 0, 4, 3, 1],
+                [3, 2, 4, 5, 1],
+                [4, 2, 0, 5, 3],
+                [5, 4, 0, 1, 3],
+            ];
+
+            let neighbour_side = neighbouring_sides[self.side as usize][edge_index];
+
+            let info = SideInfo::project_to_side(self.side, neighbour_side);
+
+            let [x, y] = info.map(|info| match info {
+                SideInfo::Fixed0 => 0,
+                SideInfo::Fixed1 => node_count as u32 - 1,
+                SideInfo::PositiveS => neighbour_position.x,
+                SideInfo::PositiveT => neighbour_position.y,
+            });
+
+            Self::new(neighbour_side, self.lod, x, y)
+        }
+
+        #[cfg(not(feature = "spherical"))] {
+            if neighbour_position.x < 0
+                || neighbour_position.y < 0
+                || neighbour_position.x >= node_count
+                || neighbour_position.y >= node_count
             {
-                return Self::INVALID
+                Self::INVALID
+            } else {
+                Self::new(
+                    self.side,
+                    self.lod,
+                    neighbour_position.x as u32,
+                    neighbour_position.y as u32,
+                )
             }
-            IVec2 { x, .. } if x < 0 => 1,
-            IVec2 { y, .. } if y < 0 => 2,
-            IVec2 { x, .. } if x >= node_count => 3,
-            IVec2 { y, .. } if y >= node_count => 4,
-            _ => 0,
-        };
-
-        let neighbour_position = neighbour_position
-            .clamp(IVec2::ZERO, IVec2::splat(node_count - 1))
-            .as_uvec2();
-
-        let neighbouring_sides = [
-            [0, 4, 2, 1, 5],
-            [1, 0, 2, 3, 5],
-            [2, 0, 4, 3, 1],
-            [3, 2, 4, 5, 1],
-            [4, 2, 0, 5, 3],
-            [5, 4, 0, 1, 3],
-        ];
-
-        let neighbour_side = neighbouring_sides[self.side as usize][edge_index];
-
-        let info = SideInfo::project_to_side(self.side, neighbour_side);
-
-        let [x, y] = info.map(|info| match info {
-            SideInfo::Fixed0 => 0,
-            SideInfo::Fixed1 => node_count as u32 - 1,
-            SideInfo::PositiveS => neighbour_position.x,
-            SideInfo::PositiveT => neighbour_position.y,
-        });
-
-        Self::new(neighbour_side, self.lod, x, y)
-    }
-
-    #[cfg(not(feature = "spherical"))]
-    fn neighbour_coordinate(self, neighbour_position: IVec2, lod_count: u32) -> Self {
-        let node_count = 1 << (lod_count - self.lod - 1);
-
-        if neighbour_position.x < 0
-            || neighbour_position.y < 0
-            || neighbour_position.x >= node_count
-            || neighbour_position.y >= node_count
-        {
-            Self::INVALID
-        } else {
-            Self::new(
-                self.side,
-                self.lod,
-                neighbour_position.x as u32,
-                neighbour_position.y as u32,
-            )
         }
     }
 }
@@ -147,20 +148,6 @@ impl fmt::Display for NodeCoordinate {
     }
 }
 
-impl FromStr for NodeCoordinate {
-    type Err = std::num::ParseIntError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut parts = s.split('_');
-
-        Ok(Self {
-            side: parts.next().unwrap().parse()?,
-            lod: parts.next().unwrap().parse()?,
-            x: parts.next().unwrap().parse()?,
-            y: parts.next().unwrap().parse()?,
-        })
-    }
-}
 
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
@@ -180,6 +167,13 @@ impl S2Coordinate {
             side: node_coordinate.side,
             st,
         }
+    }
+
+    pub(crate) fn node_coordinate(&self, lod: u32) -> Vec2 {
+        let node_count = NodeCoordinate::node_count(lod) as f32;
+        let max_coordinate = Vec2::splat(node_count - 0.00001);
+
+        (self.st * node_count).clamp(Vec2::ZERO, max_coordinate)
     }
 
     pub(crate) fn from_local_position(local_position: Vec3) -> Self {
@@ -229,7 +223,7 @@ impl S2Coordinate {
         };
     }
 
-    pub(crate) fn to_local_position(self) -> Vec3 {
+    pub(crate) fn local_position(self) -> Vec3 {
         #[cfg(feature = "spherical")]
         {
             let uv: Vec2 = self
@@ -253,7 +247,7 @@ impl S2Coordinate {
                 5 => Vec3::new(uv.y, -1.0, uv.x),
                 _ => unreachable!(),
             }
-            .normalize()
+                .normalize()
         }
 
         #[cfg(not(feature = "spherical"))]
@@ -275,6 +269,9 @@ impl S2Coordinate {
 
         Self { side, st }
     }
+
+    #[cfg(not(feature = "spherical"))]
+    pub(crate) fn project_to_side(self, _side: u32) -> Self { self }
 }
 
 #[cfg(feature = "spherical")]

@@ -41,7 +41,7 @@ description = "Preprocesses the terrain data for the planar examples."
 [[example]]
 name = "basic"
 path = "examples/planar/basic.rs"
-# required-features = ["bevy/embedded_watcher"]
+required-features = ["bevy/embedded_watcher"]
 
 [package.metadata.example.basic]
 name = "Basic"
@@ -68,8 +68,8 @@ description = "Preprocesses the terrain data for the spherical examples."
 [[example]]
 name = "spherical"
 path = "examples/spherical/spherical.rs"
-required-features = ["spherical"]
-# required-features = ["spherical", "bevy/embedded_watcher"]
+# required-features = ["spherical"]
+required-features = ["spherical", "bevy/embedded_watcher"]
 
 [package.metadata.example.spherical]
 name = "Spherical"
