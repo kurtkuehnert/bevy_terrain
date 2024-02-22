@@ -1,10 +1,50 @@
 #define_import_path bevy_terrain::functions
 
 #import bevy_terrain::bindings::{config, view_config, tiles, quadtree}
-#import bevy_terrain::types::{Tile, Quadtree, NodeLookup, Morph, Blend, LookupInfo, S2Coordinate}
+#import bevy_terrain::types::{Tile, Quadtree, NodeLookup, Blend, LookupInfo, UVCoordinate}
 #import bevy_pbr::mesh_view_bindings::view
 #import bevy_pbr::mesh_bindings::mesh
 #import bevy_render::maths::affine_to_square
+
+const F0 = 0u;
+const F1 = 1u;
+const PS = 2u;
+const PT = 3u;
+const C  = 0.87 * 0.87;
+
+fn sphere_to_cube(xy: vec2<f32>) -> vec2<f32> {
+    var uv: vec2<f32>;
+
+    // s2 quadtratic as per https://docs.s2cell.aliddell.com/en/stable/s2_concepts.html#st
+    if (xy.x > 0.0) { uv.x =       0.5 * sqrt(1.0 + 3.0 * xy.x); }
+    else            { uv.x = 1.0 - 0.5 * sqrt(1.0 - 3.0 * xy.x); }
+
+    if (xy.y > 0.0) { uv.y =       0.5 * sqrt(1.0 + 3.0 * xy.y); }
+    else            { uv.y = 1.0 - 0.5 * sqrt(1.0 - 3.0 * xy.y); }
+
+    // algebraic sigmoid c = 0.87 as per https://marlam.de/publications/cubemaps/lambers2019cubemaps.pdf
+    // uv = 0.5 * xy + 0.5;
+    // uv *= sqrt((1 + C) / (1 + C * uv * uv));
+
+    return uv;
+}
+
+fn cube_to_sphere(uv: vec2<f32>) -> vec2<f32> {
+    var xy: vec2<f32>;
+
+    // s2 quadtratic as per https://docs.s2cell.aliddell.com/en/stable/s2_concepts.html#st
+    if (uv.x > 0.5) { xy.x =       (4.0 * pow(uv.x, 2.0) - 1.0) / 3.0; }
+    else            { xy.x = (1.0 - 4.0 * pow(1.0 - uv.x, 2.0)) / 3.0; }
+
+    if (uv.y > 0.5) { xy.y =       (4.0 * pow(uv.y, 2.0) - 1.0) / 3.0; }
+    else            { xy.y = (1.0 - 4.0 * pow(1.0 - uv.y, 2.0)) / 3.0; }
+
+    // algebraic sigmoid c = 0.87 as per https://marlam.de/publications/cubemaps/lambers2019cubemaps.pdf
+    // xy = 2 * uv - 1;
+    // xy /= sqrt(1 + C - C * xy * xy);
+
+    return xy;
+}
 
 fn local_to_world_position(local_position: vec3<f32>) -> vec4<f32> {
     return affine_to_square(mesh[0].model) * vec4<f32>(local_position, 1.0);
@@ -14,13 +54,13 @@ fn world_to_clip_position(world_position: vec4<f32>) -> vec4<f32> {
     return view.view_proj * world_position;
 }
 
-fn compute_morph(coordinate: S2Coordinate, lod: u32) -> Morph {
+fn compute_morph(coordinate: UVCoordinate, lod: u32) -> f32 {
     let local_position = local_position_from_coordinate(coordinate, view_config.approximate_height);
     let view_distance = distance(local_position, view_config.view_local_position);
     let threshold_distance = 2.0 * view_config.morph_distance * tile_size(lod);
     let ratio = clamp(1.0 - (1.0 - view_distance / threshold_distance) / view_config.morph_range, 0.0, 1.0);
 
-    return Morph(ratio);
+    return ratio;
 }
 
 fn compute_blend(view_distance: f32) -> Blend {
@@ -39,7 +79,7 @@ fn grid_offset(grid_index: u32) -> vec2<u32>{
     return vec2<u32>(column_index + (row_index & 1u), row_index >> 1u);
 }
 
-fn vertex_coordinate(vertex_index: u32) -> S2Coordinate {
+fn vertex_coordinate(vertex_index: u32) -> UVCoordinate {
     let tile_index = vertex_index / view_config.vertices_per_tile;
     let grid_index = vertex_index % view_config.vertices_per_tile;
 
@@ -48,175 +88,127 @@ fn vertex_coordinate(vertex_index: u32) -> S2Coordinate {
     var coordinate  = tile_coordinate(tile, vec2<f32>(grid_offset) / view_config.grid_size);
 
 #ifdef MESH_MORPH
-    let morph        = compute_morph(coordinate, tile.lod);
-    let morph_offset = mix(vec2<f32>(grid_offset), vec2<f32>(grid_offset & vec2<u32>(4294967294u)), morph.ratio);
+    let morph_ratio  = compute_morph(coordinate, tile.lod);
+    let morph_offset = mix(vec2<f32>(grid_offset), vec2<f32>(grid_offset & vec2<u32>(4294967294u)), morph_ratio);
     coordinate       = tile_coordinate(tile, morph_offset / view_config.grid_size);
 #endif
 
     return coordinate;
 }
 
-fn local_position_from_coordinate(coordinate: S2Coordinate, height: f32) -> vec3<f32> {
+fn local_position_from_coordinate(coordinate: UVCoordinate, height: f32) -> vec3<f32> {
 #ifdef SPHERICAL
-    var ORIGIN_ARRAY = array<vec3<f32>, 6u>(vec3<f32>(-1.0,  0.0,  0.0),
-                                            vec3<f32>( 0.0,  0.0,  1.0),
-                                            vec3<f32>( 0.0,  1.0,  0.0),
-                                            vec3<f32>( 1.0,  0.0,  0.0),
-                                            vec3<f32>( 0.0,  0.0, -1.0),
-                                            vec3<f32>( 0.0, -1.0,  0.0));
-    var U_ARRAY      = array<vec3<f32>, 6u>(vec3<f32>( 0.0,  0.0,  1.0),
-                                            vec3<f32>( 1.0,  0.0,  0.0),
-                                            vec3<f32>( 1.0,  0.0,  0.0),
-                                            vec3<f32>( 0.0, -1.0,  0.0),
-                                            vec3<f32>( 0.0, -1.0,  0.0),
-                                            vec3<f32>( 0.0,  0.0,  1.0));
-    var V_ARRAY      = array<vec3<f32>, 6u>(vec3<f32>( 0.0, -1.0,  0.0),
-                                            vec3<f32>( 0.0, -1.0,  0.0),
-                                            vec3<f32>( 0.0,  0.0,  1.0),
-                                            vec3<f32>( 0.0,  0.0,  1.0),
-                                            vec3<f32>( 1.0,  0.0,  0.0),
-                                            vec3<f32>( 1.0,  0.0,  0.0));
+    let xy = cube_to_sphere(coordinate.uv);
 
-    var u: f32; var v: f32;
+    var local_position: vec3<f32>;
 
-    if (coordinate.st.x > 0.5) { u =       (4.0 * pow(coordinate.st.x, 2.0) - 1.0) / 3.0; }
-    else                       { u = (1.0 - 4.0 * pow(1.0 - coordinate.st.x, 2.0)) / 3.0; }
+    switch (coordinate.side) {
+        case 0u:      { local_position = vec3( -1.0, -xy.y,  xy.x); }
+        case 1u:      { local_position = vec3( xy.x, -xy.y,   1.0); }
+        case 2u:      { local_position = vec3( xy.x,   1.0,  xy.y); }
+        case 3u:      { local_position = vec3(  1.0, -xy.x,  xy.y); }
+        case 4u:      { local_position = vec3( xy.y, -xy.x,  -1.0); }
+        case 5u:      { local_position = vec3( xy.y,  -1.0,  xy.x); }
+        case default: {}
+    }
 
-    if (coordinate.st.y > 0.5) { v =       (4.0 * pow(coordinate.st.y, 2.0) - 1.0) / 3.0; }
-    else                       { v = (1.0 - 4.0 * pow(1.0 - coordinate.st.y, 2.0)) / 3.0; }
-
-    // switch (coordinate.side) {
-    //     case 7: { u = 1; }
-    // }
-
-    // u = 2.0 * coordinate.st.x - 1.0;
-    // v = 2.0 * coordinate.st.y - 1.0;
-    // return ORIGIN_ARRAY[coordinate.side] + U_ARRAY[coordinate.side] * u + V_ARRAY[coordinate.side] * v;
-
-    return (1.0 + height) * normalize(ORIGIN_ARRAY[coordinate.side] +
-                                           U_ARRAY[coordinate.side] * u +
-                                           V_ARRAY[coordinate.side] * v);
-
+    return (1.0 + height) * normalize(local_position);
 #else
-    let uv = 2.0 * coordinate.st - 1.0;
-
-    return vec3<f32>(uv.x, height, uv.y);
+    return vec3<f32>(2.0 * coordinate.uv.x - 1.0, height, 2.0 * coordinate.uv.y - 1.0);
 #endif
 }
 
-fn coordinate_from_local_position(local_position: vec3<f32>) -> S2Coordinate {
+fn coordinate_from_local_position(local_position: vec3<f32>) -> UVCoordinate {
 #ifdef SPHERICAL
     let normal = normalize(local_position);
     let abs_normal = abs(normal);
 
-    var side: u32;
-    var uv: vec2<f32>;
+    var side: u32; var xy: vec2<f32>;
 
     if (abs_normal.x > abs_normal.y && abs_normal.x > abs_normal.z) {
-        if (normal.x < 0.0) {
-            side = 0u;
-            uv = vec2<f32>(-normal.z / normal.x, normal.y / normal.x);
-        }
-        else {
-            side = 3u;
-            uv = vec2<f32>(-normal.y / normal.x, normal.z / normal.x);
-        }
-    }
-    else if (abs_normal.z > abs_normal.y) {
-        if (normal.z > 0.0) {
-            side = 1u;
-            uv = vec2<f32>(normal.x / normal.z, -normal.y / normal.z);
-        }
-        else {
-            side = 4u;
-            uv = vec2<f32>(normal.y / normal.z, -normal.x / normal.z);
-        }
-    }
-    else {
-        if (normal.y > 0.0) {
-            side = 2u;
-            uv = vec2<f32>(normal.x / normal.y, normal.z / normal.y);
-        }
-        else {
-            side = 5u;
-            uv = vec2<f32>(-normal.z / normal.y, -normal.x / normal.y);
-        }
+        if (normal.x < 0.0) { side = 0u; xy = vec2(-normal.z,  normal.y); }
+        else                { side = 3u; xy = vec2(-normal.y,  normal.z); }
+
+        xy /= normal.x;
+    } else if (abs_normal.z > abs_normal.y) {
+        if (normal.z > 0.0) { side = 1u; xy = vec2( normal.x, -normal.y); }
+        else                { side = 4u; xy = vec2( normal.y, -normal.x); }
+
+        xy /= normal.z;
+    } else {
+        if (normal.y > 0.0) { side = 2u; xy = vec2( normal.x,  normal.z); }
+        else                { side = 5u; xy = vec2(-normal.z, -normal.x); }
+
+        xy /= normal.y;
     }
 
-    var st = vec2<f32>(0.0);
+    let uv = sphere_to_cube(xy);
 
-    if (uv.x > 0.0) { st.x =       0.5 * sqrt(1.0 + 3.0 * uv.x); }
-    else            { st.x = 1.0 - 0.5 * sqrt(1.0 - 3.0 * uv.x); }
-
-    if (uv.y > 0.0) { st.y =       0.5 * sqrt(1.0 + 3.0 * uv.y); }
-    else            { st.y = 1.0 - 0.5 * sqrt(1.0 - 3.0 * uv.y); }
-
-    return S2Coordinate(side, st);
+    return UVCoordinate(side, uv);
 #else
-    let st = 0.5 * local_position.xz + 0.5;
-
-    return S2Coordinate(0u, st);
+    return UVCoordinate(0u, 0.5 * local_position.xz + 0.5);
 #endif
 }
 
-fn coordinate_project_to_side(coordinate: S2Coordinate, side: u32) -> S2Coordinate {
-    let F0 = 0u;
-    let F1 = 1u;
-    let PS = 2u;
-    let PT = 3u;
-
-    var EVEN_LIST = array<vec2<u32>, 6u>(
-        vec2<u32>(PS, PT),
-        vec2<u32>(F0, PT),
-        vec2<u32>(F0, PS),
-        vec2<u32>(PT, PS),
-        vec2<u32>(PT, F0),
-        vec2<u32>(PS, F0),
+fn coordinate_project_to_side(coordinate: UVCoordinate, side: u32) -> UVCoordinate {
+    var EVEN_LIST = array(
+        vec2(PS, PT),
+        vec2(F0, PT),
+        vec2(F0, PS),
+        vec2(PT, PS),
+        vec2(PT, F0),
+        vec2(PS, F0),
     );
-    var ODD_LIST = array<vec2<u32>, 6u>(
-        vec2<u32>(PS, PT),
-        vec2<u32>(PS, F1),
-        vec2<u32>(PT, F1),
-        vec2<u32>(PT, PS),
-        vec2<u32>(F1, PS),
-        vec2<u32>(F1, PT),
+    var ODD_LIST = array(
+        vec2(PS, PT),
+        vec2(PS, F1),
+        vec2(PT, F1),
+        vec2(PT, PS),
+        vec2(F1, PS),
+        vec2(F1, PT),
     );
 
     let index = (6u + side - coordinate.side) % 6u;
-    let info: vec2<u32> = select(ODD_LIST[index], EVEN_LIST[index], coordinate.side % 2u == 0u);
+    let info  = select(ODD_LIST[index], EVEN_LIST[index], coordinate.side % 2u == 0u);
 
-    var st: vec2<f32>;
+    var uv: vec2<f32>;
 
-    if (info.x == F0)      { st.x = 0.0; }
-    else if (info.x == F1) { st.x = 1.0; }
-    else if (info.x == PS) { st.x = coordinate.st.x; }
-    else if (info.x == PT) { st.x = coordinate.st.y; }
+    switch info.x {
+        case F0: { uv.x = 0.0; }
+        case F1: { uv.x = 1.0; }
+        case PS: { uv.x = coordinate.uv.x; }
+        case PT: { uv.x = coordinate.uv.y; }
+        default: {}
+    }
 
-    if (info.y == F0)      { st.y = 0.0; }
-    else if (info.y == F1) { st.y = 1.0; }
-    else if (info.y == PS) { st.y = coordinate.st.x; }
-    else if (info.y == PT) { st.y = coordinate.st.y; }
+    switch info.y {
+        case F0: { uv.y = 0.0; }
+        case F1: { uv.y = 1.0; }
+        case PS: { uv.y = coordinate.uv.x; }
+        case PT: { uv.y = coordinate.uv.y; }
+        default: {}
+    }
 
-    return S2Coordinate(side, st);
+    return UVCoordinate(side, uv);
 }
 
 fn tile_size(lod: u32) -> f32 {
     return 1.0 / f32(1u << lod);
 }
 
-fn tile_coordinate(tile: Tile, offset: vec2<f32>) -> S2Coordinate {
-     return S2Coordinate(tile.side, (vec2<f32>(tile.xy) + offset) * tile_size(tile.lod));
+fn tile_coordinate(tile: Tile, offset: vec2<f32>) -> UVCoordinate {
+    return UVCoordinate(tile.side, (vec2<f32>(tile.xy) + offset) * tile_size(tile.lod));
 }
 
 fn node_count(lod: u32) -> u32 {
     return 1u << lod;
 }
 
-fn node_coordinate(coordinate: S2Coordinate, lod: u32) -> vec2<f32> {
+fn node_coordinate(coordinate: UVCoordinate, lod: u32) -> vec2<f32> {
     let node_count = f32(node_count(lod));
     let max_coordinate  = vec2<f32>(node_count - 0.00001);
 
-    return clamp(coordinate.st * node_count, vec2<f32>(0.0), max_coordinate);
+    return clamp(coordinate.uv * node_count, vec2<f32>(0.0), max_coordinate);
 }
 
 fn inside_square(position: vec2<f32>, origin: vec2<f32>, size: f32) -> f32 {
@@ -225,14 +217,14 @@ fn inside_square(position: vec2<f32>, origin: vec2<f32>, size: f32) -> f32 {
     return inside.x * inside.y;
 }
 
-fn quadtree_origin(quadtree_coordinate: S2Coordinate, lod: u32) -> vec2<f32> {
+fn quadtree_origin(quadtree_coordinate: UVCoordinate, lod: u32) -> vec2<f32> {
     let node_coordinate = node_coordinate(quadtree_coordinate, lod);
-    let max_offset          = f32(node_count(lod)) - f32(view_config.quadtree_size);
+    let max_offset      = f32(node_count(lod)) - f32(view_config.quadtree_size);
 
     return clamp(round(node_coordinate - 0.5 * f32(view_config.quadtree_size)), vec2<f32>(0.0), vec2<f32>(max_offset));
 }
 
-fn inside_quadtree(view_coordinate: S2Coordinate, frag_coordinate: S2Coordinate, lod: u32) -> f32 {
+fn inside_quadtree(view_coordinate: UVCoordinate, frag_coordinate: UVCoordinate, lod: u32) -> f32 {
 #ifdef SPHERICAL
     let quadtree_coordinate = coordinate_project_to_side(view_coordinate, frag_coordinate.side);
 #else
@@ -247,7 +239,7 @@ fn inside_quadtree(view_coordinate: S2Coordinate, frag_coordinate: S2Coordinate,
     return inside_square(node_distance, vec2<f32>(0.0), f32(view_config.quadtree_size - 1u));
 }
 
-fn quadtree_lod(frag_coordinate: S2Coordinate) -> u32 {
+fn quadtree_lod(frag_coordinate: UVCoordinate) -> u32 {
     let view_coordinate = coordinate_from_local_position(view_config.view_local_position);
 
     for (var lod = config.lod_count - 1u; lod > 0u; lod = lod - 1u) {

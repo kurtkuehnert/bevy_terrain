@@ -1,4 +1,4 @@
-#import bevy_terrain::types::{TerrainConfig, TerrainViewConfig, Tile, TileList, Parameters, NodeLookup, S2Coordinate}
+#import bevy_terrain::types::{TerrainConfig, TerrainViewConfig, Tile, TileList, Parameters, NodeLookup, UVCoordinate}
 #import bevy_terrain::bindings::config
 #import bevy_terrain::functions::{local_position_from_coordinate, tile_coordinate, tile_size}
 
