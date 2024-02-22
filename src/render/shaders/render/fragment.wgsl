@@ -1,6 +1,6 @@
 #define_import_path bevy_terrain::fragment
 
-#import bevy_terrain::types::{LookupInfo, NodeLookup, S2Coordinate, Blend}
+#import bevy_terrain::types::{LookupInfo, NodeLookup, UVCoordinate, Blend}
 #import bevy_terrain::functions::{compute_blend, lookup_node, quadtree_lod}
 #import bevy_terrain::attachments::{sample_normal_grad, sample_color_grad}
 #import bevy_terrain::debug::{show_lod, show_quadtree, show_pixels}
@@ -11,7 +11,7 @@ struct FragmentInput {
     @builtin(front_facing)   is_front: bool,
     @builtin(position)       fragment_position: vec4<f32>,
     @location(0)             side: u32,
-    @location(1)             st: vec2<f32>,
+    @location(1)             uv: vec2<f32>,
     @location(2)             view_distance: f32,
     @location(3)             world_normal: vec3<f32>,
     @location(4)             world_position: vec4<f32>,
@@ -23,15 +23,13 @@ struct FragmentOutput {
 }
 
 fn fragment_lookup_info(input: FragmentInput) -> LookupInfo {
-    let coordinate    = S2Coordinate(input.side, input.st);
-    let ddx           = dpdx(input.st);
-    let ddy           = dpdy(input.st);
+    let coordinate    = UVCoordinate(input.side, input.uv);
+    let ddx           = dpdx(input.uv);
+    let ddy           = dpdy(input.uv);
     let view_distance = input.view_distance;
 
 #ifdef QUADTREE_LOD
-    let lod = quadtree_lod(coordinate);
-    let ratio = 0.0;
-    let blend = Blend(lod, ratio);
+    let blend = Blend(quadtree_lod(coordinate), 0.0);
 #else
     let blend = compute_blend(view_distance);
 #endif
@@ -42,7 +40,7 @@ fn fragment_lookup_info(input: FragmentInput) -> LookupInfo {
 fn fragment_output(input: FragmentInput, color: vec4<f32>, normal: vec3<f32>, lookup: NodeLookup) -> FragmentOutput {
     var output: FragmentOutput;
 
-    let coordinate = S2Coordinate(input.side, input.st);
+    let coordinate = UVCoordinate(input.side, input.uv);
 
     output.color = color;
 

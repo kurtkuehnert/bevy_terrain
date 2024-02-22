@@ -64,13 +64,13 @@ fn sample_normal_grad(lookup: NodeLookup, vertex_normal: vec3<f32>) -> vec3<f32>
     let height_coordinate = lookup.atlas_coordinate * height_attachment.scale + height_attachment.offset;
 
 #ifdef SPHERICAL
-    var FACE_UP = array<vec3<f32>, 6u>(
-        vec3<f32>( 0.0, 1.0,  0.0),
-        vec3<f32>( 0.0, 1.0,  0.0),
-        vec3<f32>( 0.0, 0.0, -1.0),
-        vec3<f32>( 0.0, 0.0, -1.0),
-        vec3<f32>(-1.0, 0.0,  0.0),
-        vec3<f32>(-1.0, 0.0,  0.0),
+    var FACE_UP = array(
+        vec3( 0.0, 1.0,  0.0),
+        vec3( 0.0, 1.0,  0.0),
+        vec3( 0.0, 0.0, -1.0),
+        vec3( 0.0, 0.0, -1.0),
+        vec3(-1.0, 0.0,  0.0),
+        vec3(-1.0, 0.0,  0.0),
     );
 
     let face_up = FACE_UP[lookup.side];
@@ -78,13 +78,13 @@ fn sample_normal_grad(lookup: NodeLookup, vertex_normal: vec3<f32>) -> vec3<f32>
     let normal    = normalize(vertex_normal);
     let tangent   = cross(face_up, normal);
     let bitangent = cross(normal, tangent);
-    let TBN       = mat3x3<f32>(tangent, bitangent, normal);
+    let TBN       = mat3x3(tangent, bitangent, normal);
 
     let side_length = 3.14159265359 / 4.0;
 #else
-    let TBN = mat3x3<f32>(1.0, 0.0, 0.0,
-                          0.0, 0.0, 1.0,
-                          0.0, 1.0, 0.0);
+    let TBN = mat3x3(1.0, 0.0, 0.0,
+                     0.0, 0.0, 1.0,
+                     0.0, 1.0, 0.0);
 
     let side_length = 1.0;
 #endif
