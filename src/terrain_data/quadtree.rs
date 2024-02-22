@@ -183,24 +183,10 @@ impl Quadtree {
         )
     }
 
-    #[inline]
-    fn node_count(&self, lod: u32) -> u32 {
-        1 << (self.lod_count - lod - 1)
-    }
-
-    #[inline]
-    fn node_coordinate(&self, s2: S2Coordinate, lod: u32) -> Vec2 {
-        let node_count = self.node_count(lod) as f32;
-        let max_coordinate = Vec2::splat(node_count - 0.00001);
-
-        (s2.st * node_count).clamp(Vec2::ZERO, max_coordinate)
-    }
-
     fn origin(&self, quadtree_s2: S2Coordinate, lod: u32) -> UVec2 {
-        let origin_node_coordinate = self.node_coordinate(quadtree_s2, lod);
-        let max_offset = self.node_count(lod) as f32 - self.quadtree_size as f32;
+        let max_offset = NodeCoordinate::node_count(lod) as f32 - self.quadtree_size as f32;
 
-        let quadtree_origin = (origin_node_coordinate - 0.5 * self.quadtree_size as f32)
+        let quadtree_origin = (quadtree_s2.node_coordinate(lod) - 0.5 * self.quadtree_size as f32)
             .round()
             .clamp(Vec2::splat(0.0), Vec2::splat(max_offset));
 
@@ -213,19 +199,18 @@ impl Quadtree {
 
     pub(super) fn compute_blend(&self, local_position: Vec3) -> (u32, f32) {
         let view_distance = local_position.distance(self.view_local_position);
-        let blend_threshold_distance = self.blend_distance / (1 << (self.lod_count - 1)) as f32;
-        let log_distance = (view_distance / blend_threshold_distance).log2().max(0.0);
-        let ratio = 1.0 - (1.0 - log_distance % 1.0) / self.blend_range;
 
-        (log_distance as u32, ratio)
+        let lod_f32 = (2.0 * self.blend_distance / view_distance).log2();
+        let lod = (lod_f32 as u32).clamp(0, self.lod_count - 1);
+        let ratio = if lod_f32 < 1.0 || lod_f32 > self.lod_count as f32 { 0.0 } else { 1.0 - (lod_f32 % 1.0) / self.blend_range };
+
+        (lod, ratio)
     }
 
-    pub(super) fn lookup_node(&self, local_position: Vec3, lod: u32) -> NodeLookup {
+    pub(super) fn lookup_node(&self, local_position: Vec3, quadtree_lod: u32) -> NodeLookup {
         let s2 = S2Coordinate::from_local_position(local_position);
 
-        let quadtree_lod = lod.min(self.lod_count - 1);
-
-        let mut node_coordinate = self.node_coordinate(s2, quadtree_lod);
+        let mut node_coordinate = s2.node_coordinate(quadtree_lod);
 
         let entry = self.data[[
             s2.side as usize,
@@ -238,7 +223,7 @@ impl Quadtree {
             return NodeLookup::INVALID;
         }
 
-        node_coordinate /= (1 << (entry.atlas_lod - quadtree_lod)) as f32;
+        node_coordinate /= (1 << (quadtree_lod - entry.atlas_lod)) as f32;
 
         NodeLookup {
             atlas_index: entry.atlas_index,
@@ -266,18 +251,15 @@ impl Quadtree {
                 let view_s2 = S2Coordinate::from_local_position(quadtree.view_local_position);
 
                 for side in 0..SIDE_COUNT {
-                    #[cfg(feature = "spherical")]
                     let quadtree_s2 = view_s2.project_to_side(side);
 
-                    #[cfg(not(feature = "spherical"))]
-                    let quadtree_s2 = view_s2;
 
                     for lod in 0..quadtree.lod_count {
-                        let node_count = quadtree.node_count(lod);
+                        let node_count = NodeCoordinate::node_count(lod);
                         let quadtree_origin: UVec2 = quadtree.origin(quadtree_s2, lod);
 
                         for (x, y) in
-                            iproduct!(0..quadtree.quadtree_size, 0..quadtree.quadtree_size)
+                        iproduct!(0..quadtree.quadtree_size, 0..quadtree.quadtree_size)
                         {
                             let node_coordinate = NodeCoordinate {
                                 side,
@@ -288,13 +270,13 @@ impl Quadtree {
 
                             let node_s2 =
                                 S2Coordinate::from_node_coordinate(node_coordinate, node_count);
-                            let node_local_position = node_s2.to_local_position();
+                            let node_local_position = node_s2.local_position(); // Todo: consider calculating distance to closest corner instead
 
                             let distance =
                                 node_local_position.distance(quadtree.view_local_position);
                             let node_distance = 0.5 * distance * node_count as f32;
 
-                            let state = if node_distance < quadtree.load_distance {
+                            let state = if lod == 0 || node_distance < quadtree.load_distance {
                                 RequestState::Requested
                             } else {
                                 RequestState::Released
@@ -349,7 +331,7 @@ impl Quadtree {
                 let quadtree = quadtrees.get_mut(&(terrain, view)).unwrap();
 
                 for (node, entry) in iter::zip(&quadtree.nodes, &mut quadtree.data) {
-                    *entry = node_atlas.get_best_node(node.node_coordinate, quadtree.lod_count);
+                    *entry = node_atlas.get_best_node(node.node_coordinate);
                 }
             }
         }

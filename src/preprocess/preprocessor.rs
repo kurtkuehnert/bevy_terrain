@@ -14,6 +14,7 @@ use std::{
     ops::{DerefMut, Range},
     time::Instant,
 };
+use crate::util::CollectArray;
 
 pub fn reset_directory(directory: &str) {
     let _ = fs::remove_file(format!("{directory}/../../config.tc"));
@@ -58,9 +59,8 @@ impl PreprocessDataset {
     fn overlapping_nodes(
         &self,
         lod: u32,
-        lod_count: u32,
-    ) -> impl Iterator<Item = NodeCoordinate> + '_ {
-        let node_count = 1 << (lod_count - lod - 1);
+    ) -> impl Iterator<Item=NodeCoordinate> + '_ {
+        let node_count = NodeCoordinate::node_count(lod);
 
         let lower = (self.top_left * node_count as f32).as_uvec2();
         let upper = (self.bottom_right * node_count as f32).ceil().as_uvec2();
@@ -180,11 +180,9 @@ impl PreprocessTask {
 
         let neighbour_nodes = node
             .coordinate
-            .neighbours(node_atlas.lod_count)
+            .neighbours()
             .map(|coordinate| node_atlas.get_or_allocate(coordinate))
-            .collect_vec()
-            .try_into()
-            .unwrap();
+            .collect_array();
 
         Self {
             node,
@@ -205,9 +203,7 @@ impl PreprocessTask {
             .coordinate
             .children()
             .map(|coordinate| node_atlas.get_or_allocate(coordinate))
-            .collect_vec()
-            .try_into()
-            .unwrap();
+            .collect_array();
 
         Self {
             node,
@@ -250,8 +246,10 @@ impl Preprocessor {
             format: node_atlas.attachments[dataset.attachment_index as usize].format,
         });
 
+        let mut lods = dataset.lod_range.clone().rev();
+
         for node_coordinate in
-            dataset.overlapping_nodes(dataset.lod_range.start, node_atlas.lod_count)
+        dataset.overlapping_nodes(lods.next().unwrap())
         {
             self.task_queue.push_back(PreprocessTask::split(
                 node_coordinate,
@@ -261,10 +259,10 @@ impl Preprocessor {
             ));
         }
 
-        for lod in dataset.lod_range.clone().skip(1) {
+        for lod in lods {
             self.task_queue.push_back(PreprocessTask::barrier());
 
-            for node_coordinate in dataset.overlapping_nodes(lod, node_atlas.lod_count) {
+            for node_coordinate in dataset.overlapping_nodes(lod) {
                 self.task_queue.push_back(PreprocessTask::downsample(
                     node_coordinate,
                     node_atlas,
@@ -280,7 +278,7 @@ impl Preprocessor {
         node_atlas: &mut NodeAtlas,
         lod: u32,
     ) {
-        for node_coordinate in dataset.overlapping_nodes(lod, node_atlas.lod_count) {
+        for node_coordinate in dataset.overlapping_nodes(lod) {
             self.task_queue.push_back(PreprocessTask::stitch(
                 node_coordinate,
                 node_atlas,
@@ -290,7 +288,7 @@ impl Preprocessor {
 
         self.task_queue.push_back(PreprocessTask::barrier());
 
-        for node_coordinate in dataset.overlapping_nodes(lod, node_atlas.lod_count) {
+        for node_coordinate in dataset.overlapping_nodes(lod) {
             self.task_queue
                 .push_back(PreprocessTask::save(node_coordinate, node_atlas, &dataset));
         }
@@ -310,7 +308,6 @@ impl Preprocessor {
         asset_server: &AssetServer,
         node_atlas: &mut NodeAtlas,
     ) -> Self {
-        self.task_queue.push_back(PreprocessTask::barrier());
         self.split_and_downsample(&dataset, asset_server, node_atlas);
         self.task_queue.push_back(PreprocessTask::barrier());
 
@@ -371,7 +368,7 @@ pub(crate) fn select_ready_tasks(
                 && node_atlas.state.save_slots == node_atlas.state.max_save_slots
             {
                 println!("Preprocessing took {:?}", time.elapsed());
-
+                
                 node_atlas.save_node_config();
 
                 *start_time = None;
@@ -385,8 +382,8 @@ pub(crate) fn select_ready_tasks(
         loop {
             if (node_atlas.state.download_slots > 0)
                 && task_queue
-                    .front()
-                    .map_or(false, |task| task.is_ready(&asset_server, &node_atlas))
+                .front()
+                .map_or(false, |task| task.is_ready(&asset_server, &node_atlas))
             {
                 let task = task_queue.pop_front().unwrap();
 

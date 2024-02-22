@@ -237,7 +237,7 @@ impl AtlasAttachment {
                 data: self.data[node.atlas_index as usize].clone(),
                 texture_size: self.texture_size,
             }
-            .start_saving(self.path.clone()),
+                .start_saving(self.path.clone()),
         );
     }
 
@@ -371,7 +371,7 @@ impl NodeAtlasState {
 
     fn get_or_allocate(&mut self, node_coordinate: NodeCoordinate) -> AtlasNode {
         if node_coordinate == NodeCoordinate::INVALID {
-            return AtlasNode::new(node_coordinate, INVALID_ATLAS_INDEX);
+            return AtlasNode::new(NodeCoordinate::INVALID, INVALID_ATLAS_INDEX);
         }
 
         self.existing_nodes.insert(node_coordinate);
@@ -455,12 +455,12 @@ impl NodeAtlasState {
         }
     }
 
-    fn get_best_node(&self, node_coordinate: NodeCoordinate, lod_count: u32) -> QuadtreeEntry {
+    fn get_best_node(&self, node_coordinate: NodeCoordinate) -> QuadtreeEntry {
         let mut best_node_coordinate = node_coordinate;
 
         loop {
             if best_node_coordinate == NodeCoordinate::INVALID
-                || best_node_coordinate.lod == lod_count
+                || best_node_coordinate.lod == INVALID_LOD
             {
                 // highest lod is not loaded
                 return QuadtreeEntry {
@@ -498,7 +498,8 @@ impl NodeAtlasState {
 /// and in shaders by the GPU.
 #[derive(Component)]
 pub struct NodeAtlas {
-    pub(crate) attachments: Vec<AtlasAttachment>, // stores the attachment data
+    pub(crate) attachments: Vec<AtlasAttachment>,
+    // stores the attachment data
     pub(crate) state: NodeAtlasState,
     pub(crate) path: String,
     pub(crate) atlas_size: u32,
@@ -555,9 +556,8 @@ impl NodeAtlas {
     pub(super) fn get_best_node(
         &self,
         node_coordinate: NodeCoordinate,
-        lod_count: u32,
     ) -> QuadtreeEntry {
-        self.state.get_best_node(node_coordinate, lod_count)
+        self.state.get_best_node(node_coordinate)
     }
 
     pub(super) fn sample_attachment(&self, node_lookup: NodeLookup, attachment_index: u32) -> Vec4 {

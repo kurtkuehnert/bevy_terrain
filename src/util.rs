@@ -6,7 +6,24 @@ use bevy::{
     },
 };
 use itertools::Itertools;
-use std::{marker::PhantomData, ops::Deref};
+use std::{
+    marker::PhantomData,
+    ops::Deref,
+    fmt::Debug,
+};
+
+pub trait CollectArray: Iterator {
+    fn collect_array<const T: usize>(self) -> [Self::Item; T]
+        where
+            Self: Sized, <Self as Iterator>::Item: Debug
+    {
+        self.collect_vec()
+            .try_into()
+            .unwrap()
+    }
+}
+
+impl<T> CollectArray for T where T: Iterator + ?Sized {}
 
 #[derive(Default, Resource)]
 pub(crate) struct InternalShaders(Vec<Handle<Shader>>);

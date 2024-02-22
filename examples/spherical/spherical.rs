@@ -35,6 +35,7 @@ fn main() {
             TerrainDebugPlugin, // enable debug settings and controls
             TerrainMaterialPlugin::<TerrainMaterial>::default(),
         ))
+        .insert_resource(ClearColor(Color::WHITE))
         .add_systems(Startup, setup)
         .run();
 }
@@ -63,13 +64,13 @@ fn setup(
         path: PATH.to_string(),
         ..default()
     }
-    .add_attachment(AttachmentConfig {
-        name: "height".to_string(),
-        texture_size: TEXTURE_SIZE,
-        border_size: 2,
-        mip_level_count: 4,
-        format: AttachmentFormat::R16,
-    });
+        .add_attachment(AttachmentConfig {
+            name: "height".to_string(),
+            texture_size: TEXTURE_SIZE,
+            border_size: 2,
+            mip_level_count: 4,
+            format: AttachmentFormat::R16,
+        });
 
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
     let view_config = TerrainViewConfig::default();

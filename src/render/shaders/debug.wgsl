@@ -28,7 +28,7 @@ fn show_tiles(coordinate: S2Coordinate, vertex_index: u32) -> vec4<f32> {
     if (is_even) { color = vec4<f32>(0.5, 0.5, 0.5, 1.0); }
     else {         color = vec4<f32>(0.1, 0.1, 0.1, 1.0); }
 
-    let lod = u32(log2(1.0 / tile.size));
+    let lod = u32(log2(tile.size));
     color = mix(color, index_color(lod), 0.5);
 
 #ifdef MESH_MORPH
@@ -60,7 +60,7 @@ fn show_lod(coordinate: S2Coordinate, view_distance: f32, lod: u32) -> vec4<f32>
 fn quadtree_outlines(coordinate: S2Coordinate, lod: u32) -> f32 {
     let node_coordinate = node_coordinate(coordinate, lod) % 1.0;
 
-    let thickness = 0.02;
+    let thickness = 0.03;
     let outer = inside_square(node_coordinate, vec2<f32>(0.0)            , 1.0);
     let inner = inside_square(node_coordinate, vec2<f32>(0.0) + thickness, 1.0 - 2.0 * thickness);
 
