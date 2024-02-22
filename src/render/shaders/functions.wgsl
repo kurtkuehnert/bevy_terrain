@@ -14,11 +14,10 @@ fn world_to_clip_position(world_position: vec4<f32>) -> vec4<f32> {
     return view.view_proj * world_position;
 }
 
-fn compute_morph(tile: Tile, st: vec2<f32>) -> Morph {
-    let local_position = local_position_from_coordinate(S2Coordinate(tile.side, st), view_config.approximate_height);
+fn compute_morph(coordinate: S2Coordinate, lod: u32) -> Morph {
+    let local_position = local_position_from_coordinate(coordinate, view_config.approximate_height);
     let view_distance = distance(local_position, view_config.view_local_position);
-    let morph_threshold_distance = view_config.morph_distance * tile.size;
-    let threshold_distance = 2.0 * morph_threshold_distance;
+    let threshold_distance = 2.0 * view_config.morph_distance * tile_size(lod);
     let ratio = clamp(1.0 - (1.0 - view_distance / threshold_distance) / view_config.morph_range, 0.0, 1.0);
 
     return Morph(ratio);
@@ -45,19 +44,16 @@ fn vertex_coordinate(vertex_index: u32) -> S2Coordinate {
     let grid_index = vertex_index % view_config.vertices_per_tile;
 
     let tile        = tiles.data[tile_index];
-    let grid_scale  = tile.size / view_config.grid_size;
     let grid_offset = grid_offset(grid_index);
-    var st          = tile.st + vec2<f32>(grid_offset) * grid_scale;
+    var coordinate  = tile_coordinate(tile, vec2<f32>(grid_offset) / view_config.grid_size);
 
 #ifdef MESH_MORPH
-    let morph = compute_morph(tile, st);
-    let even_grid_offset = grid_offset & vec2<u32>(4294967294u); // set last bit to zero
-    let even_st = tile.st + vec2<f32>(even_grid_offset) * grid_scale;
-
-    st = mix(st, even_st, morph.ratio);
+    let morph        = compute_morph(coordinate, tile.lod);
+    let morph_offset = mix(vec2<f32>(grid_offset), vec2<f32>(grid_offset & vec2<u32>(4294967294u)), morph.ratio);
+    coordinate       = tile_coordinate(tile, morph_offset / view_config.grid_size);
 #endif
 
-    return S2Coordinate(tile.side, st);
+    return coordinate;
 }
 
 fn local_position_from_coordinate(coordinate: S2Coordinate, height: f32) -> vec3<f32> {
@@ -202,6 +198,14 @@ fn coordinate_project_to_side(coordinate: S2Coordinate, side: u32) -> S2Coordina
     else if (info.y == PT) { st.y = coordinate.st.y; }
 
     return S2Coordinate(side, st);
+}
+
+fn tile_size(lod: u32) -> f32 {
+    return 1.0 / f32(1u << lod);
+}
+
+fn tile_coordinate(tile: Tile, offset: vec2<f32>) -> S2Coordinate {
+     return S2Coordinate(tile.side, (vec2<f32>(tile.xy) + offset) * tile_size(tile.lod));
 }
 
 fn node_count(lod: u32) -> u32 {

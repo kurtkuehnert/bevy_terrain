@@ -26,12 +26,12 @@ fn prepare_root() {
     parameters.tile_count = 6u;
 
     for (var i: u32 = 0u; i < 6u; i = i + 1u) {
-        temporary_tiles.data[i] = Tile(vec2<f32>(0.0), 1.0, i);
+        temporary_tiles.data[i] = Tile(i, 0u, vec2<u32>(0u));
     }
 #else
     parameters.tile_count = 1u;
 
-    temporary_tiles.data[0] = Tile(vec2<f32>(0.0), 1.0, 0u);
+    temporary_tiles.data[0] = Tile(0u, 0u, vec2<u32>(0u));
 #endif
 
     indirect_buffer.workgroup_count = vec3<u32>(1u, 1u, 1u);
