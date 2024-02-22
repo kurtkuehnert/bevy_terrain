@@ -2,6 +2,16 @@ use bevy::{prelude::*, render::render_resource::ShaderType};
 use bincode::{Decode, Encode};
 use std::{fmt};
 
+fn sphere_to_cube(xy: Vec2) -> Vec2 {
+    Vec2::new(if xy.x > 0.0 { 0.5 * (1.0 + 3.0 * xy.x).sqrt() } else { 1.0 - 0.5 * (1.0 - 3.0 * xy.x).sqrt() },
+              if xy.y > 0.0 { 0.5 * (1.0 + 3.0 * xy.y).sqrt() } else { 1.0 - 0.5 * (1.0 - 3.0 * xy.y).sqrt() })
+}
+
+fn cube_to_sphere(uv: Vec2) -> Vec2 {
+    Vec2::new(if uv.x > 0.5 { (4.0 * uv.x.powi(2) - 1.0) / 3.0 } else { (1.0 - 4.0 * (1.0 - uv.x).powi(2)) / 3.0 },
+              if uv.y > 0.5 { (4.0 * uv.y.powi(2) - 1.0) / 3.0 } else { (1.0 - 4.0 * (1.0 - uv.y).powi(2)) / 3.0 })
+}
+
 /// The global coordinate and identifier of a node.
 #[derive(Copy, Clone, Default, Debug, Hash, Eq, PartialEq, ShaderType, Encode, Decode)]
 pub struct NodeCoordinate {
@@ -151,21 +161,21 @@ impl fmt::Display for NodeCoordinate {
 
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
-pub(crate) struct S2Coordinate {
+pub(crate) struct UVCoordinate {
     pub(crate) side: u32,
-    pub(crate) st: Vec2,
+    pub(crate) uv: Vec2,
 }
 
-impl S2Coordinate {
+impl UVCoordinate {
     pub(crate) fn from_node_coordinate(node_coordinate: NodeCoordinate, node_count: u32) -> Self {
-        let st = (Vec2::new(
+        let uv = (Vec2::new(
             node_coordinate.x as f32 + 0.5,
             node_coordinate.y as f32 + 0.5,
         )) / node_count as f32;
 
         Self {
             side: node_coordinate.side,
-            st,
+            uv,
         }
     }
 
@@ -173,7 +183,7 @@ impl S2Coordinate {
         let node_count = NodeCoordinate::node_count(lod) as f32;
         let max_coordinate = Vec2::splat(node_count - 0.00001);
 
-        (self.st * node_count).clamp(Vec2::ZERO, max_coordinate)
+        (self.uv * node_count).clamp(Vec2::ZERO, max_coordinate)
     }
 
     pub(crate) fn from_local_position(local_position: Vec3) -> Self {
@@ -182,61 +192,42 @@ impl S2Coordinate {
             let normal = local_position.normalize();
             let abs_normal = normal.abs();
 
-            let (side, uv) = if abs_normal.x > abs_normal.y && abs_normal.x > abs_normal.z {
+            let (side, xy) = if abs_normal.x > abs_normal.y && abs_normal.x > abs_normal.z {
                 if normal.x < 0.0 {
-                    (0, Vec2::new(-normal.z / normal.x, normal.y / normal.x))
+                    (0, Vec2::new(-normal.z, normal.y) / normal.x)
                 } else {
-                    (3, Vec2::new(-normal.y / normal.x, normal.z / normal.x))
+                    (3, Vec2::new(-normal.y, normal.z) / normal.x)
                 }
             } else if abs_normal.z > abs_normal.y {
                 if normal.z > 0.0 {
-                    (1, Vec2::new(normal.x / normal.z, -normal.y / normal.z))
+                    (1, Vec2::new(normal.x, -normal.y) / normal.z)
                 } else {
-                    (4, Vec2::new(normal.y / normal.z, -normal.x / normal.z))
+                    (4, Vec2::new(normal.y, -normal.x) / normal.z)
                 }
             } else {
                 if normal.y > 0.0 {
-                    (2, Vec2::new(normal.x / normal.y, normal.z / normal.y))
+                    (2, Vec2::new(normal.x, normal.z) / normal.y)
                 } else {
-                    (5, Vec2::new(-normal.z / normal.y, -normal.x / normal.y))
+                    (5, Vec2::new(-normal.z, -normal.x) / normal.y)
                 }
             };
 
-            let st = uv
-                .to_array()
-                .map(|f| {
-                    if f > 0.0 {
-                        0.5 * (1.0 + 3.0 * f).sqrt()
-                    } else {
-                        1.0 - 0.5 * (1.0 - 3.0 * f).sqrt()
-                    }
-                })
-                .into();
+            let uv = sphere_to_cube(xy);
 
-            Self { side, st }
+            Self { side, uv }
         }
 
         #[cfg(not(feature = "spherical"))]
         return Self {
             side: 0,
-            st: Vec2::new(0.5 * local_position.x + 0.5, 0.5 * local_position.z + 0.5),
+            uv: Vec2::new(0.5 * local_position.x + 0.5, 0.5 * local_position.z + 0.5),
         };
     }
 
     pub(crate) fn local_position(self) -> Vec3 {
         #[cfg(feature = "spherical")]
         {
-            let uv: Vec2 = self
-                .st
-                .to_array()
-                .map(|f| {
-                    if f > 0.5 {
-                        (4.0 * f.powi(2) - 1.0) / 3.0
-                    } else {
-                        (1.0 - 4.0 * (1.0 - f).powi(2)) / 3.0
-                    }
-                })
-                .into();
+            let uv = cube_to_sphere(self.uv);
 
             match self.side {
                 0 => Vec3::new(-1.0, -uv.y, uv.x),
@@ -251,23 +242,23 @@ impl S2Coordinate {
         }
 
         #[cfg(not(feature = "spherical"))]
-        return Vec3::new(2.0 * self.st.x - 1.0, 0.0, 2.0 * self.st.y - 1.0);
+        return Vec3::new(2.0 * self.uv.x - 1.0, 0.0, 2.0 * self.uv.y - 1.0);
     }
 
     #[cfg(feature = "spherical")]
     pub(crate) fn project_to_side(self, side: u32) -> Self {
         let info = SideInfo::project_to_side(self.side, side);
 
-        let st = info
+        let uv = info
             .map(|info| match info {
                 SideInfo::Fixed0 => 0.0,
                 SideInfo::Fixed1 => 1.0,
-                SideInfo::PositiveS => self.st.x,
-                SideInfo::PositiveT => self.st.y,
+                SideInfo::PositiveS => self.uv.x,
+                SideInfo::PositiveT => self.uv.y,
             })
             .into();
 
-        Self { side, st }
+        Self { side, uv }
     }
 
     #[cfg(not(feature = "spherical"))]

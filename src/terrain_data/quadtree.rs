@@ -1,7 +1,7 @@
 use crate::{
     terrain::{Terrain, TerrainConfig},
     terrain_data::{
-        coordinates::NodeCoordinate, coordinates::S2Coordinate, node_atlas::NodeAtlas,
+        coordinates::NodeCoordinate, coordinates::UVCoordinate, node_atlas::NodeAtlas,
         sample_attachment_local, INVALID_ATLAS_INDEX, INVALID_LOD, SIDE_COUNT,
     },
     terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
@@ -183,7 +183,7 @@ impl Quadtree {
         )
     }
 
-    fn origin(&self, quadtree_s2: S2Coordinate, lod: u32) -> UVec2 {
+    fn origin(&self, quadtree_s2: UVCoordinate, lod: u32) -> UVec2 {
         let max_offset = NodeCoordinate::node_count(lod) as f32 - self.quadtree_size as f32;
 
         let quadtree_origin = (quadtree_s2.node_coordinate(lod) - 0.5 * self.quadtree_size as f32)
@@ -208,7 +208,7 @@ impl Quadtree {
     }
 
     pub(super) fn lookup_node(&self, local_position: Vec3, quadtree_lod: u32) -> NodeLookup {
-        let s2 = S2Coordinate::from_local_position(local_position);
+        let s2 = UVCoordinate::from_local_position(local_position);
 
         let mut node_coordinate = s2.node_coordinate(quadtree_lod);
 
@@ -248,7 +248,7 @@ impl Quadtree {
 
                 quadtree.view_local_position =
                     quadtree.world_to_local_position(view_world_position);
-                let view_s2 = S2Coordinate::from_local_position(quadtree.view_local_position);
+                let view_s2 = UVCoordinate::from_local_position(quadtree.view_local_position);
 
                 for side in 0..SIDE_COUNT {
                     let quadtree_s2 = view_s2.project_to_side(side);
@@ -269,7 +269,7 @@ impl Quadtree {
                             };
 
                             let node_s2 =
-                                S2Coordinate::from_node_coordinate(node_coordinate, node_count);
+                                UVCoordinate::from_node_coordinate(node_coordinate, node_count);
                             let node_local_position = node_s2.local_position(); // Todo: consider calculating distance to closest corner instead
 
                             let distance =

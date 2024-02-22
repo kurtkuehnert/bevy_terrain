@@ -15,21 +15,21 @@ fn project_to_side(coords: vec2<u32>, original_side: u32, projected_side: u32) -
     let NS = 2u;
     let NT = 3u;
 
-    var EVEN_LIST = array<vec2<u32>, 6u>(
-        vec2<u32>(PS, PT),
-        vec2<u32>(PS, PT),
-        vec2<u32>(NT, PS),
-        vec2<u32>(NT, NS),
-        vec2<u32>(PT ,NS),
-        vec2<u32>(PS, PT),
+    var EVEN_LIST = array(
+        vec2(PS, PT),
+        vec2(PS, PT),
+        vec2(NT, PS),
+        vec2(NT, NS),
+        vec2(PT ,NS),
+        vec2(PS, PT),
     );
-    var ODD_LIST = array<vec2<u32>, 6u>(
-        vec2<u32>(PS, PT),
-        vec2<u32>(PS, PT),
-        vec2<u32>(PT, NS),
-        vec2<u32>(PT, PS),
-        vec2<u32>(NT, PS),
-        vec2<u32>(PS, PT),
+    var ODD_LIST = array(
+        vec2(PS, PT),
+        vec2(PS, PT),
+        vec2(PT, NS),
+        vec2(PT, PS),
+        vec2(NT, PS),
+        vec2(PS, PT),
     );
 
     let index = (6u + projected_side - original_side) % 6u;
@@ -55,15 +55,15 @@ fn neighbour_index(coords: vec2<u32>) -> u32 {
     let border_size = attachment.border_size;
     let offset_size = attachment.border_size + attachment.center_size;
 
-    var bounds = array<vec4<u32>, 8u>(
-        vec4<u32>(border_size,          0u, center_size, border_size),
-        vec4<u32>(offset_size, border_size, border_size, center_size),
-        vec4<u32>(border_size, offset_size, center_size, border_size),
-        vec4<u32>(         0u, border_size, border_size, center_size),
-        vec4<u32>(         0u,          0u, border_size, border_size),
-        vec4<u32>(offset_size,          0u, border_size, border_size),
-        vec4<u32>(offset_size, offset_size, border_size, border_size),
-        vec4<u32>(         0u, offset_size, border_size, border_size)
+    var bounds = array(
+        vec4(border_size,          0u, center_size, border_size),
+        vec4(offset_size, border_size, border_size, center_size),
+        vec4(border_size, offset_size, center_size, border_size),
+        vec4(         0u, border_size, border_size, center_size),
+        vec4(         0u,          0u, border_size, border_size),
+        vec4(offset_size,          0u, border_size, border_size),
+        vec4(offset_size, offset_size, border_size, border_size),
+        vec4(         0u, offset_size, border_size, border_size)
     );
 
     for (var neighbour_index = 0u; neighbour_index < 8u; neighbour_index += 1u) {
@@ -76,15 +76,15 @@ fn neighbour_index(coords: vec2<u32>) -> u32 {
 fn neighbour_data(coords: vec2<u32>, neighbour_index: u32) -> vec4<f32> {
     let center_size = i32(attachment.center_size);
 
-    var offsets = array<vec2<i32>, 8u>(
-        vec2<i32>(           0,  center_size),
-        vec2<i32>(-center_size,            0),
-        vec2<i32>(           0, -center_size),
-        vec2<i32>( center_size,            0),
-        vec2<i32>( center_size,  center_size),
-        vec2<i32>(-center_size,  center_size),
-        vec2<i32>(-center_size, -center_size),
-        vec2<i32>( center_size, -center_size)
+    var offsets = array(
+        vec2(           0,  center_size),
+        vec2(-center_size,            0),
+        vec2(           0, -center_size),
+        vec2( center_size,            0),
+        vec2( center_size,  center_size),
+        vec2(-center_size,  center_size),
+        vec2(-center_size, -center_size),
+        vec2( center_size, -center_size)
     );
 
     let neighbour_node = stitch_data.neighbour_nodes[neighbour_index];
