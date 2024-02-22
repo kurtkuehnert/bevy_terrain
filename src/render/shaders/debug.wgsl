@@ -2,7 +2,7 @@
 
 #import bevy_terrain::types::{S2Coordinate}
 #import bevy_terrain::bindings::{config, view_config, tiles, attachments}
-#import bevy_terrain::functions::{compute_morph, compute_blend, quadtree_lod, inside_square, node_count, node_coordinate, coordinate_from_local_position}
+#import bevy_terrain::functions::{compute_morph, compute_blend, quadtree_lod, inside_square, node_count, node_coordinate, coordinate_from_local_position, tile_size}
 
 fn index_color(index: u32) -> vec4<f32> {
     var COLOR_ARRAY = array<vec4<f32>, 6u>(
@@ -23,16 +23,15 @@ fn show_tiles(coordinate: S2Coordinate, vertex_index: u32) -> vec4<f32> {
 
     var color: vec4<f32>;
 
-    let is_even = u32((tile.st.x + tile.st.y) / tile.size) % 2u == 0u;
+    let is_even = (tile.xy.x + tile.xy.y) % 2u == 0u;
 
     if (is_even) { color = vec4<f32>(0.5, 0.5, 0.5, 1.0); }
     else {         color = vec4<f32>(0.1, 0.1, 0.1, 1.0); }
 
-    let lod = u32(log2(tile.size));
-    color = mix(color, index_color(lod), 0.5);
+    color = mix(color, index_color(tile.lod), 0.5);
 
 #ifdef MESH_MORPH
-    let morph = compute_morph(tile, coordinate.st);
+    let morph = compute_morph(coordinate, tile.lod);
     color = mix(color, vec4<f32>(1.0), 0.3 * morph.ratio);
 #endif
 

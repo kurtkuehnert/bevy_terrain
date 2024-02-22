@@ -1,6 +1,6 @@
 #import bevy_terrain::types::{TerrainConfig, TerrainViewConfig, Tile, TileList, Parameters, NodeLookup, S2Coordinate}
 #import bevy_terrain::bindings::config
-#import bevy_terrain::functions::local_position_from_coordinate
+#import bevy_terrain::functions::{local_position_from_coordinate, tile_coordinate, tile_size}
 
 struct CullingData {
     world_position: vec3<f32>,
@@ -25,9 +25,7 @@ var<storage, read_write> parameters: Parameters;
 
 // Todo: figure out how to remove this duplicate
 fn morph_threshold_distance(tile: Tile) -> f32 {
-    let tile_count = 1.0 / tile.size;
-
-    return view_config.morph_distance / tile_count;
+    return view_config.morph_distance * tile_size(tile.lod);
 }
 
 fn child_index() -> i32 {
@@ -46,7 +44,7 @@ fn should_be_divided(tile: Tile) -> bool {
     var min_view_distance = 3.40282347E+38; // f32::MAX
 
     for (var i: u32 = 0u; i < 4u; i = i + 1u) {
-        let corner_coordinate = S2Coordinate(tile.side, tile.st + tile.size * vec2<f32>(f32(i & 1u), f32(i >> 1u & 1u)));
+        let corner_coordinate = tile_coordinate(tile, vec2<f32>(f32(i & 1u), f32(i >> 1u & 1u)));
         let corner_local_position = local_position_from_coordinate(corner_coordinate, view_config.approximate_height);
         let corner_view_distance = distance(corner_local_position, view_config.view_local_position);
 
@@ -57,27 +55,23 @@ fn should_be_divided(tile: Tile) -> bool {
 }
 
 fn subdivide(tile: Tile) {
-    let child_size = 0.5 * tile.size;
-
     for (var i: u32 = 0u; i < 4u; i = i + 1u) {
-        let child_st = tile.st + child_size * vec2<f32>(f32(i & 1u), f32(i >> 1u & 1u));
+        let child_xy  = vec2<u32>((tile.xy.x << 1u) + (i & 1u), (tile.xy.y << 1u) + (i >> 1u & 1u));
+        let child_lod = tile.lod + 1u;
 
-        temporary_tiles.data[child_index()] = Tile(child_st, child_size, tile.side);
+        temporary_tiles.data[child_index()] = Tile(tile.side, child_lod, child_xy);
     }
 }
 
 @compute @workgroup_size(64, 1, 1)
 fn refine_tiles(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
-    if (invocation_id.x >= parameters.tile_count) {
-        return;
-    }
+    if (invocation_id.x >= parameters.tile_count) { return; }
 
     let tile = temporary_tiles.data[parent_index(invocation_id.x)];
 
     if (should_be_divided(tile)) {
         subdivide(tile);
-    }
-    else {
+    } else {
         final_tiles.data[final_index()] = tile;
     }
 }
