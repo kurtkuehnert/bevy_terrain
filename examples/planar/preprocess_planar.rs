@@ -18,20 +18,20 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         path: PATH.to_string(),
         ..default()
     }
-    .add_attachment(AttachmentConfig {
-        name: "height".to_string(),
-        texture_size: TEXTURE_SIZE,
-        border_size: 2,
-        format: AttachmentFormat::R16,
-        ..default()
-    })
-    .add_attachment(AttachmentConfig {
-        name: "albedo".to_string(),
-        texture_size: TEXTURE_SIZE,
-        border_size: 2,
-        format: AttachmentFormat::Rgba8,
-        ..default()
-    });
+        .add_attachment(AttachmentConfig {
+            name: "height".to_string(),
+            texture_size: TEXTURE_SIZE,
+            border_size: 2,
+            format: AttachmentFormat::R16,
+            ..default()
+        })
+        .add_attachment(AttachmentConfig {
+            name: "albedo".to_string(),
+            texture_size: TEXTURE_SIZE,
+            border_size: 2,
+            format: AttachmentFormat::Rgba8,
+            ..default()
+        });
 
     let mut node_atlas = NodeAtlas::from_config(&config);
 

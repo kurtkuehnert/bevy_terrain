@@ -15,12 +15,17 @@
 //! Both the node atlas and the quadtrees also have a corresponding GPU representation,
 //! which can be used to access the terrain data in shaders.
 
-use crate::terrain_data::{node_atlas::NodeAtlas, quadtree::Quadtree};
-use bevy::prelude::*;
-use bevy::render::render_resource::*;
+use crate::{
+    terrain_data::{node_atlas::NodeAtlas, quadtree::Quadtree},
+    util::CollectArray,
+};
+use bevy::{
+    prelude::*,
+    render::render_resource::*,
+};
 use bincode::{Decode, Encode};
 use bytemuck::cast_slice;
-use itertools::{iproduct, Itertools};
+use itertools::{iproduct};
 use std::iter;
 
 pub mod coordinates;
@@ -166,9 +171,7 @@ impl AttachmentData {
                 let value = value
                     .iter()
                     .map(|value| (value / 4) as u8)
-                    .collect_vec()
-                    .try_into()
-                    .unwrap();
+                    .collect_array();
 
                 data.push(value);
             }
@@ -280,7 +283,7 @@ pub(crate) fn sample_attachment_local(
     let mut value = node_atlas.sample_attachment(lookup, attachment_index);
 
     if blend_ratio > 0.0 {
-        let lookup2 = quadtree.lookup_node(local_position, lod);
+        let lookup2 = quadtree.lookup_node(local_position, lod - 1);
         value = value.lerp(
             node_atlas.sample_attachment(lookup2, attachment_index),
             blend_ratio,
