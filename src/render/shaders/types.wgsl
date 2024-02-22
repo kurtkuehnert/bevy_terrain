@@ -22,9 +22,9 @@ struct TerrainViewConfig {
 }
 
 struct Tile {
-    st: vec2<f32>, // [0..1]
-    size: f32, // [0..1]
-    side: u32, // [0..6]
+    side: u32,
+    lod: u32,
+    xy: vec2<u32>,
 }
 
 struct TileList {
