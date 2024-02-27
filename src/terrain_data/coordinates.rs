@@ -2,11 +2,13 @@ use bevy::{prelude::*, render::render_resource::ShaderType};
 use bincode::{Decode, Encode};
 use std::{fmt};
 
+#[cfg(feature = "spherical")]
 fn sphere_to_cube(xy: Vec2) -> Vec2 {
     Vec2::new(if xy.x > 0.0 { 0.5 * (1.0 + 3.0 * xy.x).sqrt() } else { 1.0 - 0.5 * (1.0 - 3.0 * xy.x).sqrt() },
               if xy.y > 0.0 { 0.5 * (1.0 + 3.0 * xy.y).sqrt() } else { 1.0 - 0.5 * (1.0 - 3.0 * xy.y).sqrt() })
 }
 
+#[cfg(feature = "spherical")]
 fn cube_to_sphere(uv: Vec2) -> Vec2 {
     Vec2::new(if uv.x > 0.5 { (4.0 * uv.x.powi(2) - 1.0) / 3.0 } else { (1.0 - 4.0 * (1.0 - uv.x).powi(2)) / 3.0 },
               if uv.y > 0.5 { (4.0 * uv.y.powi(2) - 1.0) / 3.0 } else { (1.0 - 4.0 * (1.0 - uv.y).powi(2)) / 3.0 })

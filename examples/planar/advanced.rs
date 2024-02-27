@@ -2,7 +2,7 @@ use bevy::{prelude::*, reflect::TypePath, render::render_resource::*};
 use bevy_terrain::prelude::*;
 
 const PATH: &str = "terrains/planar";
-const TERRAIN_SIZE: f32 = 1000.0;
+const TERRAIN_SIZE: f32 = 2000.0;
 const HEIGHT: f32 = 500.0 / TERRAIN_SIZE;
 const TEXTURE_SIZE: u32 = 512;
 const LOD_COUNT: u32 = 4;
@@ -54,20 +54,20 @@ fn setup(
         path: PATH.to_string(),
         ..default()
     }
-    .add_attachment(AttachmentConfig {
-        name: "height".to_string(),
-        texture_size: TEXTURE_SIZE,
-        border_size: 2,
-        mip_level_count: 4,
-        format: AttachmentFormat::R16,
-    })
-    .add_attachment(AttachmentConfig {
-        name: "albedo".to_string(),
-        texture_size: TEXTURE_SIZE,
-        border_size: 2,
-        mip_level_count: 4,
-        format: AttachmentFormat::Rgba8,
-    });
+        .add_attachment(AttachmentConfig {
+            name: "height".to_string(),
+            texture_size: TEXTURE_SIZE,
+            border_size: 2,
+            mip_level_count: 4,
+            format: AttachmentFormat::R16,
+        })
+        .add_attachment(AttachmentConfig {
+            name: "albedo".to_string(),
+            texture_size: TEXTURE_SIZE,
+            border_size: 2,
+            mip_level_count: 4,
+            format: AttachmentFormat::Rgba8,
+        });
 
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
     let view_config = TerrainViewConfig::default();

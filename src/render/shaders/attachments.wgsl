@@ -90,7 +90,7 @@ fn sample_normal_grad(lookup: NodeLookup, vertex_normal: vec3<f32>) -> vec3<f32>
 #endif
 
     // Todo: this is only an approximation of the S2 distance (pixels are not spaced evenly and they are not perpendicular)
-    let pixels_per_side = height_attachment.size * f32(node_count(lookup.atlas_lod));
+    let pixels_per_side = height_attachment.size * node_count(lookup.atlas_lod);
     let distance_between_samples = side_length / pixels_per_side;
     let offset = 0.5 / height_attachment.size;
 
