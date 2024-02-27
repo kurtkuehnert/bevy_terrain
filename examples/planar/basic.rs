@@ -3,7 +3,7 @@ use bevy_terrain::prelude::*;
 
 const PATH: &str = "terrains/planar";
 const TERRAIN_SIZE: f32 = 1000.0;
-const HEIGHT: f32 = 500.0 / TERRAIN_SIZE;
+const HEIGHT: f32 = 250.0 / TERRAIN_SIZE;
 const TEXTURE_SIZE: u32 = 512;
 const LOD_COUNT: u32 = 4;
 
@@ -27,20 +27,20 @@ fn setup(
         path: PATH.to_string(),
         ..default()
     }
-    .add_attachment(AttachmentConfig {
-        name: "height".to_string(),
-        texture_size: TEXTURE_SIZE,
-        border_size: 2,
-        mip_level_count: 4,
-        format: AttachmentFormat::R16,
-    });
+        .add_attachment(AttachmentConfig {
+            name: "height".to_string(),
+            texture_size: TEXTURE_SIZE,
+            border_size: 2,
+            mip_level_count: 4,
+            format: AttachmentFormat::R16,
+        });
 
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
     let view_config = TerrainViewConfig::default();
 
     let terrain = commands
         .spawn((
-            TerrainBundle::new(config.clone(), default(), TERRAIN_SIZE),
+            TerrainBundle::new(config.clone(), Vec3::new(0.0, -100.0, 0.0), TERRAIN_SIZE),
             materials.add(DebugTerrainMaterial::default()),
         ))
         .id();

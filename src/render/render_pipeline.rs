@@ -36,8 +36,8 @@ pub struct TerrainPipelineKey<M: Material> {
 impl<M: Material> Eq for TerrainPipelineKey<M> where M::Data: PartialEq {}
 
 impl<M: Material> PartialEq for TerrainPipelineKey<M>
-where
-    M::Data: PartialEq,
+    where
+        M::Data: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
         self.flags == other.flags && self.bind_group_data == other.bind_group_data
@@ -45,8 +45,8 @@ where
 }
 
 impl<M: Material> Clone for TerrainPipelineKey<M>
-where
-    M::Data: Clone,
+    where
+        M::Data: Clone,
 {
     fn clone(&self) -> Self {
         Self {
@@ -57,8 +57,8 @@ where
 }
 
 impl<M: Material> Hash for TerrainPipelineKey<M>
-where
-    M::Data: Hash,
+    where
+        M::Data: Hash,
 {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.flags.hash(state);
@@ -79,8 +79,8 @@ bitflags::bitflags! {
         const SHOW_QUADTREE      = (1 <<  5);
         const SHOW_PIXELS        = (1 <<  6);
         const SHOW_NORMALS       = (1 <<  7);
-        const MESH_MORPH         = (1 <<  8);
-        const LAYER_BLEND        = (1 <<  9);
+        const MORPH              = (1 <<  8);
+        const BLEND              = (1 <<  9);
         const QUADTREE_LOD       = (1 << 10);
         const ALBEDO             = (1 << 11);
         const BRIGHT             = (1 << 12);
@@ -127,11 +127,11 @@ impl TerrainPipelineFlags {
         if debug.show_normals {
             key |= TerrainPipelineFlags::SHOW_NORMALS;
         }
-        if debug.mesh_morph {
-            key |= TerrainPipelineFlags::MESH_MORPH;
+        if debug.morph {
+            key |= TerrainPipelineFlags::MORPH;
         }
-        if debug.layer_blend {
-            key |= TerrainPipelineFlags::LAYER_BLEND;
+        if debug.blend {
+            key |= TerrainPipelineFlags::BLEND;
         }
         if debug.quadtree_lod {
             key |= TerrainPipelineFlags::QUADTREE_LOD;
@@ -193,11 +193,11 @@ impl TerrainPipelineFlags {
         if (self.bits() & TerrainPipelineFlags::SHOW_NORMALS.bits()) != 0 {
             shader_defs.push("SHOW_NORMALS".into())
         }
-        if (self.bits() & TerrainPipelineFlags::MESH_MORPH.bits()) != 0 {
-            shader_defs.push("MESH_MORPH".into());
+        if (self.bits() & TerrainPipelineFlags::MORPH.bits()) != 0 {
+            shader_defs.push("MORPH".into());
         }
-        if (self.bits() & TerrainPipelineFlags::LAYER_BLEND.bits()) != 0 {
-            shader_defs.push("LAYER_BLEND".into());
+        if (self.bits() & TerrainPipelineFlags::BLEND.bits()) != 0 {
+            shader_defs.push("BLEND".into());
         }
         if (self.bits() & TerrainPipelineFlags::QUADTREE_LOD.bits()) != 0 {
             shader_defs.push("QUADTREE_LOD".into());
@@ -283,8 +283,8 @@ impl<M: Material> FromWorld for TerrainRenderPipeline<M> {
 }
 
 impl<M: Material> SpecializedRenderPipeline for TerrainRenderPipeline<M>
-where
-    M::Data: PartialEq + Eq + Hash + Clone,
+    where
+        M::Data: PartialEq + Eq + Hash + Clone,
 {
     type Key = TerrainPipelineKey<M>;
 
@@ -399,8 +399,8 @@ pub(crate) fn queue_terrain<M: Material>(
                     flags |= TerrainPipelineFlags::from_debug(debug);
                 } else {
                     flags |= TerrainPipelineFlags::LIGHTING
-                        | TerrainPipelineFlags::MESH_MORPH
-                        | TerrainPipelineFlags::LAYER_BLEND
+                        | TerrainPipelineFlags::MORPH
+                        | TerrainPipelineFlags::BLEND
                         | TerrainPipelineFlags::SAMPLE_GRAD;
                 }
 
@@ -436,8 +436,8 @@ impl<M: Material> Default for TerrainMaterialPlugin<M> {
 }
 
 impl<M: Material> Plugin for TerrainMaterialPlugin<M>
-where
-    M::Data: PartialEq + Eq + Hash + Clone,
+    where
+        M::Data: PartialEq + Eq + Hash + Clone,
 {
     fn build(&self, app: &mut App) {
         app.init_asset::<M>()

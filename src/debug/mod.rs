@@ -52,8 +52,8 @@ pub struct DebugTerrain {
     pub show_quadtree: bool,
     pub show_pixels: bool,
     pub show_normals: bool,
-    pub mesh_morph: bool,
-    pub layer_blend: bool,
+    pub morph: bool,
+    pub blend: bool,
     pub quadtree_lod: bool,
     pub albedo: bool,
     pub lighting: bool,
@@ -74,8 +74,8 @@ impl Default for DebugTerrain {
             show_quadtree: false,
             show_pixels: false,
             show_normals: false,
-            mesh_morph: true,
-            layer_blend: true,
+            morph: true,
+            blend: true,
             quadtree_lod: false,
             albedo: false,
             lighting: true,
@@ -143,17 +143,17 @@ pub fn toggle_debug(input: Res<ButtonInput<KeyCode>>, mut debug: ResMut<DebugTer
         )
     }
     if input.just_pressed(KeyCode::KeyM) {
-        debug.mesh_morph = !debug.mesh_morph;
+        debug.morph = !debug.morph;
         println!(
-            "Toggled the mesh morph {}.",
-            if debug.mesh_morph { "on" } else { "off" }
+            "Toggled morphing {}.",
+            if debug.morph { "on" } else { "off" }
         )
     }
     if input.just_pressed(KeyCode::KeyK) {
-        debug.layer_blend = !debug.layer_blend;
+        debug.blend = !debug.blend;
         println!(
-            "Toggled the layer blend {}.",
-            if debug.layer_blend { "on" } else { "off" }
+            "Toggled blending {}.",
+            if debug.blend { "on" } else { "off" }
         )
     }
     if input.just_pressed(KeyCode::KeyH) {

@@ -1,8 +1,8 @@
 #define_import_path bevy_terrain::vertex
 
-#import bevy_terrain::bindings::{view_config}
-#import bevy_terrain::types::{UVCoordinate, LookupInfo}
-#import bevy_terrain::functions::{vertex_coordinate, local_position_from_coordinate, compute_blend, lookup_node, local_to_world_position, world_to_clip_position}
+#import bevy_terrain::bindings::{view_config, tiles}
+#import bevy_terrain::types::{Blend, UVCoordinate, LookupInfo}
+#import bevy_terrain::functions::{grid_offset, tile_coordinate, compute_morph, local_position_from_coordinate, compute_blend, quadtree_lod, lookup_node, local_to_world_position, world_to_clip_position}
 #import bevy_terrain::attachments::sample_height
 #import bevy_terrain::debug::show_tiles
 
@@ -21,34 +21,49 @@ struct VertexOutput {
 }
 
 fn vertex_lookup_info(input: VertexInput) -> LookupInfo {
-    let coordinate     = vertex_coordinate(input.vertex_index);
-    let local_position = local_position_from_coordinate(coordinate, view_config.approximate_height);
-    let view_distance  = distance(local_position, view_config.view_local_position);
+    let tile_index = input.vertex_index / view_config.vertices_per_tile;
+    let grid_index = input.vertex_index % view_config.vertices_per_tile;
+
+    let tile        = tiles.data[tile_index];
+    let grid_offset = grid_offset(grid_index);
+
+    let approximate_coordinate  = tile_coordinate(tile, vec2<f32>(grid_offset) / view_config.grid_size);
+    let approximate_position    = local_position_from_coordinate(approximate_coordinate, view_config.approximate_height);
+    let approximate_distance    = distance(approximate_position, view_config.view_local_position);
+
+#ifdef MORPH
+    let morph_ratio  = compute_morph(approximate_distance, tile.lod);
+    let morph_offset = mix(vec2<f32>(grid_offset), vec2<f32>(grid_offset & vec2<u32>(4294967294u)), morph_ratio);
+    let coordinate   = tile_coordinate(tile, morph_offset / view_config.grid_size);
+#else
+    let coordinate   = approximate_coordinate;
+#endif
 
 #ifdef QUADTREE_LOD
     let blend = Blend(quadtree_lod(coordinate), 0.0);
 #else
-    let blend = compute_blend(view_distance);
+    let blend = compute_blend(approximate_distance);
 #endif
 
-    return LookupInfo(coordinate, view_distance, blend.lod, blend.ratio, vec2<f32>(0.0), vec2<f32>(0.0));
+    return LookupInfo(coordinate, approximate_distance, blend.lod, blend.ratio, vec2<f32>(0.0), vec2<f32>(0.0));
 }
 
 fn vertex_output(input: VertexInput, info: LookupInfo, height: f32) -> VertexOutput {
     var output: VertexOutput;
 
     let local_position = local_position_from_coordinate(info.coordinate, height);
+    let view_distance  = distance(local_position, view_config.view_local_position);
 
     output.side              = info.coordinate.side;
     output.uv                = info.coordinate.uv;
-    output.view_distance     = info.view_distance;
+    output.view_distance     = view_distance;
     output.world_normal      = normalize(local_position);
     output.world_position    = local_to_world_position(local_position);
     output.fragment_position = world_to_clip_position(output.world_position);
 
 
 #ifdef SHOW_TILES
-    output.debug_color       = show_tiles(info.coordinate, input.vertex_index);
+    output.debug_color       = show_tiles(info.view_distance, input.vertex_index);
 #endif
 
     return output;
