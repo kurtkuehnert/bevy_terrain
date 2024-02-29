@@ -56,14 +56,12 @@ fn world_to_clip_position(world_position: vec4<f32>) -> vec4<f32> {
 
 fn compute_morph(view_distance: f32, lod: u32) -> f32 {
     let threshold_distance = 2.0 * view_config.morph_distance * tile_size(lod);
-    let ratio = clamp(1.0 - (1.0 - view_distance / threshold_distance) / view_config.morph_range, 0.0, 1.0);
-
-    return ratio;
+    return clamp(1.0 - (1.0 - view_distance / threshold_distance) / view_config.morph_range, 0.0, 1.0);
 }
 
 fn compute_blend(view_distance: f32) -> Blend {
     let lod_f32 = log2(2.0 * view_config.blend_distance / view_distance);
-    let lod = clamp(u32(lod_f32), 0u, config.lod_count - 1u);
+    let lod     = clamp(u32(lod_f32), 0u, config.lod_count - 1u);
 
 #ifdef BLEND
     let ratio = select(1.0 - (lod_f32 % 1.0) / view_config.blend_range, 0.0, lod_f32 < 1.0 || lod_f32 > f32(config.lod_count));
@@ -247,9 +245,9 @@ fn lookup_node(info: LookupInfo, lod_offset: u32) -> NodeLookup {
 
     let atlas_lod           = entry.atlas_lod;
     let atlas_index         = entry.atlas_index;
-    let atlas_coordinate    = node_coordinate(info.coordinate, entry.atlas_lod) % 1.0;
-    let atlas_ddx           = node_count(entry.atlas_lod) * info.ddx;
-    let atlas_ddy           = node_count(entry.atlas_lod) * info.ddy;
+    let atlas_coordinate    = node_coordinate(info.coordinate, atlas_lod) % 1.0;
+    let atlas_ddx           = node_count(atlas_lod) * info.ddx;
+    let atlas_ddy           = node_count(atlas_lod) * info.ddy;
 
-    return NodeLookup(atlas_index, atlas_lod, atlas_coordinate, atlas_ddx, atlas_ddy, quadtree_side);
+    return NodeLookup(atlas_index, atlas_lod, atlas_coordinate, atlas_ddx, atlas_ddy);
 }

@@ -73,7 +73,6 @@ struct NodeLookup {
     atlas_coordinate: vec2<f32>,
     ddx: vec2<f32>,
     ddy: vec2<f32>,
-    side: u32,
 }
 
 struct AttachmentConfig {
