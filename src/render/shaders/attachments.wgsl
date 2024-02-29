@@ -59,7 +59,7 @@ fn sample_height_grad(lookup: NodeLookup) -> f32 {
     return mix(config.min_height, config.max_height, height);
 }
 
-fn sample_normal_grad(lookup: NodeLookup, vertex_normal: vec3<f32>) -> vec3<f32> {
+fn sample_normal_grad(lookup: NodeLookup, vertex_normal: vec3<f32>, side: u32) -> vec3<f32> {
     let height_attachment = attachments.data[0];
     let height_coordinate = lookup.atlas_coordinate * height_attachment.scale + height_attachment.offset;
 
@@ -73,7 +73,7 @@ fn sample_normal_grad(lookup: NodeLookup, vertex_normal: vec3<f32>) -> vec3<f32>
         vec3(-1.0, 0.0,  0.0),
     );
 
-    let face_up = FACE_UP[lookup.side];
+    let face_up = FACE_UP[side];
 
     let normal    = normalize(vertex_normal);
     let tangent   = cross(face_up, normal);

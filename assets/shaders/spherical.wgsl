@@ -49,13 +49,13 @@ fn fragment(input: FragmentInput) -> FragmentOutput {
     let info = fragment_lookup_info(input);
 
     let lookup = lookup_node(info, 0u);
-    var normal = sample_normal_grad(lookup, input.world_normal);
+    var normal = sample_normal_grad(lookup, input.world_normal, input.side);
     var color  = sample_color_grad(lookup);
 
     if (info.blend_ratio > 0.0) {
         let lookup2 = lookup_node(info, 1u);
-        normal      = mix(normal, sample_normal_grad(lookup2, input.world_normal), info.blend_ratio);
-        color       = mix(color,  sample_color_grad(lookup2),                      info.blend_ratio);
+        normal      = mix(normal, sample_normal_grad(lookup2, input.world_normal, input.side), info.blend_ratio);
+        color       = mix(color,  sample_color_grad(lookup2),                                  info.blend_ratio);
     }
 
     return fragment_output(input, color, normal, lookup);
