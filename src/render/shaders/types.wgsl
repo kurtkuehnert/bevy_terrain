@@ -27,10 +27,6 @@ struct Tile {
     xy: vec2<u32>,
 }
 
-struct TileList {
-    data: array<Tile>,
-}
-
 struct Parameters {
     tile_count: u32,
     counter: i32,
@@ -53,10 +49,6 @@ struct QuadtreeEntry {
     atlas_lod: u32,
 }
 
-struct Quadtree {
-    data: array<QuadtreeEntry>,
-}
-
 struct LookupInfo {
     coordinate: UVCoordinate,
     view_distance: f32,
@@ -68,9 +60,9 @@ struct LookupInfo {
 
 // A lookup of a node inside the node atlas based on the view of a quadtree.
 struct NodeLookup {
-    atlas_index: u32,
-    atlas_lod: u32,
-    atlas_coordinate: vec2<f32>,
+    index: u32,
+    lod: u32,
+    coordinate: vec2<f32>,
     ddx: vec2<f32>,
     ddy: vec2<f32>,
 }
@@ -80,8 +72,4 @@ struct AttachmentConfig {
     scale: f32,
     offset: f32,
     _padding: u32,
-}
-
-struct AttachmentList {
-    data: array<AttachmentConfig, 8u>,
 }

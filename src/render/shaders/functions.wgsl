@@ -233,21 +233,24 @@ fn quadtree_lod(frag_coordinate: UVCoordinate) -> u32 {
 }
 
 fn lookup_node(info: LookupInfo, lod_offset: u32) -> NodeLookup {
-    let quadtree_lod        = info.lod - lod_offset;
-    let quadtree_side       = info.coordinate.side;
-    let quadtree_coordinate = vec2<u32>(node_coordinate(info.coordinate, quadtree_lod)) % view_config.quadtree_size;
-    let quadtree_index      = ((quadtree_side          * config.lod_count +
-                                quadtree_lod)          * view_config.quadtree_size +
-                                quadtree_coordinate.x) * view_config.quadtree_size +
-                                quadtree_coordinate.y;
+    return lookup_attachment_group(info, lod_offset, 0u);
+}
 
-    let entry               = quadtree.data[quadtree_index];
+fn lookup_attachment_group(info: LookupInfo, lod_offset: u32, attachment_group: u32) -> NodeLookup {
+    let quadtree_lod           = info.lod - lod_offset;
+    let quadtree_side          = info.coordinate.side;
+    let quadtree_coordinate    = vec2<u32>(node_coordinate(info.coordinate, quadtree_lod)) % view_config.quadtree_size;
+    let quadtree_index         = (((                         quadtree_side        ) *
+                                 config.lod_count          + quadtree_lod         ) *
+                                 view_config.quadtree_size + quadtree_coordinate.x) *
+                                 view_config.quadtree_size + quadtree_coordinate.y;
+    let quadtree_entry         = quadtree[quadtree_index];
 
-    let atlas_lod           = entry.atlas_lod;
-    let atlas_index         = entry.atlas_index;
-    let atlas_coordinate    = node_coordinate(info.coordinate, atlas_lod) % 1.0;
-    let atlas_ddx           = node_count(atlas_lod) * info.ddx;
-    let atlas_ddy           = node_count(atlas_lod) * info.ddy;
-
-    return NodeLookup(atlas_index, atlas_lod, atlas_coordinate, atlas_ddx, atlas_ddy);
+    var lookup: NodeLookup;
+    lookup.lod                 = quadtree_entry.atlas_lod;
+    lookup.index               = quadtree_entry.atlas_index;
+    lookup.coordinate          = node_coordinate(info.coordinate, lookup.lod) % 1.0;
+    lookup.ddx                 = node_count(lookup.lod) * info.ddx;
+    lookup.ddy                 = node_count(lookup.lod) * info.ddy;
+    return lookup;
 }

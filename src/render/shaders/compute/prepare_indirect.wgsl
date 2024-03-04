@@ -1,4 +1,4 @@
-#import bevy_terrain::types::{TerrainViewConfig, Tile, TileList, Parameters}
+#import bevy_terrain::types::{TerrainViewConfig, Tile, Parameters}
 
 struct IndirectBuffer {
     workgroup_count: vec3<u32>,
@@ -7,9 +7,9 @@ struct IndirectBuffer {
 @group(1) @binding(0)
 var<uniform> view_config: TerrainViewConfig;
 @group(1) @binding(2)
-var<storage, read_write> final_tiles: TileList;
+var<storage, read_write> final_tiles: array<Tile>;
 @group(1) @binding(3)
-var<storage, read_write> temporary_tiles: TileList;
+var<storage, read_write> temporary_tiles: array<Tile>;
 @group(1) @binding(4)
 var<storage, read_write> parameters: Parameters;
 
@@ -26,12 +26,12 @@ fn prepare_root() {
     parameters.tile_count = 6u;
 
     for (var i: u32 = 0u; i < 6u; i = i + 1u) {
-        temporary_tiles.data[i] = Tile(i, 0u, vec2<u32>(0u));
+        temporary_tiles[i] = Tile(i, 0u, vec2<u32>(0u));
     }
 #else
     parameters.tile_count = 1u;
 
-    temporary_tiles.data[0] = Tile(0u, 0u, vec2<u32>(0u));
+    temporary_tiles[0] = Tile(0u, 0u, vec2<u32>(0u));
 #endif
 
     indirect_buffer.workgroup_count = vec3<u32>(1u, 1u, 1u);

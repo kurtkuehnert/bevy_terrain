@@ -5,46 +5,46 @@
 #import bevy_terrain::functions::node_count
 
 fn sample_attachment0(lookup: NodeLookup) -> vec4<f32> {
-    let attachment = attachments.data[0];
-    let coordinate = lookup.atlas_coordinate * attachment.scale + attachment.offset;
+    let attachment = attachments[0];
+    let coordinate = lookup.coordinate * attachment.scale + attachment.offset;
 
-    return textureSampleLevel(attachment0_atlas, atlas_sampler, coordinate, lookup.atlas_index, 0.0);
+    return textureSampleLevel(attachment0_atlas, atlas_sampler, coordinate, lookup.index, 0.0);
 }
 
 fn sample_attachment0_grad(lookup: NodeLookup) -> vec4<f32> {
-    let attachment = attachments.data[0];
-    let coordinate = lookup.atlas_coordinate * attachment.scale + attachment.offset;
+    let attachment = attachments[0];
+    let coordinate = lookup.coordinate * attachment.scale + attachment.offset;
 
 #ifdef SAMPLE_GRAD
-    return textureSampleGrad(attachment0_atlas, atlas_sampler, coordinate, lookup.atlas_index, lookup.ddx, lookup.ddy);
+    return textureSampleGrad(attachment0_atlas, atlas_sampler, coordinate, lookup.index, lookup.ddx, lookup.ddy);
 #else
-    return textureSampleLevel(attachment0_atlas, atlas_sampler, coordinate, lookup.atlas_index, 0.0);
+    return textureSampleLevel(attachment0_atlas, atlas_sampler, coordinate, lookup.index, 0.0);
 #endif
 }
 
 fn sample_attachment1(lookup: NodeLookup) -> vec4<f32> {
-    let attachment = attachments.data[1];
-    let coordinate = lookup.atlas_coordinate * attachment.scale + attachment.offset;
+    let attachment = attachments[1];
+    let coordinate = lookup.coordinate * attachment.scale + attachment.offset;
 
-    return textureSampleLevel(attachment1_atlas, atlas_sampler, coordinate, lookup.atlas_index, 0.0);
+    return textureSampleLevel(attachment1_atlas, atlas_sampler, coordinate, lookup.index, 0.0);
 }
 
 fn sample_attachment1_grad(lookup: NodeLookup) -> vec4<f32> {
-    let attachment = attachments.data[1];
-    let coordinate = lookup.atlas_coordinate * attachment.scale + attachment.offset;
+    let attachment = attachments[1];
+    let coordinate = lookup.coordinate * attachment.scale + attachment.offset;
 
 #ifdef SAMPLE_GRAD
-    // return textureSampleLevel(attachment1_atlas, atlas_sampler, coordinate, lookup.atlas_index, 1.0);
-    return textureSampleGrad(attachment1_atlas, atlas_sampler, coordinate, lookup.atlas_index, lookup.ddx, lookup.ddy);
+    // return textureSampleLevel(attachment1_atlas, atlas_sampler, coordinate, lookup.index, 1.0);
+    return textureSampleGrad(attachment1_atlas, atlas_sampler, coordinate, lookup.index, lookup.ddx, lookup.ddy);
 #else
-    return textureSampleLevel(attachment1_atlas, atlas_sampler, coordinate, lookup.atlas_index, 0.0);
+    return textureSampleLevel(attachment1_atlas, atlas_sampler, coordinate, lookup.index, 0.0);
 #endif
 }
 
 fn sample_attachment1_gather0(lookup: NodeLookup) -> vec4<f32> {
-    let attachment = attachments.data[1];
-    let coordinate = lookup.atlas_coordinate * attachment.scale + attachment.offset;
-    return textureGather(0, attachment1_atlas, atlas_sampler, coordinate, lookup.atlas_index);
+    let attachment = attachments[1];
+    let coordinate = lookup.coordinate * attachment.scale + attachment.offset;
+    return textureGather(0, attachment1_atlas, atlas_sampler, coordinate, lookup.index);
 }
 
 fn sample_height(lookup: NodeLookup) -> f32 {
@@ -60,8 +60,8 @@ fn sample_height_grad(lookup: NodeLookup) -> f32 {
 }
 
 fn sample_normal_grad(lookup: NodeLookup, vertex_normal: vec3<f32>, side: u32) -> vec3<f32> {
-    let height_attachment = attachments.data[0];
-    let height_coordinate = lookup.atlas_coordinate * height_attachment.scale + height_attachment.offset;
+    let height_attachment = attachments[0];
+    let height_coordinate = lookup.coordinate * height_attachment.scale + height_attachment.offset;
 
 #ifdef SPHERICAL
     var FACE_UP = array(
@@ -90,20 +90,20 @@ fn sample_normal_grad(lookup: NodeLookup, vertex_normal: vec3<f32>, side: u32) -
 #endif
 
     // Todo: this is only an approximation of the S2 distance (pixels are not spaced evenly and they are not perpendicular)
-    let pixels_per_side = height_attachment.size * node_count(lookup.atlas_lod);
+    let pixels_per_side = height_attachment.size * node_count(lookup.lod);
     let distance_between_samples = side_length / pixels_per_side;
     let offset = 0.5 / height_attachment.size;
 
 #ifdef SAMPLE_GRAD
-    let left  = mix(config.min_height, config.max_height, textureSampleGrad(attachment0_atlas, atlas_sampler, height_coordinate + vec2<f32>(-offset,     0.0), lookup.atlas_index, lookup.ddx, lookup.ddy).x);
-    let up    = mix(config.min_height, config.max_height, textureSampleGrad(attachment0_atlas, atlas_sampler, height_coordinate + vec2<f32>(    0.0, -offset), lookup.atlas_index, lookup.ddx, lookup.ddy).x);
-    let right = mix(config.min_height, config.max_height, textureSampleGrad(attachment0_atlas, atlas_sampler, height_coordinate + vec2<f32>( offset,     0.0), lookup.atlas_index, lookup.ddx, lookup.ddy).x);
-    let down  = mix(config.min_height, config.max_height, textureSampleGrad(attachment0_atlas, atlas_sampler, height_coordinate + vec2<f32>(    0.0,  offset), lookup.atlas_index, lookup.ddx, lookup.ddy).x);
+    let left  = mix(config.min_height, config.max_height, textureSampleGrad(attachment0_atlas, atlas_sampler, height_coordinate + vec2<f32>(-offset,     0.0), lookup.index, lookup.ddx, lookup.ddy).x);
+    let up    = mix(config.min_height, config.max_height, textureSampleGrad(attachment0_atlas, atlas_sampler, height_coordinate + vec2<f32>(    0.0, -offset), lookup.index, lookup.ddx, lookup.ddy).x);
+    let right = mix(config.min_height, config.max_height, textureSampleGrad(attachment0_atlas, atlas_sampler, height_coordinate + vec2<f32>( offset,     0.0), lookup.index, lookup.ddx, lookup.ddy).x);
+    let down  = mix(config.min_height, config.max_height, textureSampleGrad(attachment0_atlas, atlas_sampler, height_coordinate + vec2<f32>(    0.0,  offset), lookup.index, lookup.ddx, lookup.ddy).x);
 #else
-    let left  = mix(config.min_height, config.max_height, textureSampleLevel(attachment0_atlas, atlas_sampler, height_coordinate + vec2<f32>(-offset,     0.0), lookup.atlas_index, 0.0).x);
-    let up    = mix(config.min_height, config.max_height, textureSampleLevel(attachment0_atlas, atlas_sampler, height_coordinate + vec2<f32>(    0.0, -offset), lookup.atlas_index, 0.0).x);
-    let right = mix(config.min_height, config.max_height, textureSampleLevel(attachment0_atlas, atlas_sampler, height_coordinate + vec2<f32>( offset,     0.0), lookup.atlas_index, 0.0).x);
-    let down  = mix(config.min_height, config.max_height, textureSampleLevel(attachment0_atlas, atlas_sampler, height_coordinate + vec2<f32>(    0.0,  offset), lookup.atlas_index, 0.0).x);
+    let left  = mix(config.min_height, config.max_height, textureSampleLevel(attachment0_atlas, atlas_sampler, height_coordinate + vec2<f32>(-offset,     0.0), lookup.index, 0.0).x);
+    let up    = mix(config.min_height, config.max_height, textureSampleLevel(attachment0_atlas, atlas_sampler, height_coordinate + vec2<f32>(    0.0, -offset), lookup.index, 0.0).x);
+    let right = mix(config.min_height, config.max_height, textureSampleLevel(attachment0_atlas, atlas_sampler, height_coordinate + vec2<f32>( offset,     0.0), lookup.index, 0.0).x);
+    let down  = mix(config.min_height, config.max_height, textureSampleLevel(attachment0_atlas, atlas_sampler, height_coordinate + vec2<f32>(    0.0,  offset), lookup.index, 0.0).x);
 #endif
 
     let surface_normal = normalize(vec3<f32>(left - right, down - up, distance_between_samples));

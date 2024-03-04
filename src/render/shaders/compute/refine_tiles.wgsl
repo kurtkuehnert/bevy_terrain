@@ -1,4 +1,4 @@
-#import bevy_terrain::types::{TerrainConfig, TerrainViewConfig, Tile, TileList, Parameters, NodeLookup, UVCoordinate}
+#import bevy_terrain::types::{TerrainConfig, TerrainViewConfig, Tile, Parameters, NodeLookup, UVCoordinate}
 #import bevy_terrain::bindings::config
 #import bevy_terrain::functions::{local_position_from_coordinate, tile_coordinate, tile_size}
 
@@ -17,9 +17,9 @@ var<uniform> view_config: TerrainViewConfig;
 @group(1) @binding(1)
 var quadtree: texture_2d_array<u32>;
 @group(1) @binding(2)
-var<storage, read_write> final_tiles: TileList;
+var<storage, read_write> final_tiles: array<Tile>;
 @group(1) @binding(3)
-var<storage, read_write> temporary_tiles: TileList;
+var<storage, read_write> temporary_tiles: array<Tile>;
 @group(1) @binding(4)
 var<storage, read_write> parameters: Parameters;
 
@@ -59,7 +59,7 @@ fn subdivide(tile: Tile) {
         let child_xy  = vec2<u32>((tile.xy.x << 1u) + (i & 1u), (tile.xy.y << 1u) + (i >> 1u & 1u));
         let child_lod = tile.lod + 1u;
 
-        temporary_tiles.data[child_index()] = Tile(tile.side, child_lod, child_xy);
+        temporary_tiles[child_index()] = Tile(tile.side, child_lod, child_xy);
     }
 }
 
@@ -67,11 +67,11 @@ fn subdivide(tile: Tile) {
 fn refine_tiles(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
     if (invocation_id.x >= parameters.tile_count) { return; }
 
-    let tile = temporary_tiles.data[parent_index(invocation_id.x)];
+    let tile = temporary_tiles[parent_index(invocation_id.x)];
 
     if (should_be_divided(tile)) {
         subdivide(tile);
     } else {
-        final_tiles.data[final_index()] = tile;
+        final_tiles[final_index()] = tile;
     }
 }
