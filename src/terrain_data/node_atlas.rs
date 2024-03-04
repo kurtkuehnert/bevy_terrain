@@ -361,6 +361,18 @@ impl NodeAtlasState {
         self.download_slots += 1;
     }
 
+    fn get_node(&mut self, node_coordinate: NodeCoordinate) -> AtlasNode {
+        if node_coordinate == NodeCoordinate::INVALID {
+            return AtlasNode::new(NodeCoordinate::INVALID, INVALID_ATLAS_INDEX);
+        }
+
+        let atlas_index = if self.existing_nodes.contains(&node_coordinate) {
+            self.node_states.get(&node_coordinate).unwrap().atlas_index
+        } else { INVALID_ATLAS_INDEX };
+
+        AtlasNode::new(node_coordinate, atlas_index)
+    }
+
     fn allocate_node(&mut self) -> u32 {
         let unused_node = self.unused_nodes.pop_front().expect("Atlas out of indices");
 
@@ -369,7 +381,7 @@ impl NodeAtlasState {
         unused_node.atlas_index
     }
 
-    fn get_or_allocate(&mut self, node_coordinate: NodeCoordinate) -> AtlasNode {
+    fn get_or_allocate_node(&mut self, node_coordinate: NodeCoordinate) -> AtlasNode {
         if node_coordinate == NodeCoordinate::INVALID {
             return AtlasNode::new(NodeCoordinate::INVALID, INVALID_ATLAS_INDEX);
         }
@@ -545,8 +557,12 @@ impl NodeAtlas {
         )
     }
 
-    pub fn get_or_allocate(&mut self, node_coordinate: NodeCoordinate) -> AtlasNode {
-        self.state.get_or_allocate(node_coordinate)
+    pub fn get_node(&mut self, node_coordinate: NodeCoordinate) -> AtlasNode {
+        self.state.get_node(node_coordinate)
+    }
+
+    pub fn get_or_allocate_node(&mut self, node_coordinate: NodeCoordinate) -> AtlasNode {
+        self.state.get_or_allocate_node(node_coordinate)
     }
 
     pub fn save(&mut self, node: AtlasNodeAttachment) {

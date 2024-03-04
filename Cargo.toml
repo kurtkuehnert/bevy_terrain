@@ -68,10 +68,22 @@ description = "Preprocesses the terrain data for the spherical examples."
 [[example]]
 name = "spherical"
 path = "examples/spherical/spherical.rs"
-# required-features = ["spherical"]
-required-features = ["spherical", "bevy/embedded_watcher"]
+required-features = ["spherical"]
+# required-features = ["spherical", "bevy/embedded_watcher"]
 
 [package.metadata.example.spherical]
 name = "Spherical"
 description = "Renders a spherical terrain using a custom shader."
 
+
+
+
+[[example]]
+name = "preprocess_test"
+path = "examples/spherical/preprocess_test.rs"
+required-features = ["spherical"]
+
+[[example]]
+name = "test"
+path = "examples/spherical/test.rs"
+required-features = ["spherical"]
