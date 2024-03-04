@@ -5,6 +5,7 @@ use crate::{
         node_atlas::{AtlasNode, AtlasNodeAttachment, NodeAtlas},
         AttachmentFormat,
     },
+    util::CollectArray,
 };
 use bevy::{prelude::*, render::texture::ImageSampler};
 use itertools::{iproduct, Itertools};
@@ -14,7 +15,6 @@ use std::{
     ops::{DerefMut, Range},
     time::Instant,
 };
-use crate::util::CollectArray;
 
 pub fn reset_directory(directory: &str) {
     let _ = fs::remove_file(format!("{directory}/../../config.tc"));
@@ -140,7 +140,7 @@ impl PreprocessTask {
         dataset: &PreprocessDataset,
     ) -> Self {
         let node = node_atlas
-            .get_or_allocate(node_coordinate)
+            .get_or_allocate_node(node_coordinate)
             .attachment(dataset.attachment_index);
 
         Self {
@@ -156,7 +156,7 @@ impl PreprocessTask {
         tile: Handle<Image>,
     ) -> Self {
         let node = node_atlas
-            .get_or_allocate(node_coordinate)
+            .get_or_allocate_node(node_coordinate)
             .attachment(dataset.attachment_index);
 
         Self {
@@ -175,13 +175,13 @@ impl PreprocessTask {
         dataset: &PreprocessDataset,
     ) -> Self {
         let node = node_atlas
-            .get_or_allocate(node_coordinate)
+            .get_or_allocate_node(node_coordinate)
             .attachment(dataset.attachment_index);
 
         let neighbour_nodes = node
             .coordinate
             .neighbours()
-            .map(|coordinate| node_atlas.get_or_allocate(coordinate))
+            .map(|coordinate| node_atlas.get_node(coordinate))
             .collect_array();
 
         Self {
@@ -196,13 +196,13 @@ impl PreprocessTask {
         dataset: &PreprocessDataset,
     ) -> Self {
         let node = node_atlas
-            .get_or_allocate(node_coordinate)
+            .get_or_allocate_node(node_coordinate)
             .attachment(dataset.attachment_index);
 
         let child_nodes = node
             .coordinate
             .children()
-            .map(|coordinate| node_atlas.get_or_allocate(coordinate))
+            .map(|coordinate| node_atlas.get_node(coordinate))
             .collect_array();
 
         Self {
@@ -368,8 +368,9 @@ pub(crate) fn select_ready_tasks(
                 && node_atlas.state.save_slots == node_atlas.state.max_save_slots
             {
                 println!("Preprocessing took {:?}", time.elapsed());
-                
+
                 node_atlas.save_node_config();
+                node_atlas.state.existing_nodes.iter().for_each(|node| { println!("{node}"); });
 
                 *start_time = None;
             }

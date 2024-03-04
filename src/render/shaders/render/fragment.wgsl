@@ -59,10 +59,10 @@ fn fragment_output(input: FragmentInput, color: vec4<f32>, normal: vec3<f32>, lo
 #endif
 
 #ifdef SHOW_LOD
-    output.color = show_lod(coordinate, input.view_distance, lookup.atlas_lod);
+    output.color = show_lod(coordinate, input.view_distance, lookup.lod);
 #endif
 #ifdef SHOW_UV
-    output.color = vec4<f32>(lookup.atlas_coordinate, 0.0, 1.0);
+    output.color = vec4<f32>(lookup.coordinate, 0.0, 1.0);
 #endif
 #ifdef SHOW_TILES
     output.color = input.debug_color;
@@ -71,7 +71,7 @@ fn fragment_output(input: FragmentInput, color: vec4<f32>, normal: vec3<f32>, lo
     output.color = show_quadtree(coordinate);
 #endif
 #ifdef SHOW_PIXELS
-    output.color = mix(output.color, show_pixels(coordinate, lookup.atlas_lod), 0.5);
+    output.color = mix(output.color, show_pixels(coordinate, lookup.lod), 0.5);
 #endif
 #ifdef SHOW_NORMALS
     output.color = vec4<f32>(normal, 1.0);
