@@ -108,12 +108,12 @@ pub struct Quadtree {
     pub(super) released_nodes: Vec<NodeCoordinate>,
     /// Nodes that are requested to be loaded by this quadtree.
     pub(super) requested_nodes: Vec<NodeCoordinate>,
+    /// The internal node states of the quadtree.
+    nodes: Array4<QuadtreeNode>,
     /// The count of level of detail layers.
     lod_count: u32,
     /// The count of nodes in x and y direction per layer.
     quadtree_size: u32,
-    /// The internal node states of the quadtree.
-    nodes: Array4<QuadtreeNode>,
     /// The distance (measured in node sizes) until which to request nodes to be loaded.
     load_distance: f32,
     blend_distance: f32,

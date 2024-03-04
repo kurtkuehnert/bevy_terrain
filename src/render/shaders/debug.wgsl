@@ -28,7 +28,7 @@ fn quadtree_outlines(coordinate: UVCoordinate, lod: u32) -> f32 {
 
 fn show_tiles(view_distance: f32, vertex_index: u32) -> vec4<f32> {
     let tile_index = vertex_index / view_config.vertices_per_tile;
-    let tile = tiles.data[tile_index];
+    let tile = tiles[tile_index];
 
     var color: vec4<f32>;
 
@@ -75,7 +75,7 @@ fn show_quadtree(coordinate: UVCoordinate) -> vec4<f32> {
 
 fn show_pixels(coordinate: UVCoordinate, lod: u32) -> vec4<f32> {
     let pixel_size = 4.0;
-    let pixels_per_side = attachments.data[0].size * node_count(lod);
+    let pixels_per_side = attachments[0].size * node_count(lod);
     let pixel_coordinate = coordinate.uv * f32(pixels_per_side) / pixel_size;
 
     let is_even = (u32(pixel_coordinate.x) + u32(pixel_coordinate.y)) % 2u == 0u;

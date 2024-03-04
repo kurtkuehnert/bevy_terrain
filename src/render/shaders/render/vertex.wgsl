@@ -24,7 +24,7 @@ fn vertex_lookup_info(input: VertexInput) -> LookupInfo {
     let tile_index = input.vertex_index / view_config.vertices_per_tile;
     let grid_index = input.vertex_index % view_config.vertices_per_tile;
 
-    let tile        = tiles.data[tile_index];
+    let tile        = tiles[tile_index];
     let grid_offset = grid_offset(grid_index);
 
     let approximate_coordinate  = tile_coordinate(tile, vec2<f32>(grid_offset) / view_config.grid_size);
