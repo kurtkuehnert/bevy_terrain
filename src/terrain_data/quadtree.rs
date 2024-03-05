@@ -55,11 +55,15 @@ pub(super) struct QuadtreeEntry {
 
 impl Default for QuadtreeEntry {
     fn default() -> Self {
-        Self {
-            atlas_index: INVALID_ATLAS_INDEX,
-            atlas_lod: INVALID_LOD,
-        }
+        Self::INVALID
     }
+}
+
+impl QuadtreeEntry {
+    const INVALID: Self = Self {
+        atlas_index: INVALID_ATLAS_INDEX,
+        atlas_lod: INVALID_LOD,
+    };
 }
 
 #[allow(dead_code)]
@@ -133,6 +137,7 @@ impl Quadtree {
     /// * `center_size` - The size of the smallest nodes (with lod 0).
     /// * `load_distance` - The distance (measured in node sizes) until which to request nodes to be loaded.
     /// * `height` - The height of the terrain.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         lod_count: u32,
         min_height: f32,
@@ -341,15 +346,32 @@ impl Quadtree {
                 let quadtree = quadtrees.get_mut(&(terrain, view)).unwrap();
 
                 // Todo: this is very expensive, optimize
-                for group_index in 0..2 {
+                // Solution 1:
+                // only update on change: node attachment group loaded and quadtree shifted
+                // loaded requires recursive updating of all layers below, because they could potential contain a worse node
+                // Solution 2:
+                // for each node in atlas, fill quadtree entry, now go top down and copy parent for empty nodes
+                for group_index in 0..quadtree.group_count {
                     for ((side, lod, x, y), node) in quadtree.nodes.indexed_iter() {
-                        quadtree.data[[
-                            group_index as usize,
-                            side as usize,
-                            lod as usize,
-                            x as usize,
-                            y as usize,
-                        ]] = node_atlas.get_best_node(node.coordinate, group_index);
+                        let entry = node_atlas
+                            .get_quadtree_entry(node.coordinate, group_index)
+                            .unwrap_or_else(|| {
+                                if lod == 0 || node.coordinate == NodeCoordinate::INVALID {
+                                    QuadtreeEntry::INVALID
+                                } else {
+                                    let parent = node.coordinate.parent();
+
+                                    quadtree.data[[
+                                        group_index as usize,
+                                        parent.side as usize,
+                                        parent.lod as usize,
+                                        (parent.x % quadtree.quadtree_size) as usize,
+                                        (parent.y % quadtree.quadtree_size) as usize,
+                                    ]]
+                                }
+                            });
+
+                        quadtree.data[[group_index as usize, side, lod, x, y]] = entry;
                     }
                 }
             }

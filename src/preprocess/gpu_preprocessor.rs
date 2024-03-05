@@ -112,6 +112,7 @@ impl GpuPreprocessor {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn prepare(
         mut not_first: Local<bool>,
         device: Res<RenderDevice>,

@@ -5,7 +5,7 @@ use crate::{
     terrain_data::{
         coordinates::NodeCoordinate,
         quadtree::{NodeLookup, Quadtree, QuadtreeEntry},
-        AttachmentData, INVALID_ATLAS_INDEX, INVALID_LOD,
+        AttachmentData, INVALID_ATLAS_INDEX,
     },
     terrain_view::{TerrainView, TerrainViewComponents},
 };
@@ -465,32 +465,23 @@ impl NodeAtlasState {
         }
     }
 
-    fn get_best_node(&self, node_coordinate: NodeCoordinate, group_index: u32) -> QuadtreeEntry {
-        let mut best_node_coordinate = node_coordinate;
+    fn get_quadtree_entry(
+        &self,
+        node_coordinate: NodeCoordinate,
+        group_index: u32,
+    ) -> Option<QuadtreeEntry> {
+        if let Some(node_state) = self.node_states.get(&node_coordinate) {
+            let group = &self.attachment_groups[group_index as usize];
 
-        loop {
-            if best_node_coordinate == NodeCoordinate::INVALID
-                || best_node_coordinate.lod == INVALID_LOD
-            {
-                return QuadtreeEntry {
-                    atlas_index: INVALID_ATLAS_INDEX,
-                    atlas_lod: INVALID_LOD,
-                };
+            if group.0.is_subset(&node_state.loaded_attachments) {
+                return Some(QuadtreeEntry {
+                    atlas_index: node_state.atlas_index,
+                    atlas_lod: node_coordinate.lod,
+                });
             }
-
-            if let Some(node_state) = self.node_states.get(&best_node_coordinate) {
-                let group = &self.attachment_groups[group_index as usize];
-
-                if group.0.is_subset(&node_state.loaded_attachments) {
-                    return QuadtreeEntry {
-                        atlas_index: node_state.atlas_index,
-                        atlas_lod: best_node_coordinate.lod,
-                    };
-                }
-            }
-
-            best_node_coordinate = best_node_coordinate.parent();
         }
+
+        None
     }
 }
 
@@ -593,12 +584,12 @@ impl NodeAtlas {
         self.state.to_save.push_back(node);
     }
 
-    pub(super) fn get_best_node(
+    pub(super) fn get_quadtree_entry(
         &self,
         node_coordinate: NodeCoordinate,
         group_index: u32,
-    ) -> QuadtreeEntry {
-        self.state.get_best_node(node_coordinate, group_index)
+    ) -> Option<QuadtreeEntry> {
+        self.state.get_quadtree_entry(node_coordinate, group_index)
     }
 
     pub(super) fn sample_attachment(&self, node_lookup: NodeLookup, attachment_index: u32) -> Vec4 {
@@ -640,12 +631,7 @@ impl NodeAtlas {
     /// of the terrain.
     pub(crate) fn save_node_config(&self) {
         let tc = TC {
-            nodes: self
-                .state
-                .existing_nodes
-                .iter()
-                .map(|&node_coordinate| node_coordinate)
-                .collect_vec(),
+            nodes: self.state.existing_nodes.iter().copied().collect_vec(),
         };
 
         tc.save_file(format!("assets/{}/config.tc", &self.path))
