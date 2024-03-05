@@ -87,5 +87,5 @@ required-features = ["spherical"]
 [[example]]
 name = "test"
 path = "examples/spherical/test.rs"
-required-features = ["spherical"]
-# required-features = ["spherical", "bevy/embedded_watcher"]
+# required-features = ["spherical"]
+required-features = ["spherical", "bevy/embedded_watcher"]

@@ -68,7 +68,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
                 side: 2,
                 top_left: Vec2::new(0.2077404, 0.4357290),
                 bottom_right: Vec2::new(0.3284694, 0.5636175),
-                lod_range: 0..4,
+                lod_range: 0..8,
             },
             &asset_server,
             &mut node_atlas,
