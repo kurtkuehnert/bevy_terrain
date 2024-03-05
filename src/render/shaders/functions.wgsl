@@ -12,6 +12,12 @@ const PS = 2u;
 const PT = 3u;
 const C  = 0.87 * 0.87;
 
+#ifdef SPHERICAL
+const SIDE_COUNT = 6u;
+#else
+const SIDE_COUNT = 1u;
+#endif
+
 fn sphere_to_cube(xy: vec2<f32>) -> vec2<f32> {
     var uv: vec2<f32>;
 
@@ -240,7 +246,8 @@ fn lookup_attachment_group(info: LookupInfo, lod_offset: u32, attachment_group: 
     let quadtree_lod           = info.lod - lod_offset;
     let quadtree_side          = info.coordinate.side;
     let quadtree_coordinate    = vec2<u32>(node_coordinate(info.coordinate, quadtree_lod)) % view_config.quadtree_size;
-    let quadtree_index         = (((                         quadtree_side        ) *
+    let quadtree_index         = (((                         attachment_group       *
+                                 SIDE_COUNT                + quadtree_side        ) *
                                  config.lod_count          + quadtree_lod         ) *
                                  view_config.quadtree_size + quadtree_coordinate.x) *
                                  view_config.quadtree_size + quadtree_coordinate.y;

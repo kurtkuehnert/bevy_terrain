@@ -284,8 +284,9 @@ impl LoadingImages {
         handle: &Handle<Image>,
         dimension: TextureDimension,
         format: TextureFormat,
-    ) {
-        self.0.push((handle.id(), dimension, format))
+    ) -> &mut Self {
+        self.0.push((handle.id(), dimension, format));
+        self
     }
 }
 

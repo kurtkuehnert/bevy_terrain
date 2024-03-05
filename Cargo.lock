@@ -902,6 +902,7 @@ dependencies = [
  "async-channel",
  "bevy",
  "bincode",
+ "bit-set",
  "bitflags 2.4.2",
  "bytemuck",
  "dolly",
