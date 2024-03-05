@@ -5,7 +5,7 @@ const PATH: &str = "terrains/test";
 const RADIUS: f32 = 50.0;
 const MIN_HEIGHT: f32 = -12.0 / 6371.0;
 const MAX_HEIGHT: f32 = 9.0 / 6371.0;
-const SUPER_ELEVATION: f32 = 10.0;
+const SUPER_ELEVATION: f32 = 2.0;
 const TEXTURE_SIZE: u32 = 512;
 const LOD_COUNT: u32 = 8;
 
