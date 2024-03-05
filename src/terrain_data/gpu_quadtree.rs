@@ -13,7 +13,7 @@ use bevy::{
         Extract,
     },
 };
-use ndarray::Array4;
+use ndarray::Array5;
 use std::mem;
 
 /// Stores the GPU representation of the [`Quadtree`] (array texture)
@@ -24,7 +24,7 @@ use std::mem;
 pub struct GpuQuadtree {
     pub(crate) quadtree_buffer: StaticBuffer<()>,
     /// The current cpu quadtree data. This is synced each frame with the quadtree data.
-    data: Array4<QuadtreeEntry>,
+    data: Array5<QuadtreeEntry>,
 }
 
 impl GpuQuadtree {

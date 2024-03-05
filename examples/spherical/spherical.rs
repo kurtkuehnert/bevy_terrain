@@ -19,9 +19,6 @@ pub struct TerrainMaterial {
 }
 
 impl Material for TerrainMaterial {
-    fn vertex_shader() -> ShaderRef {
-        "shaders/spherical.wgsl".into()
-    }
     fn fragment_shader() -> ShaderRef {
         "shaders/spherical.wgsl".into()
     }
@@ -64,13 +61,13 @@ fn setup(
         path: PATH.to_string(),
         ..default()
     }
-        .add_attachment(AttachmentConfig {
-            name: "height".to_string(),
-            texture_size: TEXTURE_SIZE,
-            border_size: 2,
-            mip_level_count: 4,
-            format: AttachmentFormat::R16,
-        });
+    .add_attachment(AttachmentConfig {
+        name: "height".to_string(),
+        texture_size: TEXTURE_SIZE,
+        border_size: 2,
+        mip_level_count: 4,
+        format: AttachmentFormat::R16,
+    });
 
     let terrain = commands
         .spawn((

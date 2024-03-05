@@ -53,6 +53,7 @@ pub struct TerrainConfig {
     pub path: String,
     /// The attachments of the terrain.
     pub attachments: Vec<AttachmentConfig>,
+    pub attachment_groups: Vec<Vec<u32>>,
 }
 
 impl Default for TerrainConfig {
@@ -64,6 +65,7 @@ impl Default for TerrainConfig {
             node_atlas_size: 1024,
             path: default(),
             attachments: default(),
+            attachment_groups: default(),
         }
     }
 }

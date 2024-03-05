@@ -29,6 +29,7 @@ anyhow = "1.0"
 bincode = "2.0.0-rc.3"
 dolly = "0.4"
 async-channel = "2.1"
+bit-set = "0.5.3"
 
 [[example]]
 name = "preprocess_planar"
@@ -68,8 +69,8 @@ description = "Preprocesses the terrain data for the spherical examples."
 [[example]]
 name = "spherical"
 path = "examples/spherical/spherical.rs"
-required-features = ["spherical"]
-# required-features = ["spherical", "bevy/embedded_watcher"]
+# required-features = ["spherical"]
+required-features = ["spherical", "bevy/embedded_watcher"]
 
 [package.metadata.example.spherical]
 name = "Spherical"
@@ -87,3 +88,4 @@ required-features = ["spherical"]
 name = "test"
 path = "examples/spherical/test.rs"
 required-features = ["spherical"]
+# required-features = ["spherical", "bevy/embedded_watcher"]

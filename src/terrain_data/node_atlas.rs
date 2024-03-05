@@ -9,12 +9,14 @@ use crate::{
     },
     terrain_view::{TerrainView, TerrainViewComponents},
 };
+use anyhow::Result;
 use bevy::{
     prelude::*,
     render::render_resource::*,
     tasks::{futures_lite::future, AsyncComputeTaskPool, Task},
     utils::{HashMap, HashSet},
 };
+use bit_set::BitSet;
 use image::{io::Reader, DynamicImage, ImageBuffer, Luma, LumaA, Rgb, Rgba};
 use itertools::Itertools;
 use std::{collections::VecDeque, fs, mem, ops::DerefMut};
@@ -120,30 +122,30 @@ impl NodeAttachmentWithData {
         texture_size: u32,
         format: AttachmentFormat,
         mip_level_count: u32,
-    ) -> Task<Self> {
+    ) -> Task<Result<Self>> {
         AsyncComputeTaskPool::get().spawn(async move {
             let mut data = if STORE_PNG {
                 let path = node.coordinate.path(&path, "png");
 
-                let mut reader = Reader::open(path).unwrap();
+                let mut reader = Reader::open(path)?;
                 reader.no_limits();
                 let image = reader.decode().unwrap();
                 AttachmentData::from_bytes(image.as_bytes(), format)
             } else {
                 let path = node.coordinate.path(&path, "bin");
 
-                let bytes = fs::read(path).unwrap();
+                let bytes = fs::read(path)?;
 
                 AttachmentData::from_bytes(&bytes, format)
             };
 
             data.generate_mipmaps(texture_size, mip_level_count);
 
-            Self {
+            Ok(Self {
                 node,
                 data,
                 texture_size: 0,
-            }
+            })
         })
     }
 }
@@ -162,7 +164,7 @@ pub struct AtlasAttachment {
     pub(crate) data: Vec<AttachmentData>,
 
     pub(crate) saving_nodes: Vec<Task<AtlasNodeAttachment>>,
-    pub(crate) loading_nodes: Vec<Task<NodeAttachmentWithData>>,
+    pub(crate) loading_nodes: Vec<Task<Result<NodeAttachmentWithData>>>,
     pub(crate) uploading_nodes: Vec<NodeAttachmentWithData>,
     pub(crate) downloading_nodes: Vec<Task<NodeAttachmentWithData>>,
 }
@@ -194,9 +196,14 @@ impl AtlasAttachment {
     fn update(&mut self, atlas_state: &mut NodeAtlasState) {
         self.loading_nodes.retain_mut(|node| {
             future::block_on(future::poll_once(node)).map_or(true, |node| {
-                atlas_state.loaded_node_attachment(node.node);
-                self.uploading_nodes.push(node.clone());
-                self.data[node.node.atlas_index as usize] = node.data;
+                if let Ok(node) = node {
+                    atlas_state.loaded_node_attachment(node.node);
+                    self.uploading_nodes.push(node.clone());
+                    self.data[node.node.atlas_index as usize] = node.data;
+                } else {
+                    dbg!("loading failed");
+                    atlas_state.load_slots += 1;
+                }
 
                 false
             })
@@ -237,7 +244,7 @@ impl AtlasAttachment {
                 data: self.data[node.atlas_index as usize].clone(),
                 texture_size: self.texture_size,
             }
-                .start_saving(self.path.clone()),
+            .start_saving(self.path.clone()),
         );
     }
 
@@ -253,28 +260,20 @@ impl AtlasAttachment {
     }
 }
 
-/// The current state of a node of a [`NodeAtlas`].
-///
-/// This indicates, whether the node is loading or loaded and ready to be used.
-#[derive(Clone, Copy)]
-enum LoadingState {
-    /// The node is loading, but can not be used yet.
-    Loading(u32),
-    /// The node is loaded and can be used.
-    Loaded,
-}
-
 /// The internal representation of a present node in a [`NodeAtlas`].
+#[derive(Clone)]
 struct NodeState {
-    /// Indicates whether or not the node is loading or loaded.
-    state: LoadingState,
     /// The index of the node inside the atlas.
     atlas_index: u32,
     /// The count of [`Quadtrees`] that have requested this node.
     requests: u32,
+    loaded_attachments: BitSet,
 }
 
+struct AttachmentGroup(BitSet);
+
 pub(crate) struct NodeAtlasState {
+    attachment_groups: Vec<AttachmentGroup>,
     node_states: HashMap<NodeCoordinate, NodeState>,
     unused_nodes: VecDeque<AtlasNode>,
     pub(crate) existing_nodes: HashSet<NodeCoordinate>,
@@ -297,6 +296,7 @@ impl NodeAtlasState {
     fn new(
         atlas_size: u32,
         attachment_count: u32,
+        attachment_groups: Vec<AttachmentGroup>,
         existing_nodes: HashSet<NodeCoordinate>,
     ) -> Self {
         let unused_nodes = (0..atlas_size)
@@ -304,6 +304,7 @@ impl NodeAtlasState {
             .collect();
 
         Self {
+            attachment_groups,
             node_states: default(),
             unused_nodes,
             existing_nodes,
@@ -343,14 +344,9 @@ impl NodeAtlasState {
         self.load_slots += 1;
 
         let node_state = self.node_states.get_mut(&node.coordinate).unwrap();
-
-        node_state.state = match node_state.state {
-            LoadingState::Loading(1) => LoadingState::Loaded,
-            LoadingState::Loading(n) => LoadingState::Loading(n - 1),
-            LoadingState::Loaded => {
-                panic!("Loaded more attachments, than registered with the atlas.")
-            }
-        };
+        node_state
+            .loaded_attachments
+            .insert(node.attachment_index as usize);
     }
 
     fn saved_node_attachment(&mut self, _node: AtlasNodeAttachment) {
@@ -368,7 +364,9 @@ impl NodeAtlasState {
 
         let atlas_index = if self.existing_nodes.contains(&node_coordinate) {
             self.node_states.get(&node_coordinate).unwrap().atlas_index
-        } else { INVALID_ATLAS_INDEX };
+        } else {
+            INVALID_ATLAS_INDEX
+        };
 
         AtlasNode::new(node_coordinate, atlas_index)
     }
@@ -397,8 +395,8 @@ impl NodeAtlasState {
                 node_coordinate,
                 NodeState {
                     requests: 1,
-                    state: LoadingState::Loaded,
                     atlas_index,
+                    loaded_attachments: BitSet::new(),
                 },
             );
 
@@ -431,9 +429,9 @@ impl NodeAtlasState {
             node_states.insert(
                 node_coordinate,
                 NodeState {
-                    requests: 1,
-                    state: LoadingState::Loading(self.attachment_count),
                     atlas_index,
+                    requests: 1,
+                    loaded_attachments: BitSet::new(),
                 },
             );
 
@@ -467,25 +465,25 @@ impl NodeAtlasState {
         }
     }
 
-    fn get_best_node(&self, node_coordinate: NodeCoordinate) -> QuadtreeEntry {
+    fn get_best_node(&self, node_coordinate: NodeCoordinate, group_index: u32) -> QuadtreeEntry {
         let mut best_node_coordinate = node_coordinate;
 
         loop {
             if best_node_coordinate == NodeCoordinate::INVALID
                 || best_node_coordinate.lod == INVALID_LOD
             {
-                // highest lod is not loaded
                 return QuadtreeEntry {
                     atlas_index: INVALID_ATLAS_INDEX,
                     atlas_lod: INVALID_LOD,
                 };
             }
 
-            if let Some(atlas_node) = self.node_states.get(&best_node_coordinate) {
-                if matches!(atlas_node.state, LoadingState::Loaded) {
-                    // found best loaded node
+            if let Some(node_state) = self.node_states.get(&best_node_coordinate) {
+                let group = &self.attachment_groups[group_index as usize];
+
+                if group.0.is_subset(&node_state.loaded_attachments) {
                     return QuadtreeEntry {
-                        atlas_index: atlas_node.atlas_index,
+                        atlas_index: node_state.atlas_index,
                         atlas_lod: best_node_coordinate.lod,
                     };
                 }
@@ -528,15 +526,40 @@ impl NodeAtlas {
         atlas_size: u32,
         lod_count: u32,
         attachments: &[AttachmentConfig],
+        attachment_groups: &[Vec<u32>],
     ) -> Self {
         let attachments = attachments
             .iter()
             .map(|attachment| AtlasAttachment::new(attachment, atlas_size, path))
             .collect_vec();
 
+        let attachment_groups = if attachment_groups.is_empty() {
+            let mut set = BitSet::new();
+            for index in 0..attachments.len() {
+                set.insert(index);
+            }
+            vec![AttachmentGroup(set)]
+        } else {
+            attachment_groups
+                .iter()
+                .map(|group| {
+                    let mut set = BitSet::new();
+                    for &index in group {
+                        set.insert(index as usize);
+                    }
+                    AttachmentGroup(set)
+                })
+                .collect_vec()
+        };
+
         let existing_nodes = Self::load_node_config(path);
 
-        let state = NodeAtlasState::new(atlas_size, attachments.len() as u32, existing_nodes);
+        let state = NodeAtlasState::new(
+            atlas_size,
+            attachments.len() as u32,
+            attachment_groups,
+            existing_nodes,
+        );
 
         Self {
             attachments,
@@ -554,6 +577,7 @@ impl NodeAtlas {
             config.node_atlas_size,
             config.lod_count,
             &config.attachments,
+            &config.attachment_groups,
         )
     }
 
@@ -572,8 +596,9 @@ impl NodeAtlas {
     pub(super) fn get_best_node(
         &self,
         node_coordinate: NodeCoordinate,
+        group_index: u32,
     ) -> QuadtreeEntry {
-        self.state.get_best_node(node_coordinate)
+        self.state.get_best_node(node_coordinate, group_index)
     }
 
     pub(super) fn sample_attachment(&self, node_lookup: NodeLookup, attachment_index: u32) -> Vec4 {
