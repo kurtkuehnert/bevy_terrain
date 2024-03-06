@@ -21,10 +21,22 @@ override fn pixel_value(coords: vec2<u32>) -> vec4<f32> {
 
     let child_node = downsample_data.child_nodes[child_index];
 
-    return (textureLoad(atlas, child_coords + vec2<u32>(0u, 0u), child_node.atlas_index, 0) +
-            textureLoad(atlas, child_coords + vec2<u32>(0u, 1u), child_node.atlas_index, 0) +
-            textureLoad(atlas, child_coords + vec2<u32>(1u, 0u), child_node.atlas_index, 0) +
-            textureLoad(atlas, child_coords + vec2<u32>(1u, 1u), child_node.atlas_index, 0) ) / 4.0;
+    var OFFSETS = array(vec2(0u, 0u), vec2(0u, 1u), vec2(1u, 0u), vec2(1u, 1u));
+
+    var value = vec4<f32>(0.0);
+    var count = 0.0;
+
+    for (var index = 0u; index < 4u; index += 1u) {
+        let child_value = textureLoad(atlas, child_coords + OFFSETS[index], child_node.atlas_index, 0);
+        let is_valid  = any(child_value.xyz != vec3(0.0));
+
+        if (is_valid) {
+            value += child_value;
+            count += 1.0;
+        }
+    }
+
+    return value / count;
 }
 
 // Todo: respect memory coalescing

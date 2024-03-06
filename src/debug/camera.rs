@@ -22,7 +22,14 @@ pub struct DebugCamera {
 impl Default for DebugCamera {
     fn default() -> Self {
         Self {
-            camera: default(),
+            camera: Camera3dBundle {
+                projection: PerspectiveProjection {
+                    near: 0.001,
+                    ..default()
+                }
+                .into(),
+                ..default()
+            },
             rig: DebugRig {
                 rig: CameraRig::builder()
                     .with(Position::new(dg::Vec3::new(-150.0, 0.0, 0.0)))

@@ -201,7 +201,6 @@ impl AtlasAttachment {
                     self.uploading_nodes.push(node.clone());
                     self.data[node.node.atlas_index as usize] = node.data;
                 } else {
-                    dbg!("loading failed");
                     atlas_state.load_slots += 1;
                 }
 
