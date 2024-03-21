@@ -4,7 +4,7 @@
 #import bevy_terrain::attachments::{sample_attachment0, sample_attachment1, sample_height_grad, sample_normal_grad, sample_attachment1_gather0}
 #import bevy_terrain::vertex::{VertexInput, vertex_lookup_info}
 #import bevy_terrain::fragment::{FragmentOutput}
-#import bevy_terrain::debug::{show_lod, show_tiles}
+#import bevy_terrain::debug::{show_lod, show_tiles, show_pixels}
 #import bevy_pbr::pbr_types::{PbrInput, pbr_input_new}
 #import bevy_pbr::pbr_functions::{calculate_view, apply_pbr_lighting}
 
@@ -220,33 +220,30 @@ fn sample_test(lookup: NodeLookup) -> f32 {
 
 @vertex
 fn vertex(input: VertexInput) -> VertexOutput {
-    var height = 0.0;
-    var info: LookupInfo;
+    let grid_index = input.vertex_index % view_config.vertices_per_tile;
+    let grid_offset1 = grid_offset(grid_index);
+    let info   = vertex_lookup_info(input);
+    let lookup = lookup_attachment_group(info, 0u, 1u);
+    var valid  = local_available(lookup);
+    var height = sample_test(lookup);
 
-    for (var i = 0u; i < 3u; i += 1u) {
-        let input_2 =  VertexInput(input.vertex_index / 3);
+    var color = vec4(0.0);
 
-        info = vertex_lookup_info(input_2);
+    // if (info.blend_ratio > 0.0) {
+    //     let lookup2 = lookup_attachment_group(info, 1u, 1u);
+    //     valid       = valid && local_available(lookup2);
+    //     height      = mix(height, sample_test(lookup2), info.blend_ratio);
+    // }
 
-        let lookup  = lookup_attachment_group(info, 0u, 1u);
-        let local         = local_available(lookup);
-        var vertex_height        = sample_test(lookup);
+    // if (!valid) {
+    //    height = height / 0.0;
+    // }
 
-        if (info.blend_ratio > 0.0) {
-            let lookup2  = lookup_attachment_group(info, 1u, 1u);
-            vertex_height             = mix(vertex_height, sample_test(lookup2), info.blend_ratio);
-        }
-
-        height = max(height, vertex_height);
-    }
-
-    info = vertex_lookup_info(input);
-
-    // if (!local) {    height /= 0.0; }
-
+    height = -0.001;
 
     var output = vertex_output(input, info, height);
-    // output.local_available = select(0.0, 1.0, local);
+    output.local_available = select(0.0, 1.0, valid);
+    output.debug_color = color;
     return output;
 }
 
@@ -268,10 +265,11 @@ fn fragment(input: FragmentInput) -> FragmentOutput {
         normal             = mix(normal, sample_normal(lookup_global2, lookup_local2, local, input.world_normal, input.side), info.blend_ratio);
     }
 
-   // if (input.local_available < 0.9999 && input.local_available > 0.0001) {
-   //     normal = vec3(0.0, 1.0, 0.0);
-   //     // color  = sample_color(lookup_global, lookup_local, false);
-   // }
+    // if (input.local_available < 0.9999) {
+    //     normal = vec3(0.0, 0.0, 0.0);
+    //     color = vec4(0.3);
+    //     // color  = sample_color(lookup_global, lookup_local, false);
+    // }
 
     if (!local) {
         discard;
@@ -279,5 +277,5 @@ fn fragment(input: FragmentInput) -> FragmentOutput {
 
     // if (input.local_available < 0.9999) { discard; }
 
-    return fragment_output(input, color, normal, lookup_global);
+    return fragment_output(input, color, normal, lookup_local);
 }

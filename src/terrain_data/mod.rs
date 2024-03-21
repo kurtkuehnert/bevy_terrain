@@ -19,13 +19,10 @@ use crate::{
     terrain_data::{node_atlas::NodeAtlas, quadtree::Quadtree},
     util::CollectArray,
 };
-use bevy::{
-    prelude::*,
-    render::render_resource::*,
-};
+use bevy::{prelude::*, render::render_resource::*};
 use bincode::{Decode, Encode};
 use bytemuck::cast_slice;
-use itertools::{iproduct};
+use itertools::iproduct;
 use std::iter;
 
 pub mod coordinates;
@@ -168,10 +165,7 @@ impl AttachmentData {
                     iter::zip(&mut value, data[index]).for_each(|(value, v)| *value += v as u64);
                 }
 
-                let value = value
-                    .iter()
-                    .map(|value| (value / 4) as u8)
-                    .collect_array();
+                let value = value.iter().map(|value| (value / 4) as u8).collect_array();
 
                 data.push(value);
             }
@@ -185,17 +179,25 @@ impl AttachmentData {
         ) {
             for (child_y, child_x) in iproduct!(0..child_size, 0..child_size) {
                 let mut value = 0;
+                let mut count = 0;
 
-                for i in 0..4 {
-                    let parent_x = (child_x << 1) + (i >> 1);
-                    let parent_y = (child_y << 1) + (i & 1);
-
+                for (parent_x, parent_y) in
+                    iproduct!(0..2, 0..2).map(|(x, y)| ((child_x << 1) + x, (child_y << 1) + y))
+                {
                     let index = start + parent_y * parent_size + parent_x;
+                    let data = data[index] as u32;
 
-                    value += data[index] as u64;
+                    if data != 0 {
+                        value += data;
+                        count += 1;
+                    }
                 }
 
-                let value = (value / 4) as u16;
+                let value = if count == 0 {
+                    0
+                } else {
+                    (value / count) as u16
+                };
 
                 data.push(value);
             }
