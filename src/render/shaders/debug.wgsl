@@ -74,7 +74,7 @@ fn show_quadtree(coordinate: UVCoordinate) -> vec4<f32> {
 }
 
 fn show_pixels(coordinate: UVCoordinate, lod: u32) -> vec4<f32> {
-    let pixel_size = 4.0;
+    let pixel_size = 1.0;
     let pixels_per_side = attachments[0].size * node_count(lod);
     let pixel_coordinate = coordinate.uv * f32(pixels_per_side) / pixel_size;
 

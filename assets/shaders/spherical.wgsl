@@ -1,8 +1,7 @@
 #import bevy_terrain::types::NodeLookup
 #import bevy_terrain::bindings::config
-#import bevy_terrain::functions::{vertex_coordinate, lookup_node, compute_blend}
-#import bevy_terrain::attachments::{sample_attachment0, sample_attachment1, sample_height, sample_height_grad, sample_normal_grad, sample_attachment1_gather0}
-#import bevy_terrain::vertex::{VertexInput, VertexOutput, vertex_lookup_info, vertex_output}
+#import bevy_terrain::functions::{vertex_coordinate, lookup_node}
+#import bevy_terrain::attachments::{sample_height_grad, sample_normal_grad}
 #import bevy_terrain::fragment::{FragmentInput, FragmentOutput, fragment_lookup_info, fragment_output}
 #import bevy_pbr::pbr_types::{PbrInput, pbr_input_new}
 #import bevy_pbr::pbr_functions::{calculate_view, apply_pbr_lighting}
@@ -27,21 +26,6 @@ fn sample_color_grad(lookup: NodeLookup) -> vec4<f32> {
     }
 
     return color;
-}
-
-@vertex
-fn vertex(input: VertexInput) -> VertexOutput {
-    let info = vertex_lookup_info(input);
-
-    let lookup = lookup_node(info, 0u);
-    var height = sample_height(lookup);
-
-    if (info.blend_ratio > 0.0) {
-        let lookup2 = lookup_node(info, 1u);
-        height      = mix(height, sample_height(lookup2), info.blend_ratio);
-    }
-
-     return vertex_output(input, info, height);
 }
 
 @fragment
