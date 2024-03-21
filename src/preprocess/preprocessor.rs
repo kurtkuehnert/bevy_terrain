@@ -5,6 +5,7 @@ use crate::{
         node_atlas::{AtlasNode, AtlasNodeAttachment, NodeAtlas},
         AttachmentFormat,
     },
+    util::CollectArray,
 };
 use bevy::{prelude::*, render::texture::ImageSampler};
 use itertools::{iproduct, Itertools};
@@ -14,7 +15,6 @@ use std::{
     ops::{DerefMut, Range},
     time::Instant,
 };
-use crate::util::CollectArray;
 
 pub fn reset_directory(directory: &str) {
     let _ = fs::remove_file(format!("{directory}/../../config.tc"));
@@ -56,10 +56,7 @@ impl Default for PreprocessDataset {
 }
 
 impl PreprocessDataset {
-    fn overlapping_nodes(
-        &self,
-        lod: u32,
-    ) -> impl Iterator<Item=NodeCoordinate> + '_ {
+    fn overlapping_nodes(&self, lod: u32) -> impl Iterator<Item=NodeCoordinate> + '_ {
         let node_count = NodeCoordinate::node_count(lod);
 
         let lower = (self.top_left * node_count as f32).as_uvec2();
@@ -140,7 +137,7 @@ impl PreprocessTask {
         dataset: &PreprocessDataset,
     ) -> Self {
         let node = node_atlas
-            .get_or_allocate(node_coordinate)
+            .get_or_allocate_node(node_coordinate)
             .attachment(dataset.attachment_index);
 
         Self {
@@ -156,7 +153,7 @@ impl PreprocessTask {
         tile: Handle<Image>,
     ) -> Self {
         let node = node_atlas
-            .get_or_allocate(node_coordinate)
+            .get_or_allocate_node(node_coordinate)
             .attachment(dataset.attachment_index);
 
         Self {
@@ -175,13 +172,13 @@ impl PreprocessTask {
         dataset: &PreprocessDataset,
     ) -> Self {
         let node = node_atlas
-            .get_or_allocate(node_coordinate)
+            .get_or_allocate_node(node_coordinate)
             .attachment(dataset.attachment_index);
 
         let neighbour_nodes = node
             .coordinate
             .neighbours()
-            .map(|coordinate| node_atlas.get_or_allocate(coordinate))
+            .map(|coordinate| node_atlas.get_node(coordinate))
             .collect_array();
 
         Self {
@@ -196,13 +193,13 @@ impl PreprocessTask {
         dataset: &PreprocessDataset,
     ) -> Self {
         let node = node_atlas
-            .get_or_allocate(node_coordinate)
+            .get_or_allocate_node(node_coordinate)
             .attachment(dataset.attachment_index);
 
         let child_nodes = node
             .coordinate
             .children()
-            .map(|coordinate| node_atlas.get_or_allocate(coordinate))
+            .map(|coordinate| node_atlas.get_node(coordinate))
             .collect_array();
 
         Self {
@@ -248,9 +245,7 @@ impl Preprocessor {
 
         let mut lods = dataset.lod_range.clone().rev();
 
-        for node_coordinate in
-        dataset.overlapping_nodes(lods.next().unwrap())
-        {
+        for node_coordinate in dataset.overlapping_nodes(lods.next().unwrap()) {
             self.task_queue.push_back(PreprocessTask::split(
                 node_coordinate,
                 node_atlas,
@@ -279,18 +274,15 @@ impl Preprocessor {
         lod: u32,
     ) {
         for node_coordinate in dataset.overlapping_nodes(lod) {
-            self.task_queue.push_back(PreprocessTask::stitch(
-                node_coordinate,
-                node_atlas,
-                &dataset,
-            ));
+            self.task_queue
+                .push_back(PreprocessTask::stitch(node_coordinate, node_atlas, dataset));
         }
 
         self.task_queue.push_back(PreprocessTask::barrier());
 
         for node_coordinate in dataset.overlapping_nodes(lod) {
             self.task_queue
-                .push_back(PreprocessTask::save(node_coordinate, node_atlas, &dataset));
+                .push_back(PreprocessTask::save(node_coordinate, node_atlas, dataset));
         }
     }
 
@@ -335,14 +327,14 @@ impl Preprocessor {
             .collect_vec();
 
         for dataset in &side_datasets {
-            self.split_and_downsample(&dataset, asset_server, node_atlas);
+            self.split_and_downsample(dataset, asset_server, node_atlas);
         }
 
         self.task_queue.push_back(PreprocessTask::barrier());
 
         for lod in dataset.lod_range {
             for dataset in &side_datasets {
-                self.stitch_and_save_layer(&dataset, node_atlas, lod);
+                self.stitch_and_save_layer(dataset, node_atlas, lod);
             }
         }
 
@@ -368,8 +360,11 @@ pub(crate) fn select_ready_tasks(
                 && node_atlas.state.save_slots == node_atlas.state.max_save_slots
             {
                 println!("Preprocessing took {:?}", time.elapsed());
-                
+
                 node_atlas.save_node_config();
+                // node_atlas.state.existing_nodes.iter().for_each(|node| {
+                //     println!("{node}");
+                // });
 
                 *start_time = None;
             }
@@ -411,9 +406,9 @@ pub(crate) fn preprocessor_load_tile(
             if let Some(image) = images.get_mut(tile.id) {
                 image.texture_descriptor.format = tile.format.processing_format();
                 image.sampler = ImageSampler::linear();
-                return false;
+                false
             } else {
-                return true;
+                true
             }
         });
 
