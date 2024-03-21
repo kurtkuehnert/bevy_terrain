@@ -5,10 +5,13 @@ use crate::{
     terrain_data::{
         coordinates::NodeCoordinate,
         quadtree::{NodeLookup, Quadtree, QuadtreeEntry},
-        AttachmentData, INVALID_ATLAS_INDEX, INVALID_LOD,
+        AttachmentData,
+        INVALID_ATLAS_INDEX,
+        INVALID_LOD,
     },
     terrain_view::{TerrainView, TerrainViewComponents},
 };
+use anyhow::Result;
 use bevy::{
     prelude::*,
     render::render_resource::*,
@@ -120,30 +123,30 @@ impl NodeAttachmentWithData {
         texture_size: u32,
         format: AttachmentFormat,
         mip_level_count: u32,
-    ) -> Task<Self> {
+    ) -> Task<Result<Self>> {
         AsyncComputeTaskPool::get().spawn(async move {
             let mut data = if STORE_PNG {
                 let path = node.coordinate.path(&path, "png");
 
-                let mut reader = Reader::open(path).unwrap();
+                let mut reader = Reader::open(path)?;
                 reader.no_limits();
                 let image = reader.decode().unwrap();
                 AttachmentData::from_bytes(image.as_bytes(), format)
             } else {
                 let path = node.coordinate.path(&path, "bin");
 
-                let bytes = fs::read(path).unwrap();
+                let bytes = fs::read(path)?;
 
                 AttachmentData::from_bytes(&bytes, format)
             };
 
             data.generate_mipmaps(texture_size, mip_level_count);
 
-            Self {
+            Ok(Self {
                 node,
                 data,
                 texture_size: 0,
-            }
+            })
         })
     }
 }
@@ -162,7 +165,7 @@ pub struct AtlasAttachment {
     pub(crate) data: Vec<AttachmentData>,
 
     pub(crate) saving_nodes: Vec<Task<AtlasNodeAttachment>>,
-    pub(crate) loading_nodes: Vec<Task<NodeAttachmentWithData>>,
+    pub(crate) loading_nodes: Vec<Task<Result<NodeAttachmentWithData>>>,
     pub(crate) uploading_nodes: Vec<NodeAttachmentWithData>,
     pub(crate) downloading_nodes: Vec<Task<NodeAttachmentWithData>>,
 }
@@ -194,9 +197,13 @@ impl AtlasAttachment {
     fn update(&mut self, atlas_state: &mut NodeAtlasState) {
         self.loading_nodes.retain_mut(|node| {
             future::block_on(future::poll_once(node)).map_or(true, |node| {
-                atlas_state.loaded_node_attachment(node.node);
-                self.uploading_nodes.push(node.clone());
-                self.data[node.node.atlas_index as usize] = node.data;
+                if let Ok(node) = node {
+                    atlas_state.loaded_node_attachment(node.node);
+                    self.uploading_nodes.push(node.clone());
+                    self.data[node.node.atlas_index as usize] = node.data;
+                } else {
+                    atlas_state.load_slots += 1;
+                }
 
                 false
             })
@@ -361,6 +368,20 @@ impl NodeAtlasState {
         self.download_slots += 1;
     }
 
+    fn get_node(&mut self, node_coordinate: NodeCoordinate) -> AtlasNode {
+        if node_coordinate == NodeCoordinate::INVALID {
+            return AtlasNode::new(NodeCoordinate::INVALID, INVALID_ATLAS_INDEX);
+        }
+
+        let atlas_index = if self.existing_nodes.contains(&node_coordinate) {
+            self.node_states.get(&node_coordinate).unwrap().atlas_index
+        } else {
+            INVALID_ATLAS_INDEX
+        };
+
+        AtlasNode::new(node_coordinate, atlas_index)
+    }
+
     fn allocate_node(&mut self) -> u32 {
         let unused_node = self.unused_nodes.pop_front().expect("Atlas out of indices");
 
@@ -369,7 +390,7 @@ impl NodeAtlasState {
         unused_node.atlas_index
     }
 
-    fn get_or_allocate(&mut self, node_coordinate: NodeCoordinate) -> AtlasNode {
+    fn get_or_allocate_node(&mut self, node_coordinate: NodeCoordinate) -> AtlasNode {
         if node_coordinate == NodeCoordinate::INVALID {
             return AtlasNode::new(NodeCoordinate::INVALID, INVALID_ATLAS_INDEX);
         }
@@ -545,8 +566,12 @@ impl NodeAtlas {
         )
     }
 
-    pub fn get_or_allocate(&mut self, node_coordinate: NodeCoordinate) -> AtlasNode {
-        self.state.get_or_allocate(node_coordinate)
+    pub fn get_node(&mut self, node_coordinate: NodeCoordinate) -> AtlasNode {
+        self.state.get_node(node_coordinate)
+    }
+
+    pub fn get_or_allocate_node(&mut self, node_coordinate: NodeCoordinate) -> AtlasNode {
+        self.state.get_or_allocate_node(node_coordinate)
     }
 
     pub fn save(&mut self, node: AtlasNodeAttachment) {
@@ -599,12 +624,7 @@ impl NodeAtlas {
     /// of the terrain.
     pub(crate) fn save_node_config(&self) {
         let tc = TC {
-            nodes: self
-                .state
-                .existing_nodes
-                .iter()
-                .map(|&node_coordinate| node_coordinate)
-                .collect_vec(),
+            nodes: self.state.existing_nodes.iter().copied().collect_vec(),
         };
 
         tc.save_file(format!("assets/{}/config.tc", &self.path))

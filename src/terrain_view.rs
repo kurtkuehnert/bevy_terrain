@@ -81,7 +81,7 @@ pub fn initialize_terrain_view(
     quadtrees: &mut TerrainViewComponents<Quadtree>,
     view_configs: &mut TerrainViewComponents<TerrainViewConfig>,
 ) {
-    let quadtree = Quadtree::from_configs(&config, &view_config);
+    let quadtree = Quadtree::from_configs(config, &view_config);
     view_configs.insert((terrain, view), view_config);
     quadtrees.insert((terrain, view), quadtree);
 }
