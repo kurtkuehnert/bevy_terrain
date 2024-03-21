@@ -77,14 +77,14 @@ fn setup(
         name: "height".to_string(),
         texture_size: TEXTURE_SIZE,
         border_size: 2,
-        mip_level_count: 4,
+        mip_level_count: 9,
         format: AttachmentFormat::R16,
     })
     .add_attachment(AttachmentConfig {
         name: "height2".to_string(),
         texture_size: TEXTURE_SIZE,
         border_size: 2,
-        mip_level_count: 4,
+        mip_level_count: 9,
         format: AttachmentFormat::R16,
     });
 
