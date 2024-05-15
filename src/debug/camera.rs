@@ -1,5 +1,72 @@
+use std::ops::DerefMut;
 use bevy::{input::mouse::MouseMotion, prelude::*};
+use bevy::render::camera::ScalingMode;
 use dolly::{glam as dg, prelude::*};
+
+#[derive(Bundle)]
+pub struct DebugCamera2d {
+    pub camera: Camera3dBundle,
+}
+
+
+impl Default for DebugCamera2d {
+    fn default() -> Self {
+        let mut transform = Transform::from_xyz(0.0, 1.0, 0.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Y);
+        transform.rotate_axis(Vec3::Y, -90.0_f32.to_radians());
+
+        Self {
+            camera: Camera3dBundle {
+                transform,
+                projection: OrthographicProjection {
+                    // scaling_mode: ScalingMode::FixedVertical(2000.0),
+                    ..OrthographicProjection::default()
+                }
+                    .into(),
+                ..default()
+            },
+        }
+    }
+}
+
+pub(crate) fn debug_camera_control_2d(
+    time: Res<Time>,
+    input: Res<ButtonInput<KeyCode>>,
+    mut debug_projection_query: Query<(&mut Transform, &mut Projection)>,
+) {
+    let delta_time = time.delta_seconds();
+
+    if let (mut transform, mut projection) = debug_projection_query.single_mut() {
+        let mut speed_factor = 500.0;
+        let mut translation_delta = dg::Vec3::ZERO;
+
+        if input.pressed(KeyCode::ArrowLeft) {
+            translation_delta.x -= 1.0;
+        }
+        if input.pressed(KeyCode::ArrowRight) {
+            translation_delta.x += 1.0;
+        }
+        if input.pressed(KeyCode::PageUp) {
+            translation_delta.y += 1.0;
+        }
+        if input.pressed(KeyCode::PageDown) {
+            translation_delta.y -= 1.0;
+        }
+        if input.pressed(KeyCode::ArrowUp) {
+            translation_delta.z -= 1.0;
+        }
+        if input.pressed(KeyCode::ArrowDown) {
+            translation_delta.z += 1.0;
+        }
+
+        if let
+            Projection::Orthographic(projection) = projection.deref_mut() {
+            transform.translation.x += translation_delta.x * delta_time * speed_factor * projection.scale;
+            transform.translation.z += translation_delta.z * delta_time * speed_factor * projection.scale;
+            projection.scale *= 1.0 + 0.002 * translation_delta.y * delta_time * speed_factor;
+        }
+    }
+}
+
 
 #[derive(Component)]
 pub struct DebugRig {
@@ -23,11 +90,8 @@ impl Default for DebugCamera {
     fn default() -> Self {
         Self {
             camera: Camera3dBundle {
-                projection: PerspectiveProjection {
-                    near: 0.001,
-                    ..default()
-                }
-                .into(),
+                projection: OrthographicProjection::default()
+                    .into(),
                 ..default()
             },
             rig: DebugRig {

@@ -10,6 +10,7 @@ use bevy::{
     prelude::*,
     render::{render_resource::*, Extract, RenderApp},
 };
+use crate::debug::camera::debug_camera_control_2d;
 
 pub mod camera;
 
@@ -31,6 +32,7 @@ impl Plugin for TerrainDebugPlugin {
                 Update,
                 (
                     debug_camera_control,
+                    debug_camera_control_2d,
                     toggle_debug,
                     change_config,
                     finish_loading_images,

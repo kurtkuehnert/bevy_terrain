@@ -3,7 +3,8 @@ use bevy_terrain::prelude::*;
 
 const PATH: &str = "terrains/planar";
 const TERRAIN_SIZE: f32 = 1000.0;
-const HEIGHT: f32 = 250.0 / TERRAIN_SIZE;
+const HEIGHT: f32 = 0.0;
+// 250.0 / TERRAIN_SIZE;
 const TEXTURE_SIZE: u32 = 512;
 const LOD_COUNT: u32 = 4;
 
@@ -45,7 +46,7 @@ fn setup(
         ))
         .id();
 
-    let view = commands.spawn((TerrainView, DebugCamera::default())).id();
+    let view = commands.spawn((TerrainView, DebugCamera2d::default())).id();
 
     initialize_terrain_view(
         terrain,
