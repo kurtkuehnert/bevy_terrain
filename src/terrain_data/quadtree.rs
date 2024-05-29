@@ -354,9 +354,10 @@ impl Quadtree {
                     quadtree.view_local_position.z,
                 );
 
-                let height = sample_attachment_local(quadtree, node_atlas, 0, local_position).x
-                    * (quadtree.max_height - quadtree.min_height)
-                    + quadtree.min_height;
+                // let height = sample_attachment_local(quadtree, node_atlas, 0, local_position).x
+                //     * (quadtree.max_height - quadtree.min_height)
+                //     + quadtree.min_height;
+                let height = 0.0;
 
                 (quadtree.approximate_height, view_config.approximate_height) = (height, height);
             }
