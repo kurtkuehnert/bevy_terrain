@@ -24,7 +24,7 @@ impl Default for DebugCamera {
         Self {
             camera: Camera3dBundle {
                 projection: PerspectiveProjection {
-                    near: 0.001,
+                    near: 0.00001,
                     ..default()
                 }
                     .into(),
