@@ -2,6 +2,7 @@
 #import bevy_terrain::bindings::config
 #import bevy_terrain::functions::{vertex_coordinate, lookup_node}
 #import bevy_terrain::attachments::{sample_height_grad, sample_normal_grad}
+#import bevy_terrain::vertex::{VertexInput, VertexOutput, vertex_lookup_info, vertex_output}
 #import bevy_terrain::fragment::{FragmentInput, FragmentOutput, fragment_lookup_info, fragment_output}
 #import bevy_pbr::pbr_types::{PbrInput, pbr_input_new}
 #import bevy_pbr::pbr_functions::{calculate_view, apply_pbr_lighting}
@@ -26,6 +27,13 @@ fn sample_color_grad(lookup: NodeLookup) -> vec4<f32> {
     }
 
     return color;
+}
+
+@vertex
+fn vertex(input: VertexInput) -> VertexOutput {
+    let info = vertex_lookup_info(input);
+
+     return vertex_output(input, info, 0.0);
 }
 
 @fragment
