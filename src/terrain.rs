@@ -1,6 +1,8 @@
 //! Types for configuring terrains.
 
+use crate::big_space::{GridCell, RootReferenceFrame};
 use crate::{terrain_data::node_atlas::NodeAtlas, terrain_data::AttachmentConfig};
+use bevy::math::DVec3;
 use bevy::{
     prelude::*, render::extract_component::ExtractComponent, render::view::NoFrustumCulling,
     utils::HashMap,
@@ -43,6 +45,8 @@ pub struct Terrain;
 pub struct TerrainConfig {
     /// The count of level of detail layers.
     pub lod_count: u32,
+    /// The radius (spherical) or the side length (planar) of the terrain.
+    pub scale: f64,
     /// The minimum height of the terrain.
     pub min_height: f32,
     /// The maximum height of the terrain.
@@ -59,6 +63,7 @@ impl Default for TerrainConfig {
     fn default() -> Self {
         Self {
             lod_count: 1,
+            scale: 1.0,
             min_height: 0.0,
             max_height: 1.0,
             node_atlas_size: 1024,
@@ -83,6 +88,7 @@ pub struct TerrainBundle {
     pub terrain: Terrain,
     pub node_atlas: NodeAtlas,
     pub config: TerrainConfig,
+    pub cell: GridCell,
     pub transform: Transform,
     pub global_transform: GlobalTransform,
     pub visibility_bundle: VisibilityBundle,
@@ -91,16 +97,19 @@ pub struct TerrainBundle {
 
 impl TerrainBundle {
     /// Creates a new terrain bundle from the config.
-    pub fn new(config: TerrainConfig, translation: Vec3, scale: f32) -> Self {
+    pub fn new(config: TerrainConfig, position: DVec3, frame: &RootReferenceFrame) -> Self {
+        let (cell, translation) = frame.translation_to_grid(position);
+
         Self {
             terrain: Terrain,
             node_atlas: NodeAtlas::from_config(&config),
-            config,
             transform: Transform {
                 translation,
-                scale: Vec3::splat(scale),
+                scale: Vec3::splat(config.scale as f32),
                 ..default()
             },
+            config,
+            cell,
             global_transform: default(),
             visibility_bundle: default(),
             no_frustum_culling: NoFrustumCulling,

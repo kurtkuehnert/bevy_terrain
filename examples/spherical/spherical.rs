@@ -1,8 +1,11 @@
+use bevy::math::DVec3;
+use bevy::window::Cursor;
 use bevy::{prelude::*, reflect::TypePath, render::render_resource::*};
+use bevy_terrain::big_space::{FloatingOriginPlugin, GridCell, RootReferenceFrame};
 use bevy_terrain::prelude::*;
 
 const PATH: &str = "terrains/spherical";
-const RADIUS: f32 = 50.0;
+const RADIUS: f64 = 50.0;
 const MIN_HEIGHT: f32 = -12.0 / 6371.0;
 const MAX_HEIGHT: f32 = 9.0 / 6371.0;
 const SUPER_ELEVATION: f32 = 10.0;
@@ -30,10 +33,23 @@ impl Material for TerrainMaterial {
 fn main() {
     App::new()
         .add_plugins((
-            DefaultPlugins,
+            DefaultPlugins
+                .set(WindowPlugin {
+                    primary_window: Some(Window {
+                        cursor: Cursor {
+                            visible: false,
+                            ..default()
+                        },
+                        ..default()
+                    }),
+                    ..default()
+                })
+                .build()
+                .disable::<TransformPlugin>(),
             TerrainPlugin,
             TerrainDebugPlugin, // enable debug settings and controls
             TerrainMaterialPlugin::<TerrainMaterial>::default(),
+            FloatingOriginPlugin::default(),
         ))
         .insert_resource(ClearColor(Color::WHITE))
         .add_systems(Startup, setup)
@@ -48,6 +64,7 @@ fn setup(
     mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
     asset_server: Res<AssetServer>,
+    frame: Res<RootReferenceFrame>,
 ) {
     let gradient = asset_server.load("textures/gradient.png");
     images.load_image(
@@ -59,6 +76,7 @@ fn setup(
     // Configure all the important properties of the terrain, as well as its attachments.
     let config = TerrainConfig {
         lod_count: LOD_COUNT,
+        scale: RADIUS,
         min_height: MIN_HEIGHT * SUPER_ELEVATION,
         max_height: MAX_HEIGHT * SUPER_ELEVATION,
         path: PATH.to_string(),
@@ -77,7 +95,7 @@ fn setup(
 
     let terrain = commands
         .spawn((
-            TerrainBundle::new(config.clone(), Vec3::new(100.0, 100.0, 100.0), RADIUS),
+            TerrainBundle::new(config.clone(), DVec3::new(0.0, 0.0, 0.0), &frame),
             materials.add(TerrainMaterial {
                 gradient: gradient.clone(),
                 super_elevation: SUPER_ELEVATION,
@@ -85,7 +103,12 @@ fn setup(
         ))
         .id();
 
-    let view = commands.spawn((TerrainView, DebugCamera::default())).id();
+    let view = commands
+        .spawn((
+            TerrainView,
+            DebugCameraBundle::new(-DVec3::X * RADIUS * 3.0, RADIUS, &frame),
+        ))
+        .id();
 
     initialize_terrain_view(
         terrain,
@@ -96,14 +119,23 @@ fn setup(
         &mut view_configs,
     );
 
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Sphere::new(100.0).mesh().build()),
-        transform: Transform::from_xyz(-1000.0, 1000.0, -1000.0),
-        ..default()
-    });
+    let sun_position = DVec3::new(-1000.0, 1000.0, -1000.0);
+    let (sun_cell, sun_translation) = frame.translation_to_grid(sun_position);
 
-    commands.spawn(PbrBundle {
-        mesh: meshes.add(Cuboid::default()),
-        ..default()
-    });
+    commands.spawn((
+        PbrBundle {
+            mesh: meshes.add(Sphere::new(100.0).mesh().build()),
+            transform: Transform::from_translation(sun_translation),
+            ..default()
+        },
+        sun_cell,
+    ));
+
+    commands.spawn((
+        PbrBundle {
+            mesh: meshes.add(Cuboid::default()),
+            ..default()
+        },
+        GridCell::default(),
+    ));
 }

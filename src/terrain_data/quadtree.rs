@@ -2,7 +2,7 @@ use crate::{
     terrain::{Terrain, TerrainConfig},
     terrain_data::{
         coordinates::NodeCoordinate, coordinates::UVCoordinate, node_atlas::NodeAtlas,
-        sample_attachment_local, INVALID_ATLAS_INDEX, INVALID_LOD, SIDE_COUNT,
+        INVALID_ATLAS_INDEX, INVALID_LOD, SIDE_COUNT,
     },
     terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
 };
@@ -202,7 +202,11 @@ impl Quadtree {
 
         let lod_f32 = (2.0 * self.blend_distance / view_distance).log2();
         let lod = (lod_f32 as u32).clamp(0, self.lod_count - 1);
-        let ratio = if lod_f32 < 1.0 || lod_f32 > self.lod_count as f32 { 0.0 } else { 1.0 - (lod_f32 % 1.0) / self.blend_range };
+        let ratio = if lod_f32 < 1.0 || lod_f32 > self.lod_count as f32 {
+            0.0
+        } else {
+            1.0 - (lod_f32 % 1.0) / self.blend_range
+        };
 
         (lod, ratio)
     }
@@ -253,13 +257,12 @@ impl Quadtree {
                 for side in 0..SIDE_COUNT {
                     let quadtree_s2 = view_s2.project_to_side(side);
 
-
                     for lod in 0..quadtree.lod_count {
                         let node_count = NodeCoordinate::node_count(lod);
                         let quadtree_origin: UVec2 = quadtree.origin(quadtree_s2, lod);
 
                         for (x, y) in
-                        iproduct!(0..quadtree.quadtree_size, 0..quadtree.quadtree_size)
+                            iproduct!(0..quadtree.quadtree_size, 0..quadtree.quadtree_size)
                         {
                             let node_coordinate = NodeCoordinate {
                                 side,
@@ -343,12 +346,12 @@ impl Quadtree {
         view_query: Query<Entity, With<TerrainView>>,
         mut terrain_query: Query<(Entity, &NodeAtlas), With<Terrain>>,
     ) {
-        for (terrain, node_atlas) in &mut terrain_query {
+        for (terrain, _node_atlas) in &mut terrain_query {
             for view in &view_query {
                 let quadtree = quadtrees.get_mut(&(terrain, view)).unwrap();
                 let view_config = view_configs.get_mut(&(terrain, view)).unwrap();
 
-                let local_position = Vec3::new(
+                let _local_position = Vec3::new(
                     quadtree.view_local_position.x,
                     quadtree.approximate_height,
                     quadtree.view_local_position.z,

@@ -60,6 +60,7 @@ impl Plugin for TerrainPlugin {
                     TerrainViewData::initialize.after(GpuQuadtree::initialize),
                     GpuNodeAtlas::extract.after(GpuNodeAtlas::initialize),
                     GpuQuadtree::extract.after(GpuQuadtree::initialize),
+                    TerrainData::extract.after(TerrainData::initialize),
                     TerrainViewData::extract.after(TerrainViewData::initialize),
                 ),
             )
@@ -69,6 +70,7 @@ impl Plugin for TerrainPlugin {
                     (
                         GpuQuadtree::prepare,
                         GpuNodeAtlas::prepare,
+                        TerrainData::prepare,
                         TerrainViewData::prepare,
                         CullingBindGroup::prepare,
                     )
