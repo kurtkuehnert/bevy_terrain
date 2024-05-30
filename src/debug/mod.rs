@@ -1,7 +1,7 @@
 //! Contains a debug resource and systems controlling it to visualize different internal
 //! data of the plugin.
 use crate::{
-    debug::camera::debug_camera_control,
+    debug::camera::camera_controller,
     prelude::TerrainMaterialPlugin,
     terrain_view::{TerrainViewComponents, TerrainViewConfig},
 };
@@ -9,6 +9,7 @@ use bevy::{
     asset::LoadState,
     prelude::*,
     render::{render_resource::*, Extract, RenderApp},
+    transform::TransformSystem,
 };
 
 pub mod camera;
@@ -27,14 +28,10 @@ impl Plugin for TerrainDebugPlugin {
             .init_resource::<DebugTerrain>()
             .init_resource::<LoadingImages>()
             .add_systems(Startup, debug_lighting)
+            .add_systems(Update, (toggle_debug, change_config, finish_loading_images))
             .add_systems(
-                Update,
-                (
-                    debug_camera_control,
-                    toggle_debug,
-                    change_config,
-                    finish_loading_images,
-                ),
+                PostUpdate,
+                camera_controller.before(TransformSystem::TransformPropagate),
             );
 
         app.sub_app_mut(RenderApp)
