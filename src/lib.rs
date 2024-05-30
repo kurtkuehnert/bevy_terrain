@@ -43,6 +43,7 @@
 //!
 //! [^note]: Some of these claims are not yet fully implemented.
 
+pub mod big_space;
 pub mod debug;
 pub mod formats;
 pub mod plugin;
@@ -57,7 +58,10 @@ pub mod prelude {
     //! `use bevy_terrain::prelude::*;` to import common components, bundles, and plugins.
     // #[doc(hidden)]
     pub use crate::{
-        debug::{camera::DebugCamera, DebugTerrainMaterial, LoadingImages, TerrainDebugPlugin},
+        debug::{
+            camera::{DebugCameraBundle, DebugCameraController},
+            DebugTerrainMaterial, LoadingImages, TerrainDebugPlugin,
+        },
         plugin::TerrainPlugin,
         preprocess::{
             preprocessor::Preprocessor,

@@ -13,7 +13,7 @@ use bevy::{
     render::{
         render_phase::{PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass},
         render_resource::{binding_types::*, *},
-        renderer::RenderDevice,
+        renderer::{RenderDevice, RenderQueue},
         texture::FallbackImage,
         Extract,
     },
@@ -92,6 +92,8 @@ impl From<&TerrainConfig> for TerrainConfigUniform {
 }
 
 pub struct TerrainData {
+    mesh_uniform: MeshUniform,
+    mesh_buffer: StaticBuffer<MeshUniform>,
     pub(crate) terrain_bind_group: BindGroup,
 }
 
@@ -100,10 +102,23 @@ impl TerrainData {
         device: &RenderDevice,
         fallback_image: &FallbackImage,
         config_uniform: TerrainConfigUniform,
-        mesh_uniform: MeshUniform,
         gpu_node_atlas: &GpuNodeAtlas,
     ) -> Self {
-        let mesh_buffer = StaticBuffer::create(None, device, &mesh_uniform, BufferUsages::STORAGE);
+        let mesh_uniform = MeshUniform {
+            transform: default(),
+            previous_transform: default(),
+            lightmap_uv_rect: default(),
+            inverse_transpose_model_a: default(),
+            inverse_transpose_model_b: 0.0,
+            flags: 0,
+        };
+
+        let mesh_buffer = StaticBuffer::create(
+            None,
+            device,
+            &mesh_uniform,
+            BufferUsages::STORAGE | BufferUsages::COPY_DST,
+        );
         let terrain_config_buffer =
             StaticBuffer::create(None, device, &config_uniform, BufferUsages::UNIFORM);
 
@@ -149,30 +164,37 @@ impl TerrainData {
             )),
         );
 
-        Self { terrain_bind_group }
+        Self {
+            mesh_uniform,
+            mesh_buffer,
+            terrain_bind_group,
+        }
     }
 
-    #[allow(clippy::type_complexity)]
     pub(crate) fn initialize(
         device: Res<RenderDevice>,
         fallback_image: Res<FallbackImage>,
         mut terrain_data: ResMut<TerrainComponents<TerrainData>>,
         gpu_node_atlases: Res<TerrainComponents<GpuNodeAtlas>>,
+        terrain_query: Extract<Query<(Entity, &TerrainConfig), Added<Terrain>>>,
+    ) {
+        for (terrain, config) in terrain_query.iter() {
+            let gpu_node_atlas = gpu_node_atlases.get(&terrain).unwrap();
+
+            terrain_data.insert(
+                terrain,
+                TerrainData::new(&device, &fallback_image, config.into(), gpu_node_atlas),
+            );
+        }
+    }
+
+    pub(crate) fn extract(
+        mut terrain_data: ResMut<TerrainComponents<TerrainData>>,
         terrain_query: Extract<
-            Query<
-                (
-                    Entity,
-                    &TerrainConfig,
-                    &GlobalTransform,
-                    Option<&PreviousGlobalTransform>,
-                ),
-                Added<Terrain>,
-            >,
+            Query<(Entity, &GlobalTransform, Option<&PreviousGlobalTransform>), With<Terrain>>,
         >,
     ) {
-        for (terrain, config, transform, previous_transform) in terrain_query.iter() {
-            // Todo: update the transform each frame
-
+        for (terrain, transform, previous_transform) in terrain_query.iter() {
             let transform = transform.affine();
             let previous_transform = previous_transform.map(|t| t.0).unwrap_or(transform);
             let mesh_transforms = MeshTransforms {
@@ -180,30 +202,21 @@ impl TerrainData {
                 previous_transform: (&previous_transform).into(),
                 flags: 0,
             };
-            let (inverse_transpose_model_a, inverse_transpose_model_b) =
-                mesh_transforms.transform.inverse_transpose_3x3();
-            let mesh_uniform = MeshUniform {
-                transform: mesh_transforms.transform.to_transpose(),
-                previous_transform: mesh_transforms.previous_transform.to_transpose(),
-                lightmap_uv_rect: UVec2::ZERO,
-                inverse_transpose_model_a,
-                inverse_transpose_model_b,
-                flags: mesh_transforms.flags,
-            };
-            let config_uniform = config.into();
+            let mesh_uniform = MeshUniform::new(&mesh_transforms, None);
 
-            let gpu_node_atlas = gpu_node_atlases.get(&terrain).unwrap();
+            let terrain_data = terrain_data.get_mut(&terrain).unwrap();
+            terrain_data.mesh_uniform = mesh_uniform;
+        }
+    }
 
-            terrain_data.insert(
-                terrain,
-                TerrainData::new(
-                    &device,
-                    &fallback_image,
-                    config_uniform,
-                    mesh_uniform,
-                    gpu_node_atlas,
-                ),
-            );
+    pub(crate) fn prepare(
+        queue: Res<RenderQueue>,
+        mut terrain_data: ResMut<TerrainComponents<TerrainData>>,
+    ) {
+        for terrain_data in &mut terrain_data.0.values_mut() {
+            terrain_data
+                .mesh_buffer
+                .update(&queue, &terrain_data.mesh_uniform);
         }
     }
 }
