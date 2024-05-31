@@ -5,7 +5,7 @@ use bevy_terrain::big_space::{FloatingOriginPlugin, GridCell, RootReferenceFrame
 use bevy_terrain::prelude::*;
 
 const PATH: &str = "terrains/spherical";
-const RADIUS: f64 = 50.0;
+const RADIUS: f64 = 6371000.0;
 const MIN_HEIGHT: f32 = -12.0 / 6371.0;
 const MAX_HEIGHT: f32 = 9.0 / 6371.0;
 const SUPER_ELEVATION: f32 = 10.0;

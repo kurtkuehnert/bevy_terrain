@@ -73,3 +73,20 @@ struct AttachmentConfig {
     offset: f32,
     _padding: u32,
 }
+
+struct SideParameter {
+    origin_xy: vec2<i32>,
+    delta_relative_st: vec2<f32>,
+    c: vec3<f32>,
+    c_s: vec3<f32>,
+    c_t: vec3<f32>,
+    c_ss: vec3<f32>,
+    c_st: vec3<f32>,
+    c_tt: vec3<f32>,
+}
+
+struct ModelViewApproximation {
+    origin_lod: i32,
+    view_rotation: mat4x4<f32>,
+    sides: array<SideParameter, 6>,
+}

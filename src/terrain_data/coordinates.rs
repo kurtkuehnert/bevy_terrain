@@ -1,17 +1,35 @@
 use bevy::{prelude::*, render::render_resource::ShaderType};
 use bincode::{Decode, Encode};
-use std::{fmt};
+use std::fmt;
+
+const C_SQR: f32 = 0.87 * 0.87;
 
 #[cfg(feature = "spherical")]
 fn sphere_to_cube(xy: Vec2) -> Vec2 {
-    Vec2::new(if xy.x > 0.0 { 0.5 * (1.0 + 3.0 * xy.x).sqrt() } else { 1.0 - 0.5 * (1.0 - 3.0 * xy.x).sqrt() },
-              if xy.y > 0.0 { 0.5 * (1.0 + 3.0 * xy.y).sqrt() } else { 1.0 - 0.5 * (1.0 - 3.0 * xy.y).sqrt() })
+    // Vec2::new(if xy.x > 0.0 { 0.5 * (1.0 + 3.0 * xy.x).sqrt() } else { 1.0 - 0.5 * (1.0 - 3.0 * xy.x).sqrt() },
+    //           if xy.y > 0.0 { 0.5 * (1.0 + 3.0 * xy.y).sqrt() } else { 1.0 - 0.5 * (1.0 - 3.0 * xy.y).sqrt() })
+
+    let w = xy * ((1.0 + C_SQR) / (1.0 + C_SQR * xy * xy)).powf(0.5);
+    0.5 * w + 0.5
 }
 
 #[cfg(feature = "spherical")]
 fn cube_to_sphere(uv: Vec2) -> Vec2 {
-    Vec2::new(if uv.x > 0.5 { (4.0 * uv.x.powi(2) - 1.0) / 3.0 } else { (1.0 - 4.0 * (1.0 - uv.x).powi(2)) / 3.0 },
-              if uv.y > 0.5 { (4.0 * uv.y.powi(2) - 1.0) / 3.0 } else { (1.0 - 4.0 * (1.0 - uv.y).powi(2)) / 3.0 })
+    // Vec2::new(
+    //     if uv.x > 0.5 {
+    //         (4.0 * uv.x.powi(2) - 1.0) / 3.0
+    //     } else {
+    //         (1.0 - 4.0 * (1.0 - uv.x).powi(2)) / 3.0
+    //     },
+    //     if uv.y > 0.5 {
+    //         (4.0 * uv.y.powi(2) - 1.0) / 3.0
+    //     } else {
+    //         (1.0 - 4.0 * (1.0 - uv.y).powi(2)) / 3.0
+    //     },
+    // )
+
+    let xy = (uv - 0.5) / 0.5;
+    xy / (1.0 + C_SQR - C_SQR * xy * xy).powf(0.5)
 }
 
 /// The global coordinate and identifier of a node.
@@ -53,7 +71,7 @@ impl NodeCoordinate {
         }
     }
 
-    pub fn children(self) -> impl Iterator<Item=Self> {
+    pub fn children(self) -> impl Iterator<Item = Self> {
         (0..4).map(move |index| {
             NodeCoordinate::new(
                 self.side,
@@ -64,7 +82,7 @@ impl NodeCoordinate {
         })
     }
 
-    pub fn neighbours(self) -> impl Iterator<Item=Self> {
+    pub fn neighbours(self) -> impl Iterator<Item = Self> {
         const OFFSETS: [IVec2; 8] = [
             IVec2::new(0, -1),
             IVec2::new(1, 0),
@@ -87,20 +105,20 @@ impl NodeCoordinate {
         format!("{path}/{self}.{extension}")
     }
 
-
     fn neighbour_coordinate(self, neighbour_position: IVec2) -> Self {
         let node_count = Self::node_count(self.lod) as i32;
 
-        #[cfg(feature = "spherical")] {
+        #[cfg(feature = "spherical")]
+        {
             let edge_index = match neighbour_position {
                 IVec2 { x, y }
-                if x < 0 && y < 0
-                    || x < 0 && y >= node_count
-                    || x >= node_count && y < 0
-                    || x >= node_count && y >= node_count =>
-                    {
-                        return Self::INVALID;
-                    }
+                    if x < 0 && y < 0
+                        || x < 0 && y >= node_count
+                        || x >= node_count && y < 0
+                        || x >= node_count && y >= node_count =>
+                {
+                    return Self::INVALID;
+                }
                 IVec2 { x, .. } if x < 0 => 1,
                 IVec2 { y, .. } if y < 0 => 2,
                 IVec2 { x, .. } if x >= node_count => 3,
@@ -135,7 +153,8 @@ impl NodeCoordinate {
             Self::new(neighbour_side, self.lod, x, y)
         }
 
-        #[cfg(not(feature = "spherical"))] {
+        #[cfg(not(feature = "spherical"))]
+        {
             if neighbour_position.x < 0
                 || neighbour_position.y < 0
                 || neighbour_position.x >= node_count
@@ -159,7 +178,6 @@ impl fmt::Display for NodeCoordinate {
         write!(f, "{}_{}_{}_{}", self.side, self.lod, self.x, self.y)
     }
 }
-
 
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
@@ -240,7 +258,7 @@ impl UVCoordinate {
                 5 => Vec3::new(uv.y, -1.0, uv.x),
                 _ => unreachable!(),
             }
-                .normalize()
+            .normalize()
         }
 
         #[cfg(not(feature = "spherical"))]
@@ -264,7 +282,9 @@ impl UVCoordinate {
     }
 
     #[cfg(not(feature = "spherical"))]
-    pub(crate) fn project_to_side(self, _side: u32) -> Self { self }
+    pub(crate) fn project_to_side(self, _side: u32) -> Self {
+        self
+    }
 }
 
 #[cfg(feature = "spherical")]

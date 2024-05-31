@@ -46,6 +46,7 @@
 pub mod big_space;
 pub mod debug;
 pub mod formats;
+pub mod math;
 pub mod plugin;
 pub mod preprocess;
 pub mod render;
