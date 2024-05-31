@@ -1,6 +1,6 @@
 #define_import_path bevy_terrain::bindings
 
-#import bevy_terrain::types::{TerrainViewConfig, TerrainConfig, QuadtreeEntry, Tile, AttachmentConfig}
+#import bevy_terrain::types::{TerrainViewConfig, TerrainConfig, QuadtreeEntry, Tile, AttachmentConfig, ModelViewApproximation}
 
 // terrain bindings
 @group(1) @binding(1)
@@ -30,6 +30,8 @@ var attachment7_atlas: texture_2d_array<f32>;
 @group(2) @binding(0)
 var<uniform> view_config: TerrainViewConfig;
 @group(2) @binding(1)
-var<storage> quadtree: array<QuadtreeEntry>;
+var<uniform> model_view_approximation: ModelViewApproximation;
 @group(2) @binding(2)
+var<storage> quadtree: array<QuadtreeEntry>;
+@group(2) @binding(3)
 var<storage> tiles: array<Tile>;

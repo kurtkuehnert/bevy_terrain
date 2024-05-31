@@ -62,7 +62,7 @@ impl Default for TerrainViewConfig {
             approximate_height: 0.0,
             quadtree_size: 8,
             tile_count: 1000000,
-            refinement_count: 20,
+            refinement_count: 30,
             grid_size: 32,
             load_distance: 3.0,
             morph_distance: 8.0,

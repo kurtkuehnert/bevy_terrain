@@ -10,7 +10,7 @@ const F0 = 0u;
 const F1 = 1u;
 const PS = 2u;
 const PT = 3u;
-const C  = 0.87 * 0.87;
+const C_SQR = 0.87 * 0.87;
 
 #ifdef SPHERICAL
 const SIDE_COUNT = 6u;
@@ -22,15 +22,15 @@ fn sphere_to_cube(xy: vec2<f32>) -> vec2<f32> {
     var uv: vec2<f32>;
 
     // s2 quadtratic as per https://docs.s2cell.aliddell.com/en/stable/s2_concepts.html#st
-    if (xy.x > 0.0) { uv.x =       0.5 * sqrt(1.0 + 3.0 * xy.x); }
-    else            { uv.x = 1.0 - 0.5 * sqrt(1.0 - 3.0 * xy.x); }
-
-    if (xy.y > 0.0) { uv.y =       0.5 * sqrt(1.0 + 3.0 * xy.y); }
-    else            { uv.y = 1.0 - 0.5 * sqrt(1.0 - 3.0 * xy.y); }
+    // if (xy.x > 0.0) { uv.x =       0.5 * sqrt(1.0 + 3.0 * xy.x); }
+    // else            { uv.x = 1.0 - 0.5 * sqrt(1.0 - 3.0 * xy.x); }
+//
+    // if (xy.y > 0.0) { uv.y =       0.5 * sqrt(1.0 + 3.0 * xy.y); }
+    // else            { uv.y = 1.0 - 0.5 * sqrt(1.0 - 3.0 * xy.y); }
 
     // algebraic sigmoid c = 0.87 as per https://marlam.de/publications/cubemaps/lambers2019cubemaps.pdf
-    // uv = 0.5 * xy + 0.5;
-    // uv *= sqrt((1 + C) / (1 + C * uv * uv));
+    uv = xy * sqrt((1.0 + C_SQR) / (1.0 + C_SQR * xy * xy));
+    uv = 0.5 * xy + 0.5;
 
     return uv;
 }
@@ -39,25 +39,26 @@ fn cube_to_sphere(uv: vec2<f32>) -> vec2<f32> {
     var xy: vec2<f32>;
 
     // s2 quadtratic as per https://docs.s2cell.aliddell.com/en/stable/s2_concepts.html#st
-    if (uv.x > 0.5) { xy.x =       (4.0 * pow(uv.x, 2.0) - 1.0) / 3.0; }
-    else            { xy.x = (1.0 - 4.0 * pow(1.0 - uv.x, 2.0)) / 3.0; }
-
-    if (uv.y > 0.5) { xy.y =       (4.0 * pow(uv.y, 2.0) - 1.0) / 3.0; }
-    else            { xy.y = (1.0 - 4.0 * pow(1.0 - uv.y, 2.0)) / 3.0; }
+    // if (uv.x > 0.5) { xy.x =       (4.0 * pow(uv.x, 2.0) - 1.0) / 3.0; }
+    // else            { xy.x = (1.0 - 4.0 * pow(1.0 - uv.x, 2.0)) / 3.0; }
+//
+    // if (uv.y > 0.5) { xy.y =       (4.0 * pow(uv.y, 2.0) - 1.0) / 3.0; }
+    // else            { xy.y = (1.0 - 4.0 * pow(1.0 - uv.y, 2.0)) / 3.0; }
 
     // algebraic sigmoid c = 0.87 as per https://marlam.de/publications/cubemaps/lambers2019cubemaps.pdf
-    // xy = 2 * uv - 1;
-    // xy /= sqrt(1 + C - C * xy * xy);
+
+    xy = (uv - 0.5) / 0.5;
+    xy = xy / sqrt(1.0 + C_SQR - C_SQR * xy * xy);
 
     return xy;
 }
 
-fn local_to_world_position(local_position: vec3<f32>) -> vec4<f32> {
-    return affine_to_square(mesh[0].model) * vec4<f32>(local_position, 1.0);
+fn local_to_world_position(local_position: vec3<f32>) -> vec3<f32> {
+    return (affine_to_square(mesh[0].model) * vec4<f32>(local_position, 1.0)).xyz;
 }
 
-fn world_to_clip_position(world_position: vec4<f32>) -> vec4<f32> {
-    return view.view_proj * world_position;
+fn world_to_clip_position(world_position: vec3<f32>) -> vec4<f32> {
+    return view.view_proj * vec4<f32>(world_position, 1.0);
 }
 
 fn compute_morph(view_distance: f32, lod: u32) -> f32 {
