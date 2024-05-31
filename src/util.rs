@@ -6,20 +6,15 @@ use bevy::{
     },
 };
 use itertools::Itertools;
-use std::{
-    marker::PhantomData,
-    ops::Deref,
-    fmt::Debug,
-};
+use std::{fmt::Debug, marker::PhantomData, ops::Deref};
 
 pub trait CollectArray: Iterator {
     fn collect_array<const T: usize>(self) -> [Self::Item; T]
-        where
-            Self: Sized, <Self as Iterator>::Item: Debug
+    where
+        Self: Sized,
+        <Self as Iterator>::Item: Debug,
     {
-        self.collect_vec()
-            .try_into()
-            .unwrap()
+        self.collect_vec().try_into().unwrap()
     }
 }
 
@@ -76,6 +71,7 @@ impl Scratch {
 
 pub struct StaticBuffer<T> {
     buffer: Buffer,
+    value: Option<T>,
     scratch: Scratch,
     _marker: PhantomData<T>,
 }
@@ -96,7 +92,8 @@ impl<T> StaticBuffer<T> {
 
         Self {
             buffer,
-            scratch: Scratch::None,
+            value: None,
+            scratch: Scratch::new(usage),
             _marker: PhantomData,
         }
     }
@@ -121,6 +118,7 @@ impl<T: ShaderType + Default> StaticBuffer<T> {
 
         Self {
             buffer,
+            value: None,
             scratch: Scratch::new(usage),
             _marker: PhantomData,
         }
@@ -145,15 +143,26 @@ impl<T: ShaderType + WriteInto> StaticBuffer<T> {
 
         Self {
             buffer,
+            value: None,
             scratch,
             _marker: PhantomData,
         }
     }
 
-    pub fn update(&mut self, queue: &RenderQueue, value: &T) {
-        self.scratch.write(&value);
+    pub fn value(&self) -> &T {
+        self.value.as_ref().unwrap()
+    }
 
-        queue.write_buffer(&self.buffer, 0, self.scratch.contents());
+    pub fn set_value(&mut self, value: T) {
+        self.value = Some(value);
+    }
+
+    pub fn update(&mut self, queue: &RenderQueue) {
+        if let Some(value) = &self.value {
+            self.scratch.write(value);
+
+            queue.write_buffer(&self.buffer, 0, self.scratch.contents());
+        }
     }
 }
 

@@ -29,7 +29,7 @@ impl DebugCameraBundle {
             camera: Camera3dBundle {
                 transform: Transform::from_translation(translation).looking_to(Vec3::X, Vec3::Y),
                 projection: PerspectiveProjection {
-                    near: 0.001,
+                    near: 0.000001,
                     ..default()
                 }
                 .into(),

@@ -92,7 +92,6 @@ impl From<&TerrainConfig> for TerrainConfigUniform {
 }
 
 pub struct TerrainData {
-    mesh_uniform: MeshUniform,
     mesh_buffer: StaticBuffer<MeshUniform>,
     pub(crate) terrain_bind_group: BindGroup,
 }
@@ -104,19 +103,10 @@ impl TerrainData {
         config_uniform: TerrainConfigUniform,
         gpu_node_atlas: &GpuNodeAtlas,
     ) -> Self {
-        let mesh_uniform = MeshUniform {
-            transform: default(),
-            previous_transform: default(),
-            lightmap_uv_rect: default(),
-            inverse_transpose_model_a: default(),
-            inverse_transpose_model_b: 0.0,
-            flags: 0,
-        };
-
-        let mesh_buffer = StaticBuffer::create(
+        let mesh_buffer = StaticBuffer::empty_sized(
             None,
             device,
-            &mesh_uniform,
+            MeshUniform::SHADER_SIZE.get(),
             BufferUsages::STORAGE | BufferUsages::COPY_DST,
         );
         let terrain_config_buffer =
@@ -165,7 +155,6 @@ impl TerrainData {
         );
 
         Self {
-            mesh_uniform,
             mesh_buffer,
             terrain_bind_group,
         }
@@ -205,7 +194,7 @@ impl TerrainData {
             let mesh_uniform = MeshUniform::new(&mesh_transforms, None);
 
             let terrain_data = terrain_data.get_mut(&terrain).unwrap();
-            terrain_data.mesh_uniform = mesh_uniform;
+            terrain_data.mesh_buffer.set_value(mesh_uniform);
         }
     }
 
@@ -214,9 +203,7 @@ impl TerrainData {
         mut terrain_data: ResMut<TerrainComponents<TerrainData>>,
     ) {
         for terrain_data in &mut terrain_data.0.values_mut() {
-            terrain_data
-                .mesh_buffer
-                .update(&queue, &terrain_data.mesh_uniform);
+            terrain_data.mesh_buffer.update(&queue);
         }
     }
 }

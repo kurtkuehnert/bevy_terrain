@@ -1,3 +1,4 @@
+use crate::math::{generate_model_view_approximation, ModelViewApproximation};
 use crate::{
     render::{
         compute_pipelines::{TerrainComputeLabel, TerrainComputeNode, TerrainComputePipelines},
@@ -34,9 +35,11 @@ impl Plugin for TerrainPlugin {
         .init_resource::<InternalShaders>()
         .init_resource::<TerrainViewComponents<Quadtree>>()
         .init_resource::<TerrainViewComponents<TerrainViewConfig>>()
+        .init_resource::<TerrainViewComponents<ModelViewApproximation>>()
         .add_systems(
             Last,
             (
+                generate_model_view_approximation,
                 Quadtree::compute_requests,
                 NodeAtlas::update,
                 Quadtree::adjust_to_node_atlas,
