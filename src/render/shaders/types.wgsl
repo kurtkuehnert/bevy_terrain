@@ -34,9 +34,14 @@ struct Parameters {
     final_index: atomic<i32>,
 }
 
-struct UVCoordinate {
+struct Coordinate {
     side: u32,
     uv: vec2<f32>,
+}
+
+struct Morph {
+    offset: vec2<f32>,
+    ratio: f32,
 }
 
 struct Blend {
@@ -50,7 +55,7 @@ struct QuadtreeEntry {
 }
 
 struct LookupInfo {
-    coordinate: UVCoordinate,
+    coordinate: Coordinate,
     view_distance: f32,
     lod: u32,
     blend_ratio: f32,

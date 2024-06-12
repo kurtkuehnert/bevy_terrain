@@ -1,6 +1,6 @@
-#import bevy_terrain::types::{TerrainConfig, TerrainViewConfig, Tile, Parameters, NodeLookup, UVCoordinate}
+#import bevy_terrain::types::{TerrainConfig, TerrainViewConfig, Tile, Parameters, NodeLookup, Coordinate}
 #import bevy_terrain::bindings::config
-#import bevy_terrain::functions::{local_position_from_coordinate, tile_coordinate, tile_size}
+#import bevy_terrain::functions::{cube_to_sphere, compute_coordinate, tile_size}
 
 struct CullingData {
     world_position: vec3<f32>,
@@ -28,6 +28,30 @@ fn morph_threshold_distance(tile: Tile) -> f32 {
     return view_config.morph_distance * tile_size(tile.lod);
 }
 
+
+// Todo: replace this
+fn local_position_from_coordinate(coordinate: Coordinate, height: f32) -> vec3<f32> {
+#ifdef SPHERICAL
+    let xy = cube_to_sphere(coordinate.uv);
+
+    var local_position: vec3<f32>;
+
+    switch (coordinate.side) {
+        case 0u:      { local_position = vec3( -1.0, -xy.y,  xy.x); }
+        case 1u:      { local_position = vec3( xy.x, -xy.y,   1.0); }
+        case 2u:      { local_position = vec3( xy.x,   1.0,  xy.y); }
+        case 3u:      { local_position = vec3(  1.0, -xy.x,  xy.y); }
+        case 4u:      { local_position = vec3( xy.y, -xy.x,  -1.0); }
+        case 5u:      { local_position = vec3( xy.y,  -1.0,  xy.x); }
+        case default: {}
+    }
+
+    return (1.0 + height) * normalize(local_position);
+#else
+    return vec3<f32>(coordinate.uv.x - 0.5, 0.0, coordinate.uv.y - 0.5);
+#endif
+}
+
 fn child_index() -> i32 {
     return atomicAdd(&parameters.child_index, parameters.counter);
 }
@@ -44,7 +68,7 @@ fn should_be_divided(tile: Tile) -> bool {
     var min_view_distance = 3.40282347E+38; // f32::MAX
 
     for (var i: u32 = 0u; i < 4u; i = i + 1u) {
-        let corner_coordinate = tile_coordinate(tile, vec2<f32>(f32(i & 1u), f32(i >> 1u & 1u)));
+        let corner_coordinate = compute_coordinate(tile, vec2<f32>(f32(i & 1u), f32(i >> 1u & 1u)));
         let corner_local_position = local_position_from_coordinate(corner_coordinate, view_config.approximate_height);
         let corner_view_distance = distance(corner_local_position, view_config.view_local_position);
 
