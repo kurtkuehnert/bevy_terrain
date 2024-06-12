@@ -8,92 +8,70 @@
 #import bevy_pbr::pbr_functions::{calculate_view, apply_pbr_lighting}
 
 #import bevy_terrain::bindings::{view_config, tiles, model_view_approximation}
-#import bevy_terrain::types::{Blend, UVCoordinate, LookupInfo, Tile}
-#import bevy_terrain::functions::{tile_size, coordinate_from_local_position, grid_offset, tile_coordinate, compute_morph, local_position_from_coordinate, compute_blend, quadtree_lod, local_to_world_position, world_to_clip_position}
+#import bevy_terrain::types::{Blend, Coordinate, LookupInfo, Tile, Morph}
+#import bevy_terrain::functions::{tile_size, compute_coordinate, compute_local_position, compute_relative_coordinate, compute_relative_position, compute_grid_offset, compute_morph, compute_blend, local_to_world_position, world_to_clip_position}
 #import bevy_terrain::attachments::sample_height
 #import bevy_terrain::debug::{show_tiles, index_color}
 #import bevy_pbr::mesh_view_bindings::view
 
-@group(3) @binding(0)
-var gradient: texture_1d<f32>;
-@group(3) @binding(1)
-var gradient_sampler: sampler;
-@group(3) @binding(2)
-var<uniform> super_elevation: f32;
-
-fn sample_color_grad(lookup: NodeLookup) -> vec4<f32> {
-    let height = sample_height_grad(lookup);
-
-    var color: vec4<f32>;
-
-    if (height < 0.0) {
-        color = textureSampleLevel(gradient, gradient_sampler, mix(0.0, 0.075, pow(height / config.min_height, 0.25)), 0.0);
-    }
-    else {
-        color = textureSampleLevel(gradient, gradient_sampler, mix(0.09, 1.0, pow(height / config.max_height * 2.0, 1.0)), 0.0);
-    }
-
-    return color;
+struct VertexInfo {
+    world_position: vec3<f32>,
+    world_normal: vec3<f32>,
+    view_distance: f32,
 }
 
-fn relative_coordinate(tile: Tile, vertex_offset: vec2<f32>) -> UVCoordinate {
-    let side = model_view_approximation.sides[tile.side];
+fn default_precision(info: ptr<function, VertexInfo>, tile: Tile, grid_offset: vec2<f32>) {
+    let approximate_coordinate     = compute_coordinate(tile, grid_offset);
+    let approximate_local_position = compute_local_position(approximate_coordinate);
+    let approximate_world_position = local_to_world_position(approximate_local_position) + view_config.approximate_height * approximate_local_position;
+    var approximate_view_distance  = distance(approximate_world_position, view.world_position);
 
-    let lod_difference = tile.lod - u32(model_view_approximation.origin_lod);
-    let origin_xy = vec2<i32>(side.origin_xy.x << lod_difference, side.origin_xy.y << lod_difference);
-    let tile_offset = vec2<i32>(tile.xy) - origin_xy;
-    let relative_st = (vec2<f32>(tile_offset) + vertex_offset) * tile_size(tile.lod) + side.delta_relative_st;
+#ifdef MORPH
+    var morph      = compute_morph(approximate_view_distance, tile.lod, grid_offset);
+    let coordinate = compute_coordinate(tile, morph.offset);
+#else
+    let coordinate = approximate_coordinate;
+#endif
 
-    return UVCoordinate(tile.side, relative_st);
+    let local_position = compute_local_position(coordinate);
+    (*info).world_position = local_to_world_position(local_position);
+    (*info).world_normal   = normalize(local_position);
+    (*info).view_distance = approximate_view_distance;
 }
 
-fn approximate_relative_position(relative_coordinate: UVCoordinate) -> vec3<f32> {
-    let params = model_view_approximation.sides[relative_coordinate.side];
+fn high_precision(info: ptr<function, VertexInfo>, tile: Tile, grid_offset: vec2<f32>) {
+    #ifdef TEST1
+    let threshold_distance = 50000.0;
+    #else
+    let threshold_distance = 0.0;
+    #endif
 
-    let s = relative_coordinate.uv.x;
-    let t = relative_coordinate.uv.y;
-    let c = params.c;
-    let c_s = params.c_s;
-    let c_t = params.c_t;
-    let c_ss = params.c_ss;
-    let c_st = params.c_st;
-    let c_tt = params.c_tt;
+    if ((*info).view_distance < threshold_distance) {
+        let approximate_relative_coordinate = compute_relative_coordinate(tile, grid_offset);
+        let approximate_relative_position   = compute_relative_position(approximate_relative_coordinate);
+        let approximate_view_distance           = length(approximate_relative_position);
 
-    return c + c_s * s + c_t * t + c_ss * s * s + c_st * s * t + c_tt * t * t;
-}
+    #ifdef MORPH
+        let morph = compute_morph(approximate_view_distance, tile.lod, grid_offset);
+        let relative_coordinate = compute_relative_coordinate(tile, morph.offset);
+    #else
+        let relative_coordinate = approximate_relative_coordinate;
+    #endif
 
-fn show_approximation_origin(coordinate: UVCoordinate) -> vec4<f32> {
-    let origin_lod = u32(model_view_approximation.origin_lod);
-    let side = model_view_approximation.sides[coordinate.side];
-
-    var color = vec4<f32>(0.0);
-
-    let origin_tile = Tile(coordinate.side, origin_lod, vec2<u32>(side.origin_xy));
-    let origin_coordinate = vec2<f32>(side.origin_xy) * tile_size(origin_lod);
-    let camera_coordinate = UVCoordinate(coordinate.side, origin_coordinate - side.delta_relative_st);
-
-    if (distance(coordinate.uv, origin_coordinate) < 0.01) {
-        color += vec4<f32>(1.0, 0.0, 0.0, 1.0);
+        let relative_position  = compute_relative_position(relative_coordinate);
+        (*info).world_position = view.world_position + relative_position;
+        (*info).view_distance  = approximate_view_distance;
     }
-    if (distance(coordinate.uv, camera_coordinate.uv) < 0.001) {
-        color += vec4<f32>(0.0, 1.0, 0.0, 1.0);
-    }
-
-    return color;
 }
 
-fn show_error(tile: Tile, vertex_offset: vec2<f32>) -> vec4<f32> {
-    let relative_coordinate = relative_coordinate(tile, vertex_offset);
-    let relative_position = approximate_relative_position(relative_coordinate);
+fn apply_height(info: ptr<function, VertexInfo>, blend: Blend) {
+    // Todo: apply height to world_position
+    let height = 0.0;
 
-    var color = vec4<f32>(0.0);
+    let world_position = (*info).world_position + height * (*info).world_normal;
 
-    color = index_color(u32(log2(length(relative_position))));
-
-    color = vec4<f32>(relative_coordinate.uv, 0.0, 1.0);
-    color = vec4<f32>(length(relative_position) / 50.0, 0.0, 0.0, 1.0);
-
-    return color;
+    (*info).world_position = world_position;
+    (*info).view_distance  = distance(world_position, view.world_position);
 }
 
 @vertex
@@ -102,88 +80,31 @@ fn vertex(input: VertexInput) -> VertexOutput {
     let grid_index = input.vertex_index % view_config.vertices_per_tile;
 
     let tile        = tiles[tile_index];
-    let grid_offset = grid_offset(grid_index);
+    let grid_offset = compute_grid_offset(grid_index);
 
-    let approximate_coordinate     = tile_coordinate(tile, vec2<f32>(grid_offset) / view_config.grid_size);
-    let approximate_local_position = local_position_from_coordinate(approximate_coordinate, view_config.approximate_height);
-    var approximate_distance       = distance(approximate_local_position, view_config.view_local_position);
+    var info: VertexInfo;
 
-#ifdef MORPH
-    var morph_ratio  = compute_morph(approximate_distance, tile.lod);
-    var morph_offset = mix(vec2<f32>(grid_offset), vec2<f32>(grid_offset & vec2<u32>(4294967294u)), morph_ratio);
-    let coordinate   = tile_coordinate(tile, morph_offset / view_config.grid_size);
-#else
-    let coordinate   = approximate_coordinate;
-#endif
+    default_precision(&info, tile, grid_offset);
+    high_precision(&info, tile, grid_offset);
 
-    let local_position = local_position_from_coordinate(coordinate, 0.0);
-    let world_normal = normalize(local_position);
+    let blend = compute_blend(info.view_distance);
 
-    var view_distance = distance(view.world_position, local_to_world_position(local_position).xyz);
+    // terrain data sample hook
+    apply_height(&info, blend);
 
-    var world_position = vec3<f32>(0.0);
-
-    #ifdef TEST1
-    let threshold_distance = 50000.0;
-    #else
-    let threshold_distance = 0.0;
-    #endif
-
-    if (view_distance < threshold_distance) {
-        let offset              = vec2<f32>(grid_offset) / view_config.grid_size;
-        var relative_coordinate = relative_coordinate(tile, offset);
-        var relative_position   = approximate_relative_position(relative_coordinate);
-        approximate_distance    = length(relative_position) / 6371000.0;
-
-    #ifdef MORPH
-        morph_ratio  = compute_morph(approximate_distance, tile.lod);
-        morph_offset = mix(vec2<f32>(grid_offset), vec2<f32>(grid_offset & vec2<u32>(4294967294u)), morph_ratio) / view_config.grid_size;
-        relative_coordinate = relative_coordinate(tile, morph_offset);
-    #endif
-
-        relative_position = approximate_relative_position(relative_coordinate);
-        world_position = view.world_position + relative_position;
-    } else {
-        world_position = local_to_world_position(local_position);
-    }
-
-    // Todo: apply height to world_position
-    let height = 0.0;
-    world_position       += height * world_normal;
-    view_distance         = distance(world_position, view.world_position) / 6371000.0;
-    let fragment_position = world_to_clip_position(world_position);
-
-
-#ifdef QUADTREE_LOD
-    let blend = Blend(quadtree_lod(coordinate), 0.0);
-#else
-    let blend = compute_blend(approximate_distance);
-#endif
+    let clip_position  = world_to_clip_position(info.world_position);
 
     var output: VertexOutput;
-
-
-
-    output.side              = coordinate.side;
-    output.uv                = coordinate.uv;
-    output.view_distance     = view_distance;
-    output.world_normal      = world_normal;
-    output.world_position    = vec4<f32>(world_position, 1.0);
-    output.fragment_position = fragment_position;
+    output.side              = tile.side;
+    output.uv                = grid_offset;
+    output.view_distance     = info.view_distance;
+    output.world_normal      = info.world_normal;
+    output.world_position    = vec4<f32>(info.world_position, 1.0);
+    output.clip_position     = clip_position;
 
 #ifdef SHOW_TILES
-    output.debug_color       = show_tiles(view_distance, input.vertex_index);
+    output.debug_color       = show_tiles(info.view_distance, input.vertex_index);
 #endif
-
-    // let w1 = local_to_world_position(local_position);
-    // let w2 = view.world_position + relative_position;
-//
-    // var error = 0.0;
-    // error = distance(w1, w2)/ length(w1);
-    // error *= 5000.0;
-//
-    // // output.debug_color = show_error(tile, vec2<f32>(grid_offset) / view_config.grid_size);
-    // output.debug_color = vec4<f32>(error, 0.0, 0.0, 1.0);
 
     return output;
 }
@@ -194,15 +115,15 @@ fn fragment(input: FragmentInput) -> FragmentOutput {
 
     let lookup = lookup_node(info, 0u);
     var normal = sample_normal_grad(lookup, input.world_normal, input.side);
-    var color  = sample_color_grad(lookup);
 
     if (info.blend_ratio > 0.0) {
         let lookup2 = lookup_node(info, 1u);
         normal      = mix(normal, sample_normal_grad(lookup2, input.world_normal, input.side), info.blend_ratio);
-        color       = mix(color,  sample_color_grad(lookup2),                                  info.blend_ratio);
     }
 
     // color = show_approximation_origin(info.coordinate) * 5.0;
+
+    let color = vec4<f32>(0.5);
 
     return fragment_output(input, color, normal, lookup);
 }
