@@ -1,6 +1,7 @@
 #define_import_path bevy_terrain::debug
 
-#import bevy_terrain::types::{Coordinate, Blend}
+#import bevy_terrain::vertex::{VertexInfo}
+#import bevy_terrain::types::{Coordinate, NodeLookup, Blend}
 #import bevy_terrain::bindings::{config, view_config, tiles, attachments}
 #import bevy_terrain::functions::{compute_morph, compute_blend, quadtree_lod, inside_square, node_count, node_coordinate, coordinate_from_local_position, tile_size}
 
@@ -17,48 +18,40 @@ fn index_color(index: u32) -> vec4<f32> {
     return COLOR_ARRAY[index % 6u];
 }
 
-fn quadtree_outlines(coordinate: Coordinate, lod: u32) -> f32 {
-    let node_coordinate = node_coordinate(coordinate, lod) % 1.0;
-    let thickness       = 0.02;
-    let outer           = inside_square(node_coordinate, vec2<f32>(-0.001)         , 1.001);
-    let inner           = inside_square(node_coordinate, vec2<f32>(0.0) + thickness, 1.0 - 2.0 * thickness);
+fn quadtree_outlines(lookup: NodeLookup) -> f32 {
+    let thickness = 0.02;
 
-    return outer - inner;
+    return 1.0 - inside_square(lookup.uv, vec2<f32>(thickness), 1.0 - 2.0 * thickness);
 }
 
-fn show_tiles(view_distance: f32, vertex_index: u32) -> vec4<f32> {
-    let tile_index = vertex_index / view_config.vertices_per_tile;
-    let tile = tiles[tile_index];
-
+fn show_tiles(info: ptr<function, VertexInfo>) -> vec4<f32> {
     var color: vec4<f32>;
 
-    if ((tile.xy.x + tile.xy.y) % 2u == 0u) { color = vec4<f32>(0.5, 0.5, 0.5, 1.0); }
-    else                                    { color = vec4<f32>(0.1, 0.1, 0.1, 1.0); }
+    if (((*info).tile.xy.x + (*info).tile.xy.y) % 2u == 0u) { color = vec4<f32>(0.5, 0.5, 0.5, 1.0); }
+    else                                                    { color = vec4<f32>(0.1, 0.1, 0.1, 1.0); }
 
-    color = mix(color, index_color(tile.lod), 0.5);
+    color = mix(color, index_color((*info).tile.lod), 0.5);
 
 #ifdef MORPH
-    let morph = compute_morph(view_distance, tile.lod, vec2<f32>(0.0));
+    let morph = compute_morph((*info).view_distance, (*info).tile.lod, vec2<f32>(0.0));
     color     = mix(color, vec4<f32>(1.0), 0.5 * morph.ratio);
 #endif
 
 #ifdef SPHERICAL
-    color = mix(color, index_color(tile.side), 0.5);
+    color = mix(color, index_color((*info).tile.side), 0.5);
 #endif
 
     return color;
 }
 
-fn show_lod(coordinate: Coordinate, view_distance: f32, lod: u32) -> vec4<f32> {
-#ifdef QUADTREE_LOD
-    let blend = Blend(lod, 0.0);
-#else
-    let blend = compute_blend(view_distance);
-#endif
+fn show_lod(blend: Blend, lookup: NodeLookup) -> vec4<f32> {
+    let is_outline = quadtree_outlines(lookup);
+    var color      = index_color(lookup.lod);
 
-    let is_outline = quadtree_outlines(coordinate, blend.lod);
-    var color      = index_color(blend.lod);
-    color          = mix(color, vec4<f32>(1.0), 0.5 * blend.ratio);
+    if (blend.lod == lookup.lod) {
+        color          = mix(color, vec4<f32>(1.0), 0.5 * blend.ratio);
+    }
+
     color          = mix(color, 0.1 * color, is_outline);
 
     return color;

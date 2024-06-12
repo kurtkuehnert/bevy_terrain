@@ -67,7 +67,7 @@ struct LookupInfo {
 struct NodeLookup {
     index: u32,
     lod: u32,
-    coordinate: vec2<f32>,
+    uv: vec2<f32>,
     ddx: vec2<f32>,
     ddy: vec2<f32>,
 }
