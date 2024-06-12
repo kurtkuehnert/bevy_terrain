@@ -1,7 +1,7 @@
 #define_import_path bevy_terrain::fragment
 
-#import bevy_terrain::types::{LookupInfo, NodeLookup, Coordinate, Blend}
-#import bevy_terrain::functions::{compute_blend, lookup_node, quadtree_lod}
+#import bevy_terrain::types::{Tile, NodeLookup, Coordinate, Blend}
+#import bevy_terrain::functions::{compute_blend, lookup_node}
 #import bevy_terrain::attachments::{sample_normal_grad, sample_color_grad}
 #import bevy_terrain::debug::{show_lod, show_quadtree, show_pixels}
 #import bevy_pbr::pbr_types::{PbrInput, pbr_input_new}
@@ -10,8 +10,8 @@
 struct FragmentInput {
     @builtin(front_facing)   is_front: bool,
     @builtin(position)       clip_position: vec4<f32>,
-    @location(0)             side: u32,
-    @location(1)             uv: vec2<f32>,
+    @location(0)             tile_index: u32,
+    @location(1)             offset: vec2<f32>,
     @location(2)             view_distance: f32,
     @location(3)             world_normal: vec3<f32>,
     @location(4)             world_position: vec4<f32>,
@@ -22,21 +22,18 @@ struct FragmentOutput {
     @location(0)             color: vec4<f32>
 }
 
-fn fragment_lookup_info(input: FragmentInput) -> LookupInfo {
-    let coordinate    = Coordinate(input.side, input.uv);
-    let ddx           = dpdx(input.uv);
-    let ddy           = dpdy(input.uv);
-    let view_distance = input.view_distance;
-
-#ifdef QUADTREE_LOD
-    let blend = Blend(quadtree_lod(coordinate), 0.0);
-#else
-    let blend = compute_blend(view_distance);
-#endif
-
-    return LookupInfo(coordinate, view_distance, blend.lod, blend.ratio, ddx, ddy);
+struct FragmentInfo {
+    tile: Tile,
+    offset: vec2<f32>,
+    blend: Blend,
+    clip_position: vec4<f32>,
+    world_normal: vec3<f32>,
+    world_position: vec4<f32>,
+    debug_color: vec4<f32>,
+    color: vec4<f32>,
+    normal: vec3<f32>,
 }
-
+/*
 fn fragment_output(input: FragmentInput, color: vec4<f32>, normal: vec3<f32>, lookup: NodeLookup) -> FragmentOutput {
     var output: FragmentOutput;
 
@@ -80,6 +77,7 @@ fn fragment_output(input: FragmentInput, color: vec4<f32>, normal: vec3<f32>, lo
     return output;
 }
 
+/*
 @fragment
 fn default_fragment(input: FragmentInput) -> FragmentOutput {
     let info = fragment_lookup_info(input);
@@ -96,3 +94,5 @@ fn default_fragment(input: FragmentInput) -> FragmentOutput {
 
     return fragment_output(input, color, normal, lookup);
 }
+
+*/
