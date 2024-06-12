@@ -171,21 +171,26 @@ fn quadtree_origin(quadtree_coordinate: Coordinate, lod: u32) -> vec2<f32> {
 }
 
 
-fn lookup_node(info: LookupInfo, lod_offset: u32) -> NodeLookup {
-    let quadtree_lod           = info.lod - lod_offset;
-    let quadtree_side          = info.coordinate.side;
-    let quadtree_coordinate    = vec2<u32>(node_coordinate(info.coordinate, quadtree_lod)) % view_config.quadtree_size;
-    let quadtree_index         = (((SIDE_COUNT                + quadtree_side        ) *
-                                    config.lod_count          + quadtree_lod         ) *
-                                    view_config.quadtree_size + quadtree_coordinate.x) *
-                                    view_config.quadtree_size + quadtree_coordinate.y;
-    let quadtree_entry         = quadtree[quadtree_index];
+fn lookup_node(tile: Tile, grid_offset: vec2<f32>, blend: Blend, lod_offset: u32) -> NodeLookup {
+    let quadtree_lod        = blend.lod - lod_offset;
+    let quadtree_side       = tile.side;
+    let quadtree_coordinate = vec2<u32>(tile.xy.x >> (tile.lod - quadtree_lod),
+                                        tile.xy.y >> (tile.lod - quadtree_lod)) % view_config.quadtree_size;
+    let quadtree_index      = (((                            quadtree_side        ) *
+                                 config.lod_count          + quadtree_lod         ) *
+                                 view_config.quadtree_size + quadtree_coordinate.x) *
+                                 view_config.quadtree_size + quadtree_coordinate.y;
+    let quadtree_entry      = quadtree[quadtree_index];
+
+
+    let tiles_per_node = 1u << (tile.lod - quadtree_entry.atlas_lod);
+    let atlas_uv = (vec2<f32>(tile.xy % tiles_per_node) + grid_offset) / f32(tiles_per_node);
 
     var lookup: NodeLookup;
     lookup.lod                 = quadtree_entry.atlas_lod;
     lookup.index               = quadtree_entry.atlas_index;
-    lookup.coordinate          = node_coordinate(info.coordinate, lookup.lod) % 1.0;
-    lookup.ddx                 = node_count(lookup.lod) * info.ddx;
-    lookup.ddy                 = node_count(lookup.lod) * info.ddy;
+    lookup.uv                  = atlas_uv;
+    lookup.ddx                 = vec2<f32>(0.0);
+    lookup.ddy                 = vec2<f32>(0.0);
     return lookup;
 }

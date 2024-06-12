@@ -6,8 +6,8 @@ use bevy_terrain::prelude::*;
 
 const PATH: &str = "terrains/spherical";
 const RADIUS: f64 = 6371000.0;
-const MIN_HEIGHT: f32 = -12.0 / 6371.0;
-const MAX_HEIGHT: f32 = 9.0 / 6371.0;
+const MIN_HEIGHT: f32 = -12000.0;
+const MAX_HEIGHT: f32 = 9000.0;
 const SUPER_ELEVATION: f32 = 10.0;
 const TEXTURE_SIZE: u32 = 512;
 const LOD_COUNT: u32 = 16;
@@ -81,14 +81,14 @@ fn setup(
         max_height: MAX_HEIGHT * SUPER_ELEVATION,
         path: PATH.to_string(),
         ..default()
-    };
-    // .add_attachment(AttachmentConfig {
-    //     name: "height".to_string(),
-    //     texture_size: TEXTURE_SIZE,
-    //     border_size: 2,
-    //     mip_level_count: 4,
-    //     format: AttachmentFormat::R16,
-    // });
+    }
+    .add_attachment(AttachmentConfig {
+        name: "height".to_string(),
+        texture_size: TEXTURE_SIZE,
+        border_size: 2,
+        mip_level_count: 4,
+        format: AttachmentFormat::R16,
+    });
 
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
     let view_config = TerrainViewConfig::default();
