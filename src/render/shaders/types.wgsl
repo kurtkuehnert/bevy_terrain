@@ -34,11 +34,6 @@ struct Parameters {
     final_index: atomic<i32>,
 }
 
-struct Coordinate {
-    side: u32,
-    uv: vec2<f32>,
-}
-
 struct Morph {
     offset: vec2<f32>,
     ratio: f32,
@@ -52,15 +47,6 @@ struct Blend {
 struct QuadtreeEntry {
     atlas_index: u32,
     atlas_lod: u32,
-}
-
-struct LookupInfo {
-    coordinate: Coordinate,
-    view_distance: f32,
-    lod: u32,
-    blend_ratio: f32,
-    ddx: vec2<f32>,
-    ddy: vec2<f32>,
 }
 
 // A lookup of a node inside the node atlas based on the view of a quadtree.
