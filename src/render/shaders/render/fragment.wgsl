@@ -1,5 +1,6 @@
 #define_import_path bevy_terrain::fragment
 
+#import bevy_terrain::bindings::{tiles}
 #import bevy_terrain::types::{Tile, NodeLookup, Coordinate, Blend}
 #import bevy_terrain::functions::{compute_blend, lookup_node}
 #import bevy_terrain::attachments::{sample_normal_grad, sample_color_grad}
@@ -33,66 +34,53 @@ struct FragmentInfo {
     color: vec4<f32>,
     normal: vec3<f32>,
 }
-/*
-fn fragment_output(input: FragmentInput, color: vec4<f32>, normal: vec3<f32>, lookup: NodeLookup) -> FragmentOutput {
-    var output: FragmentOutput;
 
-    let coordinate = Coordinate(input.side, input.uv);
+fn fragment_info(input: FragmentInput) -> FragmentInfo{
+    var info: FragmentInfo;
+    info.tile   = tiles[input.tile_index];
+    info.offset = input.offset;
+    info.blend  = compute_blend(input.view_distance);
+    info.clip_position  = input.clip_position;
+    info.world_normal   = input.world_normal;
+    info.world_position = input.world_position;
+    info.debug_color    = input.debug_color;
 
-    output.color = color;
+    return info;
+}
 
+fn fragment_output(info: ptr<function, FragmentInfo>, output: ptr<function, FragmentOutput>, color: vec4<f32>, normal: vec3<f32>) {
 #ifdef LIGHTING
     var pbr_input: PbrInput                 = pbr_input_new();
     pbr_input.material.base_color           = color;
     pbr_input.material.perceptual_roughness = 1.0;
     pbr_input.material.reflectance          = 0.0;
-    pbr_input.frag_coord                    = input.clip_position;
-    pbr_input.world_position                = input.world_position;
-    pbr_input.world_normal                  = input.world_normal;
+    pbr_input.frag_coord                    = (*info).clip_position;
+    pbr_input.world_position                = (*info).world_position;
+    pbr_input.world_normal                  = (*info).world_normal;
     pbr_input.N                             = normal;
-    pbr_input.V                             = calculate_view(input.world_position, pbr_input.is_orthographic);
+    pbr_input.V                             = calculate_view((*info).world_position, pbr_input.is_orthographic);
 
-    output.color = apply_pbr_lighting(pbr_input);
+    (*output).color = apply_pbr_lighting(pbr_input);
 #endif
+}
 
+fn fragment_debug(info: ptr<function, FragmentInfo>, output: ptr<function, FragmentOutput>, lookup: NodeLookup, normal: vec3<f32>) {
 #ifdef SHOW_LOD
-    output.color = show_lod(coordinate, input.view_distance, lookup.lod);
+    (*output).color = show_lod((*info).blend, lookup);
 #endif
 #ifdef SHOW_UV
-    output.color = vec4<f32>(lookup.coordinate, 0.0, 1.0);
+    (*output).color = vec4<f32>(lookup.uv, 0.0, 1.0);
 #endif
 #ifdef SHOW_TILES
-    output.color = input.debug_color;
+    (*output).color = (*info).debug_color;
 #endif
 #ifdef SHOW_QUADTREE
-    output.color = show_quadtree(coordinate);
+    (*output).color = show_quadtree(coordinate);
 #endif
 #ifdef SHOW_PIXELS
-    output.color = mix(output.color, show_pixels(coordinate, lookup.lod), 0.5);
+    (*output).color = mix((*output).color, show_pixels(coordinate, lookup.lod), 0.5);
 #endif
 #ifdef SHOW_NORMALS
-    output.color = vec4<f32>(normal, 1.0);
+    (*output).color = vec4<f32>(normal, 1.0);
 #endif
-
-    return output;
 }
-
-/*
-@fragment
-fn default_fragment(input: FragmentInput) -> FragmentOutput {
-    let info = fragment_lookup_info(input);
-
-    let lookup = lookup_node(info, 0u);
-    var normal = sample_normal_grad(lookup, input.world_normal, input.side);
-    var color  = sample_color_grad(lookup);
-
-    if (info.blend_ratio > 0.0) {
-        let lookup2 = lookup_node(info, 1u);
-        normal      = mix(normal, sample_normal_grad(lookup2, input.world_normal, input.side), info.blend_ratio);
-        color       = mix(color,  sample_color_grad(lookup2),                                  info.blend_ratio);
-    }
-
-    return fragment_output(input, color, normal, lookup);
-}
-
-*/
