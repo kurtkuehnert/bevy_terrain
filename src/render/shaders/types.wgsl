@@ -92,6 +92,5 @@ struct SideParameter {
 
 struct ModelViewApproximation {
     origin_lod: i32,
-    view_rotation: mat4x4<f32>,
     sides: array<SideParameter, 6>,
 }

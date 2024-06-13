@@ -25,7 +25,6 @@ use bytemuck::cast_slice;
 use itertools::iproduct;
 use std::iter;
 
-pub mod coordinates;
 pub mod gpu_node_atlas;
 pub mod gpu_quadtree;
 pub mod node_atlas;
@@ -182,7 +181,7 @@ impl AttachmentData {
                 let mut count = 0;
 
                 for (parent_x, parent_y) in
-                iproduct!(0..2, 0..2).map(|(x, y)| ((child_x << 1) + x, (child_y << 1) + y))
+                    iproduct!(0..2, 0..2).map(|(x, y)| ((child_x << 1) + x, (child_y << 1) + y))
                 {
                     let index = start + parent_y * parent_size + parent_x;
                     let data = data[index] as u32;
