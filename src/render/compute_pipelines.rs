@@ -153,8 +153,8 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
             TerrainComputePipelineId::RefineTiles => {
                 layout = vec![
                     self.culling_data_layout.clone(),
-                    self.refine_tiles_layout.clone(),
                     self.terrain_layout.clone(),
+                    self.refine_tiles_layout.clone(),
                 ];
                 shader = self.refine_tiles_shader.clone();
                 entry_point = "refine_tiles".into();
@@ -162,8 +162,8 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
             TerrainComputePipelineId::PrepareRoot => {
                 layout = vec![
                     self.culling_data_layout.clone(),
-                    self.refine_tiles_layout.clone(),
                     self.terrain_layout.clone(),
+                    self.refine_tiles_layout.clone(),
                     self.prepare_indirect_layout.clone(),
                 ];
                 shader = self.prepare_indirect_shader.clone();
@@ -172,8 +172,8 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
             TerrainComputePipelineId::PrepareNext => {
                 layout = vec![
                     self.culling_data_layout.clone(),
-                    self.refine_tiles_layout.clone(),
                     self.terrain_layout.clone(),
+                    self.refine_tiles_layout.clone(),
                     self.prepare_indirect_layout.clone(),
                 ];
                 shader = self.prepare_indirect_shader.clone();
@@ -182,8 +182,8 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
             TerrainComputePipelineId::PrepareRender => {
                 layout = vec![
                     self.culling_data_layout.clone(),
-                    self.refine_tiles_layout.clone(),
                     self.terrain_layout.clone(),
+                    self.refine_tiles_layout.clone(),
                     self.prepare_indirect_layout.clone(),
                 ];
                 shader = self.prepare_indirect_shader.clone();
@@ -225,8 +225,8 @@ impl TerrainComputeNode {
         culling_bind_group: &'a CullingBindGroup,
     ) {
         pass.set_bind_group(0, culling_bind_group, &[]);
-        pass.set_bind_group(1, &view_data.refine_tiles_bind_group, &[]);
-        pass.set_bind_group(2, &terrain_data.terrain_bind_group, &[]);
+        pass.set_bind_group(1, &terrain_data.terrain_bind_group, &[]);
+        pass.set_bind_group(2, &view_data.refine_tiles_bind_group, &[]);
         pass.set_bind_group(3, &view_data.prepare_indirect_bind_group, &[]);
 
         pass.set_pipeline(pipelines[TerrainComputePipelineId::PrepareRoot as usize]);

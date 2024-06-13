@@ -7,7 +7,6 @@ struct TerrainConfig {
 }
 
 struct TerrainViewConfig {
-    view_local_position: vec3<f32>,
     approximate_height: f32,
     quadtree_size: u32,
     tile_count: u32,
@@ -19,6 +18,7 @@ struct TerrainViewConfig {
     blend_distance: f32,
     morph_range: f32,
     blend_range: f32,
+    precision_threshold_distance: f32,
 }
 
 struct Tile {
@@ -93,4 +93,14 @@ struct SideParameter {
 struct ModelViewApproximation {
     origin_lod: i32,
     sides: array<SideParameter, 6>,
+}
+
+struct IndirectBuffer {
+    workgroup_count: vec3<u32>,
+}
+
+struct CullingData {
+    world_position: vec3<f32>,
+    view_proj: mat4x4<f32>,
+    planes: array<vec4<f32>, 5>,
 }

@@ -39,6 +39,7 @@ pub(crate) fn create_refine_tiles_layout(device: &RenderDevice) -> BindGroupLayo
             ShaderStages::COMPUTE,
             (
                 uniform_buffer::<TerrainViewConfigUniform>(false), // terrain view config
+                uniform_buffer::<ModelViewApproximation>(false),   // model view approximation
                 storage_buffer_read_only_sized(false, None),       // quadtree
                 storage_buffer_sized(false, TILE_BUFFER_MIN_SIZE), // final tiles
                 storage_buffer_sized(false, TILE_BUFFER_MIN_SIZE), // temporary tiles
@@ -81,7 +82,6 @@ struct Parameters {
 
 #[derive(Default, ShaderType)]
 struct TerrainViewConfigUniform {
-    view_local_position: Vec3,
     approximate_height: f32,
     quadtree_size: u32,
     tile_count: u32,
@@ -93,13 +93,12 @@ struct TerrainViewConfigUniform {
     blend_distance: f32,
     morph_range: f32,
     blend_range: f32,
-    _padding: Vec2,
+    precision_threshold_distance: f32,
 }
 
 impl TerrainViewConfigUniform {
-    fn new(view_config: &TerrainViewConfig, view_local_position: Vec3) -> Self {
+    fn new(view_config: &TerrainViewConfig) -> Self {
         TerrainViewConfigUniform {
-            view_local_position,
             approximate_height: view_config.approximate_height,
             quadtree_size: view_config.quadtree_size,
             tile_count: view_config.tile_count,
@@ -111,7 +110,7 @@ impl TerrainViewConfigUniform {
             blend_distance: view_config.blend_distance,
             morph_range: view_config.morph_range,
             blend_range: view_config.blend_range,
-            _padding: Vec2::ZERO,
+            precision_threshold_distance: view_config.precision_threshold_distance,
         }
     }
 }
@@ -160,6 +159,7 @@ impl TerrainViewData {
             &create_refine_tiles_layout(device),
             &BindGroupEntries::sequential((
                 &view_config_buffer,
+                &model_view_approximation_buffer,
                 &gpu_quadtree.quadtree_buffer,
                 &final_tile_buffer,
                 &temporary_tile_buffer,
@@ -216,25 +216,13 @@ impl TerrainViewData {
         mut terrain_view_data: ResMut<TerrainViewComponents<TerrainViewData>>,
         model_view_approximations: Extract<Res<TerrainViewComponents<ModelViewApproximation>>>,
         view_configs: Extract<Res<TerrainViewComponents<TerrainViewConfig>>>,
-        view_query: Extract<Query<&GlobalTransform, With<TerrainView>>>,
-        terrain_query: Extract<Query<&GlobalTransform, With<Terrain>>>,
     ) {
         for (&(terrain, view), view_config) in &view_configs.0 {
-            let view_world_position = view_query.get(view).unwrap();
-            let terrain_transform = terrain_query.get(terrain).unwrap();
             let terrain_view_data = terrain_view_data.get_mut(&(terrain, view)).unwrap();
-
-            // Todo: compute this properly
-            let view_local_position = (terrain_transform.compute_matrix().inverse()
-                * view_world_position.translation().extend(1.0))
-            .xyz();
 
             terrain_view_data
                 .view_config_buffer
-                .set_value(TerrainViewConfigUniform::new(
-                    view_config,
-                    view_local_position,
-                ));
+                .set_value(TerrainViewConfigUniform::new(view_config));
 
             terrain_view_data.model_view_approximation_buffer.set_value(
                 model_view_approximations

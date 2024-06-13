@@ -130,5 +130,10 @@ fn fragment(input: FragmentInput) -> FragmentOutput {
     var output: FragmentOutput;
     fragment_pbr(&info, &output, color, normal);
     fragment_debug(&info, &output, lookup, normal);
+
+    if (input.view_distance < view_config.precision_threshold_distance) {
+        output.color = vec4<f32>(1.0, 0.0, 0.0, 1.0);
+    }
+
     return output;
 }
