@@ -1,7 +1,7 @@
 use crate::{
+    math::NodeCoordinate,
     terrain::Terrain,
     terrain_data::{
-        coordinates::NodeCoordinate,
         node_atlas::{AtlasNode, AtlasNodeAttachment, NodeAtlas},
         AttachmentFormat,
     },
@@ -56,7 +56,7 @@ impl Default for PreprocessDataset {
 }
 
 impl PreprocessDataset {
-    fn overlapping_nodes(&self, lod: u32) -> impl Iterator<Item=NodeCoordinate> + '_ {
+    fn overlapping_nodes(&self, lod: u32) -> impl Iterator<Item = NodeCoordinate> + '_ {
         let node_count = NodeCoordinate::node_count(lod);
 
         let lower = (self.top_left * node_count as f32).as_uvec2();
@@ -377,8 +377,8 @@ pub(crate) fn select_ready_tasks(
         loop {
             if (node_atlas.state.download_slots > 0)
                 && task_queue
-                .front()
-                .map_or(false, |task| task.is_ready(&asset_server, &node_atlas))
+                    .front()
+                    .map_or(false, |task| task.is_ready(&asset_server, &node_atlas))
             {
                 let task = task_queue.pop_front().unwrap();
 
