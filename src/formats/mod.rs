@@ -1,4 +1,4 @@
-use crate::terrain_data::coordinates::NodeCoordinate;
+use crate::math::NodeCoordinate;
 use anyhow::Result;
 use bincode::{config, Decode, Encode};
 use std::{fs, path::Path};

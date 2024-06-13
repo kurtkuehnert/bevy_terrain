@@ -1,5 +1,5 @@
-use crate::math::ModelViewApproximation;
 use crate::{
+    math::ModelViewApproximation,
     terrain::Terrain,
     terrain_data::gpu_quadtree::GpuQuadtree,
     terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},

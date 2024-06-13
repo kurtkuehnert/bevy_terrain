@@ -1,13 +1,11 @@
 use crate::{
     formats::TC,
+    math::NodeCoordinate,
     prelude::{AttachmentConfig, AttachmentFormat},
     terrain::{Terrain, TerrainConfig},
     terrain_data::{
-        coordinates::NodeCoordinate,
         quadtree::{NodeLookup, Quadtree, QuadtreeEntry},
-        AttachmentData,
-        INVALID_ATLAS_INDEX,
-        INVALID_LOD,
+        AttachmentData, INVALID_ATLAS_INDEX, INVALID_LOD,
     },
     terrain_view::{TerrainView, TerrainViewComponents},
 };
@@ -244,7 +242,7 @@ impl AtlasAttachment {
                 data: self.data[node.atlas_index as usize].clone(),
                 texture_size: self.texture_size,
             }
-                .start_saving(self.path.clone()),
+            .start_saving(self.path.clone()),
         );
     }
 
@@ -578,10 +576,7 @@ impl NodeAtlas {
         self.state.to_save.push_back(node);
     }
 
-    pub(super) fn get_best_node(
-        &self,
-        node_coordinate: NodeCoordinate,
-    ) -> QuadtreeEntry {
+    pub(super) fn get_best_node(&self, node_coordinate: NodeCoordinate) -> QuadtreeEntry {
         self.state.get_best_node(node_coordinate)
     }
 
