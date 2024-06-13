@@ -52,6 +52,11 @@ fn cube_to_sphere(uv: vec2<f32>) -> vec2<f32> {
     return xy;
 }
 
+fn local_to_world_normal(local_position: vec3<f32>) -> vec3<f32> {
+    // Todo: take rotation into account
+    return local_position;
+}
+
 fn local_to_world_position(local_position: vec3<f32>) -> vec3<f32> {
     return (affine_to_square(mesh[0].model) * vec4<f32>(local_position, 1.0)).xyz;
 }
@@ -92,48 +97,40 @@ fn compute_grid_offset(grid_index: u32) -> vec2<f32>{
     return vec2<f32>(offset) / view_config.grid_size;
 }
 
-fn compute_coordinate(tile: Tile, offset: vec2<f32>) -> Coordinate {
-    return Coordinate(tile.side, (vec2<f32>(tile.xy) + offset) * tile_size(tile.lod));
-}
+fn compute_local_position(tile: Tile, offset: vec2<f32>) -> vec3<f32> {
+    let st = (vec2<f32>(tile.xy) + offset) * tile_size(tile.lod);
 
-fn compute_local_position(coordinate: Coordinate) -> vec3<f32> {
 #ifdef SPHERICAL
-    let xy = cube_to_sphere(coordinate.uv);
+    let uv = cube_to_sphere(st);
 
     var local_position: vec3<f32>;
 
-    switch (coordinate.side) {
-        case 0u:      { local_position = vec3( -1.0, -xy.y,  xy.x); }
-        case 1u:      { local_position = vec3( xy.x, -xy.y,   1.0); }
-        case 2u:      { local_position = vec3( xy.x,   1.0,  xy.y); }
-        case 3u:      { local_position = vec3(  1.0, -xy.x,  xy.y); }
-        case 4u:      { local_position = vec3( xy.y, -xy.x,  -1.0); }
-        case 5u:      { local_position = vec3( xy.y,  -1.0,  xy.x); }
+    switch (tile.side) {
+        case 0u:      { local_position = vec3( -1.0, -uv.y,  uv.x); }
+        case 1u:      { local_position = vec3( uv.x, -uv.y,   1.0); }
+        case 2u:      { local_position = vec3( uv.x,   1.0,  uv.y); }
+        case 3u:      { local_position = vec3(  1.0, -uv.x,  uv.y); }
+        case 4u:      { local_position = vec3( uv.y, -uv.x,  -1.0); }
+        case 5u:      { local_position = vec3( uv.y,  -1.0,  uv.x); }
         case default: {}
     }
 
     return normalize(local_position);
 #else
-    return vec3<f32>(coordinate.uv.x - 0.5, 0.0, coordinate.uv.y - 0.5);
+    return vec3<f32>(st.x - 0.5, 0.0, st.y - 0.5);
 #endif
 }
 
-fn compute_relative_coordinate(tile: Tile, grid_offset: vec2<f32>) -> Coordinate {
-    let side = model_view_approximation.sides[tile.side];
+fn compute_relative_position(tile: Tile, grid_offset: vec2<f32>) -> vec3<f32> {
+    let params = model_view_approximation.sides[tile.side];
 
     let lod_difference = tile.lod - u32(model_view_approximation.origin_lod);
-    let origin_xy = vec2<i32>(side.origin_xy.x << lod_difference, side.origin_xy.y << lod_difference);
+    let origin_xy = vec2<i32>(params.origin_xy.x << lod_difference, params.origin_xy.y << lod_difference);
     let tile_offset = vec2<i32>(tile.xy) - origin_xy;
-    let relative_st = (vec2<f32>(tile_offset) + grid_offset) * tile_size(tile.lod) + side.delta_relative_st;
+    let relative_st = (vec2<f32>(tile_offset) + grid_offset) * tile_size(tile.lod) + params.delta_relative_st;
 
-    return Coordinate(tile.side, relative_st);
-}
-
-fn compute_relative_position(relative_coordinate: Coordinate) -> vec3<f32> {
-    let params = model_view_approximation.sides[relative_coordinate.side];
-
-    let s = relative_coordinate.uv.x;
-    let t = relative_coordinate.uv.y;
+    let s = relative_st.x;
+    let t = relative_st.y;
     let c = params.c;
     let c_s = params.c_s;
     let c_t = params.c_t;
@@ -152,23 +149,11 @@ fn node_count(lod: u32) -> f32 {
     return f32(1u << lod);
 }
 
-fn node_coordinate(coordinate: Coordinate, lod: u32) -> vec2<f32> {
-    return min(coordinate.uv, vec2(0.9999999)) * node_count(lod);
-}
-
 fn inside_square(position: vec2<f32>, origin: vec2<f32>, size: f32) -> f32 {
     let inside = step(origin, position) * step(position, origin + size);
 
     return inside.x * inside.y;
 }
-
-fn quadtree_origin(quadtree_coordinate: Coordinate, lod: u32) -> vec2<f32> {
-    let node_coordinate = node_coordinate(quadtree_coordinate, lod);
-    let max_offset      = node_count(lod) - f32(view_config.quadtree_size);
-
-    return clamp(round(node_coordinate - 0.5 * f32(view_config.quadtree_size)), vec2<f32>(0.0), vec2<f32>(max_offset));
-}
-
 
 fn lookup_node(tile: Tile, grid_offset: vec2<f32>, blend: Blend, lod_offset: u32) -> NodeLookup {
     let quadtree_lod        = blend.lod - lod_offset;

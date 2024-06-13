@@ -8,7 +8,6 @@ const PATH: &str = "terrains/spherical";
 const RADIUS: f64 = 6371000.0;
 const MIN_HEIGHT: f32 = 0.0; // -12000.0;
 const MAX_HEIGHT: f32 = 0.0; // 9000.0;
-const SUPER_ELEVATION: f32 = 10.0;
 const TEXTURE_SIZE: u32 = 512;
 const LOD_COUNT: u32 = 16;
 
@@ -17,8 +16,6 @@ pub struct TerrainMaterial {
     #[texture(0, dimension = "1d")]
     #[sampler(1)]
     gradient: Handle<Image>,
-    #[uniform(2)]
-    super_elevation: f32,
 }
 
 impl Material for TerrainMaterial {
@@ -77,8 +74,8 @@ fn setup(
     let config = TerrainConfig {
         lod_count: LOD_COUNT,
         scale: RADIUS,
-        min_height: MIN_HEIGHT * SUPER_ELEVATION,
-        max_height: MAX_HEIGHT * SUPER_ELEVATION,
+        min_height: MIN_HEIGHT,
+        max_height: MAX_HEIGHT,
         path: PATH.to_string(),
         ..default()
     }
@@ -98,7 +95,6 @@ fn setup(
             TerrainBundle::new(config.clone(), DVec3::new(0.0, 0.0, 0.0), &frame),
             materials.add(TerrainMaterial {
                 gradient: gradient.clone(),
-                super_elevation: SUPER_ELEVATION,
             }),
         ))
         .id();

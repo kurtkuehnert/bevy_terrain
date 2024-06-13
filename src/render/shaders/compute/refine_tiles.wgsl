@@ -1,6 +1,6 @@
 #import bevy_terrain::types::Tile
 #import bevy_terrain::bindings::{culling_view, view_config, final_tiles, temporary_tiles, parameters}
-#import bevy_terrain::functions::{compute_coordinate, compute_local_position, local_to_world_position, tile_size, compute_relative_coordinate, compute_relative_position}
+#import bevy_terrain::functions::{compute_local_position, compute_relative_position, local_to_world_position, local_to_world_normal, tile_size}
 
 fn child_index() -> i32 {
     return atomicAdd(&parameters.child_index, parameters.counter);
@@ -15,18 +15,17 @@ fn final_index() -> i32 {
 }
 
 fn compute_corner_view_distance(tile: Tile, offset: vec2<f32>) -> f32 {
-    let corner_coordinate     = compute_coordinate(tile, offset);
-    let corner_local_position = compute_local_position(corner_coordinate);
-    let corner_world_position = local_to_world_position(corner_local_position);
-    var corner_view_distance  = distance(corner_world_position + view_config.approximate_height * corner_local_position, culling_view.world_position);
+    let local_position = compute_local_position(tile, offset);
+    let world_position = local_to_world_position(local_position);
+    let world_normal   = local_to_world_normal(local_position);
+    var view_distance  = distance(world_position + view_config.approximate_height * world_normal, culling_view.world_position);
 
-    if (corner_view_distance < view_config.precision_threshold_distance) {
-        let corner_relative_coordinate = compute_relative_coordinate(tile, offset);
-        let corner_relative_position   = compute_relative_position(corner_relative_coordinate);
-        corner_view_distance           = length(corner_relative_position + view_config.approximate_height * corner_local_position);
+    if (view_distance < view_config.precision_threshold_distance) {
+        let relative_position   = compute_relative_position(tile, offset);
+        view_distance           = length(relative_position + view_config.approximate_height * world_normal);
     }
 
-    return corner_view_distance;
+    return view_distance;
 }
 
 fn should_be_divided(tile: Tile) -> bool {
