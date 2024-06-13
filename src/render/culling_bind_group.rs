@@ -42,7 +42,6 @@ pub fn planes(view_projection: &Mat4) -> [Vec4; 5] {
 pub struct CullingUniform {
     world_position: Vec3,
     view_proj: Mat4,
-    model: Mat4,
     planes: [Vec4; 5],
 }
 
@@ -55,7 +54,6 @@ impl From<&ExtractedView> for CullingUniform {
         Self {
             world_position,
             view_proj,
-            model: default(),
             planes,
         }
     }

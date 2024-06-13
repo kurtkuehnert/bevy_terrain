@@ -1,56 +1,6 @@
-#import bevy_terrain::types::{TerrainConfig, TerrainViewConfig, Tile, Parameters, NodeLookup, Coordinate}
-#import bevy_terrain::bindings::config
-#import bevy_terrain::functions::{cube_to_sphere, compute_coordinate, tile_size}
-
-struct CullingData {
-    world_position: vec3<f32>,
-    view_proj: mat4x4<f32>,
-    model: mat4x4<f32>,
-    planes: array<vec4<f32>, 5>,
-}
-
-@group(0) @binding(0)
-var<uniform> view: CullingData;
-
-@group(1) @binding(0)
-var<uniform> view_config: TerrainViewConfig;
-@group(1) @binding(1)
-var quadtree: texture_2d_array<u32>;
-@group(1) @binding(2)
-var<storage, read_write> final_tiles: array<Tile>;
-@group(1) @binding(3)
-var<storage, read_write> temporary_tiles: array<Tile>;
-@group(1) @binding(4)
-var<storage, read_write> parameters: Parameters;
-
-// Todo: figure out how to remove this duplicate
-fn morph_threshold_distance(tile: Tile) -> f32 {
-    return view_config.morph_distance * tile_size(tile.lod);
-}
-
-
-// Todo: replace this
-fn local_position_from_coordinate(coordinate: Coordinate, height: f32) -> vec3<f32> {
-#ifdef SPHERICAL
-    let xy = cube_to_sphere(coordinate.uv);
-
-    var local_position: vec3<f32>;
-
-    switch (coordinate.side) {
-        case 0u:      { local_position = vec3( -1.0, -xy.y,  xy.x); }
-        case 1u:      { local_position = vec3( xy.x, -xy.y,   1.0); }
-        case 2u:      { local_position = vec3( xy.x,   1.0,  xy.y); }
-        case 3u:      { local_position = vec3(  1.0, -xy.x,  xy.y); }
-        case 4u:      { local_position = vec3( xy.y, -xy.x,  -1.0); }
-        case 5u:      { local_position = vec3( xy.y,  -1.0,  xy.x); }
-        case default: {}
-    }
-
-    return (1.0 + height) * normalize(local_position);
-#else
-    return vec3<f32>(coordinate.uv.x - 0.5, 0.0, coordinate.uv.y - 0.5);
-#endif
-}
+#import bevy_terrain::types::Tile
+#import bevy_terrain::bindings::{culling_view, view_config, final_tiles, temporary_tiles, parameters}
+#import bevy_terrain::functions::{compute_coordinate, compute_local_position, local_to_world_position, tile_size, compute_relative_coordinate, compute_relative_position}
 
 fn child_index() -> i32 {
     return atomicAdd(&parameters.child_index, parameters.counter);
@@ -64,18 +14,30 @@ fn final_index() -> i32 {
     return atomicAdd(&parameters.final_index, 1);
 }
 
+fn compute_corner_view_distance(tile: Tile, offset: vec2<f32>) -> f32 {
+    let corner_coordinate     = compute_coordinate(tile, offset);
+    let corner_local_position = compute_local_position(corner_coordinate);
+    let corner_world_position = local_to_world_position(corner_local_position);
+    var corner_view_distance  = distance(corner_world_position + view_config.approximate_height * corner_local_position, culling_view.world_position);
+
+    if (corner_view_distance < view_config.precision_threshold_distance) {
+        let corner_relative_coordinate = compute_relative_coordinate(tile, offset);
+        let corner_relative_position   = compute_relative_position(corner_relative_coordinate);
+        corner_view_distance           = length(corner_relative_position + view_config.approximate_height * corner_local_position);
+    }
+
+    return corner_view_distance;
+}
+
 fn should_be_divided(tile: Tile) -> bool {
     var min_view_distance = 3.40282347E+38; // f32::MAX
 
     for (var i: u32 = 0u; i < 4u; i = i + 1u) {
-        let corner_coordinate = compute_coordinate(tile, vec2<f32>(f32(i & 1u), f32(i >> 1u & 1u)));
-        let corner_local_position = local_position_from_coordinate(corner_coordinate, view_config.approximate_height);
-        let corner_view_distance = distance(corner_local_position, view_config.view_local_position);
-
+        let corner_view_distance = compute_corner_view_distance(tile, vec2<f32>(f32(i & 1u), f32(i >> 1u & 1u)));
         min_view_distance = min(min_view_distance, corner_view_distance);
     }
 
-    return min_view_distance < morph_threshold_distance(tile);
+    return min_view_distance < view_config.morph_distance * tile_size(tile.lod) * 6371000.0;
 }
 
 fn subdivide(tile: Tile) {

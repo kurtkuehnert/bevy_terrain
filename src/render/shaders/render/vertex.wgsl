@@ -41,50 +41,41 @@ fn setup_vertex_info(info: ptr<function, VertexInfo>, input: VertexInput) {
     (*info).grid_offset = grid_offset;
     (*info).offset      = grid_offset;
 
-    let approximate_coordinate     = compute_coordinate((*info).tile, (*info).grid_offset);
-    let approximate_local_position = compute_local_position(approximate_coordinate);
-    let approximate_world_position = local_to_world_position(approximate_local_position) + view_config.approximate_height * approximate_local_position;
-    let approximate_view_distance  = distance(approximate_world_position, view.world_position);
+    var coordinate     = compute_coordinate((*info).tile, (*info).grid_offset);
+    var local_position = compute_local_position(coordinate);
+    var world_position = local_to_world_position(local_position);
+    let view_distance  = distance(world_position + view_config.approximate_height * local_position, view.world_position);
 
 #ifdef MORPH
-    var morph      = compute_morph(approximate_view_distance, (*info).tile.lod, (*info).grid_offset);
-    let coordinate = compute_coordinate((*info).tile, morph.offset);
+    var morph      = compute_morph(view_distance, (*info).tile.lod, (*info).grid_offset);
+    coordinate     = compute_coordinate((*info).tile, morph.offset);
+    local_position = compute_local_position(coordinate);
+    world_position = local_to_world_position(local_position);
 
     (*info).offset = morph.offset;
-#else
-    let coordinate = approximate_coordinate;
 #endif
 
-    let local_position = compute_local_position(coordinate);
-    (*info).world_position = local_to_world_position(local_position);
-    (*info).world_normal   = normalize(local_position);
-    (*info).view_distance = approximate_view_distance;
+    (*info).world_normal   = local_position;
+    (*info).world_position = world_position;
+    (*info).view_distance  = view_distance;
 }
 
 fn high_precision(info: ptr<function, VertexInfo>) {
-    #ifdef TEST1
-    let threshold_distance = 50000.0;
-    #else
-    let threshold_distance = 0.0;
-    #endif
-
-    if ((*info).view_distance < threshold_distance) {
-        let approximate_relative_coordinate = compute_relative_coordinate((*info).tile, (*info).grid_offset);
-        let approximate_relative_position   = compute_relative_position(approximate_relative_coordinate);
-        let approximate_view_distance           = length(approximate_relative_position);
+    if ((*info).view_distance < view_config.precision_threshold_distance) {
+        var relative_coordinate = compute_relative_coordinate((*info).tile, (*info).grid_offset);
+        var relative_position   = compute_relative_position(relative_coordinate);
+        let view_distance       = length(relative_position + view_config.approximate_height * (*info).world_normal);
 
     #ifdef MORPH
-        let morph = compute_morph(approximate_view_distance, (*info).tile.lod, (*info).grid_offset);
-        let relative_coordinate = compute_relative_coordinate((*info).tile, morph.offset);
+        let morph           = compute_morph(view_distance, (*info).tile.lod, (*info).grid_offset);
+        relative_coordinate = compute_relative_coordinate((*info).tile, morph.offset);
+        relative_position   = compute_relative_position(relative_coordinate);
 
         (*info).offset = morph.offset;
-    #else
-        let relative_coordinate = approximate_relative_coordinate;
     #endif
 
-        let relative_position  = compute_relative_position(relative_coordinate);
         (*info).world_position = view.world_position + relative_position;
-        (*info).view_distance  = approximate_view_distance;
+        (*info).view_distance  = view_distance;
     }
 }
 

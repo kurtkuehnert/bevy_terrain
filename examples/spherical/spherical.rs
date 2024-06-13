@@ -6,8 +6,8 @@ use bevy_terrain::prelude::*;
 
 const PATH: &str = "terrains/spherical";
 const RADIUS: f64 = 6371000.0;
-const MIN_HEIGHT: f32 = -12000.0;
-const MAX_HEIGHT: f32 = 9000.0;
+const MIN_HEIGHT: f32 = 0.0; // -12000.0;
+const MAX_HEIGHT: f32 = 0.0; // 9000.0;
 const SUPER_ELEVATION: f32 = 10.0;
 const TEXTURE_SIZE: u32 = 512;
 const LOD_COUNT: u32 = 16;

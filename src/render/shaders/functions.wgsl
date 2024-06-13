@@ -1,9 +1,8 @@
 #define_import_path bevy_terrain::functions
 
-#import bevy_terrain::bindings::{config, view_config, tiles, quadtree, model_view_approximation}
+#import bevy_terrain::bindings::{mesh, config, view_config, tiles, quadtree, model_view_approximation}
 #import bevy_terrain::types::{Tile, Quadtree, NodeLookup, Blend, LookupInfo, Coordinate, Morph}
 #import bevy_pbr::mesh_view_bindings::view
-#import bevy_pbr::mesh_bindings::mesh
 #import bevy_render::maths::affine_to_square
 
 const F0 = 0u;
