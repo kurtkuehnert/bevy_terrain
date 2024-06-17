@@ -1,3 +1,5 @@
+pub mod tiff;
+
 use crate::math::NodeCoordinate;
 use anyhow::Result;
 use bincode::{config, Decode, Encode};

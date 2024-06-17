@@ -1,13 +1,13 @@
 use bevy::math::DVec3;
 use bevy::window::Cursor;
 use bevy::{prelude::*, reflect::TypePath, render::render_resource::*};
-use bevy_terrain::big_space::{FloatingOriginPlugin, GridCell, RootReferenceFrame};
+use bevy_terrain::big_space::{GridCell, RootReferenceFrame};
 use bevy_terrain::prelude::*;
 
 const PATH: &str = "terrains/spherical";
 const RADIUS: f64 = 6371000.0;
-const MIN_HEIGHT: f32 = 0.0; // -12000.0;
-const MAX_HEIGHT: f32 = 0.0; // 9000.0;
+const MIN_HEIGHT: f32 = -12000.0;
+const MAX_HEIGHT: f32 = 9000.0;
 const TEXTURE_SIZE: u32 = 512;
 const LOD_COUNT: u32 = 16;
 
@@ -46,7 +46,6 @@ fn main() {
             TerrainPlugin,
             TerrainDebugPlugin, // enable debug settings and controls
             TerrainMaterialPlugin::<TerrainMaterial>::default(),
-            FloatingOriginPlugin::default(),
         ))
         .insert_resource(ClearColor(Color::WHITE))
         .add_systems(Startup, setup)
