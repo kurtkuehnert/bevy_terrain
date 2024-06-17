@@ -1,6 +1,6 @@
 #define_import_path bevy_terrain::functions
 
-#import bevy_terrain::bindings::{mesh, config, view_config, tiles, quadtree, model_view_approximation}
+#import bevy_terrain::bindings::{mesh, config, view_config, tiles, quadtree, terrain_model_approximation}
 #import bevy_terrain::types::{Tile, Quadtree, NodeLookup, Blend, LookupInfo, Coordinate, Morph}
 #import bevy_pbr::mesh_view_bindings::view
 #import bevy_render::maths::affine_to_square
@@ -122,9 +122,9 @@ fn compute_local_position(tile: Tile, offset: vec2<f32>) -> vec3<f32> {
 }
 
 fn compute_relative_position(tile: Tile, grid_offset: vec2<f32>) -> vec3<f32> {
-    let params = model_view_approximation.sides[tile.side];
+    let params = terrain_model_approximation.sides[tile.side];
 
-    let lod_difference = tile.lod - u32(model_view_approximation.origin_lod);
+    let lod_difference = tile.lod - u32(terrain_model_approximation.origin_lod);
     let origin_xy = vec2<i32>(params.origin_xy.x << lod_difference, params.origin_xy.y << lod_difference);
     let tile_offset = vec2<i32>(tile.xy) - origin_xy;
     let relative_st = (vec2<f32>(tile_offset) + grid_offset) * tile_size(tile.lod) + params.delta_relative_st;
@@ -155,7 +155,7 @@ fn inside_square(position: vec2<f32>, origin: vec2<f32>, size: f32) -> f32 {
     return inside.x * inside.y;
 }
 
-fn lookup_node(tile: Tile, grid_offset: vec2<f32>, blend: Blend, lod_offset: u32) -> NodeLookup {
+fn lookup_node(tile: Tile, offset: vec2<f32>, blend: Blend, lod_offset: u32) -> NodeLookup {
     let quadtree_lod   = blend.lod - lod_offset;
     let quadtree_side  = tile.side;
     let quadtree_xy    = vec2<u32>(tile.xy.x >> (tile.lod - quadtree_lod),
@@ -167,7 +167,7 @@ fn lookup_node(tile: Tile, grid_offset: vec2<f32>, blend: Blend, lod_offset: u32
     let quadtree_entry = quadtree[quadtree_index];
 
     let tiles_per_node = 1u << (tile.lod - quadtree_entry.atlas_lod);
-    let atlas_uv = (vec2<f32>(tile.xy % tiles_per_node) + grid_offset) / f32(tiles_per_node);
+    let atlas_uv = (vec2<f32>(tile.xy % tiles_per_node) + offset) / f32(tiles_per_node);
 
     var lookup: NodeLookup;
     lookup.lod                 = quadtree_entry.atlas_lod;

@@ -47,7 +47,7 @@ fn main() {
             TerrainDebugPlugin, // enable debug settings and controls
             TerrainMaterialPlugin::<TerrainMaterial>::default(),
         ))
-        .insert_resource(ClearColor(Color::WHITE))
+        // .insert_resource(ClearColor(Color::WHITE))
         .add_systems(Startup, setup)
         .run();
 }
@@ -72,7 +72,7 @@ fn setup(
     // Configure all the important properties of the terrain, as well as its attachments.
     let config = TerrainConfig {
         lod_count: LOD_COUNT,
-        scale: RADIUS,
+        model: TerrainModel::new(DVec3::ZERO, RADIUS),
         min_height: MIN_HEIGHT,
         max_height: MAX_HEIGHT,
         path: PATH.to_string(),
@@ -91,7 +91,7 @@ fn setup(
 
     let terrain = commands
         .spawn((
-            TerrainBundle::new(config.clone(), DVec3::new(0.0, 0.0, 0.0), &frame),
+            TerrainBundle::new(config.clone(), &frame),
             materials.add(TerrainMaterial {
                 gradient: gradient.clone(),
             }),

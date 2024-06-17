@@ -76,7 +76,7 @@ struct SideParameter {
     c_tt: vec3<f32>,
 }
 
-struct ModelViewApproximation {
+struct TerrainModelApproximation {
     origin_lod: i32,
     sides: array<SideParameter, 6>,
 }
