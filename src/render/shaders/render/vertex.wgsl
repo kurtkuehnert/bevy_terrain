@@ -2,7 +2,7 @@
 
 #import bevy_terrain::types::{Tile, Blend}
 #import bevy_terrain::bindings::{view_config, tiles}
-#import bevy_terrain::functions::{lookup_node, compute_coordinate, compute_local_position, compute_relative_coordinate, compute_relative_position, compute_grid_offset, compute_morph, compute_blend, local_to_world_normal, local_to_world_position, world_to_clip_position}
+#import bevy_terrain::functions::{lookup_node, compute_local_position, compute_relative_position, compute_grid_offset, compute_morph, compute_blend, local_to_world_normal, local_to_world_position, world_to_clip_position}
 #import bevy_terrain::debug::{show_tiles}
 #import bevy_pbr::mesh_view_bindings::view
 

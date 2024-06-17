@@ -1,5 +1,7 @@
-use crate::math::{generate_model_view_approximation, ModelViewApproximation};
 use crate::{
+    big_space::FloatingOriginPlugin,
+    formats::tiff::TiffLoader,
+    math::{generate_model_view_approximation, ModelViewApproximation},
     render::{
         compute_pipelines::{TerrainComputeLabel, TerrainComputeNode, TerrainComputePipelines},
         culling_bind_group::CullingBindGroup,
@@ -29,9 +31,11 @@ pub struct TerrainPlugin;
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((
+            FloatingOriginPlugin::default(),
             ExtractComponentPlugin::<Terrain>::default(),
             ExtractComponentPlugin::<TerrainView>::default(),
         ))
+        .init_asset_loader::<TiffLoader>()
         .init_resource::<InternalShaders>()
         .init_resource::<TerrainViewComponents<Quadtree>>()
         .init_resource::<TerrainViewComponents<TerrainViewConfig>>()
