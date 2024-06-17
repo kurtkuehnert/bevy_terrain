@@ -1,8 +1,10 @@
 //! Types for configuring terrains.
 
-use crate::big_space::{GridCell, RootReferenceFrame};
-use crate::{terrain_data::node_atlas::NodeAtlas, terrain_data::AttachmentConfig};
-use bevy::math::DVec3;
+use crate::{
+    big_space::{GridCell, RootReferenceFrame},
+    math::TerrainModel,
+    terrain_data::{node_atlas::NodeAtlas, AttachmentConfig},
+};
 use bevy::{
     prelude::*, render::extract_component::ExtractComponent, render::view::NoFrustumCulling,
     utils::HashMap,
@@ -45,8 +47,8 @@ pub struct Terrain;
 pub struct TerrainConfig {
     /// The count of level of detail layers.
     pub lod_count: u32,
-    /// The radius (spherical) or the side length (planar) of the terrain.
-    pub scale: f64,
+
+    pub model: TerrainModel,
     /// The minimum height of the terrain.
     pub min_height: f32,
     /// The maximum height of the terrain.
@@ -63,7 +65,10 @@ impl Default for TerrainConfig {
     fn default() -> Self {
         Self {
             lod_count: 1,
-            scale: 1.0,
+            model: TerrainModel {
+                position: Default::default(),
+                scale: 1.0,
+            },
             min_height: 0.0,
             max_height: 1.0,
             node_atlas_size: 1024,
@@ -97,15 +102,15 @@ pub struct TerrainBundle {
 
 impl TerrainBundle {
     /// Creates a new terrain bundle from the config.
-    pub fn new(config: TerrainConfig, position: DVec3, frame: &RootReferenceFrame) -> Self {
-        let (cell, translation) = frame.translation_to_grid(position);
+    pub fn new(config: TerrainConfig, frame: &RootReferenceFrame) -> Self {
+        let (cell, translation) = frame.translation_to_grid(config.model.position);
 
         Self {
             terrain: Terrain,
             node_atlas: NodeAtlas::from_config(&config),
             transform: Transform {
                 translation,
-                scale: Vec3::splat(config.scale as f32),
+                scale: Vec3::splat(config.model.scale as f32),
                 ..default()
             },
             config,

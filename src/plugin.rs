@@ -1,7 +1,7 @@
 use crate::{
     big_space::FloatingOriginPlugin,
     formats::tiff::TiffLoader,
-    math::{generate_model_view_approximation, ModelViewApproximation},
+    math::{generate_terrain_model_approximation, TerrainModelApproximation},
     render::{
         compute_pipelines::{TerrainComputeLabel, TerrainComputeNode, TerrainComputePipelines},
         culling_bind_group::CullingBindGroup,
@@ -39,11 +39,11 @@ impl Plugin for TerrainPlugin {
         .init_resource::<InternalShaders>()
         .init_resource::<TerrainViewComponents<Quadtree>>()
         .init_resource::<TerrainViewComponents<TerrainViewConfig>>()
-        .init_resource::<TerrainViewComponents<ModelViewApproximation>>()
+        .init_resource::<TerrainViewComponents<TerrainModelApproximation>>()
         .add_systems(
             Last,
             (
-                generate_model_view_approximation,
+                generate_terrain_model_approximation,
                 Quadtree::compute_requests,
                 NodeAtlas::update,
                 Quadtree::adjust_to_node_atlas,

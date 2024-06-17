@@ -13,7 +13,7 @@ use bevy::{
         Extract,
     },
 };
-use ndarray::Array4;
+use ndarray::{Array2, Array4};
 use std::mem;
 
 /// Stores the GPU representation of the [`Quadtree`] (array texture)
@@ -23,8 +23,10 @@ use std::mem;
 #[derive(Component)]
 pub struct GpuQuadtree {
     pub(crate) quadtree_buffer: StaticBuffer<()>,
+    pub(crate) origins_buffer: StaticBuffer<()>,
     /// The current cpu quadtree data. This is synced each frame with the quadtree data.
     data: Array4<QuadtreeEntry>,
+    origins: Array2<UVec2>,
 }
 
 impl GpuQuadtree {
@@ -36,9 +38,18 @@ impl GpuQuadtree {
             BufferUsages::STORAGE | BufferUsages::COPY_DST,
         );
 
+        let origins_buffer = StaticBuffer::empty_sized(
+            None,
+            device,
+            (quadtree.origins.len() * mem::size_of::<UVec2>()) as BufferAddress,
+            BufferUsages::STORAGE | BufferUsages::COPY_DST,
+        );
+
         Self {
             quadtree_buffer,
+            origins_buffer,
             data: default(),
+            origins: default(),
         }
     }
 
@@ -72,6 +83,7 @@ impl GpuQuadtree {
                 let gpu_quadtree = gpu_quadtrees.get_mut(&(terrain, view)).unwrap();
 
                 gpu_quadtree.data = quadtree.data.clone();
+                gpu_quadtree.origins = quadtree.origins.clone();
             }
         }
     }
@@ -89,6 +101,9 @@ impl GpuQuadtree {
 
                 let data = cast_slice(gpu_quadtree.data.as_slice().unwrap());
                 gpu_quadtree.quadtree_buffer.update_bytes(&queue, data);
+
+                let origins = cast_slice(gpu_quadtree.origins.as_slice().unwrap());
+                gpu_quadtree.origins_buffer.update_bytes(&queue, origins);
             }
         }
     }

@@ -44,27 +44,27 @@ fn vertex_info(input: VertexInput) -> VertexInfo {
     info.grid_offset = grid_offset;
     info.offset      = grid_offset;
 
-    var local_position = compute_local_position(info.tile, info.grid_offset);
+    var local_position  = compute_local_position(info.tile, info.grid_offset);
     info.world_position = local_to_world_position(local_position);
     info.world_normal   = local_to_world_normal(local_position);
     info.view_distance  = distance(info.world_position + view_config.approximate_height * info.world_normal, view.world_position);
 
 #ifdef MORPH
-    let morph      = compute_morph(info.view_distance, info.tile.lod, info.grid_offset);
-    local_position = compute_local_position(info.tile, morph.offset);
+    let morph           = compute_morph(info.view_distance, info.tile.lod, info.grid_offset);
+    local_position      = compute_local_position(info.tile, morph.offset);
     info.world_position = local_to_world_position(local_position);
     info.world_normal   = local_to_world_normal(local_position);
-    info.offset = morph.offset;
+    info.offset         = morph.offset;
 #endif
 
     if (info.view_distance < view_config.precision_threshold_distance) {
-        var relative_position   = compute_relative_position(info.tile, info.grid_offset);
-        info.view_distance   = length(relative_position + view_config.approximate_height * info.world_normal);
+        var relative_position = compute_relative_position(info.tile, info.grid_offset);
+        info.view_distance    = length(relative_position + view_config.approximate_height * info.world_normal);
 
     #ifdef MORPH
-        let morph           = compute_morph(info.view_distance, info.tile.lod, info.grid_offset);
-        relative_position   = compute_relative_position(info.tile, morph.offset);
-        info.offset = morph.offset;
+        let morph         = compute_morph(info.view_distance, info.tile.lod, info.grid_offset);
+        relative_position = compute_relative_position(info.tile, morph.offset);
+        info.offset       = morph.offset;
     #endif
 
         info.world_position = view.world_position + relative_position;

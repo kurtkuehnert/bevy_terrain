@@ -63,6 +63,7 @@ pub mod prelude {
             camera::{DebugCameraBundle, DebugCameraController},
             DebugTerrainMaterial, LoadingImages, TerrainDebugPlugin,
         },
+        math::TerrainModel,
         plugin::TerrainPlugin,
         preprocess::{
             preprocessor::Preprocessor,
@@ -72,8 +73,7 @@ pub mod prelude {
         render::render_pipeline::TerrainMaterialPlugin,
         terrain::{Terrain, TerrainBundle, TerrainConfig},
         terrain_data::{
-            node_atlas::NodeAtlas, quadtree::Quadtree, sample_attachment, AttachmentConfig,
-            AttachmentFormat,
+            node_atlas::NodeAtlas, quadtree::Quadtree, AttachmentConfig, AttachmentFormat,
         },
         terrain_view::{
             initialize_terrain_view, TerrainView, TerrainViewComponents, TerrainViewConfig,

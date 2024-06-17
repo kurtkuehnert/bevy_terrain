@@ -272,34 +272,34 @@ impl AttachmentData {
     }
 }
 
-pub(crate) fn sample_attachment_local(
-    quadtree: &Quadtree,
-    node_atlas: &NodeAtlas,
-    attachment_index: u32,
-    local_position: Vec3,
-) -> Vec4 {
-    let (lod, blend_ratio) = quadtree.compute_blend(local_position);
+// pub(crate) fn sample_attachment_local(
+//     quadtree: &Quadtree,
+//     node_atlas: &NodeAtlas,
+//     attachment_index: u32,
+//     local_position: Vec3,
+// ) -> Vec4 {
+//     let (lod, blend_ratio) = quadtree.compute_blend(local_position);
+//
+//     let lookup = quadtree.lookup_node(local_position, lod);
+//     let mut value = node_atlas.sample_attachment(lookup, attachment_index);
+//
+//     if blend_ratio > 0.0 {
+//         let lookup2 = quadtree.lookup_node(local_position, lod - 1);
+//         value = value.lerp(
+//             node_atlas.sample_attachment(lookup2, attachment_index),
+//             blend_ratio,
+//         );
+//     }
+//
+//     value
+// }
 
-    let lookup = quadtree.lookup_node(local_position, lod);
-    let mut value = node_atlas.sample_attachment(lookup, attachment_index);
-
-    if blend_ratio > 0.0 {
-        let lookup2 = quadtree.lookup_node(local_position, lod - 1);
-        value = value.lerp(
-            node_atlas.sample_attachment(lookup2, attachment_index),
-            blend_ratio,
-        );
-    }
-
-    value
-}
-
-pub fn sample_attachment(
-    quadtree: &Quadtree,
-    node_atlas: &NodeAtlas,
-    attachment_index: u32,
-    world_position: Vec3,
-) -> Vec4 {
-    let local_position = quadtree.world_to_local_position(world_position);
-    sample_attachment_local(quadtree, node_atlas, attachment_index, local_position)
-}
+// pub fn sample_attachment(
+//     quadtree: &Quadtree,
+//     node_atlas: &NodeAtlas,
+//     attachment_index: u32,
+//     world_position: Vec3,
+// ) -> Vec4 {
+//     let local_position = quadtree.world_to_local_position(world_position);
+//     sample_attachment_local(quadtree, node_atlas, attachment_index, local_position)
+// }

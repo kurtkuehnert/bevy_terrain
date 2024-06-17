@@ -23,6 +23,19 @@ pub(crate) fn tile_count(lod: i32) -> i32 {
     1 << lod
 }
 
+#[derive(Clone)]
+pub struct TerrainModel {
+    pub position: DVec3,
+    pub scale: f64,
+    // rotation:
+}
+
+impl TerrainModel {
+    pub fn new(position: DVec3, scale: f64) -> Self {
+        Self { position, scale }
+    }
+}
+
 /// Parameters of the view used to compute the position of a location on the sphere's surface relative to the view.
 /// This can be calculated directly using f64 operations, or approximated using a Taylor series and f32 operations.
 ///
@@ -53,7 +66,7 @@ pub(crate) struct SideParameter {
 }
 
 #[derive(Clone, Debug, Default, ShaderType)]
-pub(crate) struct ModelViewApproximation {
+pub struct TerrainModelApproximation {
     /// The reference tile, which is used to accurately determine the relative st coordinate in the shader.
     /// The tile under the view (with the origin lod) is the origin for the Taylor series.
     pub(crate) origin_lod: i32,
@@ -61,18 +74,15 @@ pub(crate) struct ModelViewApproximation {
     pub(crate) sides: [SideParameter; 6],
 }
 
-impl ModelViewApproximation {
+impl TerrainModelApproximation {
     /// Computes the view parameters based on the it's world position.
     pub(crate) fn compute(
-        terrain_position: DVec3,
+        model: &TerrainModel,
         view_position: DVec3,
-        radius: f64,
         origin_lod: i32,
-    ) -> ModelViewApproximation {
-        let local_position = (view_position - terrain_position) / radius;
-
+    ) -> TerrainModelApproximation {
         // Coordinate of the location vertically below the view.
-        let view_coordinate = Coordinate::from_local_position(local_position);
+        let view_coordinate = Coordinate::from_world_position(view_position, model);
         // Coordinate of the tile closest to the view coordinate.
         let origin_coordinate = Self::origin_coordinate(view_coordinate, origin_lod);
 
@@ -99,7 +109,7 @@ impl ModelViewApproximation {
             // The later serves as the input to this Taylor series.
             let delta_relative_st = (origin_coordinate.st - view_coordinate.st).as_vec2();
 
-            let r = radius;
+            let r = model.scale;
             let DVec2 { x: s, y: t } = view_coordinate.st;
 
             let u_denom = (1.0 - 4.0 * C_SQR * s * (s - 1.0)).sqrt();
@@ -151,7 +161,7 @@ impl ModelViewApproximation {
                 origin_xy,
 
                 delta_relative_st,
-                c: (p + terrain_position - view_position).as_vec3(),
+                c: (p + model.position - view_position).as_vec3(),
                 c_s: p_ds.as_vec3(),
                 c_t: p_dt.as_vec3(),
                 c_ss: (p_dss / 2.0).as_vec3(),
@@ -160,7 +170,7 @@ impl ModelViewApproximation {
             };
         }
 
-        ModelViewApproximation { origin_lod, sides }
+        TerrainModelApproximation { origin_lod, sides }
     }
 
     /// Computes the view origin tile based on the view's coordinate.
@@ -173,22 +183,21 @@ impl ModelViewApproximation {
     }
 }
 
-pub(crate) fn generate_model_view_approximation(
-    mut model_view_approximations: ResMut<TerrainViewComponents<ModelViewApproximation>>,
+pub fn generate_terrain_model_approximation(
+    mut terrain_model_approximations: ResMut<TerrainViewComponents<TerrainModelApproximation>>,
     view_query: Query<(Entity, GridTransformReadOnly), With<TerrainView>>,
-    terrain_query: Query<(Entity, GridTransformReadOnly, &TerrainConfig), With<Terrain>>,
+    terrain_query: Query<(Entity, &TerrainConfig), With<Terrain>>,
     frame: Res<RootReferenceFrame>,
 ) {
-    for (terrain, terrain_transform, config) in &terrain_query {
+    for (terrain, config) in &terrain_query {
         for (view, view_transform) in &view_query {
-            let approximation = ModelViewApproximation::compute(
-                terrain_transform.position_double(&frame),
+            let model = TerrainModelApproximation::compute(
+                &config.model,
                 view_transform.position_double(&frame),
-                config.scale,
                 10,
             );
 
-            model_view_approximations.insert((terrain, view), approximation);
+            terrain_model_approximations.insert((terrain, view), model);
         }
     }
 }
