@@ -1,7 +1,7 @@
 #define_import_path bevy_terrain::debug
 
 #import bevy_terrain::types::{Coordinate, NodeLookup, Blend, Tile}
-#import bevy_terrain::bindings::{config, quadtree, view_config, tiles, attachments}
+#import bevy_terrain::bindings::{config, quadtree, view_config, tiles, attachments, origins}
 #import bevy_terrain::functions::{compute_morph, compute_blend, quadtree_lod, inside_square, node_count, node_coordinate, coordinate_from_local_position, tile_size}
 
 fn index_color(index: u32) -> vec4<f32> {
@@ -57,7 +57,7 @@ fn show_quadtree(tile: Tile, offset: vec2<f32>) -> vec4<f32> {
     var quadtree_uv: vec2<f32>;
 
     for (; quadtree_lod < config.lod_count; quadtree_lod += 1u) {
-        let origin_xy = vec2<i32>(0);
+        let origin_xy = vec2<i32>(origins[tile.side * config.lod_count + quadtree_lod]);
 
         let lod_difference = i32(tile.lod) - i32(quadtree_lod);
 
@@ -97,14 +97,13 @@ fn show_quadtree(tile: Tile, offset: vec2<f32>) -> vec4<f32> {
 
     quadtree_lod = quadtree_entry.atlas_lod;
 
-    // Todo: lookup nodes in atlas
-    // use this node as quadtree lod again
+    // Todo: use this node as quadtree lod again
 
     var color = index_color(quadtree_lod);
     // color     = vec4<f32>(node_uv, 0.0, 1.0);
     // color     = vec4<f32>(quadtree_uv, 0.0, 1.0);
     color     = mix(color, 0.1 * color, quadtree_outlines(node_uv));
-    color     = mix(color, 0.3 * vec4<f32>(1.0, 0.0, 0.0, 1.0), quadtree_outlines(quadtree_uv));
+    color     = mix(color, 0.5 * vec4<f32>(1.0), quadtree_outlines(quadtree_uv));
 
     return color;
 }

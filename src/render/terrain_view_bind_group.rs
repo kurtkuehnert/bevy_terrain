@@ -1,5 +1,5 @@
 use crate::{
-    math::ModelViewApproximation,
+    math::TerrainModelApproximation,
     terrain::Terrain,
     terrain_data::gpu_quadtree::GpuQuadtree,
     terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
@@ -39,8 +39,9 @@ pub(crate) fn create_refine_tiles_layout(device: &RenderDevice) -> BindGroupLayo
             ShaderStages::COMPUTE,
             (
                 uniform_buffer::<TerrainViewConfigUniform>(false), // terrain view config
-                uniform_buffer::<ModelViewApproximation>(false),   // model view approximation
+                uniform_buffer::<TerrainModelApproximation>(false), // model view approximation
                 storage_buffer_read_only_sized(false, None),       // quadtree
+                storage_buffer_read_only_sized(false, None),       // origins
                 storage_buffer_sized(false, TILE_BUFFER_MIN_SIZE), // final tiles
                 storage_buffer_sized(false, TILE_BUFFER_MIN_SIZE), // temporary tiles
                 storage_buffer::<Parameters>(false),               // parameters
@@ -56,8 +57,9 @@ pub(crate) fn create_terrain_view_layout(device: &RenderDevice) -> BindGroupLayo
             ShaderStages::VERTEX_FRAGMENT,
             (
                 uniform_buffer::<TerrainViewConfigUniform>(false), // terrain view config
-                uniform_buffer::<ModelViewApproximation>(false),   // model view approximation
+                uniform_buffer::<TerrainModelApproximation>(false), // model view approximation
                 storage_buffer_read_only_sized(false, None),       // quadtree
+                storage_buffer_read_only_sized(false, None),       // origins
                 storage_buffer_read_only_sized(false, TILE_BUFFER_MIN_SIZE), // tiles
             ),
         ),
@@ -117,7 +119,7 @@ impl TerrainViewConfigUniform {
 
 pub struct TerrainViewData {
     view_config_buffer: StaticBuffer<TerrainViewConfigUniform>,
-    model_view_approximation_buffer: StaticBuffer<ModelViewApproximation>,
+    terrain_model_approximation_buffer: StaticBuffer<TerrainModelApproximation>,
     pub(super) indirect_buffer: StaticBuffer<Indirect>,
     pub(super) prepare_indirect_bind_group: BindGroup,
     pub(super) refine_tiles_bind_group: BindGroup,
@@ -143,7 +145,7 @@ impl TerrainViewData {
             StaticBuffer::<()>::empty_sized(None, device, tile_buffer_size, BufferUsages::STORAGE);
         let final_tile_buffer =
             StaticBuffer::<()>::empty_sized(None, device, tile_buffer_size, BufferUsages::STORAGE);
-        let model_view_approximation_buffer = StaticBuffer::<ModelViewApproximation>::empty(
+        let terrain_model_approximation_buffer = StaticBuffer::<TerrainModelApproximation>::empty(
             None,
             device,
             BufferUsages::UNIFORM | BufferUsages::COPY_DST,
@@ -159,8 +161,9 @@ impl TerrainViewData {
             &create_refine_tiles_layout(device),
             &BindGroupEntries::sequential((
                 &view_config_buffer,
-                &model_view_approximation_buffer,
+                &terrain_model_approximation_buffer,
                 &gpu_quadtree.quadtree_buffer,
+                &gpu_quadtree.origins_buffer,
                 &final_tile_buffer,
                 &temporary_tile_buffer,
                 &parameter_buffer,
@@ -171,15 +174,16 @@ impl TerrainViewData {
             &create_terrain_view_layout(device),
             &BindGroupEntries::sequential((
                 &view_config_buffer,
-                &model_view_approximation_buffer,
+                &terrain_model_approximation_buffer,
                 &gpu_quadtree.quadtree_buffer,
+                &gpu_quadtree.origins_buffer,
                 &final_tile_buffer,
             )),
         );
 
         Self {
             view_config_buffer,
-            model_view_approximation_buffer,
+            terrain_model_approximation_buffer,
             indirect_buffer,
             prepare_indirect_bind_group,
             refine_tiles_bind_group,
@@ -214,7 +218,9 @@ impl TerrainViewData {
 
     pub(crate) fn extract(
         mut terrain_view_data: ResMut<TerrainViewComponents<TerrainViewData>>,
-        model_view_approximations: Extract<Res<TerrainViewComponents<ModelViewApproximation>>>,
+        terrain_model_approximations: Extract<
+            Res<TerrainViewComponents<TerrainModelApproximation>>,
+        >,
         view_configs: Extract<Res<TerrainViewComponents<TerrainViewConfig>>>,
     ) {
         for (&(terrain, view), view_config) in &view_configs.0 {
@@ -224,12 +230,14 @@ impl TerrainViewData {
                 .view_config_buffer
                 .set_value(TerrainViewConfigUniform::new(view_config));
 
-            terrain_view_data.model_view_approximation_buffer.set_value(
-                model_view_approximations
-                    .get(&(terrain, view))
-                    .unwrap()
-                    .clone(),
-            );
+            terrain_view_data
+                .terrain_model_approximation_buffer
+                .set_value(
+                    terrain_model_approximations
+                        .get(&(terrain, view))
+                        .unwrap()
+                        .clone(),
+                );
         }
     }
 
@@ -239,7 +247,7 @@ impl TerrainViewData {
     ) {
         for data in &mut terrain_view_data.0.values_mut() {
             data.view_config_buffer.update(&queue);
-            data.model_view_approximation_buffer.update(&queue);
+            data.terrain_model_approximation_buffer.update(&queue);
         }
     }
 }
