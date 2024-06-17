@@ -61,13 +61,13 @@ impl Default for TerrainViewConfig {
     fn default() -> Self {
         Self {
             approximate_height: 0.0,
-            quadtree_size: 8,
+            quadtree_size: 4,
             tile_count: 1000000,
             refinement_count: 30,
             grid_size: 32,
             load_distance: 3.0,
             morph_distance: 8.0,
-            blend_distance: 2.0,
+            blend_distance: 1.0,
             morph_range: 0.2,
             blend_range: 0.2,
             precision_threshold_distance: 5000.0,

@@ -1,9 +1,8 @@
 #define_import_path bevy_terrain::fragment
 
-#import bevy_terrain::bindings::{tiles}
 #import bevy_terrain::types::{Tile, NodeLookup, Coordinate, Blend}
+#import bevy_terrain::bindings::{tiles}
 #import bevy_terrain::functions::{compute_blend, lookup_node}
-#import bevy_terrain::attachments::{sample_normal_grad, sample_color_grad}
 #import bevy_terrain::debug::{show_lod, show_quadtree, show_pixels}
 #import bevy_pbr::pbr_types::{PbrInput, pbr_input_new}
 #import bevy_pbr::pbr_functions::{calculate_view, apply_pbr_lighting}
@@ -61,6 +60,8 @@ fn fragment_output(info: ptr<function, FragmentInfo>, output: ptr<function, Frag
     pbr_input.V                             = calculate_view((*info).world_position, pbr_input.is_orthographic);
 
     (*output).color = apply_pbr_lighting(pbr_input);
+#else
+    (*output).color = color;
 #endif
 }
 
@@ -75,10 +76,10 @@ fn fragment_debug(info: ptr<function, FragmentInfo>, output: ptr<function, Fragm
     (*output).color = (*info).debug_color;
 #endif
 #ifdef SHOW_QUADTREE
-    (*output).color = show_quadtree(coordinate);
+    (*output).color = show_quadtree((*info).tile, (*info).offset);
 #endif
 #ifdef SHOW_PIXELS
-    (*output).color = mix((*output).color, show_pixels(coordinate, lookup.lod), 0.5);
+    (*output).color = mix((*output).color, show_pixels(lookup), 0.5);
 #endif
 #ifdef SHOW_NORMALS
     (*output).color = vec4<f32>(normal, 1.0);

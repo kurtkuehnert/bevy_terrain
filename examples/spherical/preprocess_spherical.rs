@@ -1,4 +1,6 @@
+use bevy::math::DVec3;
 use bevy::prelude::*;
+use bevy_terrain::big_space::RootReferenceFrame;
 use bevy_terrain::prelude::*;
 
 const PATH: &str = "terrains/spherical";
@@ -7,12 +9,16 @@ const LOD_COUNT: u32 = 5;
 
 fn main() {
     App::new()
-        .add_plugins((DefaultPlugins, TerrainPlugin, TerrainPreprocessPlugin))
+        .add_plugins((
+            DefaultPlugins.build().disable::<TransformPlugin>(),
+            TerrainPlugin,
+            TerrainPreprocessPlugin,
+        ))
         .add_systems(Startup, setup)
         .run();
 }
 
-fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
+fn setup(mut commands: Commands, asset_server: Res<AssetServer>, frame: Res<RootReferenceFrame>) {
     let config = TerrainConfig {
         lod_count: LOD_COUNT,
         path: PATH.to_string(),
@@ -44,4 +50,6 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         );
 
     commands.spawn((Terrain, node_atlas, preprocessor));
+
+    commands.spawn(DebugCameraBundle::new(DVec3::ZERO, 0.0, &frame));
 }

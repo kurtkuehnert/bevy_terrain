@@ -156,16 +156,15 @@ fn inside_square(position: vec2<f32>, origin: vec2<f32>, size: f32) -> f32 {
 }
 
 fn lookup_node(tile: Tile, grid_offset: vec2<f32>, blend: Blend, lod_offset: u32) -> NodeLookup {
-    let quadtree_lod        = blend.lod - lod_offset;
-    let quadtree_side       = tile.side;
-    let quadtree_coordinate = vec2<u32>(tile.xy.x >> (tile.lod - quadtree_lod),
-                                        tile.xy.y >> (tile.lod - quadtree_lod)) % view_config.quadtree_size;
-    let quadtree_index      = (((                            quadtree_side        ) *
-                                 config.lod_count          + quadtree_lod         ) *
-                                 view_config.quadtree_size + quadtree_coordinate.x) *
-                                 view_config.quadtree_size + quadtree_coordinate.y;
-    let quadtree_entry      = quadtree[quadtree_index];
-
+    let quadtree_lod   = blend.lod - lod_offset;
+    let quadtree_side  = tile.side;
+    let quadtree_xy    = vec2<u32>(tile.xy.x >> (tile.lod - quadtree_lod),
+                                   tile.xy.y >> (tile.lod - quadtree_lod)) % view_config.quadtree_size;
+    let quadtree_index = (((                            quadtree_side) *
+                            config.lod_count          + quadtree_lod ) *
+                            view_config.quadtree_size + quadtree_xy.x) *
+                            view_config.quadtree_size + quadtree_xy.y;
+    let quadtree_entry = quadtree[quadtree_index];
 
     let tiles_per_node = 1u << (tile.lod - quadtree_entry.atlas_lod);
     let atlas_uv = (vec2<f32>(tile.xy % tiles_per_node) + grid_offset) / f32(tiles_per_node);

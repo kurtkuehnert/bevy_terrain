@@ -37,12 +37,12 @@ fn sample_color_grad(lookup: NodeLookup) -> vec4<f32> {
 fn vertex(input: VertexInput) -> VertexOutput {
     var info = vertex_info(input);
 
-    var lookup = lookup_node(info.tile, info.offset, info.blend, 0u);
+    let lookup = lookup_node(info.tile, info.offset, info.blend, 0u);
     var height = sample_height(lookup);
 
     if (info.blend.ratio > 0.0) {
-        lookup = lookup_node(info.tile, info.offset, info.blend, 1u);
-        height = mix(height, sample_height(lookup), info.blend.ratio);
+        let lookup2 = lookup_node(info.tile, info.offset, info.blend, 1u);
+        height      = mix(height, sample_height(lookup2), info.blend.ratio);
     }
 
     var output: VertexOutput;
@@ -55,14 +55,14 @@ fn vertex(input: VertexInput) -> VertexOutput {
 fn fragment(input: FragmentInput) -> FragmentOutput {
     var info = fragment_info(input);
 
-    var lookup = lookup_node(info.tile, info.offset, info.blend, 0u);
+    let lookup = lookup_node(info.tile, info.offset, info.blend, 0u);
     var color      = sample_color_grad(lookup);
     var normal     = sample_normal_grad(lookup, info.world_normal, info.tile.side);
 
     if (info.blend.ratio > 0.0) {
-        lookup = lookup_node(info.tile, info.offset, info.blend, 1u);
-        color   = mix(color,  sample_color_grad(lookup),                                     info.blend.ratio);
-        normal  = mix(normal, sample_normal_grad(lookup, info.world_normal, info.tile.side), info.blend.ratio);
+        let lookup2 = lookup_node(info.tile, info.offset, info.blend, 1u);
+        color       = mix(color,  sample_color_grad(lookup2),                                     info.blend.ratio);
+        normal      = mix(normal, sample_normal_grad(lookup2, info.world_normal, info.tile.side), info.blend.ratio);
     }
 
     var output: FragmentOutput;
