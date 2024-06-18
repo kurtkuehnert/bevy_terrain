@@ -67,7 +67,7 @@ pub struct Coordinate {
 impl Coordinate {
     /// Calculates the coordinate for for the local position on the unit cube sphere.
     pub(crate) fn from_world_position(world_position: DVec3, model: &TerrainModel) -> Self {
-        let normal = (world_position - model.position).normalize();
+        let normal = model.world_to_normal(world_position);
 
         #[cfg(feature = "spherical")]
         {
@@ -121,13 +121,13 @@ impl Coordinate {
             }
             .normalize();
 
-            model.position + normal * model.scale
+            model.normal_to_world(normal)
         }
 
         #[cfg(not(feature = "spherical"))]
         {
             let normal = DVec3::new(2.0 * self.st.x - 1.0, 0.0, 2.0 * self.st.y - 1.0);
-            model.position + normal * model.scale
+            model.local_to_world(normal)
         }
     }
 

@@ -57,6 +57,7 @@ fn vertex_info(input: VertexInput) -> VertexInfo {
     info.offset         = morph.offset;
 #endif
 
+#ifdef TEST1
     if (info.view_distance < view_config.precision_threshold_distance) {
         var relative_position = compute_relative_position(info.tile, info.grid_offset);
         info.view_distance    = length(relative_position + view_config.approximate_height * info.world_normal);
@@ -69,6 +70,7 @@ fn vertex_info(input: VertexInput) -> VertexInfo {
 
         info.world_position = view.world_position + relative_position;
     }
+#endif
 
     info.blend = compute_blend(info.view_distance);
 
