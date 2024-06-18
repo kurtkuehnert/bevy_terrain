@@ -23,7 +23,7 @@ pub(crate) fn tile_count(lod: i32) -> i32 {
     1 << lod
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct TerrainModel {
     pub position: DVec3,
     pub scale: f64,
@@ -33,6 +33,13 @@ pub struct TerrainModel {
 impl TerrainModel {
     pub fn new(position: DVec3, scale: f64) -> Self {
         Self { position, scale }
+    }
+
+    pub(crate) fn normal_to_world(&self, local_position: DVec3) -> DVec3 {
+        self.position + local_position * self.scale
+    }
+    pub(crate) fn world_to_normal(&self, world_position: DVec3) -> DVec3 {
+        (world_position - self.position).normalize()
     }
 }
 

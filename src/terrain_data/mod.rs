@@ -19,7 +19,7 @@ use crate::{
     terrain_data::{node_atlas::NodeAtlas, quadtree::Quadtree},
     util::CollectArray,
 };
-use bevy::{prelude::*, render::render_resource::*};
+use bevy::{math::DVec3, prelude::*, render::render_resource::*};
 use bincode::{Decode, Encode};
 use bytemuck::cast_slice;
 use itertools::iproduct;
@@ -272,34 +272,38 @@ impl AttachmentData {
     }
 }
 
-// pub(crate) fn sample_attachment_local(
-//     quadtree: &Quadtree,
-//     node_atlas: &NodeAtlas,
-//     attachment_index: u32,
-//     local_position: Vec3,
-// ) -> Vec4 {
-//     let (lod, blend_ratio) = quadtree.compute_blend(local_position);
-//
-//     let lookup = quadtree.lookup_node(local_position, lod);
-//     let mut value = node_atlas.sample_attachment(lookup, attachment_index);
-//
-//     if blend_ratio > 0.0 {
-//         let lookup2 = quadtree.lookup_node(local_position, lod - 1);
-//         value = value.lerp(
-//             node_atlas.sample_attachment(lookup2, attachment_index),
-//             blend_ratio,
-//         );
-//     }
-//
-//     value
-// }
+pub fn sample_attachment(
+    quadtree: &Quadtree,
+    node_atlas: &NodeAtlas,
+    attachment_index: u32,
+    sample_world_position: DVec3,
+) -> Vec4 {
+    let normal = quadtree.model.world_to_normal(sample_world_position);
+    let sample_world_position =
+        quadtree.model.normal_to_world(normal) + normal * quadtree.approximate_height as f64;
 
-// pub fn sample_attachment(
-//     quadtree: &Quadtree,
-//     node_atlas: &NodeAtlas,
-//     attachment_index: u32,
-//     world_position: Vec3,
-// ) -> Vec4 {
-//     let local_position = quadtree.world_to_local_position(world_position);
-//     sample_attachment_local(quadtree, node_atlas, attachment_index, local_position)
-// }
+    let (lod, blend_ratio) = quadtree.compute_blend(sample_world_position);
+
+    let lookup = quadtree.lookup_node(sample_world_position, lod);
+    let mut value = node_atlas.sample_attachment(lookup, attachment_index);
+
+    if blend_ratio > 0.0 {
+        let lookup2 = quadtree.lookup_node(sample_world_position, lod - 1);
+        value = value.lerp(
+            node_atlas.sample_attachment(lookup2, attachment_index),
+            blend_ratio,
+        );
+    }
+
+    value
+}
+
+pub fn sample_height(
+    quadtree: &Quadtree,
+    node_atlas: &NodeAtlas,
+    sample_world_position: DVec3,
+) -> f32 {
+    sample_attachment(quadtree, node_atlas, 0, sample_world_position).x
+        * (quadtree.max_height - quadtree.min_height)
+        + quadtree.min_height
+}
