@@ -41,7 +41,7 @@ bitflags::bitflags! {
     pub struct TerrainComputePipelineFlags: u32 {
         const NONE               = 0;
         const SPHERICAL          = (1 << 0);
-        const TEST               = (1 << 1);
+        const TEST1              = (1 << 1);
     }
 }
 
@@ -50,7 +50,7 @@ impl TerrainComputePipelineFlags {
         let mut key = TerrainComputePipelineFlags::NONE;
 
         if debug.test1 {
-            key |= TerrainComputePipelineFlags::TEST;
+            key |= TerrainComputePipelineFlags::TEST1;
         }
 
         key
@@ -62,8 +62,8 @@ impl TerrainComputePipelineFlags {
         if (self.bits() & TerrainComputePipelineFlags::SPHERICAL.bits()) != 0 {
             shader_defs.push("SPHERICAL".into());
         }
-        if (self.bits() & TerrainComputePipelineFlags::TEST.bits()) != 0 {
-            shader_defs.push("TEST".into());
+        if (self.bits() & TerrainComputePipelineFlags::TEST1.bits()) != 0 {
+            shader_defs.push("TEST1".into());
         }
 
         shader_defs
