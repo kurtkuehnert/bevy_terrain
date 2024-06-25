@@ -1,10 +1,10 @@
 use crate::{
-    big_space::{GridTransformReadOnly, ReferenceFrames},
+    big_space::{GridTransformOwned, GridTransformReadOnly, ReferenceFrame, ReferenceFrames},
     math::{coordinate::Coordinate, C_SQR},
     prelude::{Terrain, TerrainConfig, TerrainView, TerrainViewComponents},
 };
 use bevy::{
-    math::{DMat3, DVec2, DVec3, IVec2},
+    math::{DMat3, DMat4, DQuat, DVec2, DVec3, IVec2},
     prelude::*,
     render::render_resource::ShaderType,
 };
@@ -23,23 +23,66 @@ pub(crate) fn tile_count(lod: i32) -> i32 {
     1 << lod
 }
 
+// Todo: keep in sync with terrain transform, make this authoritative?
+
 #[derive(Clone, Default)]
 pub struct TerrainModel {
-    pub position: DVec3,
-    pub scale: f64,
-    // rotation:
+    translation: DVec3,
+    scale: DVec3,
+    rotation: DQuat,
+
+    world_from_local: DMat4,
+    local_from_world: DMat4,
 }
 
 impl TerrainModel {
-    pub fn new(position: DVec3, scale: f64) -> Self {
-        Self { position, scale }
+    fn from_scale_rotation_translation(scale: DVec3, rotation: DQuat, translation: DVec3) -> Self {
+        let world_from_local = DMat4::from_scale_rotation_translation(scale, rotation, translation);
+        let local_from_world = world_from_local.inverse();
+
+        Self {
+            translation,
+            scale,
+            rotation,
+            world_from_local,
+            local_from_world,
+        }
+    }
+    pub fn sphere(position: DVec3, radius: f64) -> Self {
+        Self::from_scale_rotation_translation(DVec3::splat(radius), DQuat::default(), position)
+    }
+
+    pub fn ellipsoid(position: DVec3, major_axis: f64, minor_axis: f64) -> Self {
+        Self::from_scale_rotation_translation(
+            DVec3::new(major_axis, minor_axis, major_axis),
+            DQuat::from_rotation_x(45.0_f64.to_radians()),
+            position,
+        )
     }
 
     pub(crate) fn normal_to_world(&self, local_position: DVec3) -> DVec3 {
-        self.position + local_position * self.scale
+        self.world_from_local.transform_point3(local_position)
     }
+
     pub(crate) fn world_to_normal(&self, world_position: DVec3) -> DVec3 {
-        (world_position - self.position).normalize()
+        self.local_from_world.transform_point3(world_position)
+    }
+
+    pub(crate) fn radius(&self) -> f64 {
+        self.scale.length()
+    }
+
+    pub(crate) fn grid_transform(&self, frame: &ReferenceFrame) -> GridTransformOwned {
+        let (cell, translation) = frame.translation_to_grid(self.translation);
+
+        GridTransformOwned {
+            transform: Transform {
+                translation,
+                scale: self.scale.as_vec3(),
+                rotation: self.rotation.as_quat(),
+            },
+            cell,
+        }
     }
 }
 
@@ -107,7 +150,7 @@ impl TerrainModelApproximation {
 
         let mut sides = [SideParameter::default(); 6];
 
-        for (side, &side_matrix) in SIDE_MATRICES.iter().enumerate() {
+        for (side, &sm) in SIDE_MATRICES.iter().enumerate() {
             let origin_coordinate = origin_coordinate.project_to_side(side as u32);
             let view_coordinate = view_coordinate.project_to_side(side as u32);
             let origin_xy = (origin_coordinate.st * tile_count(origin_lod) as f64).as_ivec2();
@@ -116,7 +159,8 @@ impl TerrainModelApproximation {
             // The later serves as the input to this Taylor series.
             let delta_relative_st = (origin_coordinate.st - view_coordinate.st).as_vec2();
 
-            let r = model.scale;
+            // The model matrix is used to transform the local position and directions into the corresponding world position and directions.
+            let m = model.world_from_local;
             let DVec2 { x: s, y: t } = view_coordinate.st;
 
             let u_denom = (1.0 - 4.0 * C_SQR * s * (s - 1.0)).sqrt();
@@ -157,18 +201,19 @@ impl TerrainModelApproximation {
             let c_dst = 2.0 * v * l_ds * l_dt - l * (v_dt * l_ds + v * l_dst);
             let c_dtt = 2.0 * v * l_dt * l_dt - l * (2.0 * v_dt * l_dt + v * l_dtt) + v_dtt * l * l;
 
-            let p = r * side_matrix * DVec3::new(a, b, c) / l;
-            let p_ds = r * side_matrix * DVec3::new(a_ds, b_ds, c_ds) / l.powi(2);
-            let p_dt = r * side_matrix * DVec3::new(a_dt, b_dt, c_dt) / l.powi(2);
-            let p_dss = r * side_matrix * DVec3::new(a_dss, b_dss, c_dss) / l.powi(3);
-            let p_dst = r * side_matrix * DVec3::new(a_dst, b_dst, c_dst) / l.powi(3);
-            let p_dtt = r * side_matrix * DVec3::new(a_dtt, b_dtt, c_dtt) / l.powi(3);
+            // p is transformed as a point, takes the model position into account
+            // the other coefficients are transformed as vectors, discards the translation
+            let p = m.transform_point3(sm * DVec3::new(a, b, c) / l);
+            let p_ds = m.transform_vector3(sm * DVec3::new(a_ds, b_ds, c_ds) / l.powi(2));
+            let p_dt = m.transform_vector3(sm * DVec3::new(a_dt, b_dt, c_dt) / l.powi(2));
+            let p_dss = m.transform_vector3(sm * DVec3::new(a_dss, b_dss, c_dss) / l.powi(3));
+            let p_dst = m.transform_vector3(sm * DVec3::new(a_dst, b_dst, c_dst) / l.powi(3));
+            let p_dtt = m.transform_vector3(sm * DVec3::new(a_dtt, b_dtt, c_dtt) / l.powi(3));
 
             sides[side] = SideParameter {
                 origin_xy,
-
                 delta_relative_st,
-                c: (p + model.position - view_position).as_vec3(),
+                c: (p - view_position).as_vec3(),
                 c_s: p_ds.as_vec3(),
                 c_t: p_dt.as_vec3(),
                 c_ss: (p_dss / 2.0).as_vec3(),

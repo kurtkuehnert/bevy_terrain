@@ -205,7 +205,8 @@ impl Quadtree {
 
     pub(super) fn compute_blend(&self, sample_world_position: DVec3) -> (u32, f32) {
         let view_distance = self.view_world_position.distance(sample_world_position) as f32;
-        let lod_f32 = (2.0 * self.blend_distance / view_distance * self.model.scale as f32).log2();
+        let lod_f32 =
+            (2.0 * self.blend_distance / view_distance * self.model.radius() as f32).log2();
         let lod = (lod_f32 as u32).clamp(0, self.lod_count - 1);
         let ratio = if lod_f32 < 1.0 || lod_f32 > self.lod_count as f32 {
             0.0
@@ -284,7 +285,7 @@ impl Quadtree {
                                 node_world_position.distance(quadtree.view_world_position);
                             let node_distance =
                                 0.5 * distance * NodeCoordinate::node_count(lod) as f64
-                                    / config.model.scale;
+                                    / config.model.radius();
 
                             let state = if lod == 0 || node_distance < quadtree.load_distance as f64
                             {

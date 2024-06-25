@@ -1,7 +1,7 @@
 //! Types for configuring terrains.
 
 use crate::{
-    big_space::{GridCell, ReferenceFrame},
+    big_space::{GridCell, GridTransformOwned, ReferenceFrame},
     math::TerrainModel,
     terrain_data::{node_atlas::NodeAtlas, AttachmentConfig},
 };
@@ -64,10 +64,7 @@ impl Default for TerrainConfig {
     fn default() -> Self {
         Self {
             lod_count: 1,
-            model: TerrainModel {
-                position: Default::default(),
-                scale: 1.0,
-            },
+            model: TerrainModel::sphere(default(), 1.0),
             min_height: 0.0,
             max_height: 1.0,
             node_atlas_size: 1024,
@@ -102,16 +99,12 @@ pub struct TerrainBundle {
 impl TerrainBundle {
     /// Creates a new terrain bundle from the config.
     pub fn new(config: TerrainConfig, frame: &ReferenceFrame) -> Self {
-        let (cell, translation) = frame.translation_to_grid(config.model.position);
+        let GridTransformOwned { transform, cell } = config.model.grid_transform(frame);
 
         Self {
             terrain: Terrain,
             node_atlas: NodeAtlas::from_config(&config),
-            transform: Transform {
-                translation,
-                scale: Vec3::splat(config.model.scale as f32),
-                ..default()
-            },
+            transform,
             config,
             cell,
             global_transform: default(),
