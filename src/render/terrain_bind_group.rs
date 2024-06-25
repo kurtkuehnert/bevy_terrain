@@ -88,7 +88,7 @@ impl From<&TerrainConfig> for TerrainConfigUniform {
             lod_count: config.lod_count,
             min_height: config.min_height,
             max_height: config.max_height,
-            scale: config.model.scale as f32,
+            scale: config.model.radius() as f32,
         }
     }
 }
