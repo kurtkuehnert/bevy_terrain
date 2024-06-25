@@ -47,14 +47,10 @@ pub struct CullingUniform {
 
 impl From<&ExtractedView> for CullingUniform {
     fn from(view: &ExtractedView) -> Self {
-        let view_proj = view.projection * view.transform.compute_matrix().inverse();
-        let world_position = view.transform.translation();
-        let planes = planes(&view_proj);
-
         Self {
-            world_position,
-            view_proj,
-            planes,
+            world_position: view.world_from_view.translation(),
+            view_proj: view.world_from_view.compute_matrix().inverse(),
+            planes: default(),
         }
     }
 }

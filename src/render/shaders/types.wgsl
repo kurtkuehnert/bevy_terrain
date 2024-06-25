@@ -4,6 +4,7 @@ struct TerrainConfig {
     lod_count: u32,
     min_height: f32,
     max_height: f32,
+    scale: f32,
 }
 
 struct TerrainViewConfig {

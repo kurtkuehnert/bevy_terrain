@@ -3,7 +3,7 @@
 #import bevy_terrain::bindings::{mesh, config, view_config, tiles, quadtree, terrain_model_approximation}
 #import bevy_terrain::types::{Tile, Quadtree, NodeLookup, Blend, LookupInfo, Coordinate, Morph}
 #import bevy_pbr::mesh_view_bindings::view
-#import bevy_render::maths::affine_to_square
+#import bevy_render::maths::{affine3_to_square, mat2x4_f32_to_mat3x3_unpack}
 
 const F0 = 0u;
 const F1 = 1u;
@@ -52,21 +52,19 @@ fn cube_to_sphere(uv: vec2<f32>) -> vec2<f32> {
     return xy;
 }
 
-fn local_to_world_normal(local_position: vec3<f32>) -> vec3<f32> {
-    // Todo: take rotation into account
-    return local_position;
+fn normal_local_to_world(local_position: vec3<f32>) -> vec3<f32> {
+    let world_from_local = mat2x4_f32_to_mat3x3_unpack(mesh[0].local_from_world_transpose_a,
+                                                       mesh[0].local_from_world_transpose_b);
+    return normalize(world_from_local * local_position);
 }
 
-fn local_to_world_position(local_position: vec3<f32>) -> vec3<f32> {
-    return (affine_to_square(mesh[0].model) * vec4<f32>(local_position, 1.0)).xyz;
-}
-
-fn world_to_clip_position(world_position: vec3<f32>) -> vec4<f32> {
-    return view.view_proj * vec4<f32>(world_position, 1.0);
+fn position_local_to_world(local_position: vec3<f32>) -> vec3<f32> {
+    let world_from_local = affine3_to_square(mesh[0].world_from_local);
+    return (world_from_local * vec4<f32>(local_position, 1.0)).xyz;
 }
 
 fn compute_morph(view_distance: f32, lod: u32, grid_offset: vec2<f32>) -> Morph {
-    let threshold_distance = 2.0 * view_config.morph_distance * tile_size(lod) * 6371000.0;
+    let threshold_distance = 2.0 * view_config.morph_distance * tile_size(lod) * config.scale;
     let ratio = clamp(1.0 - (1.0 - view_distance / threshold_distance) / view_config.morph_range, 0.0, 1.0);
 
     let even_offset = vec2<f32>(vec2<u32>(grid_offset * view_config.grid_size) & vec2<u32>(4294967294u)) / view_config.grid_size;
@@ -76,7 +74,7 @@ fn compute_morph(view_distance: f32, lod: u32, grid_offset: vec2<f32>) -> Morph 
 }
 
 fn compute_blend(view_distance: f32) -> Blend {
-    let lod_f32 = log2(2.0 * view_config.blend_distance / view_distance * 6371000.0);
+    let lod_f32 = log2(2.0 * view_config.blend_distance / view_distance * config.scale);
     let lod     = clamp(u32(lod_f32), 0u, config.lod_count - 1u);
 
 #ifdef BLEND

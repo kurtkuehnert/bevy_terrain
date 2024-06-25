@@ -15,7 +15,7 @@ repository = "https://github.com/kurtkuehnert/bevy_terrain"
 spherical = []
 
 [dependencies]
-bevy = "0.13.0" #{ git="https://github.com/bevyengine/bevy/", branch="main" }
+bevy = "0.14.0-rc.3" #{ git="https://github.com/bevyengine/bevy/", branch="main" }
 ndarray = "0.15"
 itertools = "0.12"
 image = "0.25"
@@ -27,7 +27,7 @@ strum_macros = "0.26"
 bytemuck = "1.14"
 anyhow = "1.0"
 bincode = "2.0.0-rc.3"
-big_space = "0.6"
+big_space = { path = "../big_space" }
 async-channel = "2.1"
 
 [[example]]

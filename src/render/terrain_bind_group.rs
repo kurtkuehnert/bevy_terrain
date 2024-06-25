@@ -79,6 +79,7 @@ struct TerrainConfigUniform {
     lod_count: u32,
     min_height: f32,
     max_height: f32,
+    scale: f32,
 }
 
 impl From<&TerrainConfig> for TerrainConfigUniform {
@@ -87,6 +88,7 @@ impl From<&TerrainConfig> for TerrainConfigUniform {
             lod_count: config.lod_count,
             min_height: config.min_height,
             max_height: config.max_height,
+            scale: config.model.scale as f32,
         }
     }
 }
@@ -184,12 +186,13 @@ impl TerrainData {
         >,
     ) {
         for (terrain, transform, previous_transform) in terrain_query.iter() {
-            let transform = transform.affine();
-            let previous_transform = previous_transform.map(|t| t.0).unwrap_or(transform);
             let mesh_transforms = MeshTransforms {
-                transform: (&transform).into(),
-                previous_transform: (&previous_transform).into(),
+                world_from_local: (&transform.affine()).into(),
                 flags: 0,
+                previous_world_from_local: (&previous_transform
+                    .map(|t| t.0)
+                    .unwrap_or(transform.affine()))
+                    .into(),
             };
             let mesh_uniform = MeshUniform::new(&mesh_transforms, None);
 
