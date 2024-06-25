@@ -298,6 +298,7 @@ impl<P: PhaseItem> RenderCommand<P> for DrawTerrainCommand {
             .unwrap();
 
         pass.draw_indirect(&data.indirect_buffer, 0);
+
         RenderCommandResult::Success
     }
 }

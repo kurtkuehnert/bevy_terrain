@@ -1,7 +1,7 @@
 //! Types for configuring terrains.
 
 use crate::{
-    big_space::{GridCell, RootReferenceFrame},
+    big_space::{GridCell, ReferenceFrame},
     math::TerrainModel,
     terrain_data::{node_atlas::NodeAtlas, AttachmentConfig},
 };
@@ -47,7 +47,6 @@ pub struct Terrain;
 pub struct TerrainConfig {
     /// The count of level of detail layers.
     pub lod_count: u32,
-
     pub model: TerrainModel,
     /// The minimum height of the terrain.
     pub min_height: f32,
@@ -102,7 +101,7 @@ pub struct TerrainBundle {
 
 impl TerrainBundle {
     /// Creates a new terrain bundle from the config.
-    pub fn new(config: TerrainConfig, frame: &RootReferenceFrame) -> Self {
+    pub fn new(config: TerrainConfig, frame: &ReferenceFrame) -> Self {
         let (cell, translation) = frame.translation_to_grid(config.model.position);
 
         Self {
@@ -116,7 +115,11 @@ impl TerrainBundle {
             config,
             cell,
             global_transform: default(),
-            visibility_bundle: default(),
+            visibility_bundle: VisibilityBundle {
+                visibility: Visibility::Visible,
+                inherited_visibility: default(),
+                view_visibility: default(),
+            },
             no_frustum_culling: NoFrustumCulling,
         }
     }

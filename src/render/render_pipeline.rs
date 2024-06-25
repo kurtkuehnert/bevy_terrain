@@ -7,22 +7,25 @@ use crate::{
             create_terrain_view_layout, DrawTerrainCommand, SetTerrainViewBindGroup,
         },
     },
+    terrain_view::TerrainView,
 };
 use bevy::{
-    core_pipeline::core_3d::Opaque3d,
+    core_pipeline::core_3d::Transparent3d,
     pbr::{
-        extract_materials, prepare_materials, ExtractedMaterials, MaterialPipeline, MeshPipeline,
-        MeshPipelineViewLayoutKey, RenderMaterialInstances, RenderMaterials, SetMaterialBindGroup,
-        SetMeshViewBindGroup,
+        MaterialPipeline, MeshPipeline, MeshPipelineViewLayoutKey, PreparedMaterial,
+        RenderMaterialInstances, SetMaterialBindGroup, SetMeshViewBindGroup,
     },
     prelude::*,
     render::{
         extract_instances::ExtractInstancesPlugin,
-        render_asset::prepare_assets,
-        render_phase::{AddRenderCommand, DrawFunctions, RenderPhase, SetItemPipeline},
+        render_asset::{prepare_assets, RenderAssetPlugin, RenderAssets},
+        render_phase::{
+            AddRenderCommand, DrawFunctions, PhaseItemExtraIndex, SetItemPipeline,
+            ViewSortedRenderPhases,
+        },
         render_resource::*,
         renderer::RenderDevice,
-        texture::BevyDefault,
+        texture::{BevyDefault, GpuImage},
         Render, RenderApp, RenderSet,
     },
 };
@@ -36,8 +39,8 @@ pub struct TerrainPipelineKey<M: Material> {
 impl<M: Material> Eq for TerrainPipelineKey<M> where M::Data: PartialEq {}
 
 impl<M: Material> PartialEq for TerrainPipelineKey<M>
-    where
-        M::Data: PartialEq,
+where
+    M::Data: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
         self.flags == other.flags && self.bind_group_data == other.bind_group_data
@@ -45,8 +48,8 @@ impl<M: Material> PartialEq for TerrainPipelineKey<M>
 }
 
 impl<M: Material> Clone for TerrainPipelineKey<M>
-    where
-        M::Data: Clone,
+where
+    M::Data: Clone,
 {
     fn clone(&self) -> Self {
         Self {
@@ -57,8 +60,8 @@ impl<M: Material> Clone for TerrainPipelineKey<M>
 }
 
 impl<M: Material> Hash for TerrainPipelineKey<M>
-    where
-        M::Data: Hash,
+where
+    M::Data: Hash,
 {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.flags.hash(state);
@@ -283,8 +286,8 @@ impl<M: Material> FromWorld for TerrainRenderPipeline<M> {
 }
 
 impl<M: Material> SpecializedRenderPipeline for TerrainRenderPipeline<M>
-    where
-        M::Data: PartialEq + Eq + Hash + Clone,
+where
+    M::Data: PartialEq + Eq + Hash + Clone,
 {
     type Key = TerrainPipelineKey<M>;
 
@@ -371,23 +374,25 @@ pub(crate) type DrawTerrain<M> = (
 /// Queses all terrain entities for rendering via the terrain pipeline.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn queue_terrain<M: Material>(
-    draw_functions: Res<DrawFunctions<Opaque3d>>,
+    draw_functions: Res<DrawFunctions<Transparent3d>>,
     msaa: Res<Msaa>,
     debug: Option<Res<DebugTerrain>>,
-    render_materials: Res<RenderMaterials<M>>,
+    render_materials: Res<RenderAssets<PreparedMaterial<M>>>,
     terrain_pipeline: Res<TerrainRenderPipeline<M>>,
     pipeline_cache: Res<PipelineCache>,
+    mut opaque_render_phases: ResMut<ViewSortedRenderPhases<Transparent3d>>,
     mut pipelines: ResMut<SpecializedRenderPipelines<TerrainRenderPipeline<M>>>,
-    mut view_query: Query<&mut RenderPhase<Opaque3d>>,
+    view_query: Query<Entity, With<TerrainView>>,
     render_material_instances: Res<RenderMaterialInstances<M>>,
 ) where
     M::Data: PartialEq + Eq + Hash + Clone,
 {
-    let draw_function = draw_functions.read().get_id::<DrawTerrain<M>>().unwrap();
+    for view in view_query.iter() {
+        let phase = opaque_render_phases.get_mut(&view).unwrap();
+        let draw_function = draw_functions.read().get_id::<DrawTerrain<M>>().unwrap();
 
-    for mut opaque_phase in view_query.iter_mut() {
-        for (&entity, id) in render_material_instances.iter() {
-            if let Some(material) = render_materials.get(id) {
+        for (&terrain, &material_id) in render_material_instances.iter() {
+            if let Some(material) = render_materials.get(material_id) {
                 let mut flags = TerrainPipelineFlags::from_msaa_samples(msaa.samples());
 
                 #[cfg(feature = "spherical")]
@@ -409,15 +414,15 @@ pub(crate) fn queue_terrain<M: Material>(
                     bind_group_data: material.key.clone(),
                 };
 
-                let pipeline_id = pipelines.specialize(&pipeline_cache, &terrain_pipeline, key);
+                let pipeline = pipelines.specialize(&pipeline_cache, &terrain_pipeline, key);
 
-                opaque_phase.add(Opaque3d {
-                    asset_id: AssetId::invalid(),
-                    entity,
-                    pipeline: pipeline_id,
-                    batch_range: 0..1,
+                phase.add(Transparent3d {
+                    distance: -f32::MAX,
+                    pipeline,
+                    entity: terrain,
                     draw_function,
-                    dynamic_offset: None,
+                    batch_range: Default::default(),
+                    extra_index: PhaseItemExtraIndex::NONE,
                 });
             }
         }
@@ -436,29 +441,23 @@ impl<M: Material> Default for TerrainMaterialPlugin<M> {
 }
 
 impl<M: Material> Plugin for TerrainMaterialPlugin<M>
-    where
-        M::Data: PartialEq + Eq + Hash + Clone,
+where
+    M::Data: PartialEq + Eq + Hash + Clone,
 {
     fn build(&self, app: &mut App) {
-        app.init_asset::<M>()
-            .add_plugins(ExtractInstancesPlugin::<AssetId<M>>::extract_visible());
+        app.init_asset::<M>().add_plugins((
+            ExtractInstancesPlugin::<AssetId<M>>::extract_visible(),
+            RenderAssetPlugin::<PreparedMaterial<M>, GpuImage>::default(),
+        ));
 
-        if let Ok(render_app) = app.get_sub_app_mut(RenderApp) {
-            render_app
-                .add_render_command::<Opaque3d, DrawTerrain<M>>()
-                .init_resource::<ExtractedMaterials<M>>()
-                .init_resource::<RenderMaterials<M>>()
-                .add_systems(ExtractSchedule, extract_materials::<M>)
-                .add_systems(
-                    Render,
-                    (
-                        prepare_materials::<M>
-                            .in_set(RenderSet::PrepareAssets)
-                            .after(prepare_assets::<Image>),
-                        queue_terrain::<M>.in_set(RenderSet::QueueMeshes),
-                    ),
-                );
-        }
+        app.sub_app_mut(RenderApp)
+            .add_render_command::<Transparent3d, DrawTerrain<M>>()
+            .add_systems(
+                Render,
+                queue_terrain::<M>
+                    .in_set(RenderSet::QueueMeshes)
+                    .after(prepare_assets::<PreparedMaterial<M>>),
+            );
     }
 
     fn finish(&self, app: &mut App) {

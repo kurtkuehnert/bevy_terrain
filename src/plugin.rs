@@ -1,5 +1,5 @@
 use crate::{
-    big_space::FloatingOriginPlugin,
+    big_space::BigSpacePlugin,
     formats::tiff::TiffLoader,
     math::{generate_terrain_model_approximation, TerrainModelApproximation},
     render::{
@@ -17,6 +17,7 @@ use crate::{
     terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
     util::InternalShaders,
 };
+use bevy::render::view::{check_visibility, VisibilitySystems};
 use bevy::{
     prelude::*,
     render::{
@@ -31,7 +32,7 @@ pub struct TerrainPlugin;
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((
-            FloatingOriginPlugin::default(),
+            BigSpacePlugin::default(),
             ExtractComponentPlugin::<Terrain>::default(),
             ExtractComponentPlugin::<TerrainView>::default(),
         ))
@@ -40,6 +41,10 @@ impl Plugin for TerrainPlugin {
         .init_resource::<TerrainViewComponents<Quadtree>>()
         .init_resource::<TerrainViewComponents<TerrainViewConfig>>()
         .init_resource::<TerrainViewComponents<TerrainModelApproximation>>()
+        .add_systems(
+            PostUpdate,
+            check_visibility::<With<Terrain>>.in_set(VisibilitySystems::CheckVisibility),
+        )
         .add_systems(
             Last,
             (
@@ -98,8 +103,8 @@ impl Plugin for TerrainPlugin {
             .init_resource::<TerrainComputePipelines>()
             .init_resource::<SpecializedComputePipelines<TerrainComputePipelines>>();
 
-        let compute_node = TerrainComputeNode::from_world(&mut render_app.world);
-        let mut render_graph = render_app.world.resource_mut::<RenderGraph>();
+        let compute_node = TerrainComputeNode::from_world(render_app.world_mut());
+        let mut render_graph = render_app.world_mut().resource_mut::<RenderGraph>();
         render_graph.add_node(TerrainComputeLabel, compute_node);
         render_graph.add_node_edge(TerrainComputeLabel, CameraDriverLabel);
     }

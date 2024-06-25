@@ -8,7 +8,7 @@
 
 #import bevy_terrain::bindings::{view_config, tiles, terrain_model_approximation, quadtree, atlas_sampler, attachments, attachment0_atlas}
 #import bevy_terrain::types::{Blend, Coordinate, NodeLookup, Tile, Morph}
-#import bevy_terrain::functions::{tile_size, compute_coordinate, compute_local_position, compute_relative_coordinate, compute_relative_position, compute_grid_offset, compute_morph, compute_blend, local_to_world_position, world_to_clip_position}
+#import bevy_terrain::functions::{tile_size, compute_coordinate, compute_local_position, compute_relative_coordinate, compute_relative_position, compute_grid_offset, compute_morph, compute_blend, position_local_to_world}
 #import bevy_terrain::attachments::{sample_height}
 #import bevy_terrain::debug::{show_lod, show_tiles, show_quadtree, index_color}
 #import bevy_pbr::mesh_view_bindings::view

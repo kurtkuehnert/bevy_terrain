@@ -1,5 +1,5 @@
 use crate::{
-    big_space::{GridTransformReadOnly, RootReferenceFrame},
+    big_space::{GridTransformReadOnly, ReferenceFrames},
     math::{Coordinate, NodeCoordinate, TerrainModel},
     terrain::{Terrain, TerrainConfig},
     terrain_data::{
@@ -205,7 +205,7 @@ impl Quadtree {
 
     pub(super) fn compute_blend(&self, sample_world_position: DVec3) -> (u32, f32) {
         let view_distance = self.view_world_position.distance(sample_world_position) as f32;
-        let lod_f32 = (2.0 * self.blend_distance / view_distance * 6371000.0).log2();
+        let lod_f32 = (2.0 * self.blend_distance / view_distance * self.model.scale as f32).log2();
         let lod = (lod_f32 as u32).clamp(0, self.lod_count - 1);
         let ratio = if lod_f32 < 1.0 || lod_f32 > self.lod_count as f32 {
             0.0
@@ -247,14 +247,16 @@ impl Quadtree {
         mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
         view_query: Query<(Entity, GridTransformReadOnly), With<TerrainView>>,
         terrain_query: Query<(Entity, &TerrainConfig), With<Terrain>>,
-        frame: Res<RootReferenceFrame>,
+        frames: ReferenceFrames,
     ) {
         for (terrain, config) in &terrain_query {
+            let frame = frames.parent_frame(terrain).unwrap();
+
             for (view, view_transform) in &view_query {
                 let quadtree = quadtrees.get_mut(&(terrain, view)).unwrap();
 
                 quadtree.model = config.model.clone();
-                quadtree.view_world_position = view_transform.position_double(&frame);
+                quadtree.view_world_position = view_transform.position_double(frame);
                 let view_coordinate =
                     Coordinate::from_world_position(quadtree.view_world_position, &quadtree.model);
 

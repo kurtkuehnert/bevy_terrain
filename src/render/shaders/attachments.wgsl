@@ -80,7 +80,7 @@ fn sample_normal_grad(lookup: NodeLookup, vertex_normal: vec3<f32>, side: u32) -
     let bitangent = cross(normal, tangent);
     let TBN       = mat3x3(tangent, bitangent, normal);
 
-    let side_length = 3.14159265359 / 4.0 * 6371000.0;
+    let side_length = 3.14159265359 / 4.0 * config.scale;
 #else
     let TBN = mat3x3(1.0, 0.0, 0.0,
                      0.0, 0.0, 1.0,
