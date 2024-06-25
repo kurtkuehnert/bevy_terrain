@@ -1,6 +1,6 @@
 #import bevy_terrain::types::Tile
-#import bevy_terrain::bindings::{culling_view, view_config, final_tiles, temporary_tiles, parameters}
-#import bevy_terrain::functions::{compute_local_position, compute_relative_position, local_to_world_position, local_to_world_normal, tile_size}
+#import bevy_terrain::bindings::{config, culling_view, view_config, final_tiles, temporary_tiles, parameters}
+#import bevy_terrain::functions::{compute_local_position, compute_relative_position, position_local_to_world, normal_local_to_world, tile_size}
 
 fn child_index() -> i32 {
     return atomicAdd(&parameters.child_index, parameters.counter);
@@ -16,14 +16,16 @@ fn final_index() -> i32 {
 
 fn compute_corner_view_distance(tile: Tile, offset: vec2<f32>) -> f32 {
     let local_position = compute_local_position(tile, offset);
-    let world_position = local_to_world_position(local_position);
-    let world_normal   = local_to_world_normal(local_position);
+    let world_position = position_local_to_world(local_position);
+    let world_normal   = normal_local_to_world(local_position);
     var view_distance  = distance(world_position + view_config.approximate_height * world_normal, culling_view.world_position);
 
-    if (view_distance < view_config.precision_threshold_distance) {
-        let relative_position   = compute_relative_position(tile, offset);
-        view_distance           = length(relative_position + view_config.approximate_height * world_normal);
+#ifdef TEST1
+    if (view_distance < view_config.precision_threshold_distance * config.scale) {
+        let relative_position = compute_relative_position(tile, offset);
+        view_distance         = length(relative_position + view_config.approximate_height * world_normal);
     }
+#endif
 
     return view_distance;
 }
@@ -36,7 +38,7 @@ fn should_be_divided(tile: Tile) -> bool {
         min_view_distance = min(min_view_distance, corner_view_distance);
     }
 
-    return min_view_distance < view_config.morph_distance * tile_size(tile.lod) * 6371000.0;
+    return min_view_distance < view_config.morph_distance * tile_size(tile.lod) * config.scale;
 }
 
 fn subdivide(tile: Tile) {

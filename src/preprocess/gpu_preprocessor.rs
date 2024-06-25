@@ -13,6 +13,7 @@ use bevy::{
         render_asset::RenderAssets,
         render_resource::{binding_types::*, *},
         renderer::RenderDevice,
+        texture::GpuImage,
         Extract,
     },
 };
@@ -116,7 +117,7 @@ impl GpuPreprocessor {
     pub(crate) fn prepare(
         mut not_first: Local<bool>,
         device: Res<RenderDevice>,
-        images: Res<RenderAssets<Image>>,
+        images: Res<RenderAssets<GpuImage>>,
         mut gpu_preprocessors: ResMut<TerrainComponents<GpuPreprocessor>>,
         mut gpu_node_atlases: ResMut<TerrainComponents<GpuNodeAtlas>>,
         preprocess_pipelines: Res<TerrainPreprocessPipelines>,

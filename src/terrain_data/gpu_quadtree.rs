@@ -5,7 +5,6 @@ use crate::{
     util::StaticBuffer,
 };
 use bevy::{
-    core::cast_slice,
     prelude::*,
     render::{
         render_resource::*,
@@ -13,6 +12,7 @@ use bevy::{
         Extract,
     },
 };
+use bytemuck::cast_slice;
 use ndarray::{Array2, Array4};
 use std::mem;
 

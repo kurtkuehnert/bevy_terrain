@@ -1,5 +1,5 @@
 use crate::{
-    big_space::{GridTransformReadOnly, RootReferenceFrame},
+    big_space::{GridTransformReadOnly, ReferenceFrames},
     math::{coordinate::Coordinate, C_SQR},
     prelude::{Terrain, TerrainConfig, TerrainView, TerrainViewComponents},
 };
@@ -194,9 +194,11 @@ pub fn generate_terrain_model_approximation(
     mut terrain_model_approximations: ResMut<TerrainViewComponents<TerrainModelApproximation>>,
     view_query: Query<(Entity, GridTransformReadOnly), With<TerrainView>>,
     terrain_query: Query<(Entity, &TerrainConfig), With<Terrain>>,
-    frame: Res<RootReferenceFrame>,
+    frames: ReferenceFrames,
 ) {
     for (terrain, config) in &terrain_query {
+        let frame = frames.parent_frame(terrain).unwrap();
+
         for (view, view_transform) in &view_query {
             let model = TerrainModelApproximation::compute(
                 &config.model,

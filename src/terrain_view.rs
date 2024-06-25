@@ -70,7 +70,7 @@ impl Default for TerrainViewConfig {
             blend_distance: 1.0,
             morph_range: 0.2,
             blend_range: 0.2,
-            precision_threshold_distance: 5000.0,
+            precision_threshold_distance: 0.001,
         }
     }
 }

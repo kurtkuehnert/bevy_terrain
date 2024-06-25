@@ -1,7 +1,7 @@
 use bevy::math::DVec3;
 use bevy::window::Cursor;
 use bevy::{prelude::*, reflect::TypePath, render::render_resource::*};
-use bevy_terrain::big_space::{GridCell, RootReferenceFrame};
+use bevy_terrain::big_space::{BigSpaceCommands, ReferenceFrame};
 use bevy_terrain::prelude::*;
 
 const PATH: &str = "terrains/spherical";
@@ -44,8 +44,8 @@ fn main() {
                 .build()
                 .disable::<TransformPlugin>(),
             TerrainPlugin,
-            TerrainDebugPlugin, // enable debug settings and controls
             TerrainMaterialPlugin::<TerrainMaterial>::default(),
+            TerrainDebugPlugin, // enable debug settings and controls
         ))
         // .insert_resource(ClearColor(Color::WHITE))
         .add_systems(Startup, setup)
@@ -60,7 +60,6 @@ fn setup(
     mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
     asset_server: Res<AssetServer>,
-    frame: Res<RootReferenceFrame>,
 ) {
     let gradient = asset_server.load("textures/gradient.png");
     images.load_image(
@@ -89,48 +88,49 @@ fn setup(
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
     let view_config = TerrainViewConfig::default();
 
-    let terrain = commands
-        .spawn((
-            TerrainBundle::new(config.clone(), &frame),
-            materials.add(TerrainMaterial {
-                gradient: gradient.clone(),
-            }),
-        ))
-        .id();
+    commands.spawn_big_space(ReferenceFrame::default(), |root| {
+        let frame = root.frame().clone();
 
-    let view = commands
-        .spawn((
-            TerrainView,
-            DebugCameraBundle::new(-DVec3::X * RADIUS * 3.0, RADIUS, &frame),
-        ))
-        .id();
+        let terrain = root
+            .spawn_spatial((
+                TerrainBundle::new(config.clone(), &frame),
+                materials.add(TerrainMaterial {
+                    gradient: gradient.clone(),
+                }),
+            ))
+            .id();
 
-    initialize_terrain_view(
-        terrain,
-        view,
-        &config,
-        view_config,
-        &mut quadtrees,
-        &mut view_configs,
-    );
+        let view = root
+            .spawn_spatial((
+                TerrainView,
+                DebugCameraBundle::new(-DVec3::X * RADIUS * 3.0, RADIUS, &frame),
+            ))
+            .id();
 
-    let sun_position = DVec3::new(-1000.0, 1000.0, -1000.0);
-    let (sun_cell, sun_translation) = frame.translation_to_grid(sun_position);
+        initialize_terrain_view(
+            terrain,
+            view,
+            &config,
+            view_config,
+            &mut quadtrees,
+            &mut view_configs,
+        );
 
-    commands.spawn((
-        PbrBundle {
-            mesh: meshes.add(Sphere::new(100.0).mesh().build()),
-            transform: Transform::from_translation(sun_translation),
+        let sun_position = DVec3::new(-1.0, 1.0, -1.0) * RADIUS * 10.0;
+        let (sun_cell, sun_translation) = frame.translation_to_grid(sun_position);
+
+        root.spawn_spatial((
+            PbrBundle {
+                mesh: meshes.add(Sphere::new(RADIUS as f32 * 2.0).mesh().build()),
+                transform: Transform::from_translation(sun_translation),
+                ..default()
+            },
+            sun_cell,
+        ));
+
+        root.spawn_spatial(PbrBundle {
+            mesh: meshes.add(Cuboid::from_length(RADIUS as f32 * 0.1)),
             ..default()
-        },
-        sun_cell,
-    ));
-
-    commands.spawn((
-        PbrBundle {
-            mesh: meshes.add(Cuboid::default()),
-            ..default()
-        },
-        GridCell::default(),
-    ));
+        });
+    });
 }

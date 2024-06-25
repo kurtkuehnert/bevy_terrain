@@ -1,4 +1,4 @@
-use crate::big_space::{FloatingOrigin, GridCell, GridTransform, RootReferenceFrame};
+use crate::big_space::{FloatingOrigin, GridCell, GridTransform, ReferenceFrame, ReferenceFrames};
 
 use bevy::{input::mouse::MouseMotion, math::DVec3, prelude::*};
 
@@ -22,7 +22,7 @@ impl Default for DebugCameraBundle {
 }
 
 impl DebugCameraBundle {
-    pub fn new(position: DVec3, speed: f64, frame: &RootReferenceFrame) -> Self {
+    pub fn new(position: DVec3, speed: f64, frame: &ReferenceFrame) -> Self {
         let (cell, translation) = frame.translation_to_grid(position);
 
         Self {
@@ -75,13 +75,15 @@ impl Default for DebugCameraController {
 }
 
 pub fn camera_controller(
-    frame: Res<RootReferenceFrame>,
+    frames: ReferenceFrames,
     time: Res<Time>,
     keyboard: Res<ButtonInput<KeyCode>>,
     mut mouse_move: EventReader<MouseMotion>,
-    mut camera: Query<(GridTransform, &mut DebugCameraController)>,
+    mut camera: Query<(Entity, GridTransform, &mut DebugCameraController)>,
 ) {
-    let (mut position, mut controller) = camera.single_mut();
+    let (camera, mut position, mut controller) = camera.single_mut();
+
+    let frame = frames.parent_frame(camera).unwrap();
 
     keyboard
         .just_pressed(KeyCode::KeyT)
