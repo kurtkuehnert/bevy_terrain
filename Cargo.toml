@@ -27,12 +27,13 @@ strum_macros = "0.26"
 bytemuck = "1.14"
 anyhow = "1.0"
 bincode = "2.0.0-rc.3"
-big_space = { path = "../big_space" }
+big_space = { git = "https://github.com/kurtkuehnert/big_space", branch = "bevy-0.14" }
 async-channel = "2.1"
 
 [[example]]
 name = "preprocess_planar"
 path = "examples/planar/preprocess_planar.rs"
+required-features = ["bevy/embedded_watcher"]
 
 [package.metadata.example.preprocess_planar]
 name = "Preprocess Planar"
@@ -50,7 +51,7 @@ description = "Renders a basic flat terrain with only the base attachment."
 [[example]]
 name = "advanced"
 path = "examples/planar/advanced.rs"
-# required-features = ["bevy/embedded_watcher"]
+required-features = ["bevy/embedded_watcher"]
 
 [package.metadata.example.advanced]
 name = "Advanced"
@@ -59,7 +60,7 @@ description = "Renders a flat terrain with the base attachment and an albedo tex
 [[example]]
 name = "preprocess_spherical"
 path = "examples/spherical/preprocess_spherical.rs"
-required-features = ["spherical"]
+required-features = ["spherical", "bevy/embedded_watcher"]
 
 [package.metadata.example.preprocess_spherical]
 name = "Preprocess Spherical"
@@ -68,7 +69,6 @@ description = "Preprocesses the terrain data for the spherical examples."
 [[example]]
 name = "spherical"
 path = "examples/spherical/spherical.rs"
-# required-features = ["spherical"]
 required-features = ["spherical", "bevy/embedded_watcher"]
 
 [package.metadata.example.spherical]

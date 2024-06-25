@@ -1,7 +1,4 @@
-use bevy::math::DVec3;
-use bevy::window::Cursor;
-use bevy::{prelude::*, reflect::TypePath, render::render_resource::*};
-use bevy_terrain::big_space::{BigSpaceCommands, ReferenceFrame};
+use bevy::{math::DVec3, prelude::*, reflect::TypePath, render::render_resource::*};
 use bevy_terrain::prelude::*;
 
 const PATH: &str = "terrains/spherical";
@@ -30,19 +27,7 @@ impl Material for TerrainMaterial {
 fn main() {
     App::new()
         .add_plugins((
-            DefaultPlugins
-                .set(WindowPlugin {
-                    primary_window: Some(Window {
-                        cursor: Cursor {
-                            visible: false,
-                            ..default()
-                        },
-                        ..default()
-                    }),
-                    ..default()
-                })
-                .build()
-                .disable::<TransformPlugin>(),
+            DefaultPlugins.build().disable::<TransformPlugin>(),
             TerrainPlugin,
             TerrainMaterialPlugin::<TerrainMaterial>::default(),
             TerrainDebugPlugin, // enable debug settings and controls
