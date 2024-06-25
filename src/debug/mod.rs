@@ -2,7 +2,6 @@
 //! data of the plugin.
 use crate::{
     debug::camera::camera_controller,
-    prelude::TerrainMaterialPlugin,
     terrain_view::{TerrainViewComponents, TerrainViewConfig},
 };
 use bevy::{
@@ -10,6 +9,7 @@ use bevy::{
     prelude::*,
     render::{render_resource::*, Extract, RenderApp},
     transform::TransformSystem,
+    window::PrimaryWindow,
 };
 
 pub mod camera;
@@ -24,10 +24,9 @@ pub struct TerrainDebugPlugin;
 
 impl Plugin for TerrainDebugPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(TerrainMaterialPlugin::<DebugTerrainMaterial>::default())
-            .init_resource::<DebugTerrain>()
+        app.init_resource::<DebugTerrain>()
             .init_resource::<LoadingImages>()
-            .add_systems(Startup, debug_lighting)
+            .add_systems(Startup, (debug_lighting, debug_window))
             .add_systems(Update, (toggle_debug, change_config, finish_loading_images))
             .add_systems(
                 PostUpdate,
@@ -270,6 +269,11 @@ pub(crate) fn debug_lighting(mut commands: Commands) {
         brightness: 100.0,
         ..default()
     });
+}
+
+pub fn debug_window(mut window: Query<&mut Window, With<PrimaryWindow>>) {
+    let mut window = window.single_mut();
+    window.cursor.visible = false;
 }
 
 #[derive(Resource, Default)]
