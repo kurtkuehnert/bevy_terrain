@@ -49,13 +49,13 @@ impl TerrainModel {
         }
     }
     pub fn sphere(position: DVec3, radius: f64) -> Self {
-        Self::from_scale_rotation_translation(DVec3::splat(radius), DQuat::default(), position)
+        Self::from_scale_rotation_translation(DVec3::splat(radius), DQuat::IDENTITY, position)
     }
 
     pub fn ellipsoid(position: DVec3, major_axis: f64, minor_axis: f64) -> Self {
         Self::from_scale_rotation_translation(
             DVec3::new(major_axis, minor_axis, major_axis),
-            DQuat::from_rotation_x(45.0_f64.to_radians()),
+            DQuat::IDENTITY, // ::from_rotation_x(45.0_f64.to_radians()),
             position,
         )
     }
