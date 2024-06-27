@@ -1,8 +1,8 @@
 #define_import_path bevy_terrain::vertex
 
-#import bevy_terrain::types::{Tile, Blend}
+#import bevy_terrain::types::{Tile, Blend, NodeLookup}
 #import bevy_terrain::bindings::{config, view_config, tiles}
-#import bevy_terrain::functions::{lookup_node, compute_local_position, compute_relative_position, compute_grid_offset, compute_morph, compute_blend, normal_local_to_world, position_local_to_world}
+#import bevy_terrain::functions::{lookup_node, compute_grid_offset, compute_local_position, compute_relative_position, compute_morph, compute_blend, normal_local_to_world, position_local_to_world}
 #import bevy_terrain::debug::{show_tiles}
 #import bevy_pbr::mesh_view_bindings::view
 #import bevy_pbr::view_transformations::position_world_to_clip
@@ -76,6 +76,10 @@ fn vertex_info(input: VertexInput) -> VertexInfo {
     info.blend = compute_blend(info.view_distance);
 
     return info;
+}
+
+fn vertex_lookup_node(info: ptr<function, VertexInfo>, lod_offset: u32) -> NodeLookup {
+    return lookup_node((*info).tile, (*info).offset, vec2<f32>(0.0), vec2<f32>(0.0), (*info).blend, lod_offset);
 }
 
 fn vertex_output(info: ptr<function, VertexInfo>, output: ptr<function, VertexOutput>, height: f32) {

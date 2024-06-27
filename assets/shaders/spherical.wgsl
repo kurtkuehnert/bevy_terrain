@@ -1,8 +1,7 @@
 #import bevy_terrain::bindings::config
-#import bevy_terrain::functions::{vertex_coordinate, lookup_node}
 #import bevy_terrain::attachments::{sample_height_grad, sample_normal_grad}
-#import bevy_terrain::vertex::{VertexInput, VertexOutput, VertexInfo, vertex_info, vertex_output, vertex_debug}
-#import bevy_terrain::fragment::{FragmentInput, FragmentOutput, FragmentInfo, fragment_info, fragment_output, fragment_debug}
+#import bevy_terrain::vertex::{VertexInput, VertexOutput, VertexInfo, vertex_info, vertex_lookup_node, vertex_output, vertex_debug}
+#import bevy_terrain::fragment::{FragmentInput, FragmentOutput, FragmentInfo, fragment_info, fragment_lookup_node, fragment_output, fragment_debug}
 #import bevy_pbr::pbr_types::{PbrInput, pbr_input_new}
 #import bevy_pbr::pbr_functions::{calculate_view, apply_pbr_lighting}
 
@@ -37,11 +36,11 @@ fn sample_color_grad(lookup: NodeLookup) -> vec4<f32> {
 fn vertex(input: VertexInput) -> VertexOutput {
     var info = vertex_info(input);
 
-    let lookup = lookup_node(info.tile, info.offset, info.blend, 0u);
+    let lookup = vertex_lookup_node(&info, 0u);
     var height = sample_height(lookup);
 
     if (info.blend.ratio > 0.0) {
-        let lookup2 = lookup_node(info.tile, info.offset, info.blend, 1u);
+        let lookup2 = vertex_lookup_node(&info, 1u);
         height      = mix(height, sample_height(lookup2), info.blend.ratio);
     }
 
@@ -55,12 +54,12 @@ fn vertex(input: VertexInput) -> VertexOutput {
 fn fragment(input: FragmentInput) -> FragmentOutput {
     var info = fragment_info(input);
 
-    let lookup = lookup_node(info.tile, info.offset, info.blend, 0u);
-    var color      = sample_color_grad(lookup);
-    var normal     = sample_normal_grad(lookup, info.world_normal, info.tile.side);
+    let lookup = fragment_lookup_node(&info, 0u);
+    var color  = sample_color_grad(lookup);
+    var normal = sample_normal_grad(lookup, info.world_normal, info.tile.side);
 
     if (info.blend.ratio > 0.0) {
-        let lookup2 = lookup_node(info.tile, info.offset, info.blend, 1u);
+        let lookup2 = fragment_lookup_node(&info, 1u);
         color       = mix(color,  sample_color_grad(lookup2),                                     info.blend.ratio);
         normal      = mix(normal, sample_normal_grad(lookup2, info.world_normal, info.tile.side), info.blend.ratio);
     }
@@ -68,10 +67,6 @@ fn fragment(input: FragmentInput) -> FragmentOutput {
     var output: FragmentOutput;
     fragment_output(&info, &output, color, normal);
     fragment_debug(&info, &output, lookup, normal);
-
-    if (input.view_distance < view_config.precision_threshold_distance) {
-        output.color = mix(output.color, vec4<f32>(1.0, 0.0, 0.0, 1.0), 0.1);
-    }
 
     return output;
 }

@@ -153,7 +153,7 @@ fn inside_square(position: vec2<f32>, origin: vec2<f32>, size: f32) -> f32 {
     return inside.x * inside.y;
 }
 
-fn lookup_node(tile: Tile, offset: vec2<f32>, blend: Blend, lod_offset: u32) -> NodeLookup {
+fn lookup_node(tile: Tile, offset: vec2<f32>, offset_dx: vec2<f32>, offset_dy: vec2<f32>, blend: Blend, lod_offset: u32) -> NodeLookup {
     let quadtree_lod   = blend.lod - lod_offset;
     let quadtree_side  = tile.side;
     let quadtree_xy    = vec2<u32>(tile.xy.x >> (tile.lod - quadtree_lod),
@@ -165,13 +165,12 @@ fn lookup_node(tile: Tile, offset: vec2<f32>, blend: Blend, lod_offset: u32) -> 
     let quadtree_entry = quadtree[quadtree_index];
 
     let tiles_per_node = 1u << (tile.lod - quadtree_entry.atlas_lod);
-    let atlas_uv = (vec2<f32>(tile.xy % tiles_per_node) + offset) / f32(tiles_per_node);
 
     var lookup: NodeLookup;
-    lookup.lod                 = quadtree_entry.atlas_lod;
-    lookup.index               = quadtree_entry.atlas_index;
-    lookup.uv                  = atlas_uv;
-    lookup.ddx                 = vec2<f32>(0.0);
-    lookup.ddy                 = vec2<f32>(0.0);
+    lookup.lod   = quadtree_entry.atlas_lod;
+    lookup.index = quadtree_entry.atlas_index;
+    lookup.uv    = (vec2<f32>(tile.xy % tiles_per_node) + offset) / f32(tiles_per_node);
+    lookup.ddx   = offset_dx / f32(tiles_per_node);
+    lookup.ddy   = offset_dy / f32(tiles_per_node);
     return lookup;
 }
