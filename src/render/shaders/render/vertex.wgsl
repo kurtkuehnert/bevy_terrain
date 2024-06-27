@@ -30,6 +30,7 @@ struct VertexInfo {
     world_normal: vec3<f32>,
     view_distance: f32,
     blend: Blend,
+    taylor_error: f32,
 }
 
 fn vertex_info(input: VertexInput) -> VertexInfo {
@@ -69,6 +70,8 @@ fn vertex_info(input: VertexInput) -> VertexInfo {
         info.offset       = morph.offset;
     #endif
 
+        info.taylor_error = distance(info.world_position, view.world_position + relative_position);
+
         info.world_position = view.world_position + relative_position;
     }
 #endif
@@ -97,5 +100,8 @@ fn vertex_output(info: ptr<function, VertexInfo>, output: ptr<function, VertexOu
 fn vertex_debug(info: ptr<function, VertexInfo>, output: ptr<function, VertexOutput>) {
 #ifdef SHOW_TILES
     (*output).debug_color = show_tiles((*info).tile, (*info).view_distance);
+#endif
+#ifdef TEST2
+    (*output).debug_color = vec4<f32>((*info).taylor_error / 1.0, 0.0, 0.0, 1.0);
 #endif
 }
