@@ -76,14 +76,15 @@ fn fragment_output(info: ptr<function, FragmentInfo>, output: ptr<function, Frag
 }
 
 fn fragment_debug(info: ptr<function, FragmentInfo>, output: ptr<function, FragmentOutput>, lookup: NodeLookup, normal: vec3<f32>) {
+    if ((*info).debug_color.w > 0.0) {
+        (*output).color = (*info).debug_color;
+    }
+
 #ifdef SHOW_LOD
     (*output).color = show_lod((*info).blend, lookup);
 #endif
 #ifdef SHOW_UV
     (*output).color = vec4<f32>(lookup.uv, 0.0, 1.0);
-#endif
-#ifdef SHOW_TILES
-    (*output).color = (*info).debug_color;
 #endif
 #ifdef SHOW_QUADTREE
     (*output).color = show_quadtree((*info).tile, (*info).offset);
@@ -95,10 +96,7 @@ fn fragment_debug(info: ptr<function, FragmentInfo>, output: ptr<function, Fragm
     (*output).color = vec4<f32>(normal, 1.0);
 #endif
 
-    if ((*info).view_distance < view_config.precision_threshold_distance * config.scale) {
-        (*output).color = mix((*output).color, vec4<f32>(1.0, 0.0, 0.0, 1.0), 0.3);
-    }
-
-    // (*output).color = vec4<f32>((*info).offset_dx * 4.0, 0.0, 1.0);
-    // (*output).color = vec4<f32>(lookup.ddx * 50.0, 0.0, 1.0);
+    // if ((*info).view_distance < view_config.precision_threshold_distance * config.scale) {
+    //     (*output).color = mix((*output).color, vec4<f32>(0.0, 1.0, 0.0, 1.0), 0.3);
+    // }
 }
