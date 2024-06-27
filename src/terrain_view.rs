@@ -67,7 +67,7 @@ impl Default for TerrainViewConfig {
             grid_size: 32,
             load_distance: 3.0,
             morph_distance: 3.0,
-            blend_distance: 1.5,
+            blend_distance: 1.0,
             morph_range: 0.2,
             blend_range: 0.2,
             precision_threshold_distance: 0.001,
