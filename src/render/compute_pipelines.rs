@@ -1,4 +1,7 @@
 use crate::{
+    compute_phase::{
+        ComputeFunction, ComputeFunctionId, ComputeFunctions, ComputePhaseItem, ViewComputePhases,
+    },
     debug::DebugTerrain,
     render::{
         culling_bind_group::{create_culling_layout, CullingBindGroup},
@@ -10,15 +13,19 @@ use crate::{
     },
     terrain::{Terrain, TerrainComponents},
     terrain_view::{TerrainView, TerrainViewComponents},
+    util::CollectArray,
 };
 use bevy::{
+    ecs::entity::EntityHashSet,
     prelude::*,
     render::{
-        render_graph::{self, RenderLabel},
+        render_graph::{self, RenderGraphContext, RenderLabel},
         render_resource::*,
         renderer::{RenderContext, RenderDevice},
+        Extract,
     },
 };
+use itertools::Itertools;
 use strum::{EnumCount, IntoEnumIterator};
 use strum_macros::{EnumCount, EnumIter};
 
@@ -78,40 +85,6 @@ pub struct TerrainComputePipelines {
     terrain_layout: BindGroupLayout,
     prepare_indirect_shader: Handle<Shader>,
     refine_tiles_shader: Handle<Shader>,
-    pipelines: [Option<CachedComputePipelineId>; TerrainComputePipelineId::COUNT],
-}
-
-impl TerrainComputePipelines {
-    pub(crate) fn pipelines<'a>(
-        &'a self,
-        pipeline_cache: &'a PipelineCache,
-    ) -> Option<Vec<&ComputePipeline>> {
-        TerrainComputePipelineId::iter()
-            .map(|id| pipeline_cache.get_compute_pipeline(self.pipelines[id as usize].unwrap()))
-            .collect::<Option<Vec<_>>>()
-    }
-    pub(crate) fn queue(
-        debug: Option<Res<DebugTerrain>>,
-        pipeline_cache: Res<PipelineCache>,
-        mut compute_pipelines: ResMut<TerrainComputePipelines>,
-        mut pipelines: ResMut<SpecializedComputePipelines<TerrainComputePipelines>>,
-    ) {
-        let mut flags = TerrainComputePipelineFlags::NONE;
-
-        #[cfg(feature = "spherical")]
-        {
-            flags |= TerrainComputePipelineFlags::SPHERICAL;
-        }
-
-        if let Some(debug) = &debug {
-            flags |= TerrainComputePipelineFlags::from_debug(debug);
-        }
-
-        for id in TerrainComputePipelineId::iter() {
-            compute_pipelines.pipelines[id as usize] =
-                Some(pipelines.specialize(&pipeline_cache, &compute_pipelines, (id, flags)));
-        }
-    }
 }
 
 impl FromWorld for TerrainComputePipelines {
@@ -134,7 +107,6 @@ impl FromWorld for TerrainComputePipelines {
             terrain_layout,
             prepare_indirect_shader,
             refine_tiles_shader,
-            pipelines: [None; TerrainComputePipelineId::COUNT],
         }
     }
 }
@@ -203,64 +175,80 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
 }
 
 pub struct TerrainComputeNode {
-    terrain_query: QueryState<Entity, With<Terrain>>,
     view_query: QueryState<Entity, With<TerrainView>>,
 }
 
 impl FromWorld for TerrainComputeNode {
     fn from_world(world: &mut World) -> Self {
         Self {
-            terrain_query: world.query_filtered(),
             view_query: world.query_filtered(),
         }
     }
 }
 
-impl TerrainComputeNode {
-    fn tessellate_terrain<'a>(
-        pass: &mut ComputePass<'a>,
-        pipelines: &'a [&'a ComputePipeline],
-        view_data: &'a TerrainViewData,
-        terrain_data: &'a TerrainData,
-        culling_bind_group: &'a CullingBindGroup,
-    ) {
-        pass.set_bind_group(0, culling_bind_group, &[]);
-        pass.set_bind_group(1, &terrain_data.terrain_bind_group, &[]);
-        pass.set_bind_group(2, &view_data.refine_tiles_bind_group, &[]);
-        pass.set_bind_group(3, &view_data.prepare_indirect_bind_group, &[]);
-
-        pass.set_pipeline(pipelines[TerrainComputePipelineId::PrepareRoot as usize]);
-        pass.dispatch_workgroups(1, 1, 1);
-
-        for _ in 0..view_data.refinement_count() {
-            pass.set_pipeline(pipelines[TerrainComputePipelineId::RefineTiles as usize]);
-            pass.dispatch_workgroups_indirect(&view_data.indirect_buffer, 0);
-
-            pass.set_pipeline(pipelines[TerrainComputePipelineId::PrepareNext as usize]);
-            pass.dispatch_workgroups(1, 1, 1);
-        }
-
-        pass.set_pipeline(pipelines[TerrainComputePipelineId::RefineTiles as usize]);
-        pass.dispatch_workgroups_indirect(&view_data.indirect_buffer, 0);
-
-        pass.set_pipeline(pipelines[TerrainComputePipelineId::PrepareRender as usize]);
-        pass.dispatch_workgroups(1, 1, 1);
-    }
-}
-
 impl render_graph::Node for TerrainComputeNode {
     fn update(&mut self, world: &mut World) {
-        self.terrain_query.update_archetypes(world);
         self.view_query.update_archetypes(world);
     }
 
-    fn run(
+    fn run<'w>(
         &self,
-        _graph: &mut render_graph::RenderGraphContext,
-        context: &mut RenderContext,
-        world: &World,
+        _graph: &mut RenderGraphContext,
+        context: &mut RenderContext<'w>,
+        world: &'w World,
     ) -> Result<(), render_graph::NodeRunError> {
-        let compute_pipelines = world.resource::<TerrainComputePipelines>();
+        let phases = world
+            .get_resource::<ViewComputePhases<TerrainComputePhaseItem>>()
+            .unwrap();
+
+        let views = self.view_query.iter_manual(world).collect_vec();
+
+        context.add_command_buffer_generation_task(move |device| {
+            let mut command_encoder =
+                device.create_command_encoder(&CommandEncoderDescriptor::default());
+            let mut compute_pass =
+                command_encoder.begin_compute_pass(&ComputePassDescriptor::default());
+
+            for view in views {
+                let phase = phases.get(&view).unwrap();
+                phase.compute(&mut compute_pass, world, view);
+            }
+
+            drop(compute_pass);
+            command_encoder.finish()
+        });
+
+        Ok(())
+    }
+}
+
+pub(crate) struct TerrainComputePhaseItem {
+    terrain: Entity,
+    compute_function: ComputeFunctionId,
+    pipelines: [CachedComputePipelineId; TerrainComputePipelineId::COUNT],
+}
+
+impl ComputePhaseItem for TerrainComputePhaseItem {
+    fn entity(&self) -> Entity {
+        self.terrain
+    }
+
+    fn compute_function(&self) -> ComputeFunctionId {
+        self.compute_function
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct TerrainComputeFunction;
+
+impl ComputeFunction<TerrainComputePhaseItem> for TerrainComputeFunction {
+    fn compute<'w>(
+        &mut self,
+        world: &'w World,
+        pass: &mut ComputePass<'w>,
+        view: Entity,
+        item: &TerrainComputePhaseItem,
+    ) {
         let pipeline_cache = world.resource::<PipelineCache>();
         let terrain_data = world.resource::<TerrainComponents<TerrainData>>();
         let terrain_view_data = world.resource::<TerrainViewComponents<TerrainViewData>>();
@@ -270,36 +258,104 @@ impl render_graph::Node for TerrainComputeNode {
 
         if let Some(debug) = debug {
             if debug.freeze {
-                return Ok(());
+                return;
             }
         }
 
-        let pipelines = match compute_pipelines.pipelines(pipeline_cache) {
-            None => return Ok(()), // some pipelines are not loaded yet
+        let pipelines = match TerrainComputePipelineId::iter()
+            .map(|id| pipeline_cache.get_compute_pipeline(item.pipelines[id as usize]))
+            .collect::<Option<Vec<_>>>()
+        {
+            None => return, // some pipelines are not loaded yet
             Some(pipelines) => pipelines,
         };
 
-        let pass = &mut context
-            .command_encoder()
-            .begin_compute_pass(&ComputePassDescriptor::default());
+        if let Some(terrain_data) = terrain_data.get(&item.terrain) {
+            let view_data = terrain_view_data.get(&(item.terrain, view)).unwrap();
+            let culling_bind_group = culling_bind_groups.get(&(item.terrain, view)).unwrap();
 
-        for terrain in self.terrain_query.iter_manual(world) {
-            if let Some(terrain_data) = terrain_data.get(&terrain) {
-                for view in self.view_query.iter_manual(world) {
-                    let view_data = terrain_view_data.get(&(terrain, view)).unwrap();
-                    let culling_bind_group = culling_bind_groups.get(&(terrain, view)).unwrap();
+            pass.set_bind_group(0, culling_bind_group, &[]);
+            pass.set_bind_group(1, &terrain_data.terrain_bind_group, &[]);
+            pass.set_bind_group(2, &view_data.refine_tiles_bind_group, &[]);
+            pass.set_bind_group(3, &view_data.prepare_indirect_bind_group, &[]);
 
-                    TerrainComputeNode::tessellate_terrain(
-                        pass,
-                        &pipelines,
-                        view_data,
-                        terrain_data,
-                        culling_bind_group,
-                    );
-                }
+            pass.set_pipeline(pipelines[TerrainComputePipelineId::PrepareRoot as usize]);
+            pass.dispatch_workgroups(1, 1, 1);
+
+            for _ in 0..view_data.refinement_count() {
+                pass.set_pipeline(pipelines[TerrainComputePipelineId::RefineTiles as usize]);
+                pass.dispatch_workgroups_indirect(&view_data.indirect_buffer, 0);
+
+                pass.set_pipeline(pipelines[TerrainComputePipelineId::PrepareNext as usize]);
+                pass.dispatch_workgroups(1, 1, 1);
             }
-        }
 
-        Ok(())
+            pass.set_pipeline(pipelines[TerrainComputePipelineId::RefineTiles as usize]);
+            pass.dispatch_workgroups_indirect(&view_data.indirect_buffer, 0);
+
+            pass.set_pipeline(pipelines[TerrainComputePipelineId::PrepareRender as usize]);
+            pass.dispatch_workgroups(1, 1, 1);
+        }
     }
+}
+
+pub(crate) fn queue_terrain_compute(
+    compute_functions: Res<ComputeFunctions<TerrainComputePhaseItem>>,
+    debug: Option<Res<DebugTerrain>>,
+    pipeline_cache: Res<PipelineCache>,
+    compute_pipelines: ResMut<TerrainComputePipelines>,
+    mut pipelines: ResMut<SpecializedComputePipelines<TerrainComputePipelines>>,
+    mut terrain_compute_phases: ResMut<ViewComputePhases<TerrainComputePhaseItem>>,
+    view_query: Query<Entity, With<TerrainView>>,
+    terrain_query: Query<Entity, With<Terrain>>,
+) {
+    for view in view_query.iter() {
+        let phase = terrain_compute_phases.get_mut(&view).unwrap();
+        let compute_function = compute_functions
+            .read()
+            .get_id::<TerrainComputeFunction>()
+            .unwrap();
+
+        for terrain in terrain_query.iter() {
+            let mut flags = TerrainComputePipelineFlags::NONE;
+
+            #[cfg(feature = "spherical")]
+            {
+                flags |= TerrainComputePipelineFlags::SPHERICAL;
+            }
+
+            if let Some(debug) = &debug {
+                flags |= TerrainComputePipelineFlags::from_debug(debug);
+            }
+
+            let pipelines = TerrainComputePipelineId::iter()
+                .map(|id| pipelines.specialize(&pipeline_cache, &compute_pipelines, (id, flags)))
+                .collect_array();
+
+            phase.add(TerrainComputePhaseItem {
+                terrain,
+                compute_function,
+                pipelines,
+            });
+        }
+    }
+}
+
+pub(crate) fn extract_terrain_compute_phases(
+    mut commands: Commands,
+    mut terrain_compute_phases: ResMut<ViewComputePhases<TerrainComputePhaseItem>>,
+    view_query: Extract<Query<Entity, With<TerrainView>>>,
+    mut live_entities: Local<EntityHashSet>,
+) {
+    live_entities.clear();
+
+    for view in &view_query {
+        commands.get_or_spawn(view);
+
+        terrain_compute_phases.insert_or_clear(view);
+
+        live_entities.insert(view);
+    }
+
+    terrain_compute_phases.retain(|entity, _| live_entities.contains(entity));
 }
