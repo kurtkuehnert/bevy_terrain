@@ -1,20 +1,17 @@
-use crate::compute_phase::{AddComputeFunction, ComputeFunctions, ViewComputePhases};
-use crate::render::compute_pipelines::{
-    extract_terrain_compute_phases, queue_terrain_compute, TerrainComputeFunction,
-    TerrainComputePhaseItem,
-};
 use crate::{
     big_space::BigSpacePlugin,
-    formats::tiff::TiffLoader,
     math::{generate_terrain_model_approximation, TerrainModelApproximation},
     render::{
-        compute_pipelines::{TerrainComputeLabel, TerrainComputeNode, TerrainComputePipelines},
+        compute_pipelines::{
+            queue_terrain_compute, TerrainComputeItem, TerrainComputeLabel, TerrainComputeNode,
+            TerrainComputePipelines,
+        },
         culling_bind_group::CullingBindGroup,
         shaders::load_terrain_shaders,
         terrain_bind_group::TerrainData,
         terrain_view_bind_group::TerrainViewData,
     },
-    terrain::{Terrain, TerrainComponents},
+    terrain::{Terrain, TerrainComponents, TerrainConfig},
     terrain_data::{
         gpu_node_atlas::GpuNodeAtlas, gpu_quadtree::GpuQuadtree, node_atlas::NodeAtlas,
         quadtree::Quadtree,
@@ -22,12 +19,15 @@ use crate::{
     terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
     util::InternalShaders,
 };
-use bevy::render::view::{check_visibility, VisibilitySystems};
 use bevy::{
     prelude::*,
     render::{
-        extract_component::ExtractComponentPlugin, graph::CameraDriverLabel,
-        render_graph::RenderGraph, render_resource::*, Render, RenderApp, RenderSet,
+        extract_component::ExtractComponentPlugin,
+        graph::CameraDriverLabel,
+        render_graph::RenderGraph,
+        render_resource::*,
+        view::{check_visibility, VisibilitySystems},
+        Render, RenderApp, RenderSet,
     },
 };
 
@@ -40,8 +40,8 @@ impl Plugin for TerrainPlugin {
             BigSpacePlugin::default(),
             ExtractComponentPlugin::<Terrain>::default(),
             ExtractComponentPlugin::<TerrainView>::default(),
+            ExtractComponentPlugin::<TerrainConfig>::default(),
         ))
-        .init_asset_loader::<TiffLoader>()
         .init_resource::<InternalShaders>()
         .init_resource::<TerrainViewComponents<Quadtree>>()
         .init_resource::<TerrainViewComponents<TerrainViewConfig>>()
@@ -68,13 +68,10 @@ impl Plugin for TerrainPlugin {
             .init_resource::<TerrainViewComponents<GpuQuadtree>>()
             .init_resource::<TerrainViewComponents<TerrainViewData>>()
             .init_resource::<TerrainViewComponents<CullingBindGroup>>()
-            .init_resource::<ViewComputePhases<TerrainComputePhaseItem>>()
-            .init_resource::<ComputeFunctions<TerrainComputePhaseItem>>()
-            .add_compute_function::<TerrainComputePhaseItem, TerrainComputeFunction>()
+            .init_resource::<TerrainViewComponents<TerrainComputeItem>>()
             .add_systems(
                 ExtractSchedule,
                 (
-                    extract_terrain_compute_phases,
                     GpuNodeAtlas::initialize,
                     GpuQuadtree::initialize,
                     TerrainData::initialize.after(GpuNodeAtlas::initialize),

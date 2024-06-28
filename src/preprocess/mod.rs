@@ -1,8 +1,10 @@
 use crate::{
+    formats::tiff::TiffLoader,
     preprocess::{
         gpu_preprocessor::GpuPreprocessor,
         preprocess_pipeline::{
-            TerrainPreprocessLabel, TerrainPreprocessNode, TerrainPreprocessPipelines,
+            queue_terrain_preprocess, TerrainPreprocessItem, TerrainPreprocessLabel,
+            TerrainPreprocessNode, TerrainPreprocessPipelines,
         },
         preprocessor::{preprocessor_load_tile, select_ready_tasks},
         shaders::load_preprocess_shaders,
@@ -27,10 +29,12 @@ pub struct TerrainPreprocessPlugin;
 
 impl Plugin for TerrainPreprocessPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (select_ready_tasks, preprocessor_load_tile));
+        app.init_asset_loader::<TiffLoader>()
+            .add_systems(Update, (select_ready_tasks, preprocessor_load_tile));
 
         app.sub_app_mut(RenderApp)
             .init_resource::<TerrainComponents<GpuPreprocessor>>()
+            .init_resource::<TerrainComponents<TerrainPreprocessItem>>()
             .add_systems(
                 ExtractSchedule,
                 (
@@ -40,9 +44,12 @@ impl Plugin for TerrainPreprocessPlugin {
             )
             .add_systems(
                 Render,
-                GpuPreprocessor::prepare
-                    .in_set(RenderSet::PrepareAssets)
-                    .before(GpuNodeAtlas::prepare),
+                (
+                    queue_terrain_preprocess.in_set(RenderSet::Queue),
+                    GpuPreprocessor::prepare
+                        .in_set(RenderSet::PrepareAssets)
+                        .before(GpuNodeAtlas::prepare),
+                ),
             );
     }
 

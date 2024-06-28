@@ -7,22 +7,21 @@ use crate::{
             create_terrain_view_layout, DrawTerrainCommand, SetTerrainViewBindGroup,
         },
     },
+    terrain::{Terrain, TerrainConfig},
     terrain_view::TerrainView,
 };
 use bevy::{
-    core_pipeline::core_3d::Transparent3d,
+    core_pipeline::core_3d::{Opaque3d, Opaque3dBinKey},
     pbr::{
         MaterialPipeline, MeshPipeline, MeshPipelineViewLayoutKey, PreparedMaterial,
         RenderMaterialInstances, SetMaterialBindGroup, SetMeshViewBindGroup,
     },
     prelude::*,
+    render::render_phase::{BinnedRenderPhaseType, ViewBinnedRenderPhases},
     render::{
         extract_instances::ExtractInstancesPlugin,
         render_asset::{prepare_assets, RenderAssetPlugin, RenderAssets},
-        render_phase::{
-            AddRenderCommand, DrawFunctions, PhaseItemExtraIndex, SetItemPipeline,
-            ViewSortedRenderPhases,
-        },
+        render_phase::{AddRenderCommand, DrawFunctions, SetItemPipeline},
         render_resource::*,
         renderer::RenderDevice,
         texture::{BevyDefault, GpuImage},
@@ -374,15 +373,16 @@ pub(crate) type DrawTerrain<M> = (
 /// Queses all terrain entities for rendering via the terrain pipeline.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn queue_terrain<M: Material>(
-    draw_functions: Res<DrawFunctions<Transparent3d>>,
+    draw_functions: Res<DrawFunctions<Opaque3d>>,
     msaa: Res<Msaa>,
     debug: Option<Res<DebugTerrain>>,
     render_materials: Res<RenderAssets<PreparedMaterial<M>>>,
     pipeline_cache: Res<PipelineCache>,
     terrain_pipeline: Res<TerrainRenderPipeline<M>>,
     mut pipelines: ResMut<SpecializedRenderPipelines<TerrainRenderPipeline<M>>>,
-    mut opaque_render_phases: ResMut<ViewSortedRenderPhases<Transparent3d>>,
+    mut opaque_render_phases: ResMut<ViewBinnedRenderPhases<Opaque3d>>,
     view_query: Query<Entity, With<TerrainView>>,
+    terrain_query: Query<&TerrainConfig, With<Terrain>>,
     render_material_instances: Res<RenderMaterialInstances<M>>,
 ) where
     M::Data: PartialEq + Eq + Hash + Clone,
@@ -392,11 +392,11 @@ pub(crate) fn queue_terrain<M: Material>(
         let draw_function = draw_functions.read().get_id::<DrawTerrain<M>>().unwrap();
 
         for (&terrain, &material_id) in render_material_instances.iter() {
+            let config = terrain_query.get(terrain).unwrap();
             if let Some(material) = render_materials.get(material_id) {
                 let mut flags = TerrainPipelineFlags::from_msaa_samples(msaa.samples());
 
-                #[cfg(feature = "spherical")]
-                {
+                if config.model.spherical {
                     flags |= TerrainPipelineFlags::SPHERICAL;
                 }
 
@@ -416,14 +416,17 @@ pub(crate) fn queue_terrain<M: Material>(
 
                 let pipeline = pipelines.specialize(&pipeline_cache, &terrain_pipeline, key);
 
-                phase.add(Transparent3d {
-                    distance: -f32::MAX,
-                    pipeline,
-                    entity: terrain,
-                    draw_function,
-                    batch_range: Default::default(),
-                    extra_index: PhaseItemExtraIndex::NONE,
-                });
+                phase.add(
+                    Opaque3dBinKey {
+                        pipeline,
+                        draw_function,
+                        asset_id: material_id.untyped(),
+                        material_bind_group_id: None,
+                        lightmap_image: None,
+                    },
+                    terrain,
+                    BinnedRenderPhaseType::NonMesh,
+                );
             }
         }
     }
@@ -451,7 +454,7 @@ where
         ));
 
         app.sub_app_mut(RenderApp)
-            .add_render_command::<Transparent3d, DrawTerrain<M>>()
+            .add_render_command::<Opaque3d, DrawTerrain<M>>()
             .add_systems(
                 Render,
                 queue_terrain::<M>
@@ -464,8 +467,6 @@ where
         app.sub_app_mut(RenderApp)
             .init_resource::<TerrainRenderPipeline<M>>()
             .init_resource::<SpecializedRenderPipelines<TerrainRenderPipeline<M>>>()
-            // unused, but still required
-            .init_resource::<MaterialPipeline<M>>()
-            .init_resource::<SpecializedMeshPipelines<MaterialPipeline<M>>>();
+            .init_resource::<MaterialPipeline<M>>(); // prepare assets depends on this to access the material layout
     }
 }
