@@ -1,7 +1,7 @@
 use crate::{
     preprocess::{
-        preprocess_pipeline::TerrainPreprocessItem,
         preprocessor::{PreprocessTask, PreprocessTaskType, Preprocessor},
+        TerrainPreprocessItem,
     },
     terrain::{Terrain, TerrainComponents},
     terrain_data::{gpu_node_atlas::GpuNodeAtlas, node_atlas::AtlasNode},
