@@ -69,8 +69,7 @@ impl Coordinate {
     pub(crate) fn from_world_position(world_position: DVec3, model: &TerrainModel) -> Self {
         let normal = model.world_to_normal(world_position);
 
-        #[cfg(feature = "spherical")]
-        {
+        if model.spherical {
             let abs_normal = normal.abs();
 
             let (side, uv) = if abs_normal.x > abs_normal.y && abs_normal.x > abs_normal.z {
@@ -96,21 +95,19 @@ impl Coordinate {
             let st = cube_to_sphere(uv);
 
             Self { side, st }
+        } else {
+            Self {
+                side: 0,
+                st: DVec2::new(0.5 * normal.x + 0.5, 0.5 * normal.z + 0.5),
+            }
         }
-
-        #[cfg(not(feature = "spherical"))]
-        return Self {
-            side: 0,
-            st: DVec2::new(0.5 * normal.x + 0.5, 0.5 * normal.z + 0.5),
-        };
     }
 
     pub(crate) fn world_position(self, model: &TerrainModel) -> DVec3 {
-        #[cfg(feature = "spherical")]
-        {
+        let normal = if model.spherical {
             let uv = sphere_to_cube(self.st);
 
-            let normal = match self.side {
+            match self.side {
                 0 => DVec3::new(-1.0, -uv.y, uv.x),
                 1 => DVec3::new(uv.x, -uv.y, 1.0),
                 2 => DVec3::new(uv.x, 1.0, uv.y),
@@ -119,23 +116,18 @@ impl Coordinate {
                 5 => DVec3::new(uv.y, -1.0, uv.x),
                 _ => unreachable!(),
             }
-            .normalize();
+            .normalize()
+        } else {
+            DVec3::new(2.0 * self.st.x - 1.0, 0.0, 2.0 * self.st.y - 1.0)
+        };
 
-            model.normal_to_world(normal)
-        }
-
-        #[cfg(not(feature = "spherical"))]
-        {
-            let normal = DVec3::new(2.0 * self.st.x - 1.0, 0.0, 2.0 * self.st.y - 1.0);
-            model.local_to_world(normal)
-        }
+        model.normal_to_world(normal)
     }
 
     /// Projects the coordinate onto one of the six cube faces.
     /// Thereby it chooses the closest location on this face to the original coordinate.
-    pub(crate) fn project_to_side(self, side: u32) -> Self {
-        #[cfg(feature = "spherical")]
-        {
+    pub(crate) fn project_to_side(self, side: u32, model: &TerrainModel) -> Self {
+        if model.spherical {
             let info = SideInfo::project_to_side(self.side, side);
 
             let st = info
@@ -148,10 +140,9 @@ impl Coordinate {
                 .into();
 
             Self { side, st }
+        } else {
+            self
         }
-
-        #[cfg(not(feature = "spherical"))]
-        self
     }
 }
 

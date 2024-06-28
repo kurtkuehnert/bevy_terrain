@@ -30,11 +30,6 @@ pub mod gpu_quadtree;
 pub mod node_atlas;
 pub mod quadtree;
 
-#[cfg(feature = "spherical")]
-pub const SIDE_COUNT: u32 = 6;
-#[cfg(not(feature = "spherical"))]
-pub const SIDE_COUNT: u32 = 1;
-
 pub const INVALID_ATLAS_INDEX: u32 = u32::MAX;
 pub const INVALID_LOD: u32 = u32::MAX;
 

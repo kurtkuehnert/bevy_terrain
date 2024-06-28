@@ -27,6 +27,7 @@ pub(crate) fn tile_count(lod: i32) -> i32 {
 
 #[derive(Clone, Default)]
 pub struct TerrainModel {
+    pub(crate) spherical: bool,
     translation: DVec3,
     scale: DVec3,
     rotation: DQuat,
@@ -36,7 +37,12 @@ pub struct TerrainModel {
 }
 
 impl TerrainModel {
-    fn from_scale_rotation_translation(scale: DVec3, rotation: DQuat, translation: DVec3) -> Self {
+    fn from_scale_rotation_translation(
+        scale: DVec3,
+        rotation: DQuat,
+        translation: DVec3,
+        spherical: bool,
+    ) -> Self {
         let world_from_local = DMat4::from_scale_rotation_translation(scale, rotation, translation);
         let local_from_world = world_from_local.inverse();
 
@@ -46,10 +52,16 @@ impl TerrainModel {
             rotation,
             world_from_local,
             local_from_world,
+            spherical,
         }
     }
+
+    pub fn planar(position: DVec3, size: f64) -> Self {
+        Self::from_scale_rotation_translation(DVec3::splat(size), DQuat::IDENTITY, position, false)
+    }
+
     pub fn sphere(position: DVec3, radius: f64) -> Self {
-        Self::from_scale_rotation_translation(DVec3::splat(radius), DQuat::IDENTITY, position)
+        Self::from_scale_rotation_translation(DVec3::splat(radius), DQuat::IDENTITY, position, true)
     }
 
     pub fn ellipsoid(position: DVec3, major_axis: f64, minor_axis: f64) -> Self {
@@ -57,6 +69,7 @@ impl TerrainModel {
             DVec3::new(major_axis, minor_axis, major_axis),
             DQuat::IDENTITY, // ::from_rotation_x(45.0_f64.to_radians()),
             position,
+            true,
         )
     }
 
@@ -66,6 +79,14 @@ impl TerrainModel {
 
     pub(crate) fn world_to_normal(&self, world_position: DVec3) -> DVec3 {
         self.local_from_world.transform_point3(world_position)
+    }
+
+    pub(crate) fn side_count(&self) -> u32 {
+        if self.spherical {
+            6
+        } else {
+            1
+        }
     }
 
     pub(crate) fn radius(&self) -> f64 {
@@ -151,8 +172,8 @@ impl TerrainModelApproximation {
         let mut sides = [SideParameter::default(); 6];
 
         for (side, &sm) in SIDE_MATRICES.iter().enumerate() {
-            let origin_coordinate = origin_coordinate.project_to_side(side as u32);
-            let view_coordinate = view_coordinate.project_to_side(side as u32);
+            let origin_coordinate = origin_coordinate.project_to_side(side as u32, model);
+            let view_coordinate = view_coordinate.project_to_side(side as u32, model);
             let origin_xy = (origin_coordinate.st * tile_count(origin_lod) as f64).as_ivec2();
             // The difference between the origin and the view coordinate.
             // This is added to the coordinate relative to the origin tile, in order to get the coordinate relative to the view coordinate.
