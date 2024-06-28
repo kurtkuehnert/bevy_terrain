@@ -2,9 +2,7 @@ use crate::{
     big_space::{GridTransformReadOnly, ReferenceFrames},
     math::{Coordinate, NodeCoordinate, TerrainModel},
     terrain::{Terrain, TerrainConfig},
-    terrain_data::{
-        node_atlas::NodeAtlas, sample_height, INVALID_ATLAS_INDEX, INVALID_LOD, SIDE_COUNT,
-    },
+    terrain_data::{node_atlas::NodeAtlas, sample_height, INVALID_ATLAS_INDEX, INVALID_LOD},
     terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
 };
 use bevy::{
@@ -117,6 +115,7 @@ pub struct Quadtree {
     nodes: Array4<QuadtreeNode>,
     /// The count of level of detail layers.
     lod_count: u32,
+    side_count: u32,
     /// The count of nodes in x and y direction per layer.
     quadtree_size: u32,
     /// The distance (measured in node sizes) until which to request nodes to be loaded.
@@ -140,6 +139,7 @@ impl Quadtree {
     /// * `height` - The height of the terrain.
     pub fn new(
         lod_count: u32,
+        side_count: u32,
         quadtree_size: u32,
         load_distance: f32,
         blend_distance: f32,
@@ -149,6 +149,7 @@ impl Quadtree {
     ) -> Self {
         Self {
             lod_count,
+            side_count,
             quadtree_size,
             load_distance,
             blend_distance,
@@ -158,15 +159,15 @@ impl Quadtree {
             view_world_position: default(),
             model: default(),
             approximate_height: (min_height + max_height) / 2.0,
-            origins: Array2::default((SIDE_COUNT as usize, lod_count as usize)),
+            origins: Array2::default((side_count as usize, lod_count as usize)),
             data: Array4::default((
-                SIDE_COUNT as usize,
+                side_count as usize,
                 lod_count as usize,
                 quadtree_size as usize,
                 quadtree_size as usize,
             )),
             nodes: Array4::default((
-                SIDE_COUNT as usize,
+                side_count as usize,
                 lod_count as usize,
                 quadtree_size as usize,
                 quadtree_size as usize,
@@ -180,6 +181,7 @@ impl Quadtree {
     pub fn from_configs(config: &TerrainConfig, view_config: &TerrainViewConfig) -> Self {
         Self::new(
             config.lod_count,
+            config.model.side_count(),
             view_config.quadtree_size,
             view_config.load_distance,
             view_config.blend_distance,
@@ -261,8 +263,9 @@ impl Quadtree {
                 let view_coordinate =
                     Coordinate::from_world_position(quadtree.view_world_position, &quadtree.model);
 
-                for side in 0..SIDE_COUNT {
-                    let quadtree_coordinate = view_coordinate.project_to_side(side);
+                for side in 0..quadtree.side_count {
+                    let quadtree_coordinate =
+                        view_coordinate.project_to_side(side, &quadtree.model);
 
                     for lod in 0..quadtree.lod_count {
                         let origin = quadtree.origin(quadtree_coordinate, lod);

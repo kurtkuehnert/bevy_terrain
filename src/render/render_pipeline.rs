@@ -378,10 +378,10 @@ pub(crate) fn queue_terrain<M: Material>(
     msaa: Res<Msaa>,
     debug: Option<Res<DebugTerrain>>,
     render_materials: Res<RenderAssets<PreparedMaterial<M>>>,
-    terrain_pipeline: Res<TerrainRenderPipeline<M>>,
     pipeline_cache: Res<PipelineCache>,
-    mut opaque_render_phases: ResMut<ViewSortedRenderPhases<Transparent3d>>,
+    terrain_pipeline: Res<TerrainRenderPipeline<M>>,
     mut pipelines: ResMut<SpecializedRenderPipelines<TerrainRenderPipeline<M>>>,
+    mut opaque_render_phases: ResMut<ViewSortedRenderPhases<Transparent3d>>,
     view_query: Query<Entity, With<TerrainView>>,
     render_material_instances: Res<RenderMaterialInstances<M>>,
 ) where

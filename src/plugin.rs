@@ -1,3 +1,8 @@
+use crate::compute_phase::{AddComputeFunction, ComputeFunctions, ViewComputePhases};
+use crate::render::compute_pipelines::{
+    extract_terrain_compute_phases, queue_terrain_compute, TerrainComputeFunction,
+    TerrainComputePhaseItem,
+};
 use crate::{
     big_space::BigSpacePlugin,
     formats::tiff::TiffLoader,
@@ -63,9 +68,13 @@ impl Plugin for TerrainPlugin {
             .init_resource::<TerrainViewComponents<GpuQuadtree>>()
             .init_resource::<TerrainViewComponents<TerrainViewData>>()
             .init_resource::<TerrainViewComponents<CullingBindGroup>>()
+            .init_resource::<ViewComputePhases<TerrainComputePhaseItem>>()
+            .init_resource::<ComputeFunctions<TerrainComputePhaseItem>>()
+            .add_compute_function::<TerrainComputePhaseItem, TerrainComputeFunction>()
             .add_systems(
                 ExtractSchedule,
                 (
+                    extract_terrain_compute_phases,
                     GpuNodeAtlas::initialize,
                     GpuQuadtree::initialize,
                     TerrainData::initialize.after(GpuNodeAtlas::initialize),
@@ -87,7 +96,7 @@ impl Plugin for TerrainPlugin {
                         CullingBindGroup::prepare,
                     )
                         .in_set(RenderSet::Prepare),
-                    TerrainComputePipelines::queue.in_set(RenderSet::Queue),
+                    queue_terrain_compute.in_set(RenderSet::Queue),
                     GpuNodeAtlas::cleanup
                         .before(World::clear_entities)
                         .in_set(RenderSet::Cleanup),

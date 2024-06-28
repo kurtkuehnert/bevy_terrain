@@ -44,6 +44,7 @@
 //! [^note]: Some of these claims are not yet fully implemented.
 
 pub mod big_space;
+pub mod compute_phase;
 pub mod debug;
 pub mod formats;
 pub mod math;
