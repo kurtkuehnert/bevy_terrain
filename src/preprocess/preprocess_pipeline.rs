@@ -17,20 +17,39 @@ use bevy::{
         renderer::{RenderContext, RenderDevice},
     },
 };
-use itertools::Itertools;
-use strum::IntoEnumIterator;
-use strum_macros::EnumIter;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
 pub struct TerrainPreprocessLabel;
 
-type TerrainPreprocessPipelineKey = TerrainPreprocessPipelineId;
+bitflags::bitflags! {
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    #[repr(transparent)]
+    pub struct TerrainPreprocessPipelineKey: u32 {
+        const NONE       = 1 << 0;
+        const SPLIT      = 1 << 1;
+        const STITCH     = 1 << 2;
+        const DOWNSAMPLE = 1 << 3;
+    }
+}
 
-#[derive(Copy, Clone, Hash, PartialEq, Eq, EnumIter)]
-pub enum TerrainPreprocessPipelineId {
-    Split,
-    Stitch,
-    Downsample,
+pub(crate) struct TerrainPreprocessItem {
+    split_pipeline: CachedComputePipelineId,
+    stitch_pipeline: CachedComputePipelineId,
+    downsample_pipeline: CachedComputePipelineId,
+}
+
+impl TerrainPreprocessItem {
+    pub(crate) fn is_loaded(&self, pipeline_cache: &PipelineCache) -> bool {
+        pipeline_cache
+            .get_compute_pipeline(self.split_pipeline)
+            .is_some()
+            && pipeline_cache
+                .get_compute_pipeline(self.stitch_pipeline)
+                .is_some()
+            && pipeline_cache
+                .get_compute_pipeline(self.downsample_pipeline)
+                .is_some()
+    }
 }
 
 #[derive(Resource)]
@@ -42,26 +61,6 @@ pub struct TerrainPreprocessPipelines {
     split_shader: Handle<Shader>,
     stitch_shader: Handle<Shader>,
     downsample_shader: Handle<Shader>,
-    pipelines: Vec<CachedComputePipelineId>,
-}
-
-impl TerrainPreprocessPipelines {
-    pub(crate) fn loaded(&self, pipeline_cache: &PipelineCache) -> bool {
-        TerrainPreprocessPipelineId::iter().all(|id| {
-            pipeline_cache
-                .get_compute_pipeline(self.pipelines[id as usize])
-                .is_some()
-        })
-    }
-
-    pub(crate) fn pipelines<'a>(
-        &'a self,
-        pipeline_cache: &'a PipelineCache,
-    ) -> Option<Vec<&ComputePipeline>> {
-        TerrainPreprocessPipelineId::iter()
-            .map(|id| pipeline_cache.get_compute_pipeline(self.pipelines[id as usize]))
-            .collect::<Option<Vec<_>>>()
-    }
 }
 
 impl FromWorld for TerrainPreprocessPipelines {
@@ -78,7 +77,7 @@ impl FromWorld for TerrainPreprocessPipelines {
         let stitch_shader = asset_server.load(STITCH_SHADER);
         let downsample_shader = asset_server.load(DOWNSAMPLE_SHADER);
 
-        let mut preprocess_pipelines = TerrainPreprocessPipelines {
+        Self {
             attachment_layout,
             split_layout,
             stitch_layout,
@@ -86,17 +85,7 @@ impl FromWorld for TerrainPreprocessPipelines {
             split_shader,
             stitch_shader,
             downsample_shader,
-            pipelines: vec![],
-        };
-
-        world.resource_scope(|world: &mut World,mut pipelines: Mut<SpecializedComputePipelines<TerrainPreprocessPipelines>>| {
-            let pipeline_cache = world.resource::<PipelineCache>();
-            preprocess_pipelines.pipelines = TerrainPreprocessPipelineId::iter().map(|id|
-                pipelines.specialize(pipeline_cache, &preprocess_pipelines, id)).collect_vec();
-
-        });
-
-        preprocess_pipelines
+        }
     }
 }
 
@@ -104,31 +93,29 @@ impl SpecializedComputePipeline for TerrainPreprocessPipelines {
     type Key = TerrainPreprocessPipelineKey;
 
     fn specialize(&self, key: Self::Key) -> ComputePipelineDescriptor {
-        let layout;
-        let shader;
-        let entry_point;
+        let mut layout = default();
+        let mut shader = default();
+        let mut entry_point = default();
 
         let shader_defs = vec![];
 
-        match key {
-            TerrainPreprocessPipelineId::Split => {
-                layout = vec![self.attachment_layout.clone(), self.split_layout.clone()];
-                shader = self.split_shader.clone();
-                entry_point = "split".into();
-            }
-            TerrainPreprocessPipelineId::Stitch => {
-                layout = vec![self.attachment_layout.clone(), self.stitch_layout.clone()];
-                shader = self.stitch_shader.clone();
-                entry_point = "stitch".into();
-            }
-            TerrainPreprocessPipelineId::Downsample => {
-                layout = vec![
-                    self.attachment_layout.clone(),
-                    self.downsample_layout.clone(),
-                ];
-                shader = self.downsample_shader.clone();
-                entry_point = "downsample".into();
-            }
+        if key.contains(TerrainPreprocessPipelineKey::SPLIT) {
+            layout = vec![self.attachment_layout.clone(), self.split_layout.clone()];
+            shader = self.split_shader.clone();
+            entry_point = "split".into();
+        }
+        if key.contains(TerrainPreprocessPipelineKey::STITCH) {
+            layout = vec![self.attachment_layout.clone(), self.stitch_layout.clone()];
+            shader = self.stitch_shader.clone();
+            entry_point = "stitch".into();
+        }
+        if key.contains(TerrainPreprocessPipelineKey::DOWNSAMPLE) {
+            layout = vec![
+                self.attachment_layout.clone(),
+                self.downsample_layout.clone(),
+            ];
+            shader = self.downsample_shader.clone();
+            entry_point = "downsample".into();
         }
 
         ComputePipelineDescriptor {
@@ -165,17 +152,22 @@ impl render_graph::Node for TerrainPreprocessNode {
         context: &mut RenderContext,
         world: &World,
     ) -> Result<(), render_graph::NodeRunError> {
-        let preprocess_pipelines = world.resource::<TerrainPreprocessPipelines>();
+        let preprocess_items = world.resource::<TerrainComponents<TerrainPreprocessItem>>();
         let pipeline_cache = world.resource::<PipelineCache>();
         let preprocess_data = world.resource::<TerrainComponents<GpuPreprocessor>>();
         let gpu_node_atlases = world.resource::<TerrainComponents<GpuNodeAtlas>>();
 
-        let pipelines = match preprocess_pipelines.pipelines(pipeline_cache) {
-            None => return Ok(()), // some pipelines are not loaded yet
-            Some(pipelines) => pipelines,
-        };
-
         for terrain in self.terrain_query.iter_manual(world) {
+            let item = preprocess_items.get(&terrain).unwrap();
+
+            let (Some(split_pipeline), Some(stitch_pipeline), Some(downsample_pipeline)) = (
+                pipeline_cache.get_compute_pipeline(item.split_pipeline),
+                pipeline_cache.get_compute_pipeline(item.stitch_pipeline),
+                pipeline_cache.get_compute_pipeline(item.downsample_pipeline),
+            ) else {
+                continue;
+            };
+
             let preprocess_data = preprocess_data.get(&terrain).unwrap();
             let gpu_node_atlas = gpu_node_atlases.get(&terrain).unwrap();
 
@@ -198,23 +190,17 @@ impl render_graph::Node for TerrainPreprocessNode {
                         PreprocessTaskType::Split { .. } => {
                             // dbg!("running split shader");
 
-                            pass.set_pipeline(
-                                pipelines[TerrainPreprocessPipelineId::Split as usize],
-                            );
+                            pass.set_pipeline(split_pipeline);
                         }
                         PreprocessTaskType::Stitch { .. } => {
                             // dbg!("running stitch shader");
 
-                            pass.set_pipeline(
-                                pipelines[TerrainPreprocessPipelineId::Stitch as usize],
-                            );
+                            pass.set_pipeline(stitch_pipeline);
                         }
                         PreprocessTaskType::Downsample { .. } => {
                             // dbg!("running downsample shader");
 
-                            pass.set_pipeline(
-                                pipelines[TerrainPreprocessPipelineId::Downsample as usize],
-                            );
+                            pass.set_pipeline(downsample_pipeline);
                         }
                         _ => continue,
                     }
@@ -243,5 +229,40 @@ impl render_graph::Node for TerrainPreprocessNode {
         }
 
         Ok(())
+    }
+}
+
+pub(crate) fn queue_terrain_preprocess(
+    pipeline_cache: Res<PipelineCache>,
+    preprocess_pipelines: ResMut<TerrainPreprocessPipelines>,
+    mut pipelines: ResMut<SpecializedComputePipelines<TerrainPreprocessPipelines>>,
+    mut preprocess_items: ResMut<TerrainComponents<TerrainPreprocessItem>>,
+    terrain_query: Query<Entity, With<Terrain>>,
+) {
+    for terrain in terrain_query.iter() {
+        let split_pipeline = pipelines.specialize(
+            &pipeline_cache,
+            &preprocess_pipelines,
+            TerrainPreprocessPipelineKey::SPLIT,
+        );
+        let stitch_pipeline = pipelines.specialize(
+            &pipeline_cache,
+            &preprocess_pipelines,
+            TerrainPreprocessPipelineKey::STITCH,
+        );
+        let downsample_pipeline = pipelines.specialize(
+            &pipeline_cache,
+            &preprocess_pipelines,
+            TerrainPreprocessPipelineKey::DOWNSAMPLE,
+        );
+
+        preprocess_items.insert(
+            terrain,
+            TerrainPreprocessItem {
+                split_pipeline,
+                stitch_pipeline,
+                downsample_pipeline,
+            },
+        );
     }
 }

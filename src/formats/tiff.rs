@@ -1,8 +1,10 @@
-use bevy::asset::{io::Reader, AssetLoader, AsyncReadExt, LoadContext};
-use bevy::prelude::*;
-use bevy::render::render_asset::RenderAssetUsages;
-use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
-use bevy::render::texture::TextureError;
+use bevy::{
+    asset::{io::Reader, AssetLoader, AsyncReadExt, LoadContext},
+    prelude::*,
+    render::render_asset::RenderAssetUsages,
+    render::render_resource::{Extent3d, TextureDimension, TextureFormat},
+    render::texture::TextureError,
+};
 use bytemuck::cast_slice;
 use std::io::Cursor;
 use tiff::decoder::{Decoder, DecodingResult};

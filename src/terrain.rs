@@ -43,7 +43,7 @@ pub struct Terrain;
 /// The configuration of a terrain.
 ///
 /// Here you can define all fundamental parameters of the terrain.
-#[derive(Clone, Component)]
+#[derive(Clone, Component, ExtractComponent)]
 pub struct TerrainConfig {
     /// The count of level of detail layers.
     pub lod_count: u32,

@@ -177,7 +177,7 @@ impl PreprocessTask {
 
         let neighbour_nodes = node
             .coordinate
-            .neighbours()
+            .neighbours(node_atlas.spherical)
             .map(|coordinate| node_atlas.get_node(coordinate))
             .collect_array();
 
