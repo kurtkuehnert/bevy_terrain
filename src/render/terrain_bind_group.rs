@@ -205,7 +205,7 @@ impl TerrainData {
         queue: Res<RenderQueue>,
         mut terrain_data: ResMut<TerrainComponents<TerrainData>>,
     ) {
-        for terrain_data in &mut terrain_data.0.values_mut() {
+        for terrain_data in &mut terrain_data.values_mut() {
             terrain_data.mesh_buffer.update(&queue);
         }
     }

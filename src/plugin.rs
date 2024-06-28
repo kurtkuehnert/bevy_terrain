@@ -1,15 +1,15 @@
+use crate::shaders::{load_terrain_shaders, InternalShaders};
 use crate::{
     big_space::BigSpacePlugin,
     math::{generate_terrain_model_approximation, TerrainModelApproximation},
     render::{
-        compute_pipelines::{
-            queue_terrain_compute, TerrainComputeItem, TerrainComputeLabel, TerrainComputeNode,
-            TerrainComputePipelines,
-        },
         culling_bind_group::CullingBindGroup,
-        shaders::load_terrain_shaders,
         terrain_bind_group::TerrainData,
         terrain_view_bind_group::TerrainViewData,
+        tiling_prepass::{
+            queue_tiling_prepass, TilingPrepassItem, TilingPrepassLabel, TilingPrepassNode,
+            TilingPrepassPipelines,
+        },
     },
     terrain::{Terrain, TerrainComponents, TerrainConfig},
     terrain_data::{
@@ -17,7 +17,6 @@ use crate::{
         quadtree::Quadtree,
     },
     terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
-    util::InternalShaders,
 };
 use bevy::{
     prelude::*,
@@ -68,7 +67,7 @@ impl Plugin for TerrainPlugin {
             .init_resource::<TerrainViewComponents<GpuQuadtree>>()
             .init_resource::<TerrainViewComponents<TerrainViewData>>()
             .init_resource::<TerrainViewComponents<CullingBindGroup>>()
-            .init_resource::<TerrainViewComponents<TerrainComputeItem>>()
+            .init_resource::<TerrainViewComponents<TilingPrepassItem>>()
             .add_systems(
                 ExtractSchedule,
                 (
@@ -93,7 +92,7 @@ impl Plugin for TerrainPlugin {
                         CullingBindGroup::prepare,
                     )
                         .in_set(RenderSet::Prepare),
-                    queue_terrain_compute.in_set(RenderSet::Queue),
+                    queue_tiling_prepass.in_set(RenderSet::Queue),
                     GpuNodeAtlas::cleanup
                         .before(World::clear_entities)
                         .in_set(RenderSet::Cleanup),
@@ -106,12 +105,12 @@ impl Plugin for TerrainPlugin {
 
         let render_app = app
             .sub_app_mut(RenderApp)
-            .init_resource::<TerrainComputePipelines>()
-            .init_resource::<SpecializedComputePipelines<TerrainComputePipelines>>();
+            .init_resource::<TilingPrepassPipelines>()
+            .init_resource::<SpecializedComputePipelines<TilingPrepassPipelines>>();
 
-        let compute_node = TerrainComputeNode::from_world(render_app.world_mut());
+        let prepass_node = TilingPrepassNode::from_world(render_app.world_mut());
         let mut render_graph = render_app.world_mut().resource_mut::<RenderGraph>();
-        render_graph.add_node(TerrainComputeLabel, compute_node);
-        render_graph.add_node_edge(TerrainComputeLabel, CameraDriverLabel);
+        render_graph.add_node(TilingPrepassLabel, prepass_node);
+        render_graph.add_node_edge(TilingPrepassLabel, CameraDriverLabel);
     }
 }

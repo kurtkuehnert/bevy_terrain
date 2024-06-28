@@ -7,8 +7,8 @@ use crate::{
             TerrainPreprocessNode, TerrainPreprocessPipelines,
         },
         preprocessor::{preprocessor_load_tile, select_ready_tasks},
-        shaders::load_preprocess_shaders,
     },
+    shaders::load_preprocess_shaders,
     terrain::TerrainComponents,
     terrain_data::gpu_node_atlas::GpuNodeAtlas,
 };
@@ -23,7 +23,6 @@ use bevy::{
 pub mod gpu_preprocessor;
 pub mod preprocess_pipeline;
 pub mod preprocessor;
-pub mod shaders;
 
 pub struct TerrainPreprocessPlugin;
 

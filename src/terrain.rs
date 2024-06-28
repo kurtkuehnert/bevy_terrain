@@ -6,32 +6,18 @@ use crate::{
     terrain_data::{node_atlas::NodeAtlas, AttachmentConfig},
 };
 use bevy::{
-    prelude::*, render::extract_component::ExtractComponent, render::view::NoFrustumCulling,
-    utils::HashMap,
+    ecs::entity::EntityHashMap,
+    prelude::*,
+    render::{extract_component::ExtractComponent, view::NoFrustumCulling},
 };
 
 /// Resource that stores components that are associated to a terrain entity.
 /// This is used to persist components in the render world.
-/// Todo: replace this once the render world can persist components
-#[derive(Clone, Resource)]
-pub struct TerrainComponents<C>(pub HashMap<Entity, C>);
+#[derive(Deref, DerefMut, Resource)]
+pub struct TerrainComponents<C>(EntityHashMap<C>);
 
-impl<C> TerrainComponents<C> {
-    pub fn get(&self, k: &Entity) -> Option<&C> {
-        self.0.get(k)
-    }
-
-    pub fn get_mut(&mut self, k: &Entity) -> Option<&mut C> {
-        self.0.get_mut(k)
-    }
-
-    pub fn insert(&mut self, k: Entity, v: C) {
-        self.0.insert(k, v);
-    }
-}
-
-impl<C> FromWorld for TerrainComponents<C> {
-    fn from_world(_world: &mut World) -> Self {
+impl<C> Default for TerrainComponents<C> {
+    fn default() -> Self {
         Self(default())
     }
 }

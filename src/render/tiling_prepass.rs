@@ -1,21 +1,20 @@
-use crate::prelude::TerrainConfig;
+use crate::shaders::{PREPARE_INDIRECT_SHADER, REFINE_TILES_SHADER};
 use crate::{
     debug::DebugTerrain,
     render::{
         culling_bind_group::{create_culling_layout, CullingBindGroup},
-        shaders::{PREPARE_INDIRECT_SHADER, REFINE_TILES_SHADER},
         terrain_bind_group::{create_terrain_layout, TerrainData},
         terrain_view_bind_group::{
             create_prepare_indirect_layout, create_refine_tiles_layout, TerrainViewData,
         },
     },
-    terrain::{Terrain, TerrainComponents},
+    terrain::{Terrain, TerrainComponents, TerrainConfig},
     terrain_view::{TerrainView, TerrainViewComponents},
 };
 use bevy::{
     prelude::*,
     render::{
-        render_graph::{self, RenderGraphContext, RenderLabel},
+        render_graph::{self, NodeRunError, RenderGraphContext, RenderLabel},
         render_resource::*,
         renderer::{RenderContext, RenderDevice},
     },
@@ -23,12 +22,12 @@ use bevy::{
 use itertools::Itertools;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
-pub struct TerrainComputeLabel;
+pub struct TilingPrepassLabel;
 
 bitflags::bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     #[repr(transparent)]
-    pub struct TerrainComputePipelineKey: u32 {
+    pub struct TilingPrepassPipelineKey: u32 {
         const NONE           = 1 << 0;
         const REFINE_TILES   = 1 << 1;
         const PREPARE_ROOT   = 1 << 2;
@@ -39,12 +38,12 @@ bitflags::bitflags! {
     }
 }
 
-impl TerrainComputePipelineKey {
+impl TilingPrepassPipelineKey {
     pub fn from_debug(debug: &DebugTerrain) -> Self {
-        let mut key = TerrainComputePipelineKey::NONE;
+        let mut key = TilingPrepassPipelineKey::NONE;
 
         if debug.test1 {
-            key |= TerrainComputePipelineKey::TEST1;
+            key |= TilingPrepassPipelineKey::TEST1;
         }
 
         key
@@ -53,10 +52,10 @@ impl TerrainComputePipelineKey {
     pub fn shader_defs(&self) -> Vec<ShaderDefVal> {
         let mut shader_defs = Vec::new();
 
-        if self.contains(TerrainComputePipelineKey::SPHERICAL) {
+        if self.contains(TilingPrepassPipelineKey::SPHERICAL) {
             shader_defs.push("SPHERICAL".into());
         }
-        if self.contains(TerrainComputePipelineKey::TEST1) {
+        if self.contains(TilingPrepassPipelineKey::TEST1) {
             shader_defs.push("TEST1".into());
         }
 
@@ -64,7 +63,7 @@ impl TerrainComputePipelineKey {
     }
 }
 
-pub(crate) struct TerrainComputeItem {
+pub(crate) struct TilingPrepassItem {
     refine_tiles_pipeline: CachedComputePipelineId,
     prepare_root_pipeline: CachedComputePipelineId,
     prepare_next_pipeline: CachedComputePipelineId,
@@ -72,7 +71,7 @@ pub(crate) struct TerrainComputeItem {
 }
 
 #[derive(Resource)]
-pub struct TerrainComputePipelines {
+pub struct TilingPrepassPipelines {
     pub(crate) prepare_indirect_layout: BindGroupLayout,
     pub(crate) refine_tiles_layout: BindGroupLayout,
     culling_data_layout: BindGroupLayout,
@@ -81,7 +80,7 @@ pub struct TerrainComputePipelines {
     refine_tiles_shader: Handle<Shader>,
 }
 
-impl FromWorld for TerrainComputePipelines {
+impl FromWorld for TilingPrepassPipelines {
     fn from_world(world: &mut World) -> Self {
         let device = world.resource::<RenderDevice>();
         let asset_server = world.resource::<AssetServer>();
@@ -94,7 +93,7 @@ impl FromWorld for TerrainComputePipelines {
         let prepare_indirect_shader = asset_server.load(PREPARE_INDIRECT_SHADER);
         let refine_tiles_shader = asset_server.load(REFINE_TILES_SHADER);
 
-        TerrainComputePipelines {
+        TilingPrepassPipelines {
             prepare_indirect_layout,
             refine_tiles_layout,
             culling_data_layout,
@@ -105,8 +104,8 @@ impl FromWorld for TerrainComputePipelines {
     }
 }
 
-impl SpecializedComputePipeline for TerrainComputePipelines {
-    type Key = TerrainComputePipelineKey;
+impl SpecializedComputePipeline for TilingPrepassPipelines {
+    type Key = TilingPrepassPipelineKey;
 
     fn specialize(&self, key: Self::Key) -> ComputePipelineDescriptor {
         let mut layout = default();
@@ -115,7 +114,7 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
 
         let shader_defs = key.shader_defs();
 
-        if key.contains(TerrainComputePipelineKey::REFINE_TILES) {
+        if key.contains(TilingPrepassPipelineKey::REFINE_TILES) {
             layout = vec![
                 self.culling_data_layout.clone(),
                 self.terrain_layout.clone(),
@@ -124,7 +123,7 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
             shader = self.refine_tiles_shader.clone();
             entry_point = "refine_tiles".into();
         }
-        if key.contains(TerrainComputePipelineKey::PREPARE_ROOT) {
+        if key.contains(TilingPrepassPipelineKey::PREPARE_ROOT) {
             layout = vec![
                 self.culling_data_layout.clone(),
                 self.terrain_layout.clone(),
@@ -134,7 +133,7 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
             shader = self.prepare_indirect_shader.clone();
             entry_point = "prepare_root".into();
         }
-        if key.contains(TerrainComputePipelineKey::PREPARE_NEXT) {
+        if key.contains(TilingPrepassPipelineKey::PREPARE_NEXT) {
             layout = vec![
                 self.culling_data_layout.clone(),
                 self.terrain_layout.clone(),
@@ -144,7 +143,7 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
             shader = self.prepare_indirect_shader.clone();
             entry_point = "prepare_next".into();
         }
-        if key.contains(TerrainComputePipelineKey::PREPARE_RENDER) {
+        if key.contains(TilingPrepassPipelineKey::PREPARE_RENDER) {
             layout = vec![
                 self.culling_data_layout.clone(),
                 self.terrain_layout.clone(),
@@ -156,7 +155,7 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
         }
 
         ComputePipelineDescriptor {
-            label: Some("terrain_compute_pipeline".into()),
+            label: Some("tiling_prepass_pipeline".into()),
             layout,
             push_constant_ranges: default(),
             shader,
@@ -166,12 +165,12 @@ impl SpecializedComputePipeline for TerrainComputePipelines {
     }
 }
 
-pub struct TerrainComputeNode {
+pub struct TilingPrepassNode {
     view_query: QueryState<Entity, With<TerrainView>>,
     terrain_query: QueryState<Entity, With<Terrain>>,
 }
 
-impl FromWorld for TerrainComputeNode {
+impl FromWorld for TilingPrepassNode {
     fn from_world(world: &mut World) -> Self {
         Self {
             view_query: world.query_filtered(),
@@ -180,7 +179,7 @@ impl FromWorld for TerrainComputeNode {
     }
 }
 
-impl render_graph::Node for TerrainComputeNode {
+impl render_graph::Node for TilingPrepassNode {
     fn update(&mut self, world: &mut World) {
         self.view_query.update_archetypes(world);
         self.terrain_query.update_archetypes(world);
@@ -191,8 +190,8 @@ impl render_graph::Node for TerrainComputeNode {
         _graph: &mut RenderGraphContext,
         context: &mut RenderContext<'w>,
         world: &'w World,
-    ) -> Result<(), render_graph::NodeRunError> {
-        let compute_items = world.resource::<TerrainViewComponents<TerrainComputeItem>>();
+    ) -> Result<(), NodeRunError> {
+        let prepass_items = world.resource::<TerrainViewComponents<TilingPrepassItem>>();
         let pipeline_cache = world.resource::<PipelineCache>();
         let terrain_data = world.resource::<TerrainComponents<TerrainData>>();
         let terrain_view_data = world.resource::<TerrainViewComponents<TerrainViewData>>();
@@ -214,7 +213,7 @@ impl render_graph::Node for TerrainComputeNode {
 
             for &view in &views {
                 for &terrain in &terrains {
-                    let item = compute_items.get(&(terrain, view)).unwrap();
+                    let item = prepass_items.get(&(terrain, view)).unwrap();
 
                     let (
                         Some(refine_tiles_pipeline),
@@ -270,51 +269,51 @@ impl render_graph::Node for TerrainComputeNode {
     }
 }
 
-pub(crate) fn queue_terrain_compute(
+pub(crate) fn queue_tiling_prepass(
     debug: Option<Res<DebugTerrain>>,
     pipeline_cache: Res<PipelineCache>,
-    compute_pipelines: ResMut<TerrainComputePipelines>,
-    mut pipelines: ResMut<SpecializedComputePipelines<TerrainComputePipelines>>,
-    mut compute_items: ResMut<TerrainViewComponents<TerrainComputeItem>>,
+    prepass_pipelines: ResMut<TilingPrepassPipelines>,
+    mut pipelines: ResMut<SpecializedComputePipelines<TilingPrepassPipelines>>,
+    mut prepass_items: ResMut<TerrainViewComponents<TilingPrepassItem>>,
     view_query: Query<Entity, With<TerrainView>>,
     terrain_query: Query<(Entity, &TerrainConfig), With<Terrain>>,
 ) {
     for view in view_query.iter() {
         for (terrain, config) in terrain_query.iter() {
-            let mut key = TerrainComputePipelineKey::NONE;
+            let mut key = TilingPrepassPipelineKey::NONE;
 
             if config.model.spherical {
-                key |= TerrainComputePipelineKey::SPHERICAL;
+                key |= TilingPrepassPipelineKey::SPHERICAL;
             }
 
             if let Some(debug) = &debug {
-                key |= TerrainComputePipelineKey::from_debug(debug);
+                key |= TilingPrepassPipelineKey::from_debug(debug);
             }
 
             let refine_tiles_pipeline = pipelines.specialize(
                 &pipeline_cache,
-                &compute_pipelines,
-                key | TerrainComputePipelineKey::REFINE_TILES,
+                &prepass_pipelines,
+                key | TilingPrepassPipelineKey::REFINE_TILES,
             );
             let prepare_root_pipeline = pipelines.specialize(
                 &pipeline_cache,
-                &compute_pipelines,
-                key | TerrainComputePipelineKey::PREPARE_ROOT,
+                &prepass_pipelines,
+                key | TilingPrepassPipelineKey::PREPARE_ROOT,
             );
             let prepare_next_pipeline = pipelines.specialize(
                 &pipeline_cache,
-                &compute_pipelines,
-                key | TerrainComputePipelineKey::PREPARE_NEXT,
+                &prepass_pipelines,
+                key | TilingPrepassPipelineKey::PREPARE_NEXT,
             );
             let prepare_render_pipeline = pipelines.specialize(
                 &pipeline_cache,
-                &compute_pipelines,
-                key | TerrainComputePipelineKey::PREPARE_RENDER,
+                &prepass_pipelines,
+                key | TilingPrepassPipelineKey::PREPARE_RENDER,
             );
 
-            compute_items.insert(
+            prepass_items.insert(
                 (terrain, view),
-                TerrainComputeItem {
+                TilingPrepassItem {
                     refine_tiles_pipeline,
                     prepare_root_pipeline,
                     prepare_next_pipeline,

@@ -4,25 +4,11 @@ use crate::{prelude::Quadtree, terrain::TerrainConfig};
 use bevy::{prelude::*, render::extract_component::ExtractComponent, utils::HashMap};
 
 /// Resource that stores components that are associated to a terrain entity and a view entity.
-#[derive(Clone, Resource)]
+#[derive(Deref, DerefMut, Resource)]
 pub struct TerrainViewComponents<C>(pub HashMap<(Entity, Entity), C>);
 
-impl<C> TerrainViewComponents<C> {
-    pub fn get(&self, k: &(Entity, Entity)) -> Option<&C> {
-        self.0.get(k)
-    }
-
-    pub fn get_mut(&mut self, k: &(Entity, Entity)) -> Option<&mut C> {
-        self.0.get_mut(k)
-    }
-
-    pub fn insert(&mut self, k: (Entity, Entity), v: C) {
-        self.0.insert(k, v);
-    }
-}
-
-impl<C> FromWorld for TerrainViewComponents<C> {
-    fn from_world(_world: &mut World) -> Self {
+impl<C> Default for TerrainViewComponents<C> {
+    fn default() -> Self {
         Self(default())
     }
 }
