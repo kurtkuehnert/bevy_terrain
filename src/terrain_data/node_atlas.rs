@@ -523,6 +523,7 @@ pub struct NodeAtlas {
     pub(crate) path: String,
     pub(crate) atlas_size: u32,
     pub(crate) lod_count: u32,
+    pub(crate) spherical: bool,
 }
 
 impl NodeAtlas {
@@ -534,6 +535,7 @@ impl NodeAtlas {
         path: &str,
         atlas_size: u32,
         lod_count: u32,
+        spherical: bool,
         attachments: &[AttachmentConfig],
     ) -> Self {
         let attachments = attachments
@@ -551,6 +553,7 @@ impl NodeAtlas {
             path: path.to_string(),
             atlas_size,
             lod_count,
+            spherical,
         }
     }
 
@@ -560,6 +563,7 @@ impl NodeAtlas {
             &config.path,
             config.node_atlas_size,
             config.lod_count,
+            config.model.spherical,
             &config.attachments,
         )
     }

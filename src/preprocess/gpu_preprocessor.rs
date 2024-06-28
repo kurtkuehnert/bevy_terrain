@@ -1,6 +1,6 @@
 use crate::{
     preprocess::{
-        preprocess_pipeline::TerrainPreprocessPipelines,
+        preprocess_pipeline::TerrainPreprocessItem,
         preprocessor::{PreprocessTask, PreprocessTaskType, Preprocessor},
     },
     terrain::{Terrain, TerrainComponents},
@@ -115,26 +115,22 @@ impl GpuPreprocessor {
 
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn prepare(
-        mut not_first: Local<bool>,
         device: Res<RenderDevice>,
         images: Res<RenderAssets<GpuImage>>,
+        preprocess_items: Res<TerrainComponents<TerrainPreprocessItem>>,
         mut gpu_preprocessors: ResMut<TerrainComponents<GpuPreprocessor>>,
         mut gpu_node_atlases: ResMut<TerrainComponents<GpuNodeAtlas>>,
-        preprocess_pipelines: Res<TerrainPreprocessPipelines>,
         pipeline_cache: Res<PipelineCache>,
         terrain_query: Query<Entity, With<Terrain>>,
     ) {
-        // Todo: fix this (only here to skip the first invocation, to prevent preprocess_pipelines.loaded from panicing
-        if !*not_first {
-            *not_first = true;
-            return;
-        }
-
-        if !preprocess_pipelines.loaded(&pipeline_cache) {
-            return;
-        }
-
         for terrain in terrain_query.iter() {
+            if preprocess_items
+                .get(&terrain)
+                .is_some_and(|item| !item.is_loaded(&pipeline_cache))
+            {
+                continue;
+            }
+
             let gpu_preprocessor = gpu_preprocessors.get_mut(&terrain).unwrap();
             let gpu_node_atlas = gpu_node_atlases.get_mut(&terrain).unwrap();
 

@@ -196,7 +196,7 @@ impl NodeCoordinate {
         })
     }
 
-    pub fn neighbours(self) -> impl Iterator<Item = Self> {
+    pub fn neighbours(self, spherical: bool) -> impl Iterator<Item = Self> {
         const OFFSETS: [IVec2; 8] = [
             IVec2::new(0, -1),
             IVec2::new(1, 0),
@@ -211,7 +211,7 @@ impl NodeCoordinate {
         OFFSETS.iter().map(move |&offset| {
             let neighbour_position = IVec2::new(self.x as i32, self.y as i32) + offset;
 
-            self.neighbour_coordinate(neighbour_position)
+            self.neighbour_coordinate(neighbour_position, spherical)
         })
     }
 
@@ -219,11 +219,10 @@ impl NodeCoordinate {
         format!("{path}/{self}.{extension}")
     }
 
-    fn neighbour_coordinate(self, neighbour_position: IVec2) -> Self {
+    fn neighbour_coordinate(self, neighbour_position: IVec2, spherical: bool) -> Self {
         let node_count = Self::node_count(self.lod) as i32;
 
-        #[cfg(feature = "spherical")]
-        {
+        if spherical {
             let edge_index = match neighbour_position {
                 IVec2 { x, y }
                     if x < 0 && y < 0
@@ -265,10 +264,7 @@ impl NodeCoordinate {
             });
 
             Self::new(neighbour_side, self.lod, x, y)
-        }
-
-        #[cfg(not(feature = "spherical"))]
-        {
+        } else {
             if neighbour_position.x < 0
                 || neighbour_position.y < 0
                 || neighbour_position.x >= node_count
