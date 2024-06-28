@@ -20,6 +20,7 @@ use bevy::{
         Render, RenderApp, RenderSet,
     },
 };
+use itertools::Itertools;
 
 pub mod gpu_preprocessor;
 pub mod preprocessor;
@@ -45,6 +46,17 @@ pub(crate) struct TerrainPreprocessItem {
 }
 
 impl TerrainPreprocessItem {
+    fn pipelines<'a>(
+        &'a self,
+        pipeline_cache: &'a PipelineCache,
+    ) -> Option<(&ComputePipeline, &ComputePipeline, &ComputePipeline)> {
+        Some((
+            pipeline_cache.get_compute_pipeline(self.split_pipeline)?,
+            pipeline_cache.get_compute_pipeline(self.stitch_pipeline)?,
+            pipeline_cache.get_compute_pipeline(self.downsample_pipeline)?,
+        ))
+    }
+
     pub(crate) fn is_loaded(&self, pipeline_cache: &PipelineCache) -> bool {
         pipeline_cache
             .get_compute_pipeline(self.split_pipeline)
@@ -152,87 +164,81 @@ impl render_graph::Node for TerrainPreprocessNode {
         self.terrain_query.update_archetypes(world);
     }
 
-    fn run(
+    fn run<'w>(
         &self,
         _graph: &mut RenderGraphContext,
-        context: &mut RenderContext,
-        world: &World,
+        context: &mut RenderContext<'w>,
+        world: &'w World,
     ) -> Result<(), NodeRunError> {
         let preprocess_items = world.resource::<TerrainComponents<TerrainPreprocessItem>>();
         let pipeline_cache = world.resource::<PipelineCache>();
         let preprocess_data = world.resource::<TerrainComponents<GpuPreprocessor>>();
         let gpu_node_atlases = world.resource::<TerrainComponents<GpuNodeAtlas>>();
 
-        for terrain in self.terrain_query.iter_manual(world) {
-            let item = preprocess_items.get(&terrain).unwrap();
+        let terrains = self.terrain_query.iter_manual(world).collect_vec();
 
-            let (Some(split_pipeline), Some(stitch_pipeline), Some(downsample_pipeline)) = (
-                pipeline_cache.get_compute_pipeline(item.split_pipeline),
-                pipeline_cache.get_compute_pipeline(item.stitch_pipeline),
-                pipeline_cache.get_compute_pipeline(item.downsample_pipeline),
-            ) else {
-                continue;
-            };
+        context.add_command_buffer_generation_task(move |device| {
+            let mut command_encoder =
+                device.create_command_encoder(&CommandEncoderDescriptor::default());
 
-            let preprocess_data = preprocess_data.get(&terrain).unwrap();
-            let gpu_node_atlas = gpu_node_atlases.get(&terrain).unwrap();
+            for terrain in terrains {
+                let item = preprocess_items.get(&terrain).unwrap();
 
-            for attachment in &gpu_node_atlas.attachments {
-                attachment.copy_nodes_to_write_section(context.command_encoder());
-            }
+                let Some((split_pipeline, stitch_pipeline, downsample_pipeline)) =
+                    item.pipelines(pipeline_cache)
+                else {
+                    continue;
+                };
 
-            if !preprocess_data.processing_tasks.is_empty() {
-                let mut pass = context
-                    .command_encoder()
-                    .begin_compute_pass(&ComputePassDescriptor::default());
+                let preprocess_data = preprocess_data.get(&terrain).unwrap();
+                let gpu_node_atlas = gpu_node_atlases.get(&terrain).unwrap();
 
-                for task in &preprocess_data.processing_tasks {
-                    let attachment =
-                        &gpu_node_atlas.attachments[task.task.node.attachment_index as usize];
+                for attachment in &gpu_node_atlas.attachments {
+                    attachment.copy_nodes_to_write_section(&mut command_encoder);
+                }
 
-                    pass.set_bind_group(0, &attachment.bind_group, &[]);
+                if !preprocess_data.processing_tasks.is_empty() {
+                    let mut compute_pass =
+                        command_encoder.begin_compute_pass(&ComputePassDescriptor::default());
 
-                    match task.task.task_type {
-                        PreprocessTaskType::Split { .. } => {
-                            // dbg!("running split shader");
+                    for task in &preprocess_data.processing_tasks {
+                        let attachment =
+                            &gpu_node_atlas.attachments[task.task.node.attachment_index as usize];
 
-                            pass.set_pipeline(split_pipeline);
-                        }
-                        PreprocessTaskType::Stitch { .. } => {
-                            // dbg!("running stitch shader");
+                        let pipeline = match task.task.task_type {
+                            PreprocessTaskType::Split { .. } => split_pipeline,
+                            PreprocessTaskType::Stitch { .. } => stitch_pipeline,
+                            PreprocessTaskType::Downsample { .. } => downsample_pipeline,
+                            _ => continue,
+                        };
 
-                            pass.set_pipeline(stitch_pipeline);
-                        }
-                        PreprocessTaskType::Downsample { .. } => {
-                            // dbg!("running downsample shader");
-
-                            pass.set_pipeline(downsample_pipeline);
-                        }
-                        _ => continue,
+                        compute_pass.set_pipeline(pipeline);
+                        compute_pass.set_bind_group(0, &attachment.bind_group, &[]);
+                        compute_pass.set_bind_group(1, task.bind_group.as_ref().unwrap(), &[]);
+                        compute_pass.dispatch_workgroups(
+                            attachment.buffer_info.workgroup_count.x,
+                            attachment.buffer_info.workgroup_count.y,
+                            attachment.buffer_info.workgroup_count.z,
+                        );
                     }
+                }
 
-                    pass.set_bind_group(1, task.bind_group.as_ref().unwrap(), &[]);
-                    pass.dispatch_workgroups(
-                        attachment.buffer_info.workgroup_count.x,
-                        attachment.buffer_info.workgroup_count.y,
-                        attachment.buffer_info.workgroup_count.z,
-                    );
+                for attachment in &gpu_node_atlas.attachments {
+                    attachment.copy_nodes_from_write_section(&mut command_encoder);
+
+                    attachment.download_nodes(&mut command_encoder);
+
+                    // if !attachment.atlas_write_slots.is_empty() {
+                    //     println!(
+                    //         "Ran preprocessing pipeline with {} nodes.",
+                    //         attachment.atlas_write_slots.len()
+                    //     )
+                    // }
                 }
             }
 
-            for attachment in &gpu_node_atlas.attachments {
-                attachment.copy_nodes_from_write_section(context.command_encoder());
-
-                attachment.download_nodes(context.command_encoder());
-
-                // if !attachment.atlas_write_slots.is_empty() {
-                //     println!(
-                //         "Ran preprocessing pipeline with {} nodes.",
-                //         attachment.atlas_write_slots.len()
-                //     )
-                // }
-            }
-        }
+            command_encoder.finish()
+        });
 
         Ok(())
     }

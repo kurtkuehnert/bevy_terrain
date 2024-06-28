@@ -70,6 +70,25 @@ pub(crate) struct TilingPrepassItem {
     prepare_render_pipeline: CachedComputePipelineId,
 }
 
+impl TilingPrepassItem {
+    fn pipelines<'a>(
+        &'a self,
+        pipeline_cache: &'a PipelineCache,
+    ) -> Option<(
+        &ComputePipeline,
+        &ComputePipeline,
+        &ComputePipeline,
+        &ComputePipeline,
+    )> {
+        Some((
+            pipeline_cache.get_compute_pipeline(self.refine_tiles_pipeline)?,
+            pipeline_cache.get_compute_pipeline(self.prepare_root_pipeline)?,
+            pipeline_cache.get_compute_pipeline(self.prepare_next_pipeline)?,
+            pipeline_cache.get_compute_pipeline(self.prepare_render_pipeline)?,
+        ))
+    }
+}
+
 #[derive(Resource)]
 pub struct TilingPrepassPipelines {
     pub(crate) prepare_indirect_layout: BindGroupLayout,
@@ -215,49 +234,41 @@ impl render_graph::Node for TilingPrepassNode {
                 for &terrain in &terrains {
                     let item = prepass_items.get(&(terrain, view)).unwrap();
 
-                    let (
-                        Some(refine_tiles_pipeline),
-                        Some(prepare_root_pipeline),
-                        Some(prepare_next_pipeline),
-                        Some(prepare_render_pipeline),
-                    ) = (
-                        pipeline_cache.get_compute_pipeline(item.refine_tiles_pipeline),
-                        pipeline_cache.get_compute_pipeline(item.prepare_root_pipeline),
-                        pipeline_cache.get_compute_pipeline(item.prepare_next_pipeline),
-                        pipeline_cache.get_compute_pipeline(item.prepare_render_pipeline),
-                    )
+                    let Some((
+                        refine_tiles_pipeline,
+                        prepare_root_pipeline,
+                        prepare_next_pipeline,
+                        prepare_render_pipeline,
+                    )) = item.pipelines(pipeline_cache)
                     else {
                         continue;
                     };
 
-                    if let Some(terrain_data) = terrain_data.get(&terrain) {
-                        // Todo: why no unwrap?
-                        let view_data = terrain_view_data.get(&(terrain, view)).unwrap();
-                        let culling_bind_group = culling_bind_groups.get(&(terrain, view)).unwrap();
+                    let terrain_data = terrain_data.get(&terrain).unwrap();
+                    let view_data = terrain_view_data.get(&(terrain, view)).unwrap();
+                    let culling_bind_group = culling_bind_groups.get(&(terrain, view)).unwrap();
 
-                        compute_pass.set_bind_group(0, culling_bind_group, &[]);
-                        compute_pass.set_bind_group(1, &terrain_data.terrain_bind_group, &[]);
-                        compute_pass.set_bind_group(2, &view_data.refine_tiles_bind_group, &[]);
-                        compute_pass.set_bind_group(3, &view_data.prepare_indirect_bind_group, &[]);
+                    compute_pass.set_bind_group(0, culling_bind_group, &[]);
+                    compute_pass.set_bind_group(1, &terrain_data.terrain_bind_group, &[]);
+                    compute_pass.set_bind_group(2, &view_data.refine_tiles_bind_group, &[]);
+                    compute_pass.set_bind_group(3, &view_data.prepare_indirect_bind_group, &[]);
 
-                        compute_pass.set_pipeline(prepare_root_pipeline);
-                        compute_pass.dispatch_workgroups(1, 1, 1);
+                    compute_pass.set_pipeline(prepare_root_pipeline);
+                    compute_pass.dispatch_workgroups(1, 1, 1);
 
-                        for _ in 0..view_data.refinement_count() {
-                            compute_pass.set_pipeline(refine_tiles_pipeline);
-                            compute_pass
-                                .dispatch_workgroups_indirect(&view_data.indirect_buffer, 0);
-
-                            compute_pass.set_pipeline(prepare_next_pipeline);
-                            compute_pass.dispatch_workgroups(1, 1, 1);
-                        }
-
+                    for _ in 0..view_data.refinement_count() {
                         compute_pass.set_pipeline(refine_tiles_pipeline);
                         compute_pass.dispatch_workgroups_indirect(&view_data.indirect_buffer, 0);
 
-                        compute_pass.set_pipeline(prepare_render_pipeline);
+                        compute_pass.set_pipeline(prepare_next_pipeline);
                         compute_pass.dispatch_workgroups(1, 1, 1);
                     }
+
+                    compute_pass.set_pipeline(refine_tiles_pipeline);
+                    compute_pass.dispatch_workgroups_indirect(&view_data.indirect_buffer, 0);
+
+                    compute_pass.set_pipeline(prepare_render_pipeline);
+                    compute_pass.dispatch_workgroups(1, 1, 1);
                 }
             }
 
