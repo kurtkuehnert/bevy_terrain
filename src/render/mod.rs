@@ -5,9 +5,8 @@
 //! each view. Then they are drawn using a single draw indirect call and morphed together to form
 //! one continuous surface.
 
-pub mod compute_pipelines;
 pub mod culling_bind_group;
-pub mod render_pipeline;
-pub mod shaders;
 pub mod terrain_bind_group;
+pub mod terrain_material;
 pub mod terrain_view_bind_group;
+pub mod tiling_prepass;
