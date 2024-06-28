@@ -1,7 +1,7 @@
+use crate::shaders::DEFAULT_SHADER;
 use crate::{
     debug::DebugTerrain,
     render::{
-        shaders::DEFAULT_SHADER,
         terrain_bind_group::{create_terrain_layout, SetTerrainBindGroup},
         terrain_view_bind_group::{
             create_terrain_view_layout, DrawTerrainCommand, SetTerrainViewBindGroup,

@@ -4,8 +4,8 @@ use crate::{
             create_downsample_layout, create_split_layout, create_stitch_layout, GpuPreprocessor,
         },
         preprocessor::PreprocessTaskType,
-        shaders::{DOWNSAMPLE_SHADER, SPLIT_SHADER, STITCH_SHADER},
     },
+    shaders::{DOWNSAMPLE_SHADER, SPLIT_SHADER, STITCH_SHADER},
     terrain::{Terrain, TerrainComponents},
     terrain_data::gpu_node_atlas::{create_attachment_layout, GpuNodeAtlas},
 };

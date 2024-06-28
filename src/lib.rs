@@ -50,6 +50,7 @@ pub mod math;
 pub mod plugin;
 pub mod preprocess;
 pub mod render;
+pub mod shaders;
 pub mod terrain;
 pub mod terrain_data;
 pub mod terrain_view;
@@ -71,7 +72,7 @@ pub mod prelude {
             preprocessor::{PreprocessDataset, SphericalDataset},
             TerrainPreprocessPlugin,
         },
-        render::render_pipeline::TerrainMaterialPlugin,
+        render::terrain_material::TerrainMaterialPlugin,
         terrain::{Terrain, TerrainBundle, TerrainConfig},
         terrain_data::{
             node_atlas::NodeAtlas, quadtree::Quadtree, AttachmentConfig, AttachmentFormat,
