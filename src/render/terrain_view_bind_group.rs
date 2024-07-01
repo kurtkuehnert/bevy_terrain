@@ -1,6 +1,6 @@
 use crate::{
     math::TerrainModelApproximation,
-    terrain::Terrain,
+    terrain::{Terrain, TerrainConfig},
     terrain_data::gpu_quadtree::GpuQuadtree,
     terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
     util::StaticBuffer,
@@ -99,7 +99,9 @@ struct TerrainViewConfigUniform {
 }
 
 impl TerrainViewConfigUniform {
-    fn new(view_config: &TerrainViewConfig) -> Self {
+    fn new(config: &TerrainConfig, view_config: &TerrainViewConfig) -> Self {
+        let scale = config.model.scale() as f32;
+
         TerrainViewConfigUniform {
             approximate_height: view_config.approximate_height,
             quadtree_size: view_config.quadtree_size,
@@ -108,11 +110,11 @@ impl TerrainViewConfigUniform {
             grid_size: view_config.grid_size as f32,
             vertices_per_row: 2 * (view_config.grid_size + 2),
             vertices_per_tile: 2 * view_config.grid_size * (view_config.grid_size + 2),
-            morph_distance: view_config.morph_distance,
-            blend_distance: view_config.blend_distance,
+            morph_distance: view_config.morph_distance * scale,
+            blend_distance: view_config.blend_distance * scale,
             morph_range: view_config.morph_range,
             blend_range: view_config.blend_range,
-            precision_threshold_distance: view_config.precision_threshold_distance,
+            precision_threshold_distance: view_config.precision_threshold_distance * scale,
         }
     }
 }
@@ -221,14 +223,16 @@ impl TerrainViewData {
         terrain_model_approximations: Extract<
             Res<TerrainViewComponents<TerrainModelApproximation>>,
         >,
+        terrain_query: Extract<Query<&TerrainConfig, With<Terrain>>>,
         view_configs: Extract<Res<TerrainViewComponents<TerrainViewConfig>>>,
     ) {
         for (&(terrain, view), view_config) in &view_configs.0 {
+            let config = terrain_query.get(terrain).unwrap();
             let terrain_view_data = terrain_view_data.get_mut(&(terrain, view)).unwrap();
 
             terrain_view_data
                 .view_config_buffer
-                .set_value(TerrainViewConfigUniform::new(view_config));
+                .set_value(TerrainViewConfigUniform::new(config, view_config));
 
             terrain_view_data
                 .terrain_model_approximation_buffer

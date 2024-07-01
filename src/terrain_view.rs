@@ -34,6 +34,8 @@ pub struct TerrainViewConfig {
     pub grid_size: u32,
     // Todo: set scale for these appropriately
     pub load_distance: f32,
+    // Todo: this currently has to be larger than about 2.5, since the tiles can only morph to the adjacent layer.
+    //       Should the morph distance be too small, this will result in morph transitions suddenly being canceled, by the next LOD.
     pub morph_distance: f32,
     pub blend_distance: f32,
     /// The morph percentage of the mesh.

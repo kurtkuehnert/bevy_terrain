@@ -67,6 +67,7 @@ struct AttachmentConfig {
 }
 
 struct SideParameter {
+    view_st: vec2<f32>,
     origin_xy: vec2<i32>,
     delta_relative_st: vec2<f32>,
     c: vec3<f32>,

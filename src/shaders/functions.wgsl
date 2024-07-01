@@ -53,9 +53,15 @@ fn cube_to_sphere(uv: vec2<f32>) -> vec2<f32> {
 }
 
 fn normal_local_to_world(local_position: vec3<f32>) -> vec3<f32> {
+#ifdef SPHERICAL
+    let local_normal = local_position;
+#else
+    let local_normal = vec3<f32>(0.0, 1.0, 0.0);
+#endif
+
     let world_from_local = mat2x4_f32_to_mat3x3_unpack(mesh[0].local_from_world_transpose_a,
                                                        mesh[0].local_from_world_transpose_b);
-    return normalize(world_from_local * local_position);
+    return normalize(world_from_local * local_normal);
 }
 
 fn position_local_to_world(local_position: vec3<f32>) -> vec3<f32> {
@@ -64,8 +70,9 @@ fn position_local_to_world(local_position: vec3<f32>) -> vec3<f32> {
 }
 
 fn compute_morph(view_distance: f32, lod: u32, grid_offset: vec2<f32>) -> Morph {
-    let threshold_distance = 2.0 * view_config.morph_distance * tile_size(lod) * config.scale;
-    let ratio = clamp(1.0 - (1.0 - view_distance / threshold_distance) / view_config.morph_range, 0.0, 1.0);
+    let threshold_distance = view_config.morph_distance / tile_count(lod);
+    var ratio = clamp(1.0 - (1.0 - view_distance / threshold_distance) / view_config.morph_range, 0.0, 1.0);
+    ratio     = select(ratio, 0.0, lod == 0);
 
     let even_offset = vec2<f32>(vec2<u32>(grid_offset * view_config.grid_size) & vec2<u32>(4294967294u)) / view_config.grid_size;
     let offset = mix(grid_offset, even_offset, ratio);
@@ -74,11 +81,12 @@ fn compute_morph(view_distance: f32, lod: u32, grid_offset: vec2<f32>) -> Morph 
 }
 
 fn compute_blend(view_distance: f32) -> Blend {
-    let lod_f32 = log2(2.0 * view_config.blend_distance / view_distance * config.scale);
+    let lod_f32 = log2(view_config.blend_distance / view_distance);
     let lod     = clamp(u32(lod_f32), 0u, config.lod_count - 1u);
 
 #ifdef BLEND
-    let ratio = select(1.0 - (lod_f32 % 1.0) / view_config.blend_range, 0.0, lod_f32 < 1.0 || lod_f32 > f32(config.lod_count));
+    var ratio = 1.0 - (lod_f32 % 1.0) / view_config.blend_range;
+    ratio     = select(ratio, 0.0, lod_f32 < 1.0 || lod_f32 > f32(config.lod_count));
 #else
     let ratio = 0.0;
 #endif
@@ -95,8 +103,8 @@ fn compute_grid_offset(grid_index: u32) -> vec2<f32>{
     return vec2<f32>(offset) / view_config.grid_size;
 }
 
-fn compute_local_position(tile: Tile, offset: vec2<f32>) -> vec3<f32> {
-    let st = (vec2<f32>(tile.xy) + offset) * tile_size(tile.lod);
+ fn compute_local_position(tile: Tile, offset: vec2<f32>) -> vec3<f32> {
+    let st = (vec2<f32>(tile.xy) + offset) / tile_count(tile.lod);
 
 #ifdef SPHERICAL
     let uv = cube_to_sphere(st);
@@ -125,7 +133,7 @@ fn compute_relative_position(tile: Tile, grid_offset: vec2<f32>) -> vec3<f32> {
     let lod_difference = tile.lod - u32(terrain_model_approximation.origin_lod);
     let origin_xy = vec2<i32>(params.origin_xy.x << lod_difference, params.origin_xy.y << lod_difference);
     let tile_offset = vec2<i32>(tile.xy) - origin_xy;
-    let relative_st = (vec2<f32>(tile_offset) + grid_offset) * tile_size(tile.lod) + params.delta_relative_st;
+    let relative_st = (vec2<f32>(tile_offset) + grid_offset) / tile_count(tile.lod) + params.delta_relative_st;
 
     let s = relative_st.x;
     let t = relative_st.y;
@@ -139,13 +147,23 @@ fn compute_relative_position(tile: Tile, grid_offset: vec2<f32>) -> vec3<f32> {
     return c + c_s * s + c_t * t + c_ss * s * s + c_st * s * t + c_tt * t * t;
 }
 
-fn tile_size(lod: u32) -> f32 {
-    return 1.0 / f32(1u << lod);
+fn tile_offset(tile: Tile) -> vec2<f32> {
+    let params       = terrain_model_approximation.sides[tile.side];
+    let tile_count   = tile_count(tile.lod);
+    let view_tile_xy = params.view_st * tile_count;
+    let tile_offset  = vec2<i32>(view_tile_xy) - vec2<i32>(tile.xy);
+    var offset       = view_tile_xy % 1.0;
+
+    if      (tile_offset.x < 0) { offset.x = 0.0; }
+    else if (tile_offset.x > 0) { offset.x = 1.0; }
+    if      (tile_offset.y < 0) { offset.y = 0.0; }
+    else if (tile_offset.y > 0) { offset.y = 1.0; }
+
+    return offset;
 }
 
-fn node_count(lod: u32) -> f32 {
-    return f32(1u << lod);
-}
+fn tile_count(lod: u32) -> f32 { return f32(1u << lod); }
+fn node_count(lod: u32) -> f32 { return f32(1u << lod); }
 
 fn inside_square(position: vec2<f32>, origin: vec2<f32>, size: f32) -> f32 {
     let inside = step(origin, position) * step(position, origin + size);

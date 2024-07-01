@@ -84,7 +84,7 @@ fn sample_normal_grad(lookup: NodeLookup, vertex_normal: vec3<f32>, side: u32) -
                      0.0, 0.0, 1.0,
                      0.0, 1.0, 0.0);
 
-    let side_length = 1.0;
+    let side_length = config.scale;
 #endif
 
     // Todo: this is only an approximation of the S2 distance (pixels are not spaced evenly and they are not perpendicular)

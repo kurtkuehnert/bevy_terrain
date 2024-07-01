@@ -67,9 +67,10 @@ pub struct Coordinate {
 impl Coordinate {
     /// Calculates the coordinate for for the local position on the unit cube sphere.
     pub(crate) fn from_world_position(world_position: DVec3, model: &TerrainModel) -> Self {
-        let normal = model.world_to_normal(world_position);
+        let local_position = model.position_world_to_local(world_position);
 
         if model.spherical {
+            let normal = local_position;
             let abs_normal = normal.abs();
 
             let (side, uv) = if abs_normal.x > abs_normal.y && abs_normal.x > abs_normal.z {
@@ -98,7 +99,8 @@ impl Coordinate {
         } else {
             Self {
                 side: 0,
-                st: DVec2::new(0.5 * normal.x + 0.5, 0.5 * normal.z + 0.5),
+                st: DVec2::new(local_position.x + 0.5, local_position.z + 0.5)
+                    .clamp(DVec2::ZERO, DVec2::ONE),
             }
         }
     }
@@ -121,7 +123,7 @@ impl Coordinate {
             DVec3::new(2.0 * self.st.x - 1.0, 0.0, 2.0 * self.st.y - 1.0)
         };
 
-        model.normal_to_world(normal)
+        model.position_local_to_world(normal)
     }
 
     /// Projects the coordinate onto one of the six cube faces.

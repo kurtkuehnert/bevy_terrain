@@ -3,6 +3,7 @@
 #import bevy_terrain::types::{Tile, NodeLookup, Blend}
 #import bevy_terrain::bindings::{tiles, config, view_config}
 #import bevy_terrain::functions::{compute_blend, lookup_node}
+#import bevy_terrain::attachments::{sample_normal_grad, sample_color_grad}
 #import bevy_terrain::debug::{show_lod, show_quadtree, show_pixels}
 #import bevy_pbr::pbr_types::{PbrInput, pbr_input_new}
 #import bevy_pbr::pbr_functions::{calculate_view, apply_pbr_lighting}
@@ -96,7 +97,27 @@ fn fragment_debug(info: ptr<function, FragmentInfo>, output: ptr<function, Fragm
     (*output).color = vec4<f32>(normal, 1.0);
 #endif
 
-    // if ((*info).view_distance < view_config.precision_threshold_distance * config.scale) {
+    // if ((*info).view_distance < view_config.precision_threshold_distance) {
     //     (*output).color = mix((*output).color, vec4<f32>(0.0, 1.0, 0.0, 1.0), 0.3);
     // }
+}
+
+fn fragment_default(input: FragmentInput) -> FragmentOutput {
+    var info = fragment_info(input);
+
+    let lookup = fragment_lookup_node(&info, 0u);
+    var color  = sample_color_grad(lookup);
+    var normal = sample_normal_grad(lookup, info.world_normal, info.tile.side);
+
+    if (info.blend.ratio > 0.0) {
+        let lookup2 = fragment_lookup_node(&info, 1u);
+        color       = mix(color,  sample_color_grad(lookup2),                                     info.blend.ratio);
+        normal      = mix(normal, sample_normal_grad(lookup2, info.world_normal, info.tile.side), info.blend.ratio);
+    }
+
+    var output: FragmentOutput;
+    fragment_output(&info, &output, color, normal);
+    fragment_debug(&info, &output, lookup, normal);
+
+    return output;
 }
