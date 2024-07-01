@@ -25,13 +25,14 @@ pub(crate) fn tile_count(lod: i32) -> i32 {
 
 // Todo: keep in sync with terrain transform, make this authoritative?
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct TerrainModel {
-    pub(crate) spherical: bool,
+    pub(crate) spherical: bool, // Todo: model with enum?
+    pub(crate) min_height: f32,
+    pub(crate) max_height: f32,
     translation: DVec3,
     scale: DVec3,
     rotation: DQuat,
-
     world_from_local: DMat4,
     local_from_world: DMat4,
 }
@@ -41,44 +42,84 @@ impl TerrainModel {
         scale: DVec3,
         rotation: DQuat,
         translation: DVec3,
+        min_height: f32,
+        max_height: f32,
         spherical: bool,
     ) -> Self {
         let world_from_local = DMat4::from_scale_rotation_translation(scale, rotation, translation);
         let local_from_world = world_from_local.inverse();
 
         Self {
+            spherical,
+            min_height,
+            max_height,
             translation,
             scale,
             rotation,
             world_from_local,
             local_from_world,
-            spherical,
         }
     }
 
-    pub fn planar(position: DVec3, size: f64) -> Self {
-        Self::from_scale_rotation_translation(DVec3::splat(size), DQuat::IDENTITY, position, false)
-    }
-
-    pub fn sphere(position: DVec3, radius: f64) -> Self {
-        Self::from_scale_rotation_translation(DVec3::splat(radius), DQuat::IDENTITY, position, true)
-    }
-
-    pub fn ellipsoid(position: DVec3, major_axis: f64, minor_axis: f64) -> Self {
+    pub fn planar(position: DVec3, side_length: f64, min_height: f32, max_height: f32) -> Self {
         Self::from_scale_rotation_translation(
-            DVec3::new(major_axis, minor_axis, major_axis),
-            DQuat::IDENTITY, // ::from_rotation_x(45.0_f64.to_radians()),
+            DVec3::splat(side_length),
+            DQuat::IDENTITY,
             position,
+            min_height,
+            max_height,
+            false,
+        )
+    }
+
+    pub fn sphere(position: DVec3, radius: f64, min_height: f32, max_height: f32) -> Self {
+        Self::from_scale_rotation_translation(
+            DVec3::splat(radius),
+            DQuat::IDENTITY,
+            position,
+            min_height,
+            max_height,
             true,
         )
     }
 
-    pub(crate) fn normal_to_world(&self, local_position: DVec3) -> DVec3 {
+    pub fn ellipsoid(
+        position: DVec3,
+        major_axis: f64,
+        minor_axis: f64,
+        min_height: f32,
+        max_height: f32,
+    ) -> Self {
+        Self::from_scale_rotation_translation(
+            DVec3::new(major_axis, minor_axis, major_axis),
+            DQuat::IDENTITY, // ::from_rotation_x(45.0_f64.to_radians()),
+            position,
+            min_height,
+            max_height,
+            true,
+        )
+    }
+
+    pub(crate) fn position_local_to_world(&self, local_position: DVec3) -> DVec3 {
         self.world_from_local.transform_point3(local_position)
     }
 
-    pub(crate) fn world_to_normal(&self, world_position: DVec3) -> DVec3 {
-        self.local_from_world.transform_point3(world_position)
+    pub(crate) fn position_world_to_local(&self, world_position: DVec3) -> DVec3 {
+        let mut local_position = self.local_from_world.transform_point3(world_position);
+
+        if !self.spherical {
+            local_position.y = 0.0;
+        }
+
+        local_position
+    }
+
+    pub(crate) fn normal_local_to_world(&self, local_position: DVec3) -> DVec3 {
+        self.world_from_local.transform_vector3(if self.spherical {
+            local_position
+        } else {
+            DVec3::Y
+        })
     }
 
     pub(crate) fn side_count(&self) -> u32 {
@@ -89,7 +130,7 @@ impl TerrainModel {
         }
     }
 
-    pub(crate) fn radius(&self) -> f64 {
+    pub(crate) fn scale(&self) -> f64 {
         self.scale.length()
     }
 
@@ -114,6 +155,7 @@ impl TerrainModel {
 /// Therefore, we identify a origin tile with sufficiently high lod (origin LOD), that serves as a reference, to which we can compute our relative coordinate using partly integer math.
 #[derive(Copy, Clone, Debug, Default, ShaderType)]
 pub(crate) struct SideParameter {
+    pub(crate) view_st: Vec2,
     /// The tile index of the origin tile projected to this side.
     pub(crate) origin_xy: IVec2,
     /// The offset between the view st coordinate and the origin st coordinate.
@@ -175,6 +217,7 @@ impl TerrainModelApproximation {
             let origin_coordinate = origin_coordinate.project_to_side(side as u32, model);
             let view_coordinate = view_coordinate.project_to_side(side as u32, model);
             let origin_xy = (origin_coordinate.st * tile_count(origin_lod) as f64).as_ivec2();
+            let view_st = view_coordinate.st.as_vec2();
             // The difference between the origin and the view coordinate.
             // This is added to the coordinate relative to the origin tile, in order to get the coordinate relative to the view coordinate.
             // The later serves as the input to this Taylor series.
@@ -232,6 +275,7 @@ impl TerrainModelApproximation {
             let p_dtt = m.transform_vector3(sm * DVec3::new(a_dtt, b_dtt, c_dtt) / l.powi(3));
 
             sides[side] = SideParameter {
+                view_st,
                 origin_xy,
                 delta_relative_st,
                 c: (p - view_position).as_vec3(),

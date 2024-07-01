@@ -102,7 +102,7 @@ impl NodeLookup {
 /// After the [`NodeAtlas`] has adjusted to these requests, the quadtree retrieves the best
 /// currently loaded nodes from the node atlas via the
 /// `adjust` methode, which can later be used to access the terrain data.
-#[derive(Default, Component)]
+#[derive(Component)]
 pub struct Quadtree {
     pub(super) origins: Array2<UVec2>,
     /// The current cpu quadtree data. This is synced each frame with the gpu quadtree data.
@@ -122,8 +122,6 @@ pub struct Quadtree {
     load_distance: f32,
     blend_distance: f32,
     blend_range: f32,
-    pub(crate) min_height: f32,
-    pub(crate) max_height: f32,
     pub(crate) view_world_position: DVec3,
     pub(crate) model: TerrainModel,
     pub(crate) approximate_height: f32,
@@ -139,14 +137,14 @@ impl Quadtree {
     /// * `height` - The height of the terrain.
     pub fn new(
         lod_count: u32,
-        side_count: u32,
+        model: TerrainModel,
         quadtree_size: u32,
         load_distance: f32,
         blend_distance: f32,
         blend_range: f32,
-        min_height: f32,
-        max_height: f32,
     ) -> Self {
+        let side_count = model.side_count();
+
         Self {
             lod_count,
             side_count,
@@ -154,11 +152,9 @@ impl Quadtree {
             load_distance,
             blend_distance,
             blend_range,
-            min_height,
-            max_height,
             view_world_position: default(),
-            model: default(),
-            approximate_height: (min_height + max_height) / 2.0,
+            approximate_height: (model.min_height + model.max_height) / 2.0,
+            model,
             origins: Array2::default((side_count as usize, lod_count as usize)),
             data: Array4::default((
                 side_count as usize,
@@ -181,34 +177,33 @@ impl Quadtree {
     pub fn from_configs(config: &TerrainConfig, view_config: &TerrainViewConfig) -> Self {
         Self::new(
             config.lod_count,
-            config.model.side_count(),
+            config.model.clone(),
             view_config.quadtree_size,
             view_config.load_distance,
             view_config.blend_distance,
             view_config.blend_range,
-            config.min_height,
-            config.max_height,
         )
     }
 
     fn origin(&self, quadtree_coordinate: Coordinate, lod: u32) -> UVec2 {
-        let node_count = NodeCoordinate::node_count(lod);
-        let max_offset = (node_count - self.quadtree_size) as f64;
+        let node_count = NodeCoordinate::node_count(lod) as f64;
 
         (quadtree_coordinate
             .st
             .clamp(DVec2::ZERO, DVec2::splat(0.999999))
-            * node_count as f64
+            * node_count
             - 0.5 * self.quadtree_size as f64)
             .round()
-            .clamp(DVec2::splat(0.0), DVec2::splat(max_offset))
+            .clamp(
+                DVec2::splat(0.0),
+                DVec2::splat(node_count - self.quadtree_size as f64),
+            )
             .as_uvec2()
     }
 
     pub(super) fn compute_blend(&self, sample_world_position: DVec3) -> (u32, f32) {
         let view_distance = self.view_world_position.distance(sample_world_position) as f32;
-        let lod_f32 =
-            (2.0 * self.blend_distance / view_distance * self.model.radius() as f32).log2();
+        let lod_f32 = (self.blend_distance / view_distance * self.model.scale() as f32).log2();
         let lod = (lod_f32 as u32).clamp(0, self.lod_count - 1);
         let ratio = if lod_f32 < 1.0 || lod_f32 > self.lod_count as f32 {
             0.0
@@ -288,7 +283,7 @@ impl Quadtree {
                                 node_world_position.distance(quadtree.view_world_position);
                             let node_distance =
                                 0.5 * distance * NodeCoordinate::node_count(lod) as f64
-                                    / config.model.radius();
+                                    / config.model.scale();
 
                             let state = if lod == 0 || node_distance < quadtree.load_distance as f64
                             {

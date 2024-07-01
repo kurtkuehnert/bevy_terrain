@@ -3,6 +3,7 @@
 #import bevy_terrain::types::{Tile, Blend, NodeLookup}
 #import bevy_terrain::bindings::{config, view_config, tiles}
 #import bevy_terrain::functions::{lookup_node, compute_grid_offset, compute_local_position, compute_relative_position, compute_morph, compute_blend, normal_local_to_world, position_local_to_world}
+#import bevy_terrain::attachments::{sample_height}
 #import bevy_terrain::debug::{show_tiles}
 #import bevy_pbr::mesh_view_bindings::view
 #import bevy_pbr::view_transformations::position_world_to_clip
@@ -60,7 +61,7 @@ fn vertex_info(input: VertexInput) -> VertexInfo {
 #endif
 
 #ifdef TEST1
-    if (info.view_distance < view_config.precision_threshold_distance * config.scale) {
+    if (info.view_distance < view_config.precision_threshold_distance) {
         var relative_position = compute_relative_position(info.tile, info.grid_offset);
         info.view_distance    = length(relative_position + view_config.approximate_height * info.world_normal);
 
@@ -99,9 +100,26 @@ fn vertex_output(info: ptr<function, VertexInfo>, output: ptr<function, VertexOu
 
 fn vertex_debug(info: ptr<function, VertexInfo>, output: ptr<function, VertexOutput>) {
 #ifdef SHOW_TILES
-    (*output).debug_color = show_tiles((*info).tile, (*info).view_distance);
+    (*output).debug_color = show_tiles((*info).tile, (*info).offset, (*info).view_distance);
 #endif
 #ifdef TEST2
     (*output).debug_color = vec4<f32>((*info).taylor_error / 1.0, 0.0, 0.0, 1.0);
 #endif
+}
+
+fn vertex_default(input: VertexInput) -> VertexOutput {
+    var info = vertex_info(input);
+
+    let lookup = vertex_lookup_node(&info, 0u);
+    var height = sample_height(lookup);
+
+    if (info.blend.ratio > 0.0) {
+        let lookup2 = vertex_lookup_node(&info, 1u);
+        height      = mix(height, sample_height(lookup2), info.blend.ratio);
+    }
+
+    var output: VertexOutput;
+    vertex_output(&info, &output, height);
+    vertex_debug(&info, &output);
+    return output;
 }

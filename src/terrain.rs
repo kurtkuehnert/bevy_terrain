@@ -34,10 +34,6 @@ pub struct TerrainConfig {
     /// The count of level of detail layers.
     pub lod_count: u32,
     pub model: TerrainModel,
-    /// The minimum height of the terrain.
-    pub min_height: f32,
-    /// The maximum height of the terrain.
-    pub max_height: f32,
     /// The amount of nodes the can be loaded simultaneously in the node atlas.
     pub node_atlas_size: u32,
     /// The path to the terrain folder inside the assets directory.
@@ -50,9 +46,7 @@ impl Default for TerrainConfig {
     fn default() -> Self {
         Self {
             lod_count: 1,
-            model: TerrainModel::sphere(default(), 1.0),
-            min_height: 0.0,
-            max_height: 1.0,
+            model: TerrainModel::sphere(default(), 1.0, 0.0, 1.0),
             node_atlas_size: 1024,
             path: default(),
             attachments: default(),

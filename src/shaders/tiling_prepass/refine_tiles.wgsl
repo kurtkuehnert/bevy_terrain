@@ -1,6 +1,6 @@
 #import bevy_terrain::types::Tile
-#import bevy_terrain::bindings::{config, culling_view, view_config, final_tiles, temporary_tiles, parameters}
-#import bevy_terrain::functions::{compute_local_position, compute_relative_position, position_local_to_world, normal_local_to_world, tile_size}
+#import bevy_terrain::bindings::{config, culling_view, view_config, final_tiles, temporary_tiles, parameters, terrain_model_approximation}
+#import bevy_terrain::functions::{compute_local_position, compute_relative_position, position_local_to_world, normal_local_to_world, tile_count, tile_offset}
 
 fn child_index() -> i32 {
     return atomicAdd(&parameters.child_index, parameters.counter);
@@ -14,14 +14,14 @@ fn final_index() -> i32 {
     return atomicAdd(&parameters.final_index, 1);
 }
 
-fn compute_corner_view_distance(tile: Tile, offset: vec2<f32>) -> f32 {
+fn compute_view_distance(tile: Tile, offset: vec2<f32>) -> f32 {
     let local_position = compute_local_position(tile, offset);
     let world_position = position_local_to_world(local_position);
     let world_normal   = normal_local_to_world(local_position);
     var view_distance  = distance(world_position + view_config.approximate_height * world_normal, culling_view.world_position);
 
 #ifdef TEST1
-    if (view_distance < view_config.precision_threshold_distance * config.scale) {
+    if (view_distance < view_config.precision_threshold_distance) {
         let relative_position = compute_relative_position(tile, offset);
         view_distance         = length(relative_position + view_config.approximate_height * world_normal);
     }
@@ -31,14 +31,14 @@ fn compute_corner_view_distance(tile: Tile, offset: vec2<f32>) -> f32 {
 }
 
 fn should_be_divided(tile: Tile) -> bool {
-    var min_view_distance = 3.40282347E+38; // f32::MAX
+    let offset = tile_offset(tile);
 
-    for (var i: u32 = 0u; i < 4u; i = i + 1u) {
-        let corner_view_distance = compute_corner_view_distance(tile, vec2<f32>(f32(i & 1u), f32(i >> 1u & 1u)));
-        min_view_distance = min(min_view_distance, corner_view_distance);
-    }
+    let view_distance = compute_view_distance(tile, offset);
+    // Todo: add some small tolerance, since vertices close to the offset could potentially be closer to the camera
+    //       due to height differences
+    let threshold_distance = 0.5 * view_config.morph_distance / tile_count(tile.lod);
 
-    return min_view_distance < view_config.morph_distance * tile_size(tile.lod) * config.scale;
+    return view_distance < threshold_distance;
 }
 
 fn subdivide(tile: Tile) {
