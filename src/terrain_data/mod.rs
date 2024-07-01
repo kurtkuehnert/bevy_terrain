@@ -273,9 +273,14 @@ pub fn sample_attachment(
     attachment_index: u32,
     sample_world_position: DVec3,
 ) -> Vec4 {
-    let normal = quadtree.model.world_to_normal(sample_world_position);
-    let sample_world_position =
-        quadtree.model.normal_to_world(normal) + normal * quadtree.approximate_height as f64;
+    let sample_local_position = quadtree
+        .model
+        .position_world_to_local(sample_world_position);
+    let world_normal = quadtree.model.normal_local_to_world(sample_local_position);
+    let sample_world_position = quadtree
+        .model
+        .position_local_to_world(sample_local_position)
+        + world_normal * quadtree.approximate_height as f64;
 
     let (lod, blend_ratio) = quadtree.compute_blend(sample_world_position);
 
@@ -298,7 +303,9 @@ pub fn sample_height(
     node_atlas: &NodeAtlas,
     sample_world_position: DVec3,
 ) -> f32 {
-    sample_attachment(quadtree, node_atlas, 0, sample_world_position).x
-        * (quadtree.max_height - quadtree.min_height)
-        + quadtree.min_height
+    f32::lerp(
+        quadtree.model.min_height,
+        quadtree.model.max_height,
+        sample_attachment(quadtree, node_atlas, 0, sample_world_position).x,
+    )
 }

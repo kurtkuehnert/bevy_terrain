@@ -1,8 +1,8 @@
 #define_import_path bevy_terrain::debug
 
 #import bevy_terrain::types::{Coordinate, NodeLookup, Blend, Tile}
-#import bevy_terrain::bindings::{config, quadtree, view_config, tiles, attachments, origins}
-#import bevy_terrain::functions::{compute_morph, compute_blend, quadtree_lod, inside_square, node_count, node_coordinate, coordinate_from_local_position, tile_size}
+#import bevy_terrain::bindings::{config, quadtree, view_config, tiles, attachments, origins, terrain_model_approximation}
+#import bevy_terrain::functions::{compute_morph, compute_blend, tile_count, quadtree_lod, inside_square, node_count, node_coordinate, coordinate_from_local_position, tile_offset}
 
 fn index_color(index: u32) -> vec4<f32> {
     var COLOR_ARRAY = array(
@@ -23,7 +23,7 @@ fn quadtree_outlines(offset: vec2<f32>) -> f32 {
     return 1.0 - inside_square(offset, vec2<f32>(thickness), 1.0 - 2.0 * thickness);
 }
 
-fn show_tiles(tile: Tile, view_distance: f32) -> vec4<f32> {
+fn show_tiles(tile: Tile, offset: vec2<f32>, view_distance: f32) -> vec4<f32> {
     var color: vec4<f32>;
 
     if ((tile.xy.x + tile.xy.y) % 2u == 0u) { color = vec4<f32>(0.5, 0.5, 0.5, 1.0); }
@@ -32,13 +32,24 @@ fn show_tiles(tile: Tile, view_distance: f32) -> vec4<f32> {
     color = mix(color, index_color(tile.lod), 0.5);
 
 #ifdef MORPH
+    var parent_color: vec4<f32>;
+
+    if (((tile.xy.x >> 1) + (tile.xy.y >> 1)) % 2u == 0u) { parent_color = vec4<f32>(0.5, 0.5, 0.5, 1.0); }
+    else                                                  { parent_color = vec4<f32>(0.1, 0.1, 0.1, 1.0); }
+
+    parent_color = mix(parent_color, index_color(tile.lod - 1), 0.5);
+
     let morph = compute_morph(view_distance, tile.lod, vec2<f32>(0.0));
-    color     = mix(color, vec4<f32>(1.0), 0.5 * morph.ratio);
+    color     = mix(color, parent_color, morph.ratio);
 #endif
 
 #ifdef SPHERICAL
     color = mix(color, index_color(tile.side), 0.5);
 #endif
+
+    // if (length(offset - tile_offset(tile)) < 0.1) {
+    //     color = mix(color, vec4<f32>(0.0), 0.9);
+    // }
 
     return color;
 }

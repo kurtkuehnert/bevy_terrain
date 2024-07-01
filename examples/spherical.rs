@@ -56,11 +56,15 @@ fn setup(
     // Configure all the important properties of the terrain, as well as its attachments.
     let config = TerrainConfig {
         lod_count: LOD_COUNT,
-        model: TerrainModel::ellipsoid(DVec3::ZERO, 6378137.0, 6356752.314245),
+        model: TerrainModel::ellipsoid(
+            DVec3::ZERO,
+            6378137.0,
+            6356752.314245,
+            MIN_HEIGHT,
+            MAX_HEIGHT,
+        ),
         // model: TerrainModel::ellipsoid(DVec3::ZERO, 6378137.0, 6378137.0 * 0.5),
         // model: TerrainModel::sphere(DVec3::ZERO, RADIUS),
-        min_height: MIN_HEIGHT,
-        max_height: MAX_HEIGHT,
         path: PATH.to_string(),
         ..default()
     }
