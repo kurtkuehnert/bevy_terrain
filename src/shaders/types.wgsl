@@ -36,7 +36,6 @@ struct Parameters {
 }
 
 struct Morph {
-    lod: u32,
     ratio: f32,
     offset: vec2<f32>,
 }
