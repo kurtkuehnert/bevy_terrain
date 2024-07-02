@@ -14,7 +14,7 @@ fn index_color(index: u32) -> vec4<f32> {
         vec4(0.0, 1.0, 1.0, 1.0),
     );
 
-    return COLOR_ARRAY[index % 6u];
+    return mix(COLOR_ARRAY[index % 6u], vec4<f32>(0.6), 0.2);
 }
 
 fn quadtree_outlines(offset: vec2<f32>) -> f32 {
@@ -23,41 +23,39 @@ fn quadtree_outlines(offset: vec2<f32>) -> f32 {
     return 1.0 - inside_square(offset, vec2<f32>(thickness), 1.0 - 2.0 * thickness);
 }
 
-fn show_tiles(tile: Tile, offset: vec2<f32>, view_distance: f32) -> vec4<f32> {
-    var color: vec4<f32>;
+fn show_tiles(tile: Tile, offset: vec2<f32>, view_distance: f32, test_distance: f32) -> vec4<f32> {
+    let morph        = compute_morph(view_distance, tile.lod, offset);
+    var color        = select(index_color(tile.lod), mix(index_color(tile.lod), vec4(0.0), 0.5), (tile.xy.x + tile.xy.y) % 2u == 0u);
+    let parent_color = select(index_color(tile.lod - 1), mix(index_color(tile.lod - 1), vec4(0.0), 0.5), ((tile.xy.x >> 1) + (tile.xy.y >> 1)) % 2u == 0u);
+    color            = mix(color, parent_color, morph.ratio);
 
-    if ((tile.xy.x + tile.xy.y) % 2u == 0u) { color = vec4<f32>(0.5, 0.5, 0.5, 1.0); }
-    else                                    { color = vec4<f32>(0.1, 0.1, 0.1, 1.0); }
+    color = vec4<f32>(0.2);
 
-    color = mix(color, index_color(tile.lod), 0.5);
+    var lod_f32 = log2(view_config.morph_distance / view_distance);
 
-#ifdef MORPH
-    var parent_color: vec4<f32>;
+    if (tile.lod < u32(lod_f32)) { color = vec4<f32>(1.0, 0.0, 0.0, 1.0); }
+    if (fract(lod_f32) < 0.01) {   color = mix(color,vec4<f32>(0.2, 0.0, 0.0, 1.0), 0.8); }
 
-    if (((tile.xy.x >> 1) + (tile.xy.y >> 1)) % 2u == 0u) { parent_color = vec4<f32>(0.5, 0.5, 0.5, 1.0); }
-    else                                                  { parent_color = vec4<f32>(0.1, 0.1, 0.1, 1.0); }
+    lod_f32 = log2(view_config.morph_distance / test_distance);
 
-    parent_color = mix(parent_color, index_color(tile.lod - 1), 0.5);
-
-    let morph = compute_morph(view_distance, tile.lod, vec2<f32>(0.0));
-    color     = mix(color, parent_color, morph.ratio);
-#endif
+    if (tile.lod < u32(lod_f32)) { color = vec4<f32>(0.0, 1.0, 0.0, 1.0); }
+    if (fract(lod_f32) < 0.01) {   color = mix(color, vec4<f32>(0.0, 0.2, 0.0, 1.0), 0.8); }
 
 #ifdef SPHERICAL
     color = mix(color, index_color(tile.side), 0.5);
 #endif
 
-    // if (length(offset - tile_offset(tile)) < 0.1) {
-    //     color = mix(color, vec4<f32>(0.0), 0.9);
-    // }
-
     return color;
 }
 
 fn show_lod(blend: Blend, lookup: NodeLookup) -> vec4<f32> {
-    var color = index_color(lookup.lod);
-    color     = select(color, mix(color, vec4<f32>(1.0), 0.5 * blend.ratio), blend.lod == lookup.lod);
-    color     = mix(color, 0.1 * color, quadtree_outlines(lookup.uv));
+    var color        = index_color(lookup.lod);
+    let parent_color = index_color(lookup.lod - 1);
+    color            = select(color, mix(color, parent_color, blend.ratio), blend.lod == lookup.lod);
+    color            = mix(color, 0.1 * color, quadtree_outlines(lookup.uv));
+
+    if (blend.ratio > 0.9) {   color = mix(color, vec4<f32>(0.0), 0.8); }
+
     return color;
 }
 

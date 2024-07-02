@@ -70,6 +70,7 @@ fn position_local_to_world(local_position: vec3<f32>) -> vec3<f32> {
 }
 
 fn compute_morph(view_distance: f32, lod: u32, grid_offset: vec2<f32>) -> Morph {
+#ifdef MORPH
     let threshold_distance = view_config.morph_distance / tile_count(lod);
     var ratio = clamp(1.0 - (1.0 - view_distance / threshold_distance) / view_config.morph_range, 0.0, 1.0);
     ratio     = select(ratio, 0.0, lod == 0);
@@ -78,6 +79,9 @@ fn compute_morph(view_distance: f32, lod: u32, grid_offset: vec2<f32>) -> Morph 
     let offset = mix(grid_offset, even_offset, ratio);
 
     return Morph(offset, ratio);
+#else
+    return Morph(grid_offset, 0.0);
+#endif
 }
 
 fn compute_blend(view_distance: f32) -> Blend {
@@ -145,21 +149,6 @@ fn compute_relative_position(tile: Tile, grid_offset: vec2<f32>) -> vec3<f32> {
     let c_tt = params.c_tt;
 
     return c + c_s * s + c_t * t + c_ss * s * s + c_st * s * t + c_tt * t * t;
-}
-
-fn tile_offset(tile: Tile) -> vec2<f32> {
-    let params       = terrain_model_approximation.sides[tile.side];
-    let tile_count   = tile_count(tile.lod);
-    let view_tile_xy = params.view_st * tile_count;
-    let tile_offset  = vec2<i32>(view_tile_xy) - vec2<i32>(tile.xy);
-    var offset       = view_tile_xy % 1.0;
-
-    if      (tile_offset.x < 0) { offset.x = 0.0; }
-    else if (tile_offset.x > 0) { offset.x = 1.0; }
-    if      (tile_offset.y < 0) { offset.y = 0.0; }
-    else if (tile_offset.y > 0) { offset.y = 1.0; }
-
-    return offset;
 }
 
 fn tile_count(lod: u32) -> f32 { return f32(1u << lod); }

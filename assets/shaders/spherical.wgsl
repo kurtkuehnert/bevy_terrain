@@ -1,6 +1,6 @@
 #import bevy_terrain::bindings::config
 #import bevy_terrain::attachments::{sample_height_grad, sample_normal_grad}
-#import bevy_terrain::vertex::{VertexInput, VertexOutput, VertexInfo, vertex_info, vertex_lookup_node, vertex_output, vertex_debug}
+#import bevy_terrain::vertex::{VertexInput, VertexOutput, VertexInfo, vertex_info, vertex_lookup_node, vertex_output}
 #import bevy_terrain::fragment::{FragmentInput, FragmentOutput, FragmentInfo, fragment_info, fragment_lookup_node, fragment_output, fragment_debug}
 #import bevy_pbr::pbr_types::{PbrInput, pbr_input_new}
 #import bevy_pbr::pbr_functions::{calculate_view, apply_pbr_lighting}
@@ -64,9 +64,5 @@ fn fragment(input: FragmentInput) -> FragmentOutput {
         normal      = mix(normal, sample_normal_grad(lookup2, info.world_normal, info.tile.side), info.blend.ratio);
     }
 
-    var output: FragmentOutput;
-    fragment_output(&info, &output, color, normal);
-    fragment_debug(&info, &output, lookup, normal);
-
-    return output;
+    return vertex_output(&info, height);
 }
