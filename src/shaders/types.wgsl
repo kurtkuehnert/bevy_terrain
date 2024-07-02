@@ -15,7 +15,6 @@ struct TerrainViewConfig {
     grid_size: f32,
     vertices_per_row: u32,
     vertices_per_tile: u32,
-    subdivision_distance: f32,
     morph_distance: f32,
     blend_distance: f32,
     morph_range: f32,
@@ -37,8 +36,9 @@ struct Parameters {
 }
 
 struct Morph {
-    offset: vec2<f32>,
+    lod: u32,
     ratio: f32,
+    offset: vec2<f32>,
 }
 
 struct Blend {

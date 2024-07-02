@@ -19,14 +19,12 @@ struct VertexOutput {
     @location(2)       view_distance: f32,
     @location(3)       world_normal: vec3<f32>,
     @location(4)       world_position: vec4<f32>,
-    @location(5)       test_distance: f32,
 }
 
 struct VertexInfo {
     tile_index: u32,
     tile: Tile,
-    grid_offset: vec2<f32>,
-    offset: vec2<f32>, // Todo: find better name
+    offset: vec2<f32>,
     world_position: vec3<f32>,
     world_normal: vec3<f32>,
     view_distance: f32,
@@ -36,26 +34,18 @@ struct VertexInfo {
 }
 
 fn vertex_info(input: VertexInput) -> VertexInfo {
-    var info: VertexInfo;
-
     let tile_index = input.vertex_index / view_config.vertices_per_tile;
     let grid_index = input.vertex_index % view_config.vertices_per_tile;
 
-    let grid_offset = compute_grid_offset(grid_index);
-
+    var info: VertexInfo;
     info.tile_index  = tile_index;
     info.tile        = tiles[tile_index];
-    info.grid_offset = grid_offset;
-    info.offset      = grid_offset;
+    info.offset      = compute_grid_offset(grid_index);
 
-    var local_position  = compute_local_position(info.tile, info.grid_offset);
+    var local_position  = compute_local_position(info.tile, info.offset);
     info.world_position = position_local_to_world(local_position);
     info.world_normal   = normal_local_to_world(local_position);
     info.view_distance  = distance(info.world_position + view_config.approximate_height * info.world_normal, view.world_position);
-    info.test_distance  = info.view_distance;
-    // sample height, to retrive accurate view distance
-
-    let height = view_config.approximate_height;
 
 #ifdef TEST1
     let high_precision = info.view_distance < view_config.precision_threshold_distance;
@@ -64,19 +54,19 @@ fn vertex_info(input: VertexInput) -> VertexInfo {
 #endif
 
     if (high_precision) {
-        var relative_position = compute_relative_position(info.tile, info.grid_offset);
-        info.view_distance    = length(relative_position + height * info.world_normal);
+        var relative_position = compute_relative_position(info.tile, info.offset);
+        info.view_distance    = length(relative_position + view_config.approximate_height * info.world_normal);
 
-        let morph            = compute_morph(info.view_distance, info.tile.lod, info.grid_offset);
-        relative_position    = compute_relative_position(info.tile, morph.offset);
-        info.world_position  = view.world_position + relative_position;
-        info.offset          = morph.offset;
+        let morph             = compute_morph(info.view_distance, info.tile.lod, info.offset);
+        relative_position     = compute_relative_position(info.tile, morph.offset);
+        info.world_position   = view.world_position + relative_position;
+        info.offset           = morph.offset;
     } else {
-         let morph           = compute_morph(info.view_distance, info.tile.lod, info.grid_offset);
-         local_position      = compute_local_position(info.tile, morph.offset);
-         info.world_position = position_local_to_world(local_position);
-         info.world_normal   = normal_local_to_world(local_position);
-         info.offset         = morph.offset;
+         let morph            = compute_morph(info.view_distance, info.tile.lod, info.offset);
+         local_position       = compute_local_position(info.tile, morph.offset);
+         info.world_position  = position_local_to_world(local_position);
+         info.world_normal    = normal_local_to_world(local_position);
+         info.offset          = morph.offset;
     }
 
     info.blend = compute_blend(info.view_distance);
@@ -99,7 +89,6 @@ fn vertex_output(info: ptr<function, VertexInfo>, height: f32) -> VertexOutput {
     output.world_normal   = (*info).world_normal;
     output.world_position = vec4<f32>((*info).world_position, 1.0);
     output.clip_position  = position_world_to_clip((*info).world_position);
-    output.test_distance  = (*info).test_distance;
     return output;
 }
 

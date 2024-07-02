@@ -359,6 +359,7 @@ impl Quadtree {
                 let view_config = view_configs.get_mut(&(terrain, view)).unwrap();
 
                 let height = sample_height(quadtree, node_atlas, quadtree.view_world_position);
+                let height = 0.0;
 
                 (quadtree.approximate_height, view_config.approximate_height) = (height, height);
             }
