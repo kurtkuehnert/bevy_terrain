@@ -9,14 +9,12 @@
 #import bevy_pbr::pbr_functions::{calculate_view, apply_pbr_lighting}
 
 struct FragmentInput {
-    @builtin(front_facing) is_front: bool,
     @builtin(position)     clip_position: vec4<f32>,
     @location(0)           tile_index: u32,
     @location(1)           offset: vec2<f32>,
     @location(2)           view_distance: f32,
     @location(3)           world_normal: vec3<f32>,
     @location(4)           world_position: vec4<f32>,
-    @location(5)           test_distance: f32,
 }
 
 struct FragmentOutput {
@@ -35,7 +33,6 @@ struct FragmentInfo {
     world_position: vec4<f32>,
     color: vec4<f32>,
     normal: vec3<f32>,
-    test_distance: f32,
 }
 
 fn fragment_info(input: FragmentInput) -> FragmentInfo{
@@ -49,7 +46,6 @@ fn fragment_info(input: FragmentInput) -> FragmentInfo{
     info.clip_position  = input.clip_position;
     info.world_normal   = input.world_normal;
     info.world_position = input.world_position;
-    info.test_distance  = input.test_distance;
 
     return info;
 }
@@ -81,7 +77,7 @@ fn fragment_debug(info: ptr<function, FragmentInfo>, output: ptr<function, Fragm
     (*output).color = show_lod((*info).blend, lookup);
 #endif
 #ifdef SHOW_TILES
-    (*output).color = show_tiles((*info).tile, (*info).offset, (*info).view_distance, (*info).test_distance);
+    (*output).color = show_tiles((*info).tile, (*info).offset);
 #endif
 #ifdef SHOW_UV
     (*output).color = vec4<f32>(lookup.uv, 0.0, 1.0);

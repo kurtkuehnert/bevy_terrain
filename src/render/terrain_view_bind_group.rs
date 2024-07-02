@@ -91,7 +91,6 @@ struct TerrainViewConfigUniform {
     grid_size: f32,
     vertices_per_row: u32,
     vertices_per_tile: u32,
-    subdivision_distance: f32,
     morph_distance: f32,
     blend_distance: f32,
     morph_range: f32,
@@ -111,9 +110,6 @@ impl TerrainViewConfigUniform {
             grid_size: view_config.grid_size as f32,
             vertices_per_row: 2 * (view_config.grid_size + 2),
             vertices_per_tile: 2 * view_config.grid_size * (view_config.grid_size + 2),
-            subdivision_distance: view_config.morph_distance
-                * scale
-                * (1.0 + view_config.subdivision_morph_margin),
             morph_distance: view_config.morph_distance * scale,
             blend_distance: view_config.blend_distance * scale,
             morph_range: view_config.morph_range,
