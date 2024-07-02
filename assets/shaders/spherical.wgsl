@@ -1,6 +1,6 @@
 #import bevy_terrain::bindings::config
 #import bevy_terrain::attachments::{sample_height_grad, sample_normal_grad}
-#import bevy_terrain::vertex::{VertexInput, VertexOutput, VertexInfo, vertex_info, vertex_lookup_node, vertex_output}
+#import bevy_terrain::vertex::{VertexInput, VertexOutput, vertex_default}
 #import bevy_terrain::fragment::{FragmentInput, FragmentOutput, FragmentInfo, fragment_info, fragment_lookup_node, fragment_output, fragment_debug}
 #import bevy_pbr::pbr_types::{PbrInput, pbr_input_new}
 #import bevy_pbr::pbr_functions::{calculate_view, apply_pbr_lighting}
@@ -34,20 +34,7 @@ fn sample_color_grad(lookup: NodeLookup) -> vec4<f32> {
 
 @vertex
 fn vertex(input: VertexInput) -> VertexOutput {
-    var info = vertex_info(input);
-
-    let lookup = vertex_lookup_node(&info, 0u);
-    var height = sample_height(lookup);
-
-    if (info.blend.ratio > 0.0) {
-        let lookup2 = vertex_lookup_node(&info, 1u);
-        height      = mix(height, sample_height(lookup2), info.blend.ratio);
-    }
-
-    var output: VertexOutput;
-    vertex_output(&info, &output, height);
-    vertex_debug(&info, &output);
-    return output;
+    return vertex_default(input);
 }
 
 @fragment
@@ -64,5 +51,9 @@ fn fragment(input: FragmentInput) -> FragmentOutput {
         normal      = mix(normal, sample_normal_grad(lookup2, info.world_normal, info.tile.side), info.blend.ratio);
     }
 
-    return vertex_output(&info, height);
+    var output: FragmentOutput;
+    fragment_output(&info, &output, color, normal);
+    fragment_debug(&info, &output, lookup, normal);
+
+    return output;
 }

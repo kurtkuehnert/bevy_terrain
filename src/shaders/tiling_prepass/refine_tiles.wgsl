@@ -1,7 +1,6 @@
 #import bevy_terrain::types::Tile
 #import bevy_terrain::bindings::{config, culling_view, view_config, final_tiles, temporary_tiles, parameters, terrain_model_approximation}
-#import bevy_terrain::functions::{compute_local_position, compute_blend, lookup_node, compute_relative_position, position_local_to_world, normal_local_to_world, tile_count, tile_offset}
-#import bevy_terrain::attachments::{sample_height}
+#import bevy_terrain::functions::{compute_local_position, approximate_view_distance, compute_relative_position, position_local_to_world, normal_local_to_world, tile_count, compute_subdivision_offsets}
 
 fn child_index() -> i32 {
     return atomicAdd(&parameters.child_index, parameters.counter);
@@ -15,41 +14,13 @@ fn final_index() -> i32 {
     return atomicAdd(&parameters.final_index, 1);
 }
 
-fn compute_view_distance(tile: Tile, offset: vec2<f32>) -> f32 {
-    let local_position = compute_local_position(tile, offset);
-    var world_position = position_local_to_world(local_position);
-    let world_normal   = normal_local_to_world(local_position);
-    var view_distance  = distance(world_position + view_config.approximate_height * world_normal, culling_view.world_position);
-
-#ifdef TEST1
-    if (view_distance < view_config.precision_threshold_distance) {
-        let relative_position = compute_relative_position(tile, offset);
-        view_distance         = length(relative_position + view_config.approximate_height * world_normal);
-    }
-#endif
-
-//      let blend = compute_blend(view_distance);
-
-//      let lookup = lookup_node(tile, offset, vec2<f32>(0.0), vec2<f32>(0.0), blend, 0u);
-//      var height = sample_height(lookup);
-
-//      if (blend.ratio > 0.0) {
-//          let lookup2 = lookup_node(tile, offset, vec2<f32>(0.0), vec2<f32>(0.0), blend, 1u);
-//          height      = mix(height, sample_height(lookup2), blend.ratio);
-//      }
-
-//      world_position = world_position + height * world_normal;
-//      view_distance  = distance(world_position, culling_view.world_position);
-
-    return view_distance;
-}
-
 fn should_be_divided(tile: Tile) -> bool {
     var view_distance = 3.40282347E+38; // f32::MAX
 
-    for (var i: u32 = 0u; i < 4u; i = i + 1u) {
-        let offset    = vec2<f32>(f32(i & 1u), f32(i >> 1u & 1u));
-        view_distance = min(view_distance, compute_view_distance(tile, offset));
+    var offsets = compute_subdivision_offsets(tile);
+
+    for (var i = 0; i < 5; i += 1) {
+        view_distance = min(view_distance, approximate_view_distance(tile, offsets[i], culling_view.world_position));
     }
 
     return view_distance < view_config.morph_distance / tile_count(tile.lod + 1);
