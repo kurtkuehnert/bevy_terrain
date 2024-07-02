@@ -43,6 +43,7 @@ pub struct TerrainViewConfig {
     /// The blend percentage in the vertex and fragment shader.
     pub blend_range: f32,
     pub precision_threshold_distance: f32,
+    pub subdivision_morph_margin: f32,
 }
 
 impl Default for TerrainViewConfig {
@@ -54,11 +55,12 @@ impl Default for TerrainViewConfig {
             refinement_count: 30,
             grid_size: 32,
             load_distance: 3.0,
-            morph_distance: 3.0,
+            morph_distance: 6.0,
             blend_distance: 1.0,
             morph_range: 0.2,
             blend_range: 0.2,
             precision_threshold_distance: 0.001,
+            subdivision_morph_margin: 0.05,
         }
     }
 }

@@ -4,19 +4,19 @@
 #import bevy_terrain::bindings::{tiles, config, view_config}
 #import bevy_terrain::functions::{compute_blend, lookup_node}
 #import bevy_terrain::attachments::{sample_normal_grad, sample_color_grad}
-#import bevy_terrain::debug::{show_lod, show_quadtree, show_pixels}
+#import bevy_terrain::debug::{show_lod, show_tiles, show_quadtree, show_pixels}
 #import bevy_pbr::pbr_types::{PbrInput, pbr_input_new}
 #import bevy_pbr::pbr_functions::{calculate_view, apply_pbr_lighting}
 
 struct FragmentInput {
-    @builtin(front_facing)   is_front: bool,
-    @builtin(position)       clip_position: vec4<f32>,
-    @location(0)             tile_index: u32,
-    @location(1)             offset: vec2<f32>,
-    @location(2)             view_distance: f32,
-    @location(3)             world_normal: vec3<f32>,
-    @location(4)             world_position: vec4<f32>,
-    @location(5)             debug_color: vec4<f32>,
+    @builtin(front_facing) is_front: bool,
+    @builtin(position)     clip_position: vec4<f32>,
+    @location(0)           tile_index: u32,
+    @location(1)           offset: vec2<f32>,
+    @location(2)           view_distance: f32,
+    @location(3)           world_normal: vec3<f32>,
+    @location(4)           world_position: vec4<f32>,
+    @location(5)           test_distance: f32,
 }
 
 struct FragmentOutput {
@@ -33,9 +33,9 @@ struct FragmentInfo {
     clip_position: vec4<f32>,
     world_normal: vec3<f32>,
     world_position: vec4<f32>,
-    debug_color: vec4<f32>,
     color: vec4<f32>,
     normal: vec3<f32>,
+    test_distance: f32,
 }
 
 fn fragment_info(input: FragmentInput) -> FragmentInfo{
@@ -49,7 +49,7 @@ fn fragment_info(input: FragmentInput) -> FragmentInfo{
     info.clip_position  = input.clip_position;
     info.world_normal   = input.world_normal;
     info.world_position = input.world_position;
-    info.debug_color    = input.debug_color;
+    info.test_distance  = input.test_distance;
 
     return info;
 }
@@ -77,12 +77,11 @@ fn fragment_output(info: ptr<function, FragmentInfo>, output: ptr<function, Frag
 }
 
 fn fragment_debug(info: ptr<function, FragmentInfo>, output: ptr<function, FragmentOutput>, lookup: NodeLookup, normal: vec3<f32>) {
-    if ((*info).debug_color.w > 0.0) {
-        (*output).color = (*info).debug_color;
-    }
-
 #ifdef SHOW_LOD
     (*output).color = show_lod((*info).blend, lookup);
+#endif
+#ifdef SHOW_TILES
+    (*output).color = show_tiles((*info).tile, (*info).offset, (*info).view_distance, (*info).test_distance);
 #endif
 #ifdef SHOW_UV
     (*output).color = vec4<f32>(lookup.uv, 0.0, 1.0);
