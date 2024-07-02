@@ -2,7 +2,7 @@
 
 #import bevy_terrain::types::{Coordinate, NodeLookup, Blend, Tile}
 #import bevy_terrain::bindings::{config, quadtree, view_config, tiles, attachments, origins, terrain_model_approximation}
-#import bevy_terrain::functions::{approximate_view_distance, compute_morph, compute_blend, tile_count, quadtree_lod, inside_square, node_count, node_coordinate, coordinate_from_local_position, compute_subdivision_offsets}
+#import bevy_terrain::functions::{approximate_view_distance, compute_morph, compute_blend, tile_count, quadtree_lod, inside_square, node_count, node_coordinate, coordinate_from_local_position, compute_subdivision_offset}
 #import bevy_pbr::mesh_view_bindings::view
 
 fn index_color(index: u32) -> vec4<f32> {
@@ -27,37 +27,28 @@ fn quadtree_outlines(offset: vec2<f32>) -> f32 {
 fn show_tiles(tile: Tile, offset: vec2<f32>) -> vec4<f32> {
     let view_distance  = approximate_view_distance(tile, offset, view.world_position);
     let morph          = compute_morph(view_distance, tile.lod, offset);
+    let target_lod     = log2(view_config.morph_distance / view_distance);
 
-    let lod_difference = (tile.lod - morph.lod);
-    let xy = vec2<u32>(tile.xy.x >> lod_difference, tile.xy.y >> lod_difference);
-
-    var color        = select(index_color(morph.lod),     mix(index_color(morph.lod),     vec4(0.0), 0.5), (xy.x + xy.y) % 2u == 0u);
-    let parent_color = select(index_color(morph.lod - 1), mix(index_color(morph.lod - 1), vec4(0.0), 0.5), ((xy.x >> 1) + (xy.y >> 1)) % 2u == 0u);
+    var color        = select(index_color(tile.lod),     mix(index_color(tile.lod),     vec4(0.0), 0.5), (tile.xy.x + tile.xy.y) % 2u == 0u);
+    let parent_color = select(index_color(tile.lod - 1), mix(index_color(tile.lod - 1), vec4(0.0), 0.5), ((tile.xy.x >> 1) + (tile.xy.y >> 1)) % 2u == 0u);
     color            = mix(color, parent_color, morph.ratio);
 
-    let target_lod = log2(view_config.morph_distance / view_distance);
 
-    // color = index_color(tile.lod);
-    // color = index_color(u32(target_lod - 0.3));
-
-    if (lod_difference != 0) {
-        color = vec4<f32>(1.0, 0.0, 0.0, 1.0);
+    if (distance(offset, compute_subdivision_offset(tile)) < 0.1) {
+        color = mix(index_color(tile.lod + 1), vec4(0.0), 0.7);
     }
 
-    var offsets = compute_subdivision_offsets(tile);
-
-    for (var i = 0; i < 5; i += 1) {
-        if (length(offset - offsets[i]) < view_config.morph_distance / 100.0 / config.scale) {
-            color = mix(color, vec4<f32>(0.0), 0.9);
-        }
+    if (fract(target_lod) < 0.01 && target_lod >= 1.0) {
+        color = mix(color, vec4<f32>(0.0), 0.8);
     }
 
 #ifdef SPHERICAL
     color = mix(color, index_color(tile.side), 0.3);
 #endif
 
-    if (tile.lod < u32(target_lod)) { color = vec4<f32>(1.0, 0.0, 0.0, 1.0); }
-    if (fract(target_lod) < 0.01) {   color = mix(color, vec4<f32>(0.0), 0.6); }
+    if (max(0.0, target_lod) < f32(tile.lod) - 1.0 + view_config.morph_range || floor(target_lod) > f32(tile.lod)) {
+        color = vec4<f32>(1.0, 0.0, 0.0, 1.0); // The view_distance and morph range are not sufficient.
+    }
 
     return color;
 }
