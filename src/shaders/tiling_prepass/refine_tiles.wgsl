@@ -1,6 +1,6 @@
 #import bevy_terrain::types::Tile
 #import bevy_terrain::bindings::{config, culling_view, view_config, final_tiles, temporary_tiles, parameters, terrain_model_approximation}
-#import bevy_terrain::functions::{compute_local_position, approximate_view_distance, compute_relative_position, position_local_to_world, normal_local_to_world, tile_count, compute_subdivision_offsets}
+#import bevy_terrain::functions::{compute_local_position, approximate_view_distance, compute_relative_position, position_local_to_world, normal_local_to_world, tile_count, compute_subdivision_offset}
 
 fn child_index() -> i32 {
     return atomicAdd(&parameters.child_index, parameters.counter);
@@ -15,13 +15,8 @@ fn final_index() -> i32 {
 }
 
 fn should_be_divided(tile: Tile) -> bool {
-    var view_distance = 3.40282347E+38; // f32::MAX
-
-    var offsets = compute_subdivision_offsets(tile);
-
-    for (var i = 0; i < 5; i += 1) {
-        view_distance = min(view_distance, approximate_view_distance(tile, offsets[i], culling_view.world_position));
-    }
+    let offset        = compute_subdivision_offset(tile);
+    let view_distance = approximate_view_distance(tile, offset, culling_view.world_position);
 
     return view_distance < view_config.morph_distance / tile_count(tile.lod + 1);
 }

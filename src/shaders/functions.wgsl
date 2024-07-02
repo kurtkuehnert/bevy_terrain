@@ -73,52 +73,30 @@ fn inverse_mix(a: f32, b: f32, value: f32) -> f32 {
     return saturate((value - a) / (b - a));
 }
 
-fn compute_morph(view_distance: f32, test_lod: u32, grid_offset: vec2<f32>) -> Morph {
+fn compute_morph(view_distance: f32, lod: u32, grid_offset: vec2<f32>) -> Morph {
 #ifdef MORPH
-    let tile_lod   = f32(test_lod);
-    let parent_lod = max(0.0, f32(test_lod - 1));
-    let target_lod = max(0.0, log2(view_config.morph_distance / view_distance));
+    let even_offset = vec2<f32>(vec2<u32>(grid_offset * view_config.grid_size) & vec2<u32>(~1u)) / view_config.grid_size;
 
-    let even_offset        = vec2<f32>(vec2<u32>(grid_offset * view_config.grid_size) & vec2<u32>(~1u)) / view_config.grid_size;
-    let parent_even_offset = vec2<f32>(vec2<u32>(grid_offset * view_config.grid_size) & vec2<u32>(~3u)) / view_config.grid_size;
+    let target_lod  = log2(view_config.morph_distance / view_distance);
+    let ratio       = select(inverse_mix(f32(lod) + view_config.morph_range, f32(lod), target_lod), 0.0, lod == 0);
 
-    var lod: u32;
-    var ratio: f32;
-    var offset: vec2<f32>;
-
-    // if (tile_lod == 0) {
-    //     lod    = u32(tile_lod);
-    //     ratio  = 0.0;
-    //     offset = grid_offset;
-    // } else
-    if (target_lod < parent_lod + view_config.morph_range) {
-        lod    = u32(parent_lod);
-        ratio  = inverse_mix(parent_lod + view_config.morph_range, parent_lod, target_lod);
-        offset = parent_even_offset; // mix(even_offset, parent_even_offset, ratio);
-    } else {
-        lod    = u32(tile_lod);
-        ratio  = inverse_mix(tile_lod + view_config.morph_range, tile_lod, target_lod);
-        offset = mix(grid_offset, even_offset, ratio);
-    }
-
-    return Morph(lod, ratio, offset);
+    return Morph(ratio, mix(grid_offset, even_offset, ratio));
 #else
-    return Morph(test_lod, 0.0, grid_offset);
+    return Morph(0.0, grid_offset);
 #endif
 }
 
 fn compute_blend(view_distance: f32) -> Blend {
-    let lod_f32 = log2(view_config.blend_distance / view_distance);
-    let lod     = clamp(u32(lod_f32), 0u, config.lod_count - 1u);
+    let target_lod = min(log2(view_config.blend_distance / view_distance), f32(config.lod_count) - 0.00001);
+    let lod        = u32(target_lod);
 
 #ifdef BLEND
-    var ratio = 1.0 - (lod_f32 % 1.0) / view_config.blend_range;
-    ratio     = select(ratio, 0.0, lod_f32 < 1.0 || lod_f32 > f32(config.lod_count));
-#else
-    let ratio = 0.0;
-#endif
+    let ratio = select(inverse_mix(f32(lod) + view_config.blend_range, f32(lod), target_lod), 0.0, lod == 0u);
 
     return Blend(lod, ratio);
+#else
+    return Blend(lod, 0.0);
+#endif
 }
 
 fn compute_grid_offset(grid_index: u32) -> vec2<f32>{
@@ -190,7 +168,7 @@ fn approximate_view_distance(tile: Tile, offset: vec2<f32>, view_world_position:
     return view_distance;
 }
 
-fn compute_subdivision_offsets(tile: Tile) -> array<vec2<f32>, 5> {
+fn compute_subdivision_offset(tile: Tile) -> vec2<f32> {
     let params       = terrain_model_approximation.sides[tile.side];
     let view_tile_xy = params.view_st * tile_count(tile.lod);
     let tile_offset  = vec2<i32>(view_tile_xy) - vec2<i32>(tile.xy);
@@ -201,7 +179,7 @@ fn compute_subdivision_offsets(tile: Tile) -> array<vec2<f32>, 5> {
     if      (tile_offset.y < 0) { offset.y = 0.0; }
     else if (tile_offset.y > 0) { offset.y = 1.0; }
 
-    return array(vec2(0.0, 0.0), vec2(0.0, 1.0), vec2(1.0, 1.0), vec2(1.0, 0.0), offset);
+    return offset;
 }
 
 fn tile_count(lod: u32) -> f32 { return f32(1u << lod); }
