@@ -156,12 +156,12 @@ fn approximate_view_distance(tile: Tile, offset: vec2<f32>, view_world_position:
     let local_position = compute_local_position(tile, offset);
     var world_position = position_local_to_world(local_position);
     let world_normal   = normal_local_to_world(local_position);
-    var view_distance  = distance(world_position + view_config.approximate_height * world_normal, view_world_position);
+    var view_distance  = distance(world_position + terrain_model_approximation.approximate_height * world_normal, view_world_position);
 
 #ifdef TEST1
     if (view_distance < view_config.precision_threshold_distance) {
         let relative_position = compute_relative_position(tile, offset);
-        view_distance         = length(relative_position + view_config.approximate_height * world_normal);
+        view_distance         = length(relative_position + terrain_model_approximation.approximate_height * world_normal);
     }
 #endif
 

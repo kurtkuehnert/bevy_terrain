@@ -22,8 +22,6 @@ pub struct TerrainView;
 /// A terrain view describes the quality settings the corresponding terrain will be rendered with.
 #[derive(Clone, Component)]
 pub struct TerrainViewConfig {
-    /// The current height under the viewer.
-    pub approximate_height: f32,
     /// The count of nodes in x and y direction per quadtree layer.
     pub quadtree_size: u32,
     /// The size of the tile buffer.
@@ -32,9 +30,8 @@ pub struct TerrainViewConfig {
     pub refinement_count: u32,
     /// The number of rows and columns of the tile grid.
     pub grid_size: u32,
-    // Todo: set scale for these appropriately
     pub load_distance: f32,
-    // Todo: this currently has to be larger than about 2.5, since the tiles can only morph to the adjacent layer.
+    // Todo: this currently has to be larger than about 3, since the tiles can only morph to the adjacent layer.
     //       Should the morph distance be too small, this will result in morph transitions suddenly being canceled, by the next LOD.
     //       This is dependent on both the morph distance and the morph ratio. It can be debug with the show tiles debug view.
     pub morph_distance: f32,
@@ -49,13 +46,12 @@ pub struct TerrainViewConfig {
 impl Default for TerrainViewConfig {
     fn default() -> Self {
         Self {
-            approximate_height: 0.0,
             quadtree_size: 8,
             tile_count: 1000000,
             refinement_count: 30,
             grid_size: 32,
             load_distance: 3.0,
-            morph_distance: 2.5,
+            morph_distance: 4.0,
             blend_distance: 1.0,
             morph_range: 0.2,
             blend_range: 0.2,

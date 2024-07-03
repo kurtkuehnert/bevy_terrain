@@ -1,7 +1,9 @@
 use crate::{
     big_space::{GridTransformOwned, GridTransformReadOnly, ReferenceFrame, ReferenceFrames},
     math::{coordinate::Coordinate, C_SQR},
-    prelude::{Terrain, TerrainConfig, TerrainView, TerrainViewComponents},
+    terrain::{Terrain, TerrainConfig},
+    terrain_data::quadtree::Quadtree,
+    terrain_view::{TerrainView, TerrainViewComponents},
 };
 use bevy::{
     math::{DMat3, DMat4, DQuat, DVec2, DVec3, IVec2},
@@ -115,11 +117,13 @@ impl TerrainModel {
     }
 
     pub(crate) fn normal_local_to_world(&self, local_position: DVec3) -> DVec3 {
-        self.world_from_local.transform_vector3(if self.spherical {
-            local_position
-        } else {
-            DVec3::Y
-        })
+        self.world_from_local
+            .transform_vector3(if self.spherical {
+                local_position
+            } else {
+                DVec3::Y
+            })
+            .normalize()
     }
 
     pub(crate) fn side_count(&self) -> u32 {
@@ -183,6 +187,7 @@ pub struct TerrainModelApproximation {
     /// The reference tile, which is used to accurately determine the relative st coordinate in the shader.
     /// The tile under the view (with the origin lod) is the origin for the Taylor series.
     pub(crate) origin_lod: i32,
+    pub(crate) approximate_height: f32,
     /// The parameters of the six cube sphere faces.
     pub(crate) sides: [SideParameter; 6],
 }
@@ -193,6 +198,7 @@ impl TerrainModelApproximation {
         model: &TerrainModel,
         view_position: DVec3,
         origin_lod: i32,
+        approximate_height: f32,
     ) -> TerrainModelApproximation {
         // Coordinate of the location vertically below the view.
         let view_coordinate = Coordinate::from_world_position(view_position, model);
@@ -287,7 +293,11 @@ impl TerrainModelApproximation {
             };
         }
 
-        TerrainModelApproximation { origin_lod, sides }
+        TerrainModelApproximation {
+            origin_lod,
+            approximate_height,
+            sides,
+        }
     }
 
     /// Computes the view origin tile based on the view's coordinate.
@@ -302,6 +312,7 @@ impl TerrainModelApproximation {
 
 pub fn generate_terrain_model_approximation(
     mut terrain_model_approximations: ResMut<TerrainViewComponents<TerrainModelApproximation>>,
+    quadtrees: Res<TerrainViewComponents<Quadtree>>,
     view_query: Query<(Entity, GridTransformReadOnly), With<TerrainView>>,
     terrain_query: Query<(Entity, &TerrainConfig), With<Terrain>>,
     frames: ReferenceFrames,
@@ -310,10 +321,13 @@ pub fn generate_terrain_model_approximation(
         let frame = frames.parent_frame(terrain).unwrap();
 
         for (view, view_transform) in &view_query {
+            let quadtree = quadtrees.get(&(terrain, view)).unwrap();
+
             let model = TerrainModelApproximation::compute(
                 &config.model,
                 view_transform.position_double(&frame),
                 10,
+                quadtree.approximate_height,
             );
 
             terrain_model_approximations.insert((terrain, view), model);

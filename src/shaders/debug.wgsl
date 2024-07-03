@@ -59,7 +59,7 @@ fn show_lod(blend: Blend, lookup: NodeLookup) -> vec4<f32> {
     color            = select(color, mix(color, parent_color, blend.ratio), blend.lod == lookup.lod);
     color            = mix(color, 0.1 * color, quadtree_outlines(lookup.uv));
 
-    if (blend.ratio > 0.9) {   color = mix(color, vec4<f32>(0.0), 0.8); }
+    if (blend.ratio > 0.9 && blend.lod == lookup.lod) {   color = mix(color, vec4<f32>(0.0), 0.8); }
 
     return color;
 }
