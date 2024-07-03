@@ -252,9 +252,9 @@ impl AtlasAttachment {
         }
 
         let data = &self.data[lookup.atlas_index as usize];
-        let coordinate = lookup.atlas_coordinate * self.scale + self.offset;
+        let uv = lookup.atlas_uv * self.scale + self.offset;
 
-        data.sample(coordinate, self.texture_size)
+        data.sample(uv, self.texture_size)
     }
 }
 

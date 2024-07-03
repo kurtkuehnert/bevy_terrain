@@ -1,7 +1,7 @@
 #define_import_path bevy_terrain::vertex
 
 #import bevy_terrain::types::{Tile, Blend, NodeLookup}
-#import bevy_terrain::bindings::{config, view_config, tiles}
+#import bevy_terrain::bindings::{config, view_config, tiles, terrain_model_approximation}
 #import bevy_terrain::functions::{lookup_node, compute_grid_offset, compute_local_position, compute_relative_position, compute_morph, compute_blend, normal_local_to_world, position_local_to_world}
 #import bevy_terrain::attachments::{sample_height}
 #import bevy_terrain::debug::{show_tiles}
@@ -34,43 +34,47 @@ fn vertex_info(input: VertexInput) -> VertexInfo {
     let tile_index = input.vertex_index / view_config.vertices_per_tile;
     let grid_index = input.vertex_index % view_config.vertices_per_tile;
 
-    var info: VertexInfo;
-    info.tile_index  = tile_index;
-
-    let tile           = tiles[tile_index];
-    let grid_offset    = compute_grid_offset(grid_index);
-    var local_position = compute_local_position(tile, grid_offset);
-    let world_position = position_local_to_world(local_position);
-    let world_normal   = normal_local_to_world(local_position);
-    var view_distance  = distance(world_position + view_config.approximate_height * world_normal, view.world_position);
+    let tile                       = tiles[tile_index];
+    let grid_offset                = compute_grid_offset(grid_index);
+    let approximate_local_position = compute_local_position(tile, grid_offset);
+    let approximate_world_position = position_local_to_world(approximate_local_position);
+    let approximate_world_normal   = normal_local_to_world(approximate_local_position);
+    var approximate_view_distance  = distance(approximate_world_position + terrain_model_approximation.approximate_height * approximate_world_normal, view.world_position);
 
 #ifdef TEST1
-    let high_precision = view_distance < view_config.precision_threshold_distance;
+    let high_precision = approximate_view_distance < view_config.precision_threshold_distance;
 #else
     let high_precision = false;
 #endif
 
+    var offset: vec2<f32>; var world_position: vec3<f32>; var world_normal: vec3<f32>;
+
     if (high_precision) {
-        var relative_position = compute_relative_position(tile, grid_offset);
-        view_distance         = length(relative_position + view_config.approximate_height * world_normal);
+        let approximate_relative_position = compute_relative_position(tile, grid_offset);
+        approximate_view_distance         = length(approximate_relative_position + terrain_model_approximation.approximate_height * approximate_world_normal);
 
-        let morph             = compute_morph(view_distance, tile.lod, grid_offset);
-        relative_position     = compute_relative_position(tile, morph.offset);
+        let morph             = compute_morph(approximate_view_distance, tile.lod, grid_offset);
+        let relative_position = compute_relative_position(tile, morph.offset);
 
-        info.offset           = morph.offset;
-        info.world_position   = view.world_position + relative_position;
-        info.world_normal     = world_normal;
+        offset         = morph.offset;
+        world_position = view.world_position + relative_position;
+        world_normal   = approximate_world_normal;
     } else {
-         let morph            = compute_morph(view_distance, tile.lod, grid_offset);
-         local_position       = compute_local_position(tile, morph.offset);
+        let morph          = compute_morph(approximate_view_distance, tile.lod, grid_offset);
+        let local_position = compute_local_position(tile, morph.offset);
 
-         info.offset          = morph.offset;
-         info.world_position  = position_local_to_world(local_position);
-         info.world_normal    = normal_local_to_world(local_position);
+        offset         = morph.offset;
+        world_position = position_local_to_world(local_position);
+        world_normal   = normal_local_to_world(local_position);
     }
 
-    info.tile  = tile;
-    info.blend = compute_blend(view_distance);
+    var info: VertexInfo;
+    info.tile_index     = tile_index;
+    info.tile           = tile;
+    info.offset         = offset;
+    info.world_position = world_position;
+    info.world_normal   = world_normal;
+    info.blend          = compute_blend(approximate_view_distance);
 
     return info;
 }

@@ -84,7 +84,6 @@ struct Parameters {
 
 #[derive(Default, ShaderType)]
 struct TerrainViewConfigUniform {
-    approximate_height: f32,
     quadtree_size: u32,
     tile_count: u32,
     refinement_count: u32,
@@ -103,7 +102,6 @@ impl TerrainViewConfigUniform {
         let scale = config.model.scale() as f32;
 
         TerrainViewConfigUniform {
-            approximate_height: view_config.approximate_height,
             quadtree_size: view_config.quadtree_size,
             tile_count: view_config.tile_count,
             refinement_count: view_config.refinement_count,

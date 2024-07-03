@@ -2,8 +2,8 @@ use bevy::{asset::embedded_asset, prelude::*};
 use itertools::Itertools;
 
 pub const DEFAULT_SHADER: &str = "embedded://bevy_terrain/shaders/render/default.wgsl";
-pub const PREPARE_INDIRECT_SHADER: &str =
-    "embedded://bevy_terrain/shaders/tiling_prepass/prepare_indirect.wgsl";
+pub const PREPARE_PREPASS_SHADER: &str =
+    "embedded://bevy_terrain/shaders/tiling_prepass/prepare_prepass.wgsl";
 pub const REFINE_TILES_SHADER: &str =
     "embedded://bevy_terrain/shaders/tiling_prepass/refine_tiles.wgsl";
 pub(crate) const SPLIT_SHADER: &str = "embedded://bevy_terrain/shaders/preprocess/split.wgsl";
@@ -35,7 +35,7 @@ pub(crate) fn load_terrain_shaders(app: &mut App) {
     embedded_asset!(app, "render/vertex.wgsl");
     embedded_asset!(app, "render/fragment.wgsl");
     embedded_asset!(app, "render/default.wgsl");
-    embedded_asset!(app, "tiling_prepass/prepare_indirect.wgsl");
+    embedded_asset!(app, "tiling_prepass/prepare_prepass.wgsl");
     embedded_asset!(app, "tiling_prepass/refine_tiles.wgsl");
 
     InternalShaders::load(

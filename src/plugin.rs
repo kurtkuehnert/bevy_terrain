@@ -52,11 +52,11 @@ impl Plugin for TerrainPlugin {
         .add_systems(
             Last,
             (
-                generate_terrain_model_approximation,
                 Quadtree::compute_requests,
                 NodeAtlas::update,
                 Quadtree::adjust_to_node_atlas,
                 Quadtree::approximate_height,
+                generate_terrain_model_approximation.after(Quadtree::approximate_height),
             )
                 .chain(),
         );
