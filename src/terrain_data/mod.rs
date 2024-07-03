@@ -218,16 +218,16 @@ impl AttachmentData {
         }
     }
 
-    pub(crate) fn sample(&self, coordinate: Vec2, size: u32) -> Vec4 {
-        let coordinate = coordinate * size as f32 - 0.5;
+    pub(crate) fn sample(&self, uv: Vec2, size: u32) -> Vec4 {
+        let uv = uv * size as f32 - 0.5;
 
-        let _remainder = coordinate % 1.0;
-        let coordinate = coordinate.as_ivec2();
+        let remainder = uv % 1.0;
+        let uv = uv.as_ivec2();
 
         let mut values = [[Vec4::ZERO; 2]; 2];
 
         for (x, y) in iproduct!(0..2, 0..2) {
-            let index = (coordinate.y + y) * size as i32 + (coordinate.x + x);
+            let index = (uv.y + y) * size as i32 + (uv.x + x);
 
             values[x as usize][y as usize] = match self {
                 AttachmentData::None => Vec4::splat(0.0),
@@ -257,13 +257,13 @@ impl AttachmentData {
         }
 
         // Todo: check the correctness of this interpolation code
-        // Vec4::lerp(
-        //     Vec4::lerp(values[1][1], values[1][0], remainder.y),
-        //     Vec4::lerp(values[0][1], values[0][0], remainder.y),
-        //     remainder.x,
-        // )
+        Vec4::lerp(
+            Vec4::lerp(values[0][0], values[0][1], remainder.y),
+            Vec4::lerp(values[1][0], values[1][1], remainder.y),
+            remainder.x,
+        )
 
-        (values[0][0] + values[0][1] + values[1][0] + values[1][1]) / 4.0
+        // (values[0][0] + values[0][1] + values[1][0] + values[1][1]) / 4.0
     }
 }
 
@@ -289,7 +289,8 @@ pub fn sample_attachment(
 
     if blend_ratio > 0.0 {
         let lookup2 = quadtree.lookup_node(sample_world_position, lod - 1);
-        value = value.lerp(
+        value = Vec4::lerp(
+            value,
             node_atlas.sample_attachment(lookup2, attachment_index),
             blend_ratio,
         );

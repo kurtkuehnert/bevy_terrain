@@ -8,7 +8,6 @@ struct TerrainConfig {
 }
 
 struct TerrainViewConfig {
-    approximate_height: f32,
     quadtree_size: u32,
     tile_count: u32,
     refinement_count: u32,
@@ -80,6 +79,7 @@ struct SideParameter {
 
 struct TerrainModelApproximation {
     origin_lod: i32,
+    approximate_height: f32,
     sides: array<SideParameter, 6>,
 }
 

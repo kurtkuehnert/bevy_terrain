@@ -5,6 +5,10 @@ use bevy::render::{
 use itertools::Itertools;
 use std::{fmt::Debug, marker::PhantomData, ops::Deref};
 
+pub(crate) fn inverse_mix(a: f32, b: f32, value: f32) -> f32 {
+    return f32::clamp((value - a) / (b - a), 0.0, 1.0);
+}
+
 pub trait CollectArray: Iterator {
     fn collect_array<const T: usize>(self) -> [Self::Item; T]
     where

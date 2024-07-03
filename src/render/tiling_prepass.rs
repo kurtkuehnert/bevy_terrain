@@ -1,4 +1,3 @@
-use crate::shaders::{PREPARE_INDIRECT_SHADER, REFINE_TILES_SHADER};
 use crate::{
     debug::DebugTerrain,
     render::{
@@ -8,6 +7,7 @@ use crate::{
             create_prepare_indirect_layout, create_refine_tiles_layout, TerrainViewData,
         },
     },
+    shaders::{PREPARE_PREPASS_SHADER, REFINE_TILES_SHADER},
     terrain::{Terrain, TerrainComponents, TerrainConfig},
     terrain_view::{TerrainView, TerrainViewComponents},
 };
@@ -95,7 +95,7 @@ pub struct TilingPrepassPipelines {
     pub(crate) refine_tiles_layout: BindGroupLayout,
     culling_data_layout: BindGroupLayout,
     terrain_layout: BindGroupLayout,
-    prepare_indirect_shader: Handle<Shader>,
+    prepare_prepass_shader: Handle<Shader>,
     refine_tiles_shader: Handle<Shader>,
 }
 
@@ -109,7 +109,7 @@ impl FromWorld for TilingPrepassPipelines {
         let culling_data_layout = create_culling_layout(device);
         let terrain_layout = create_terrain_layout(device);
 
-        let prepare_indirect_shader = asset_server.load(PREPARE_INDIRECT_SHADER);
+        let prepare_prepass_shader = asset_server.load(PREPARE_PREPASS_SHADER);
         let refine_tiles_shader = asset_server.load(REFINE_TILES_SHADER);
 
         TilingPrepassPipelines {
@@ -117,7 +117,7 @@ impl FromWorld for TilingPrepassPipelines {
             refine_tiles_layout,
             culling_data_layout,
             terrain_layout,
-            prepare_indirect_shader,
+            prepare_prepass_shader,
             refine_tiles_shader,
         }
     }
@@ -149,7 +149,7 @@ impl SpecializedComputePipeline for TilingPrepassPipelines {
                 self.refine_tiles_layout.clone(),
                 self.prepare_indirect_layout.clone(),
             ];
-            shader = self.prepare_indirect_shader.clone();
+            shader = self.prepare_prepass_shader.clone();
             entry_point = "prepare_root".into();
         }
         if key.contains(TilingPrepassPipelineKey::PREPARE_NEXT) {
@@ -159,7 +159,7 @@ impl SpecializedComputePipeline for TilingPrepassPipelines {
                 self.refine_tiles_layout.clone(),
                 self.prepare_indirect_layout.clone(),
             ];
-            shader = self.prepare_indirect_shader.clone();
+            shader = self.prepare_prepass_shader.clone();
             entry_point = "prepare_next".into();
         }
         if key.contains(TilingPrepassPipelineKey::PREPARE_RENDER) {
@@ -169,7 +169,7 @@ impl SpecializedComputePipeline for TilingPrepassPipelines {
                 self.refine_tiles_layout.clone(),
                 self.prepare_indirect_layout.clone(),
             ];
-            shader = self.prepare_indirect_shader.clone();
+            shader = self.prepare_prepass_shader.clone();
             entry_point = "prepare_render".into();
         }
 
