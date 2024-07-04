@@ -1,7 +1,7 @@
 #define_import_path bevy_terrain::functions
 
-#import bevy_terrain::bindings::{mesh, config, view_config, tiles, quadtree, terrain_model_approximation}
-#import bevy_terrain::types::{Tile, Quadtree, NodeLookup, Blend, LookupInfo, Coordinate, Morph}
+#import bevy_terrain::bindings::{mesh, config, origins, view_config, tiles, quadtree, terrain_model_approximation}
+#import bevy_terrain::types::{Tile, Quadtree, NodeLookup, Blend, BestLookup, Coordinate, Morph}
 #import bevy_pbr::mesh_view_bindings::view
 #import bevy_render::maths::{affine3_to_square, mat2x4_f32_to_mat3x3_unpack}
 
@@ -191,17 +191,78 @@ fn inside_square(position: vec2<f32>, origin: vec2<f32>, size: f32) -> f32 {
     return inside.x * inside.y;
 }
 
+// Todo: use this node as quadtree lod again
+fn lookup_best(tile: Tile, offset: vec2<f32>) -> BestLookup {
+    let tile_size = 1u << u32(tile.lod);
+
+    let quadtree_side = tile.side;
+    var quadtree_lod: u32;       var new_quadtree_lod = 0u;
+    var node_xy:      vec2<i32>; var new_node_xy      = vec2<i32>(0);
+    var node_uv:      vec2<f32>; var new_node_uv      = (vec2<f32>(tile.xy % tile_size) + offset) / f32(tile_size);
+    var quadtree_uv:  vec2<f32>; var new_quadtree_uv  = new_node_uv;
+
+    while (new_quadtree_lod < config.lod_count && !any(new_quadtree_uv < vec2<f32>(0.0)) && !any(new_quadtree_uv > vec2<f32>(1.0))) {
+        quadtree_lod = new_quadtree_lod;
+        quadtree_uv  = new_quadtree_uv;
+        node_xy      = new_node_xy;
+        node_uv      = new_node_uv;
+
+        new_quadtree_lod += 1u;
+
+        let lod_difference = i32(tile.lod) - i32(new_quadtree_lod);
+
+        if (lod_difference < 0) {
+            let size = 1u << u32(-lod_difference);
+            let scaled_offset = offset * f32(size);
+            new_node_xy = vec2<i32>(tile.xy * size) + vec2<i32>(scaled_offset);
+            new_node_uv = scaled_offset % 1.0;
+        } else {
+            let size = 1u << u32(lod_difference);
+            new_node_xy = vec2<i32>(tile.xy / size);
+            new_node_uv = (vec2<f32>(tile.xy % size) + offset) / f32(size);
+        }
+
+        let origin_xy = vec2<i32>(origins[quadtree_side * config.lod_count + new_quadtree_lod]);
+        let quadtree_size = f32(min(view_config.quadtree_size, 1u << new_quadtree_lod));
+
+        new_quadtree_uv = (vec2<f32>(new_node_xy - origin_xy) + new_node_uv) / quadtree_size;
+    }
+
+    let quadtree_xy    = vec2<u32>(node_xy) % view_config.quadtree_size;
+    let quadtree_index = ((quadtree_side  * config.lod_count +
+                           quadtree_lod)  * view_config.quadtree_size +
+                           quadtree_xy.x) * view_config.quadtree_size +
+                           quadtree_xy.y;
+
+    let quadtree_entry = quadtree[quadtree_index];
+
+    let node_scale = i32(1u << (quadtree_lod - quadtree_entry.atlas_lod));
+    let atlas_uv = (vec2<f32>(node_xy / node_scale) +
+                   (vec2<f32>(node_xy % node_scale) + node_uv) / f32(node_scale)) % 1.0;
+
+    var lookup: BestLookup;
+    lookup.atlas_index  = quadtree_entry.atlas_index;
+    lookup.atlas_lod    = quadtree_entry.atlas_lod;
+    lookup.atlas_uv     = atlas_uv;
+    lookup.quadtree_lod = quadtree_lod;
+    lookup.quadtree_uv  = quadtree_uv;
+    lookup.node_xy      = node_xy / node_scale;
+    return lookup;
+}
+
 fn lookup_node(tile: Tile, offset: vec2<f32>, offset_dx: vec2<f32>, offset_dy: vec2<f32>, blend: Blend, lod_offset: u32) -> NodeLookup {
     let quadtree_lod   = blend.lod - lod_offset;
     let quadtree_side  = tile.side;
     let quadtree_xy    = vec2<u32>(tile.xy.x >> (tile.lod - quadtree_lod),
                                    tile.xy.y >> (tile.lod - quadtree_lod)) % view_config.quadtree_size;
-    let quadtree_index = (((                            quadtree_side) *
-                            config.lod_count          + quadtree_lod ) *
-                            view_config.quadtree_size + quadtree_xy.x) *
-                            view_config.quadtree_size + quadtree_xy.y;
+    let quadtree_index = ((quadtree_side  * config.lod_count +
+                           quadtree_lod)  * view_config.quadtree_size +
+                           quadtree_xy.x) * view_config.quadtree_size +
+                           quadtree_xy.y;
     let quadtree_entry = quadtree[quadtree_index];
 
+    // assumes the tile lod is larger than the node lod
+    // this can be guaranteed with morph distance > blend distance
     let tiles_per_node = 1u << (tile.lod - quadtree_entry.atlas_lod);
 
     var lookup: NodeLookup;
