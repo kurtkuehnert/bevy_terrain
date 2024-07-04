@@ -105,8 +105,8 @@ impl Coordinate {
         }
     }
 
-    pub(crate) fn world_position(self, model: &TerrainModel) -> DVec3 {
-        let normal = if model.spherical {
+    pub(crate) fn world_position(self, model: &TerrainModel, height: f32) -> DVec3 {
+        let local_position = if model.spherical {
             let uv = sphere_to_cube(self.st);
 
             match self.side {
@@ -120,10 +120,13 @@ impl Coordinate {
             }
             .normalize()
         } else {
-            DVec3::new(2.0 * self.st.x - 1.0, 0.0, 2.0 * self.st.y - 1.0)
+            DVec3::new(self.st.x - 0.5, 0.0, self.st.y - 0.5)
         };
 
-        model.position_local_to_world(normal)
+        let world_position = model.position_local_to_world(local_position);
+        let world_normal = model.normal_local_to_world(local_position);
+
+        world_position + height as f64 * world_normal
     }
 
     /// Projects the coordinate onto one of the six cube faces.
@@ -282,18 +285,6 @@ impl NodeCoordinate {
                 )
             }
         }
-    }
-
-    pub(crate) fn world_position(self, model: &TerrainModel) -> DVec3 {
-        let st = (DVec2::new(self.x as f64 + 0.5, self.y as f64 + 0.5))
-            / Self::node_count(self.lod) as f64;
-
-        let coordinate = Coordinate {
-            side: self.side,
-            st,
-        };
-
-        coordinate.world_position(model)
     }
 }
 

@@ -186,16 +186,16 @@ impl Quadtree {
         )
     }
 
-    fn quadtree_st(coordinate: Coordinate, node_count: f64) -> DVec2 {
+    fn compute_quadtree_xy(coordinate: Coordinate, node_count: f64) -> DVec2 {
         // scale and clamp the coordinate to the quadtree bounds
         (coordinate.st * node_count).min(DVec2::splat(node_count - 0.000001))
     }
 
-    fn origin(&self, coordinate: Coordinate, lod: u32) -> UVec2 {
+    fn compute_origin(&self, coordinate: Coordinate, lod: u32) -> UVec2 {
         let node_count = NodeCoordinate::node_count(lod) as f64;
-        let quadtree_st = Self::quadtree_st(coordinate, node_count);
+        let quadtree_xy = Self::compute_quadtree_xy(coordinate, node_count);
 
-        (quadtree_st - 0.5 * self.quadtree_size as f64)
+        (quadtree_xy - 0.5 * self.quadtree_size as f64)
             .round()
             .clamp(
                 DVec2::splat(0.0),
@@ -204,29 +204,33 @@ impl Quadtree {
             .as_uvec2()
     }
 
-    pub(super) fn lookup_node(&self, world_position: DVec3, quadtree_lod: u32) -> NodeLookup {
-        let coordinate = Coordinate::from_world_position(world_position, &self.model);
+    fn compute_node_distance(&self, node: NodeCoordinate, view_coordinate: Coordinate) -> f64 {
+        let node_count = NodeCoordinate::node_count(node.lod) as f64;
+        let node_xy = IVec2::new(node.x as i32, node.y as i32);
+        let view_node_xy = Self::compute_quadtree_xy(view_coordinate, node_count);
+        let node_offset = view_node_xy.as_ivec2() - node_xy;
+        let mut offset = view_node_xy % 1.0;
 
-        let node_count = NodeCoordinate::node_count(quadtree_lod) as f64;
-        let quadtree_st = Self::quadtree_st(coordinate, node_count);
-
-        let entry = self.data[[
-            coordinate.side as usize,
-            quadtree_lod as usize,
-            quadtree_st.x as usize % self.quadtree_size as usize,
-            quadtree_st.y as usize % self.quadtree_size as usize,
-        ]];
-
-        if entry.atlas_lod == INVALID_LOD {
-            return NodeLookup::INVALID;
+        if node_offset.x < 0 {
+            offset.x = 0.0;
+        } else if node_offset.x > 0 {
+            offset.x = 1.0;
+        }
+        if node_offset.y < 0 {
+            offset.y = 0.0;
+        } else if node_offset.y > 0 {
+            offset.y = 1.0;
         }
 
-        NodeLookup {
-            atlas_index: entry.atlas_index,
-            atlas_lod: entry.atlas_lod,
-            atlas_uv: ((quadtree_st / (1 << (quadtree_lod - entry.atlas_lod)) as f64) % 1.0)
-                .as_vec2(),
-        }
+        let node_coordinate = Coordinate {
+            side: node.side,
+            st: (node_xy.as_dvec2() + offset) / node_count,
+        };
+
+        let node_world_position =
+            node_coordinate.world_position(&self.model, self.approximate_height);
+
+        node_world_position.distance(self.view_world_position)
     }
 
     pub(super) fn compute_blend(&self, sample_world_position: DVec3) -> (u32, f32) {
@@ -243,6 +247,31 @@ impl Quadtree {
         };
 
         (lod, ratio)
+    }
+
+    pub(super) fn lookup_node(&self, world_position: DVec3, quadtree_lod: u32) -> NodeLookup {
+        let coordinate = Coordinate::from_world_position(world_position, &self.model);
+
+        let node_count = NodeCoordinate::node_count(quadtree_lod) as f64;
+        let quadtree_xy = Self::compute_quadtree_xy(coordinate, node_count);
+
+        let entry = self.data[[
+            coordinate.side as usize,
+            quadtree_lod as usize,
+            quadtree_xy.x as usize % self.quadtree_size as usize,
+            quadtree_xy.y as usize % self.quadtree_size as usize,
+        ]];
+
+        if entry.atlas_lod == INVALID_LOD {
+            return NodeLookup::INVALID;
+        }
+
+        NodeLookup {
+            atlas_index: entry.atlas_index,
+            atlas_lod: entry.atlas_lod,
+            atlas_uv: ((quadtree_xy / (1 << (quadtree_lod - entry.atlas_lod)) as f64) % 1.0)
+                .as_vec2(),
+        }
     }
 
     /// Traverses all quadtrees and updates the node states,
@@ -265,11 +294,10 @@ impl Quadtree {
                     Coordinate::from_world_position(quadtree.view_world_position, &quadtree.model);
 
                 for side in 0..quadtree.side_count {
-                    let quadtree_coordinate =
-                        view_coordinate.project_to_side(side, &quadtree.model);
+                    let view_coordinate = view_coordinate.project_to_side(side, &quadtree.model);
 
                     for lod in 0..quadtree.lod_count {
-                        let origin = quadtree.origin(quadtree_coordinate, lod);
+                        let origin = quadtree.compute_origin(view_coordinate, lod);
                         quadtree.origins[(side as usize, lod as usize)] = origin;
 
                         for (x, y) in
@@ -282,17 +310,13 @@ impl Quadtree {
                                 y: origin.y + y,
                             };
 
-                            let node_world_position =
-                                node_coordinate.world_position(&quadtree.model); // Todo: consider calculating distance to closest corner instead
-
-                            let distance =
-                                node_world_position.distance(quadtree.view_world_position);
                             let node_distance =
-                                0.5 * distance * NodeCoordinate::node_count(lod) as f64
-                                    / config.model.scale();
+                                quadtree.compute_node_distance(node_coordinate, view_coordinate);
+                            let load_distance = quadtree.load_distance as f64
+                                * quadtree.model.scale()
+                                / NodeCoordinate::node_count(node_coordinate.lod) as f64;
 
-                            let state = if lod == 0 || node_distance < quadtree.load_distance as f64
-                            {
+                            let state = if lod == 0 || node_distance < load_distance {
                                 RequestState::Requested
                             } else {
                                 RequestState::Released

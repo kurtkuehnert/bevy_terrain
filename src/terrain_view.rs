@@ -50,7 +50,7 @@ impl Default for TerrainViewConfig {
             tile_count: 1000000,
             refinement_count: 30,
             grid_size: 32,
-            load_distance: 3.0,
+            load_distance: 1.0,
             morph_distance: 4.0,
             blend_distance: 1.0,
             morph_range: 0.2,
