@@ -1,4 +1,4 @@
-use crate::shaders::DEFAULT_SHADER;
+use crate::shaders::{DEFAULT_FRAGMENT_SHADER, DEFAULT_VERTEX_SHADER};
 use crate::{
     debug::DebugTerrain,
     render::{
@@ -260,13 +260,13 @@ impl<M: Material> FromWorld for TerrainRenderPipeline<M> {
         let material_layout = M::bind_group_layout(device);
 
         let vertex_shader = match M::vertex_shader() {
-            ShaderRef::Default => asset_server.load(DEFAULT_SHADER),
+            ShaderRef::Default => asset_server.load(DEFAULT_VERTEX_SHADER),
             ShaderRef::Handle(handle) => handle,
             ShaderRef::Path(path) => asset_server.load(path),
         };
 
         let fragment_shader = match M::fragment_shader() {
-            ShaderRef::Default => asset_server.load(DEFAULT_SHADER),
+            ShaderRef::Default => asset_server.load(DEFAULT_FRAGMENT_SHADER),
             ShaderRef::Handle(handle) => handle,
             ShaderRef::Path(path) => asset_server.load(path),
         };
@@ -305,6 +305,12 @@ where
         bind_group_layout.push(self.terrain_view_layout.clone());
         bind_group_layout.push(self.material_layout.clone());
 
+        let vertex_shader_defs = shader_defs.clone();
+        // vertex_shader_defs.push("VERTEX".into());
+
+        let mut fragment_shader_defs = shader_defs.clone();
+        fragment_shader_defs.push("FRAGMENT".into());
+
         RenderPipelineDescriptor {
             label: None,
             layout: bind_group_layout,
@@ -312,7 +318,7 @@ where
             vertex: VertexState {
                 shader: self.vertex_shader.clone(),
                 entry_point: "vertex".into(),
-                shader_defs: shader_defs.clone(),
+                shader_defs: vertex_shader_defs,
                 buffers: Vec::new(),
             },
             primitive: PrimitiveState {
@@ -326,7 +332,7 @@ where
             },
             fragment: Some(FragmentState {
                 shader: self.fragment_shader.clone(),
-                shader_defs,
+                shader_defs: fragment_shader_defs,
                 entry_point: "fragment".into(),
                 targets: vec![Some(ColorTargetState {
                     format: TextureFormat::bevy_default(),

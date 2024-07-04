@@ -27,16 +27,22 @@ struct Tile {
     xy: vec2<u32>,
 }
 
+struct Coordinate {
+    side: u32,
+    lod: u32,
+    xy: vec2<u32>,
+    uv: vec2<f32>,
+#ifdef FRAGMENT
+    uv_dx: vec2<f32>,
+    uv_dy: vec2<f32>,
+#endif
+}
+
 struct Parameters {
     tile_count: u32,
     counter: i32,
     child_index: atomic<i32>,
     final_index: atomic<i32>,
-}
-
-struct Morph {
-    ratio: f32,
-    offset: vec2<f32>,
 }
 
 struct Blend {
@@ -54,8 +60,10 @@ struct NodeLookup {
     index: u32,
     lod: u32,
     uv: vec2<f32>,
-    ddx: vec2<f32>,
-    ddy: vec2<f32>,
+#ifdef FRAGMENT
+    uv_dx: vec2<f32>,
+    uv_dy: vec2<f32>,
+#endif
 }
 
 struct BestLookup {
