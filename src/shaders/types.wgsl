@@ -58,6 +58,15 @@ struct NodeLookup {
     ddy: vec2<f32>,
 }
 
+struct BestLookup {
+    atlas_index: u32,
+    atlas_lod: u32,
+    atlas_uv: vec2<f32>,
+    quadtree_lod: u32,
+    quadtree_uv: vec2<f32>,
+    node_xy: vec2<i32>,
+}
+
 struct AttachmentConfig {
     size: f32,
     scale: f32,

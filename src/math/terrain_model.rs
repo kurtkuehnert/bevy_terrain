@@ -135,7 +135,11 @@ impl TerrainModel {
     }
 
     pub(crate) fn scale(&self) -> f64 {
-        self.scale.length()
+        if self.spherical {
+            self.scale.length()
+        } else {
+            self.scale.length() / 2.0
+        }
     }
 
     pub(crate) fn grid_transform(&self, frame: &ReferenceFrame) -> GridTransformOwned {
@@ -326,7 +330,7 @@ pub fn generate_terrain_model_approximation(
             let model = TerrainModelApproximation::compute(
                 &config.model,
                 view_transform.position_double(&frame),
-                10,
+                10, // Todo: make this configurable
                 quadtree.approximate_height,
             );
 
