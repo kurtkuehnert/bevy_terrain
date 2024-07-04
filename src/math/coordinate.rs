@@ -65,6 +65,10 @@ pub struct Coordinate {
 }
 
 impl Coordinate {
+    pub fn new(side: u32, st: DVec2) -> Self {
+        Self { side, st }
+    }
+
     /// Calculates the coordinate for for the local position on the unit cube sphere.
     pub(crate) fn from_world_position(world_position: DVec3, model: &TerrainModel) -> Self {
         let local_position = model.position_world_to_local(world_position);

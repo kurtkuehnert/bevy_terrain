@@ -1,8 +1,8 @@
 #define_import_path bevy_terrain::debug
 
-#import bevy_terrain::types::{Coordinate, NodeLookup, Blend, Tile}
+#import bevy_terrain::types::{Coordinate, NodeLookup, Blend}
 #import bevy_terrain::bindings::{config, quadtree, view_config, tiles, attachments, origins, terrain_model_approximation}
-#import bevy_terrain::functions::{lookup_best, approximate_view_distance, compute_morph, compute_blend, tile_count, quadtree_lod, inside_square, node_count, node_coordinate, coordinate_from_local_position, compute_subdivision_offset}
+#import bevy_terrain::functions::{inverse_mix, compute_coordinate, lookup_best, approximate_view_distance, compute_blend, quadtree_lod, inside_square, node_count, node_coordinate, coordinate_from_local_position, compute_subdivision_coordinate}
 #import bevy_pbr::mesh_view_bindings::view
 
 fn index_color(index: u32) -> vec4<f32> {
@@ -18,24 +18,25 @@ fn index_color(index: u32) -> vec4<f32> {
     return mix(COLOR_ARRAY[index % 6u], vec4<f32>(0.6), 0.2);
 }
 
-fn quadtree_outlines(offset: vec2<f32>) -> f32 {
+fn quadtree_outlines(uv: vec2<f32>) -> f32 {
     let thickness = 0.015;
 
-    return 1.0 - inside_square(offset, vec2<f32>(thickness), 1.0 - 2.0 * thickness);
+    return 1.0 - inside_square(uv, vec2<f32>(thickness), 1.0 - 2.0 * thickness);
 }
 
-fn show_tiles(tile: Tile, offset: vec2<f32>) -> vec4<f32> {
-    let view_distance  = approximate_view_distance(tile, offset, view.world_position);
-    let morph          = compute_morph(view_distance, tile.lod, offset);
+fn show_tiles(coordinate: Coordinate) -> vec4<f32> {
+    let view_distance  = approximate_view_distance(coordinate, view.world_position);
     let target_lod     = log2(view_config.morph_distance / view_distance);
+    let ratio          = select(inverse_mix(f32(coordinate.lod) + view_config.morph_range, f32(coordinate.lod), target_lod), 0.0, coordinate.lod == 0);
 
-    var color        = select(index_color(tile.lod),     mix(index_color(tile.lod),     vec4(0.0), 0.5), (tile.xy.x + tile.xy.y) % 2u == 0u);
-    let parent_color = select(index_color(tile.lod - 1), mix(index_color(tile.lod - 1), vec4(0.0), 0.5), ((tile.xy.x >> 1) + (tile.xy.y >> 1)) % 2u == 0u);
-    color            = mix(color, parent_color, morph.ratio);
+    var color        = index_color(coordinate.lod);
+    var parent_color = index_color(coordinate.lod - 1);
+    color            = select(color,        mix(color,        vec4(0.0), 0.5), (coordinate.xy.x + coordinate.xy.y) % 2u == 0u);
+    parent_color     = select(parent_color, mix(parent_color, vec4(0.0), 0.5), ((coordinate.xy.x >> 1) + (coordinate.xy.y >> 1)) % 2u == 0u);
+    color            = mix(color, parent_color, ratio);
 
-
-    if (distance(offset, compute_subdivision_offset(tile)) < 0.1) {
-        color = mix(index_color(tile.lod + 1), vec4(0.0), 0.7);
+    if (distance(coordinate.uv, compute_subdivision_coordinate(coordinate).uv) < 0.1) {
+        color = mix(index_color(coordinate.lod + 1), vec4(0.0), 0.7);
     }
 
     if (fract(target_lod) < 0.01 && target_lod >= 1.0) {
@@ -43,21 +44,21 @@ fn show_tiles(tile: Tile, offset: vec2<f32>) -> vec4<f32> {
     }
 
 #ifdef SPHERICAL
-    color = mix(color, index_color(tile.side), 0.3);
+    color = mix(color, index_color(coordinate.side), 0.3);
 #endif
 
-    if (max(0.0, target_lod) < f32(tile.lod) - 1.0 + view_config.morph_range || floor(target_lod) > f32(tile.lod)) {
+    if (max(0.0, target_lod) < f32(coordinate.lod) - 1.0 + view_config.morph_range || floor(target_lod) > f32(coordinate.lod)) {
         color = vec4<f32>(1.0, 0.0, 0.0, 1.0); // The view_distance and morph range are not sufficient.
     }
 
     return color;
 }
 
-fn show_quadtree(tile: Tile, offset: vec2<f32>) -> vec4<f32> {
-    let lookup = lookup_best(tile, offset);
+fn show_quadtree(coordinate: Coordinate) -> vec4<f32> {
+    let view_distance  = approximate_view_distance(coordinate, view.world_position);
+    let target_lod     = log2(view_config.blend_distance / view_distance); // Todo: replace with load distance or remove
 
-    let view_distance  = approximate_view_distance(tile, offset, view.world_position);
-    let target_lod     = log2(view_config.blend_distance / view_distance);
+    let lookup = lookup_best(coordinate);
 
     var color = index_color(lookup.atlas_lod);
     color     = mix(color, 0.1 * color, quadtree_outlines(lookup.atlas_uv));
@@ -77,8 +78,6 @@ fn show_lod(blend: Blend, lookup: NodeLookup) -> vec4<f32> {
     color            = mix(color, 0.1 * color, quadtree_outlines(lookup.uv));
 
     if (blend.ratio > 0.9 && blend.lod == lookup.lod) {   color = mix(color, vec4<f32>(0.0), 0.8); }
-
-    // color = index_color(lookup.index);
 
     return color;
 }

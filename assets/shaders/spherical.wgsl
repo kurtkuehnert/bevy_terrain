@@ -1,24 +1,19 @@
+#import bevy_terrain::types::{NodeLookup}
 #import bevy_terrain::bindings::config
-#import bevy_terrain::attachments::{sample_height_grad, sample_normal_grad}
-#import bevy_terrain::vertex::{VertexInput, VertexOutput, vertex_default}
-#import bevy_terrain::fragment::{FragmentInput, FragmentOutput, FragmentInfo, fragment_info, fragment_lookup_node, fragment_output, fragment_debug}
+#import bevy_terrain::attachments::{sample_height, sample_normal}
+#import bevy_terrain::fragment::{FragmentInput, FragmentOutput, fragment_info, fragment_output, fragment_debug}
+#import bevy_terrain::functions::lookup_node
 #import bevy_pbr::pbr_types::{PbrInput, pbr_input_new}
 #import bevy_pbr::pbr_functions::{calculate_view, apply_pbr_lighting}
 
-#import bevy_terrain::bindings::{view_config, tiles, terrain_model_approximation, quadtree, atlas_sampler, attachments, attachment0_atlas}
-#import bevy_terrain::types::{Blend, Coordinate, NodeLookup, Tile, Morph}
-#import bevy_terrain::functions::{tile_size, compute_coordinate, compute_local_position, compute_relative_coordinate, compute_relative_position, compute_grid_offset, compute_morph, compute_blend, position_local_to_world}
-#import bevy_terrain::attachments::{sample_height}
-#import bevy_terrain::debug::{show_lod, show_tiles, show_quadtree, index_color}
-#import bevy_pbr::mesh_view_bindings::view
 
 @group(3) @binding(0)
 var gradient: texture_1d<f32>;
 @group(3) @binding(1)
 var gradient_sampler: sampler;
 
-fn sample_color_grad(lookup: NodeLookup) -> vec4<f32> {
-    let height = sample_height_grad(lookup);
+fn sample_color(lookup: NodeLookup) -> vec4<f32> {
+    let height = sample_height(lookup);
 
     var color: vec4<f32>;
 
@@ -32,28 +27,22 @@ fn sample_color_grad(lookup: NodeLookup) -> vec4<f32> {
     return color;
 }
 
-@vertex
-fn vertex(input: VertexInput) -> VertexOutput {
-    return vertex_default(input);
-}
-
 @fragment
 fn fragment(input: FragmentInput) -> FragmentOutput {
     var info = fragment_info(input);
 
-    let lookup = fragment_lookup_node(&info, 0u);
-    var color  = sample_color_grad(lookup);
-    var normal = sample_normal_grad(lookup, info.world_normal, info.tile.side);
+    let lookup = lookup_node(info.coordinate, info.blend, 0u);
+    var color  = sample_color(lookup);
+    var normal = sample_normal(lookup, info.world_normal, info.coordinate.side);
 
     if (info.blend.ratio > 0.0) {
-        let lookup2 = fragment_lookup_node(&info, 1u);
-        color       = mix(color,  sample_color_grad(lookup2),                                     info.blend.ratio);
-        normal      = mix(normal, sample_normal_grad(lookup2, info.world_normal, info.tile.side), info.blend.ratio);
+        let lookup2 = lookup_node(info.coordinate, info.blend, 1u);
+        color       = mix(color,  sample_color(lookup2),                                           info.blend.ratio);
+        normal      = mix(normal, sample_normal(lookup2, info.world_normal, info.coordinate.side), info.blend.ratio);
     }
 
     var output: FragmentOutput;
     fragment_output(&info, &output, color, normal);
     fragment_debug(&info, &output, lookup, normal);
-
     return output;
 }

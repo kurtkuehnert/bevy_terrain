@@ -12,14 +12,8 @@ fn attachment_uv(lookup: NodeLookup, attachment_index: u32) -> vec2<f32> {
 fn sample_attachment0(lookup: NodeLookup) -> vec4<f32> {
     let uv = attachment_uv(lookup, 0u);
 
-    return textureSampleLevel(attachment0_atlas, atlas_sampler, uv, lookup.index, 0.0);
-}
-
-fn sample_attachment0_grad(lookup: NodeLookup) -> vec4<f32> {
-    let uv = attachment_uv(lookup, 0u);
-
-#ifdef SAMPLE_GRAD
-    return textureSampleGrad(attachment0_atlas, atlas_sampler, uv, lookup.index, lookup.ddx, lookup.ddy);
+#ifdef FRAGMENT && SAMPLE_GRAD
+    return textureSampleGrad(attachment0_atlas, atlas_sampler, uv, lookup.index, lookup.uv_dx, lookup.uv_dy);
 #else
     return textureSampleLevel(attachment0_atlas, atlas_sampler, uv, lookup.index, 0.0);
 #endif
@@ -28,14 +22,8 @@ fn sample_attachment0_grad(lookup: NodeLookup) -> vec4<f32> {
 fn sample_attachment1(lookup: NodeLookup) -> vec4<f32> {
     let uv = attachment_uv(lookup, 1u);
 
-    return textureSampleLevel(attachment1_atlas, atlas_sampler, uv, lookup.index, 0.0);
-}
-
-fn sample_attachment1_grad(lookup: NodeLookup) -> vec4<f32> {
-    let uv = attachment_uv(lookup, 1u);
-
-#ifdef SAMPLE_GRAD
-    return textureSampleGrad(attachment1_atlas, atlas_sampler, uv, lookup.index, lookup.ddx, lookup.ddy);
+#ifdef FRAGMENT && SAMPLE_GRAD
+    return textureSampleGrad(attachment1_atlas, atlas_sampler, uv, lookup.index, lookup.uv_dx, lookup.uv_dy);
 #else
     return textureSampleLevel(attachment1_atlas, atlas_sampler, uv, lookup.index, 0.0);
 #endif
@@ -52,13 +40,7 @@ fn sample_height(lookup: NodeLookup) -> f32 {
     return mix(config.min_height, config.max_height, height);
 }
 
-fn sample_height_grad(lookup: NodeLookup) -> f32 {
-    let height = sample_attachment0_grad(lookup).x;
-
-    return mix(config.min_height, config.max_height, height);
-}
-
-fn sample_normal_grad(lookup: NodeLookup, vertex_normal: vec3<f32>, side: u32) -> vec3<f32> {
+fn sample_normal(lookup: NodeLookup, vertex_normal: vec3<f32>, side: u32) -> vec3<f32> {
     let uv = attachment_uv(lookup, 0u);
 
 #ifdef SPHERICAL
@@ -92,11 +74,11 @@ fn sample_normal_grad(lookup: NodeLookup, vertex_normal: vec3<f32>, side: u32) -
     let distance_between_samples = side_length / pixels_per_side;
     let offset = 0.5 / attachments[0u].size;
 
-#ifdef SAMPLE_GRAD
-    let left  = mix(config.min_height, config.max_height, textureSampleGrad(attachment0_atlas, atlas_sampler, uv + vec2<f32>(-offset,     0.0), lookup.index, lookup.ddx, lookup.ddy).x);
-    let up    = mix(config.min_height, config.max_height, textureSampleGrad(attachment0_atlas, atlas_sampler, uv + vec2<f32>(    0.0, -offset), lookup.index, lookup.ddx, lookup.ddy).x);
-    let right = mix(config.min_height, config.max_height, textureSampleGrad(attachment0_atlas, atlas_sampler, uv + vec2<f32>( offset,     0.0), lookup.index, lookup.ddx, lookup.ddy).x);
-    let down  = mix(config.min_height, config.max_height, textureSampleGrad(attachment0_atlas, atlas_sampler, uv + vec2<f32>(    0.0,  offset), lookup.index, lookup.ddx, lookup.ddy).x);
+#ifdef FRAGMENT && SAMPLE_GRAD
+    let left  = mix(config.min_height, config.max_height, textureSampleGrad(attachment0_atlas, atlas_sampler, uv + vec2<f32>(-offset,     0.0), lookup.index, lookup.uv_dx, lookup.uv_dy).x);
+    let up    = mix(config.min_height, config.max_height, textureSampleGrad(attachment0_atlas, atlas_sampler, uv + vec2<f32>(    0.0, -offset), lookup.index, lookup.uv_dx, lookup.uv_dy).x);
+    let right = mix(config.min_height, config.max_height, textureSampleGrad(attachment0_atlas, atlas_sampler, uv + vec2<f32>( offset,     0.0), lookup.index, lookup.uv_dx, lookup.uv_dy).x);
+    let down  = mix(config.min_height, config.max_height, textureSampleGrad(attachment0_atlas, atlas_sampler, uv + vec2<f32>(    0.0,  offset), lookup.index, lookup.uv_dx, lookup.uv_dy).x);
 #else
     let left  = mix(config.min_height, config.max_height, textureSampleLevel(attachment0_atlas, atlas_sampler, uv + vec2<f32>(-offset,     0.0), lookup.index, 0.0).x);
     let up    = mix(config.min_height, config.max_height, textureSampleLevel(attachment0_atlas, atlas_sampler, uv + vec2<f32>(    0.0, -offset), lookup.index, 0.0).x);
@@ -109,8 +91,8 @@ fn sample_normal_grad(lookup: NodeLookup, vertex_normal: vec3<f32>, side: u32) -
     return normalize(TBN * surface_normal);
 }
 
-fn sample_color_grad(lookup: NodeLookup) -> vec4<f32> {
-    let height = sample_attachment0_grad(lookup).x;
+fn sample_color(lookup: NodeLookup) -> vec4<f32> {
+    let height = sample_attachment0(lookup).x;
 
     return vec4<f32>(height * 0.5);
 }
