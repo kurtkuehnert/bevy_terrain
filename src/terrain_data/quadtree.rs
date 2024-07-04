@@ -222,13 +222,9 @@ impl Quadtree {
             offset.y = 1.0;
         }
 
-        let node_coordinate = Coordinate {
-            side: node.side,
-            st: (node_xy.as_dvec2() + offset) / node_count,
-        };
-
         let node_world_position =
-            node_coordinate.world_position(&self.model, self.approximate_height);
+            Coordinate::new(node.side, (node_xy.as_dvec2() + offset) / node_count)
+                .world_position(&self.model, self.approximate_height);
 
         node_world_position.distance(self.view_world_position)
     }

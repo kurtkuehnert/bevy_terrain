@@ -16,9 +16,9 @@ pub struct TerrainMaterial {
 }
 
 impl Material for TerrainMaterial {
-    fn vertex_shader() -> ShaderRef {
-        "shaders/spherical.wgsl".into()
-    }
+    // fn vertex_shader() -> ShaderRef {
+    //     "shaders/spherical.wgsl".into()
+    // }
     fn fragment_shader() -> ShaderRef {
         "shaders/spherical.wgsl".into()
     }
