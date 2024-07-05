@@ -58,21 +58,12 @@ struct QuadtreeEntry {
 // A lookup of a node inside the node atlas based on the view of a quadtree.
 struct NodeLookup {
     index: u32,
-    lod: u32,
-    uv: vec2<f32>,
-#ifdef FRAGMENT
-    uv_dx: vec2<f32>,
-    uv_dy: vec2<f32>,
-#endif
+    coordinate: Coordinate,
 }
 
 struct BestLookup {
-    atlas_index: u32,
-    atlas_lod: u32,
-    atlas_uv: vec2<f32>,
-    quadtree_lod: u32,
+    lookup: NodeLookup,
     quadtree_uv: vec2<f32>,
-    node_xy: vec2<i32>,
 }
 
 struct AttachmentConfig {

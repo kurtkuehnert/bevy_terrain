@@ -1,7 +1,7 @@
 #define_import_path bevy_terrain::functions
 
 #import bevy_terrain::bindings::{mesh, config, origins, view_config, tiles, quadtree, terrain_model_approximation}
-#import bevy_terrain::types::{Tile, Quadtree, NodeLookup, Blend, BestLookup, Coordinate, Morph}
+#import bevy_terrain::types::{Tile, Quadtree, QuadtreeEntry, NodeLookup, Blend, BestLookup, Coordinate, Morph}
 #import bevy_pbr::mesh_view_bindings::view
 #import bevy_render::maths::{affine3_to_square, mat2x4_f32_to_mat3x3_unpack}
 
@@ -144,9 +144,9 @@ fn compute_relative_position(coordinate: Coordinate) -> vec3<f32> {
     let params = terrain_model_approximation.sides[coordinate.side];
 
     let lod_difference = coordinate.lod - u32(terrain_model_approximation.origin_lod);
-    let origin_xy = vec2<i32>(params.origin_xy.x << lod_difference, params.origin_xy.y << lod_difference);
-    let offset = vec2<i32>(coordinate.xy) - origin_xy;
-    let relative_st = (vec2<f32>(offset) + coordinate.uv) / tile_count(coordinate.lod) + params.delta_relative_st;
+    let origin_xy      = vec2<i32>(params.origin_xy.x << lod_difference, params.origin_xy.y << lod_difference);
+    let offset         = vec2<i32>(coordinate.xy) - origin_xy;
+    let relative_st    = (vec2<f32>(offset) + coordinate.uv) / tile_count(coordinate.lod) + params.delta_relative_st;
 
     let s = relative_st.x;
     let t = relative_st.y;
@@ -177,10 +177,10 @@ fn approximate_view_distance(coordinate: Coordinate, view_world_position: vec3<f
 }
 
 fn compute_subdivision_coordinate(coordinate: Coordinate) -> Coordinate {
-    let params       = terrain_model_approximation.sides[coordinate.side];
+    let params  = terrain_model_approximation.sides[coordinate.side];
     let view_xy = params.view_st * tile_count(coordinate.lod);
     let offset  = vec2<i32>(view_xy) - vec2<i32>(coordinate.xy);
-    var uv       = view_xy % 1.0;
+    var uv      = view_xy % 1.0;
 
     if      (offset.x < 0) { uv.x = 0.0; }
     else if (offset.x > 0) { uv.x = 1.0; }
@@ -202,87 +202,86 @@ fn inside_square(position: vec2<f32>, origin: vec2<f32>, size: f32) -> f32 {
     return inside.x * inside.y;
 }
 
-// Todo: use this node as quadtree lod again
-fn lookup_best(coordinate: Coordinate) -> BestLookup {
-    let tile_size = 1u << u32(coordinate.lod);
+fn coordinate_change_lod(coordinate: Coordinate, new_lod: u32) -> Coordinate {
+    var new_coordinate = coordinate;
+    new_coordinate.lod = new_lod;
 
-    let quadtree_side = coordinate.side;
-    var quadtree_lod: u32;       var new_quadtree_lod = 0u;
-    var node_xy:      vec2<i32>; var new_node_xy      = vec2<i32>(0);
-    var node_uv:      vec2<f32>; var new_node_uv      = (vec2<f32>(coordinate.xy % tile_size) + coordinate.uv) / f32(tile_size);
-    var quadtree_uv:  vec2<f32>; var new_quadtree_uv  = new_node_uv;
+    let lod_difference = i32(coordinate.lod) - i32(new_lod);
 
-    while (new_quadtree_lod < config.lod_count && !any(new_quadtree_uv < vec2<f32>(0.0)) && !any(new_quadtree_uv > vec2<f32>(1.0))) {
-        quadtree_lod = new_quadtree_lod;
-        quadtree_uv  = new_quadtree_uv;
-        node_xy      = new_node_xy;
-        node_uv      = new_node_uv;
-
-        new_quadtree_lod += 1u;
-
-        let lod_difference = i32(coordinate.lod) - i32(new_quadtree_lod);
-
-        if (lod_difference < 0) {
-            let size = 1u << u32(-lod_difference);
-            let scaled_uv = coordinate.uv * f32(size);
-            new_node_xy = vec2<i32>(coordinate.xy * size) + vec2<i32>(scaled_uv);
-            new_node_uv = scaled_uv % 1.0;
-        } else {
-            let size = 1u << u32(lod_difference);
-            new_node_xy = vec2<i32>(coordinate.xy / size);
-            new_node_uv = (vec2<f32>(coordinate.xy % size) + coordinate.uv) / f32(size);
-        }
-
-        let origin_xy = vec2<i32>(origins[quadtree_side * config.lod_count + new_quadtree_lod]);
-        let quadtree_size = f32(min(view_config.quadtree_size, 1u << new_quadtree_lod));
-
-        new_quadtree_uv = (vec2<f32>(new_node_xy - origin_xy) + new_node_uv) / quadtree_size;
+    if (lod_difference < 0) {
+        let size          = 1u << u32(-lod_difference);
+        let scaled_uv     = coordinate.uv * f32(size);
+        new_coordinate.xy = vec2<u32>(coordinate.xy * size) + vec2<u32>(scaled_uv);
+        new_coordinate.uv = scaled_uv % 1.0;
+        #ifdef FRAGMENT
+            new_coordinate.uv_dx *= f32(size);
+            new_coordinate.uv_dy *= f32(size);
+        #endif
+    } else {
+        let size          = 1u << u32(lod_difference);
+        new_coordinate.xy = vec2<u32>(coordinate.xy / size);
+        new_coordinate.uv = (vec2<f32>(coordinate.xy % size) + coordinate.uv) / f32(size);
+        #ifdef FRAGMENT
+            new_coordinate.uv_dx /= f32(size);
+            new_coordinate.uv_dy /= f32(size);
+        #endif
     }
 
-    let quadtree_xy    = vec2<u32>(node_xy) % view_config.quadtree_size;
-    let quadtree_index = ((quadtree_side  * config.lod_count +
-                           quadtree_lod)  * view_config.quadtree_size +
-                           quadtree_xy.x) * view_config.quadtree_size +
-                           quadtree_xy.y;
-
-    let quadtree_entry = quadtree[quadtree_index];
-
-    let node_scale = i32(1u << (quadtree_lod - quadtree_entry.atlas_lod));
-    let atlas_uv = (vec2<f32>(node_xy / node_scale) +
-                   (vec2<f32>(node_xy % node_scale) + node_uv) / f32(node_scale)) % 1.0;
-
-    var lookup: BestLookup;
-    lookup.atlas_index  = quadtree_entry.atlas_index;
-    lookup.atlas_lod    = quadtree_entry.atlas_lod;
-    lookup.atlas_uv     = atlas_uv;
-    lookup.quadtree_lod = quadtree_lod;
-    lookup.quadtree_uv  = quadtree_uv;
-    lookup.node_xy      = node_xy / node_scale;
-    return lookup;
+    return new_coordinate;
 }
 
-fn lookup_node(coordinate: Coordinate, blend: Blend, lod_offset: u32) -> NodeLookup {
-    let quadtree_lod   = blend.lod - lod_offset;
+fn quadtree_uv(coordinate: Coordinate) -> vec2<f32> {
+    let origin_xy = vec2<i32>(origins[coordinate.side * config.lod_count + coordinate.lod]);
+    let quadtree_size = f32(min(view_config.quadtree_size, 1u << coordinate.lod));
+
+    return (vec2<f32>(vec2<i32>(coordinate.xy) - origin_xy) + coordinate.uv) / quadtree_size;
+}
+
+
+fn lookup_quadtree_entry(coordinate: Coordinate) -> QuadtreeEntry {
     let quadtree_side  = coordinate.side;
-    let quadtree_xy    = vec2<u32>(coordinate.xy.x >> (coordinate.lod - quadtree_lod),
-                                   coordinate.xy.y >> (coordinate.lod - quadtree_lod)) % view_config.quadtree_size;
+    let quadtree_lod   = coordinate.lod;
+    let quadtree_xy    = vec2<u32>(coordinate.xy) % view_config.quadtree_size;
     let quadtree_index = ((quadtree_side  * config.lod_count +
                            quadtree_lod)  * view_config.quadtree_size +
                            quadtree_xy.x) * view_config.quadtree_size +
                            quadtree_xy.y;
-    let quadtree_entry = quadtree[quadtree_index];
 
-    // assumes the tile lod is larger than the node lod
-    // this can be guaranteed with morph distance > blend distance
-    let tiles_per_node = 1u << (coordinate.lod - quadtree_entry.atlas_lod); // Todo: rename this
+    return quadtree[quadtree_index];
+}
 
-    var lookup: NodeLookup;
-    lookup.lod   = quadtree_entry.atlas_lod;
-    lookup.index = quadtree_entry.atlas_index;
-    lookup.uv    = (vec2<f32>(coordinate.xy % tiles_per_node) + coordinate.uv) / f32(tiles_per_node);
-#ifdef FRAGMENT
-    lookup.uv_dx   = coordinate.uv_dx / f32(tiles_per_node);
-    lookup.uv_dy   = coordinate.uv_dy / f32(tiles_per_node);
+// Todo: use this node as quadtree lod again
+fn lookup_best(lookup_coordinate: Coordinate) -> BestLookup {
+    var coordinate: Coordinate; var quadtree_uv: vec2<f32>;
+
+    var new_coordinate  = coordinate_change_lod(lookup_coordinate, 0u);
+    var new_quadtree_uv = new_coordinate.uv;
+
+    while (new_coordinate.lod < config.lod_count && !any(new_quadtree_uv < vec2<f32>(0.0)) && !any(new_quadtree_uv > vec2<f32>(1.0))) {
+        coordinate  = new_coordinate;
+        quadtree_uv = new_quadtree_uv;
+
+        new_coordinate  = coordinate_change_lod(lookup_coordinate, new_coordinate.lod + 1u);
+        new_quadtree_uv = quadtree_uv(new_coordinate);
+    }
+
+    let quadtree_entry = lookup_quadtree_entry(coordinate);
+
+    coordinate = coordinate_change_lod(coordinate, quadtree_entry.atlas_lod);
+
+    return BestLookup(NodeLookup(quadtree_entry.atlas_index, coordinate), quadtree_uv);
+}
+
+fn lookup_node(lookup_coordinate: Coordinate, blend: Blend, lod_offset: u32) -> NodeLookup {
+#ifdef QUADTREE_LOD
+    return lookup_best(lookup_coordinate).lookup;
+#else
+    var coordinate = coordinate_change_lod(lookup_coordinate, blend.lod - lod_offset);
+
+    let quadtree_entry = lookup_quadtree_entry(coordinate);
+
+    coordinate = coordinate_change_lod(coordinate, quadtree_entry.atlas_lod);
+
+    return NodeLookup(quadtree_entry.atlas_index, coordinate);
 #endif
-    return lookup;
 }
