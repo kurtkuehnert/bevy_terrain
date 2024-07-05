@@ -12,7 +12,7 @@ authors = ["Kurt Kühnert <kurt@kuehnert.dev>"]
 repository = "https://github.com/kurtkuehnert/bevy_terrain"
 
 [dependencies]
-bevy = "0.14.0-rc.4" #{ git="https://github.com/bevyengine/bevy/", branch="main" }
+bevy = "0.14.0" #{ git="https://github.com/bevyengine/bevy/", branch="main" }
 ndarray = "0.15"
 itertools = "0.12"
 image = "0.25"
@@ -22,7 +22,7 @@ bitflags = "2.4"
 bytemuck = "1.14"
 anyhow = "1.0"
 bincode = "2.0.0-rc.3"
-big_space = { git = "https://github.com/kurtkuehnert/big_space", branch = "bevy-0.14" }
+big_space = "0.7"
 async-channel = "2.1"
 
 [[example]]

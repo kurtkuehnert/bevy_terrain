@@ -72,7 +72,7 @@ fn fragment_debug(info: ptr<function, FragmentInfo>, output: ptr<function, Fragm
     (*output).color = show_tiles((*info).coordinate);
 #endif
 #ifdef SHOW_UV
-    (*output).color = vec4<f32>(lookup.uv, 0.0, 1.0);
+    (*output).color = vec4<f32>(lookup.coordinate.uv, 0.0, 1.0);
 #endif
 #ifdef SHOW_QUADTREE
     (*output).color = show_quadtree((*info).coordinate);
