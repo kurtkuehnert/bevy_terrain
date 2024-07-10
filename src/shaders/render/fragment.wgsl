@@ -84,9 +84,9 @@ fn fragment_debug(info: ptr<function, FragmentInfo>, output: ptr<function, Fragm
     (*output).color = vec4<f32>(normal, 1.0);
 #endif
 
-    // if ((*info).view_distance < view_config.precision_threshold_distance) {
-    //     (*output).color = mix((*output).color, vec4<f32>(0.0, 1.0, 0.0, 1.0), 0.3);
-    // }
+    if ((*info).view_distance < view_config.precision_threshold_distance) {
+        (*output).color = mix((*output).color, vec4<f32>(0.1), 0.7);
+    }
 }
 
 @fragment

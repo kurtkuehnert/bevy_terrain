@@ -1,4 +1,5 @@
 mod coordinate;
+mod ellipsoid;
 mod terrain_model;
 
 pub use crate::math::{

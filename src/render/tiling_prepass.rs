@@ -293,7 +293,7 @@ pub(crate) fn queue_tiling_prepass(
         for (terrain, config) in terrain_query.iter() {
             let mut key = TilingPrepassPipelineKey::NONE;
 
-            if config.model.spherical {
+            if config.model.is_spherical() {
                 key |= TilingPrepassPipelineKey::SPHERICAL;
             }
 

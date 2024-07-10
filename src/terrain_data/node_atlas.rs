@@ -563,7 +563,7 @@ impl NodeAtlas {
             &config.path,
             config.node_atlas_size,
             config.lod_count,
-            config.model.spherical,
+            config.model.is_spherical(),
             &config.attachments,
         )
     }

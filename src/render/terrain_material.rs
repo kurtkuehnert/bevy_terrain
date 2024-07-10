@@ -402,7 +402,7 @@ pub(crate) fn queue_terrain<M: Material>(
             if let Some(material) = render_materials.get(material_id) {
                 let mut flags = TerrainPipelineFlags::from_msaa_samples(msaa.samples());
 
-                if config.model.spherical {
+                if config.model.is_spherical() {
                     flags |= TerrainPipelineFlags::SPHERICAL;
                 }
 

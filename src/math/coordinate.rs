@@ -73,7 +73,7 @@ impl Coordinate {
     pub(crate) fn from_world_position(world_position: DVec3, model: &TerrainModel) -> Self {
         let local_position = model.position_world_to_local(world_position);
 
-        if model.spherical {
+        if model.is_spherical() {
             let normal = local_position;
             let abs_normal = normal.abs();
 
@@ -110,7 +110,7 @@ impl Coordinate {
     }
 
     pub(crate) fn world_position(self, model: &TerrainModel, height: f32) -> DVec3 {
-        let local_position = if model.spherical {
+        let local_position = if model.is_spherical() {
             let uv = sphere_to_cube(self.st);
 
             match self.side {
@@ -136,7 +136,7 @@ impl Coordinate {
     /// Projects the coordinate onto one of the six cube faces.
     /// Thereby it chooses the closest location on this face to the original coordinate.
     pub(crate) fn project_to_side(self, side: u32, model: &TerrainModel) -> Self {
-        if model.spherical {
+        if model.is_spherical() {
             let info = SideInfo::project_to_side(self.side, side);
 
             let st = info

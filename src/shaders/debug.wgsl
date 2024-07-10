@@ -52,8 +52,17 @@ fn show_tiles(coordinate: Coordinate) -> vec4<f32> {
     color = mix(color, index_color(coordinate.side), 0.3);
 #endif
 
-    if (max(0.0, target_lod) < f32(coordinate.lod) - 1.0 + view_config.morph_range || floor(target_lod) > f32(coordinate.lod)) {
-        color = vec4<f32>(1.0, 0.0, 0.0, 1.0); // The view_distance and morph range are not sufficient.
+    if (max(0.0, target_lod) < f32(coordinate.lod) - 1.0 + view_config.morph_range) {
+        // The view_distance and morph range are not sufficient.
+        // The same tile overlapps two morph zones.
+        // -> increase morph distance
+        color = vec4<f32>(1.0, 0.0, 0.0, 1.0);
+    }
+    if (floor(target_lod) > f32(coordinate.lod)) {
+        // The view_distance and morph range are not sufficient.
+        // The tile does have an insuffient LOD.
+        // -> increase morph tolerance
+        color = vec4<f32>(0.0, 1.0, 0.0, 1.0);
     }
 
     return color;
