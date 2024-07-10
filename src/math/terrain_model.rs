@@ -1,6 +1,6 @@
 use crate::{
     big_space::{GridTransformOwned, GridTransformReadOnly, ReferenceFrame, ReferenceFrames},
-    math::{coordinate::Coordinate, C_SQR},
+    math::{coordinate::Coordinate, ellipsoid::project_point_ellipsoid, C_SQR},
     terrain::{Terrain, TerrainConfig},
     terrain_data::quadtree::Quadtree,
     terrain_view::{TerrainView, TerrainViewComponents},
@@ -21,15 +21,22 @@ const SIDE_MATRICES: [DMat3; 6] = [
     DMat3::from_cols_array(&[0.0, -1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0]),
 ];
 
-pub(crate) fn tile_count(lod: i32) -> i32 {
-    1 << lod
+pub(crate) fn tile_count(lod: u32) -> f64 {
+    (1 << lod) as f64
+}
+
+#[derive(Clone)]
+pub enum TerrainKind {
+    PLANAR { side_length: f64 },
+    SPHERICAL { radius: f64 },
+    ELLIPSOIDAL { major_axis: f64, minor_axis: f64 },
 }
 
 // Todo: keep in sync with terrain transform, make this authoritative?
 
 #[derive(Clone)]
 pub struct TerrainModel {
-    pub(crate) spherical: bool, // Todo: model with enum?
+    pub(crate) kind: TerrainKind,
     pub(crate) min_height: f32,
     pub(crate) max_height: f32,
     translation: DVec3,
@@ -40,19 +47,27 @@ pub struct TerrainModel {
 }
 
 impl TerrainModel {
+    pub(crate) fn is_spherical(&self) -> bool {
+        match self.kind {
+            TerrainKind::PLANAR { .. } => false,
+            TerrainKind::SPHERICAL { .. } => true,
+            TerrainKind::ELLIPSOIDAL { .. } => true,
+        }
+    }
+
     fn from_scale_rotation_translation(
         scale: DVec3,
         rotation: DQuat,
         translation: DVec3,
         min_height: f32,
         max_height: f32,
-        spherical: bool,
+        kind: TerrainKind,
     ) -> Self {
         let world_from_local = DMat4::from_scale_rotation_translation(scale, rotation, translation);
         let local_from_world = world_from_local.inverse();
 
         Self {
-            spherical,
+            kind,
             min_height,
             max_height,
             translation,
@@ -70,7 +85,7 @@ impl TerrainModel {
             position,
             min_height,
             max_height,
-            false,
+            TerrainKind::PLANAR { side_length },
         )
     }
 
@@ -81,7 +96,7 @@ impl TerrainModel {
             position,
             min_height,
             max_height,
-            true,
+            TerrainKind::SPHERICAL { radius },
         )
     }
 
@@ -98,7 +113,10 @@ impl TerrainModel {
             position,
             min_height,
             max_height,
-            true,
+            TerrainKind::ELLIPSOIDAL {
+                major_axis,
+                minor_axis,
+            },
         )
     }
 
@@ -107,18 +125,35 @@ impl TerrainModel {
     }
 
     pub(crate) fn position_world_to_local(&self, world_position: DVec3) -> DVec3 {
-        let mut local_position = self.local_from_world.transform_point3(world_position);
+        match self.kind {
+            TerrainKind::PLANAR { .. } => {
+                DVec3::new(1.0, 0.0, 1.0) * self.local_from_world.transform_point3(world_position)
+            }
 
-        if !self.spherical {
-            local_position.y = 0.0;
+            TerrainKind::SPHERICAL { .. } => self
+                .local_from_world
+                .transform_point3(world_position)
+                .normalize(),
+            TerrainKind::ELLIPSOIDAL {
+                major_axis,
+                minor_axis,
+            } => {
+                let ellipsoid_from_world =
+                    DMat4::from_rotation_translation(self.rotation, self.translation).inverse();
+
+                let ellipsoid_position = ellipsoid_from_world.transform_point3(world_position);
+
+                let ellipsoid = DVec3::new(major_axis, major_axis, minor_axis);
+                let surface_position = project_point_ellipsoid(ellipsoid, ellipsoid_position);
+
+                self.local_from_world.transform_point3(surface_position)
+            }
         }
-
-        local_position
     }
 
     pub(crate) fn normal_local_to_world(&self, local_position: DVec3) -> DVec3 {
         self.world_from_local
-            .transform_vector3(if self.spherical {
+            .transform_vector3(if self.is_spherical() {
                 local_position
             } else {
                 DVec3::Y
@@ -127,7 +162,7 @@ impl TerrainModel {
     }
 
     pub(crate) fn side_count(&self) -> u32 {
-        if self.spherical {
+        if self.is_spherical() {
             6
         } else {
             1
@@ -135,10 +170,13 @@ impl TerrainModel {
     }
 
     pub(crate) fn scale(&self) -> f64 {
-        if self.spherical {
-            self.scale.length()
-        } else {
-            self.scale.length() / 2.0
+        match self.kind {
+            TerrainKind::PLANAR { side_length } => side_length / 2.0,
+            TerrainKind::SPHERICAL { radius } => radius,
+            TerrainKind::ELLIPSOIDAL {
+                major_axis,
+                minor_axis,
+            } => (major_axis + minor_axis) / 2.0,
         }
     }
 
@@ -163,12 +201,11 @@ impl TerrainModel {
 /// Therefore, we identify a origin tile with sufficiently high lod (origin LOD), that serves as a reference, to which we can compute our relative coordinate using partly integer math.
 #[derive(Copy, Clone, Debug, Default, ShaderType)]
 pub(crate) struct SideParameter {
-    pub(crate) view_st: Vec2,
     /// The tile index of the origin tile projected to this side.
     pub(crate) origin_xy: IVec2,
     /// The offset between the view st coordinate and the origin st coordinate.
     /// This can be used to translate from st coordinates relative to the origin tile to st coordinates relative to the view coordinate in the shader.
-    pub(crate) delta_relative_st: Vec2,
+    pub(crate) origin_uv: Vec2,
     /// The constant coefficient of the series.
     /// Describes the offset between the location vertically under view and the view position.
     pub(crate) c: Vec3,
@@ -190,7 +227,7 @@ pub(crate) struct SideParameter {
 pub struct TerrainModelApproximation {
     /// The reference tile, which is used to accurately determine the relative st coordinate in the shader.
     /// The tile under the view (with the origin lod) is the origin for the Taylor series.
-    pub(crate) origin_lod: i32,
+    pub(crate) origin_lod: u32,
     pub(crate) approximate_height: f32,
     /// The parameters of the six cube sphere faces.
     pub(crate) sides: [SideParameter; 6],
@@ -201,13 +238,13 @@ impl TerrainModelApproximation {
     pub(crate) fn compute(
         model: &TerrainModel,
         view_position: DVec3,
-        origin_lod: i32,
+        origin_lod: u32,
         approximate_height: f32,
     ) -> TerrainModelApproximation {
+        let origin_count = tile_count(origin_lod);
+
         // Coordinate of the location vertically below the view.
         let view_coordinate = Coordinate::from_world_position(view_position, model);
-        // Coordinate of the tile closest to the view coordinate.
-        let origin_coordinate = Self::origin_coordinate(view_coordinate, origin_lod);
 
         // We want to approximate the position relative to the view using a second order Taylor series.
         // For that, we have to calculate the Taylor coefficients for each cube side separately.
@@ -224,17 +261,10 @@ impl TerrainModelApproximation {
         let mut sides = [SideParameter::default(); 6];
 
         for (side, &sm) in SIDE_MATRICES.iter().enumerate() {
-            let origin_coordinate = origin_coordinate.project_to_side(side as u32, model);
             let view_coordinate = view_coordinate.project_to_side(side as u32, model);
-            let origin_xy = (origin_coordinate.st * tile_count(origin_lod) as f64).as_ivec2();
-            let view_st = view_coordinate.st.as_vec2();
-            // The difference between the origin and the view coordinate.
-            // This is added to the coordinate relative to the origin tile, in order to get the coordinate relative to the view coordinate.
-            // The later serves as the input to this Taylor series.
-            let delta_relative_st = (origin_coordinate.st - view_coordinate.st).as_vec2();
+            let view_xy = (view_coordinate.st * origin_count).as_ivec2();
+            let view_uv = (view_coordinate.st * origin_count).fract().as_vec2();
 
-            // The model matrix is used to transform the local position and directions into the corresponding world position and directions.
-            let m = model.world_from_local;
             let DVec2 { x: s, y: t } = view_coordinate.st;
 
             let u_denom = (1.0 - 4.0 * C_SQR * s * (s - 1.0)).sqrt();
@@ -275,8 +305,10 @@ impl TerrainModelApproximation {
             let c_dst = 2.0 * v * l_ds * l_dt - l * (v_dt * l_ds + v * l_dst);
             let c_dtt = 2.0 * v * l_dt * l_dt - l * (2.0 * v_dt * l_dt + v * l_dtt) + v_dtt * l * l;
 
+            // The model matrix is used to transform the local position and directions into the corresponding world position and directions.
             // p is transformed as a point, takes the model position into account
             // the other coefficients are transformed as vectors, discards the translation
+            let m = model.world_from_local;
             let p = m.transform_point3(sm * DVec3::new(a, b, c) / l);
             let p_ds = m.transform_vector3(sm * DVec3::new(a_ds, b_ds, c_ds) / l.powi(2));
             let p_dt = m.transform_vector3(sm * DVec3::new(a_dt, b_dt, c_dt) / l.powi(2));
@@ -285,9 +317,8 @@ impl TerrainModelApproximation {
             let p_dtt = m.transform_vector3(sm * DVec3::new(a_dtt, b_dtt, c_dtt) / l.powi(3));
 
             sides[side] = SideParameter {
-                view_st,
-                origin_xy,
-                delta_relative_st,
+                origin_xy: view_xy,
+                origin_uv: view_uv,
                 c: (p - view_position).as_vec3(),
                 c_s: p_ds.as_vec3(),
                 c_t: p_dt.as_vec3(),
@@ -302,15 +333,6 @@ impl TerrainModelApproximation {
             approximate_height,
             sides,
         }
-    }
-
-    /// Computes the view origin tile based on the view's coordinate.
-    /// This is a tile with the threshold lod that is closest to the view.
-    fn origin_coordinate(coordinate: Coordinate, origin_lod: i32) -> Coordinate {
-        let tile_count = tile_count(origin_lod) as f64;
-        let st = (coordinate.st * tile_count).round() / tile_count;
-
-        Coordinate { st, ..coordinate }
     }
 }
 

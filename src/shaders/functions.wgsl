@@ -143,10 +143,8 @@ fn compute_local_position(coordinate: Coordinate) -> vec3<f32> {
 fn compute_relative_position(coordinate: Coordinate) -> vec3<f32> {
     let params = terrain_model_approximation.sides[coordinate.side];
 
-    let lod_difference = coordinate.lod - u32(terrain_model_approximation.origin_lod);
-    let origin_xy      = vec2<i32>(params.origin_xy.x << lod_difference, params.origin_xy.y << lod_difference);
-    let offset         = vec2<i32>(coordinate.xy) - origin_xy;
-    let relative_st    = (vec2<f32>(offset) + coordinate.uv) / tile_count(coordinate.lod) + params.delta_relative_st;
+    let test        = coordinate_change_lod(coordinate, terrain_model_approximation.origin_lod);
+    let relative_st = (vec2<f32>(vec2<i32>(test.xy) - params.view_xy) + test.uv - params.view_uv) / tile_count(terrain_model_approximation.origin_lod);
 
     let s = relative_st.x;
     let t = relative_st.y;
@@ -178,9 +176,16 @@ fn approximate_view_distance(coordinate: Coordinate, view_world_position: vec3<f
 
 fn compute_subdivision_coordinate(coordinate: Coordinate) -> Coordinate {
     let params  = terrain_model_approximation.sides[coordinate.side];
-    let view_xy = params.view_st * tile_count(coordinate.lod);
-    let offset  = vec2<i32>(view_xy) - vec2<i32>(coordinate.xy);
-    var uv      = view_xy % 1.0;
+
+#ifdef FRAGMENT
+    var view_coordinate = Coordinate(coordinate.side, terrain_model_approximation.origin_lod, vec2<u32>(params.view_xy), params.view_uv, vec2<f32>(0.0), vec2<f32>(0.0));
+#else
+    var view_coordinate = Coordinate(coordinate.side, terrain_model_approximation.origin_lod, vec2<u32>(params.view_xy), params.view_uv);
+#endif
+
+    view_coordinate = coordinate_change_lod(view_coordinate, coordinate.lod);
+    var offset = vec2<i32>(view_coordinate.xy) - vec2<i32>(coordinate.xy);
+    var uv = view_coordinate.uv;
 
     if      (offset.x < 0) { uv.x = 0.0; }
     else if (offset.x > 0) { uv.x = 1.0; }
@@ -250,7 +255,6 @@ fn lookup_quadtree_entry(coordinate: Coordinate) -> QuadtreeEntry {
     return quadtree[quadtree_index];
 }
 
-// Todo: use this node as quadtree lod again
 fn lookup_best(lookup_coordinate: Coordinate) -> BestLookup {
     var coordinate: Coordinate; var quadtree_uv: vec2<f32>;
 
