@@ -11,7 +11,7 @@ const LOD_COUNT: u32 = 4;
 fn main() {
     App::new()
         .add_plugins((
-            DefaultPlugins.build().disable::<TransformPlugin>(),
+            DefaultPlugins,
             TerrainPlugin,
             TerrainMaterialPlugin::<DebugTerrainMaterial>::default(),
             TerrainDebugPlugin,
@@ -45,37 +45,33 @@ fn setup(
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
     let view_config = TerrainViewConfig::default();
 
-    commands.spawn_big_space(ReferenceFrame::default(), |root| {
-        let frame = root.frame().clone();
+    let terrain = commands
+        .spawn((
+            TerrainBundle::new(config.clone()),
+            materials.add(DebugTerrainMaterial::default()),
+        ))
+        .id();
 
-        let terrain = root
-            .spawn_spatial((
-                TerrainBundle::new(config.clone(), &frame),
-                materials.add(DebugTerrainMaterial::default()),
-            ))
-            .id();
+    let view = commands
+        .spawn((TerrainView, DebugCameraBundle::default()))
+        .id();
 
-        let view = root
-            .spawn_spatial((TerrainView, DebugCameraBundle::default()))
-            .id();
+    initialize_terrain_view(
+        terrain,
+        view,
+        &config,
+        view_config,
+        &mut quadtrees,
+        &mut view_configs,
+    );
 
-        initialize_terrain_view(
-            terrain,
-            view,
-            &config,
-            view_config,
-            &mut quadtrees,
-            &mut view_configs,
-        );
-
-        root.spawn_spatial(PbrBundle {
-            mesh: meshes.add(Cuboid::from_length(10.0)),
-            transform: Transform::from_translation(Vec3::new(
-                TERRAIN_SIZE as f32 / 2.0,
-                100.0,
-                TERRAIN_SIZE as f32 / 2.0,
-            )),
-            ..default()
-        });
+    commands.spawn(PbrBundle {
+        mesh: meshes.add(Cuboid::from_length(10.0)),
+        transform: Transform::from_translation(Vec3::new(
+            TERRAIN_SIZE as f32 / 2.0,
+            100.0,
+            TERRAIN_SIZE as f32 / 2.0,
+        )),
+        ..default()
     });
 }

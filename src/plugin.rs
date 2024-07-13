@@ -1,6 +1,7 @@
-use crate::shaders::{load_terrain_shaders, InternalShaders};
+#[cfg(feature = "high_precision")]
+use crate::big_space::BigSpacePlugin;
+
 use crate::{
-    big_space::BigSpacePlugin,
     math::{generate_terrain_model_approximation, TerrainModelApproximation},
     render::{
         culling_bind_group::CullingBindGroup,
@@ -11,6 +12,7 @@ use crate::{
             TilingPrepassPipelines,
         },
     },
+    shaders::{load_terrain_shaders, InternalShaders},
     terrain::{Terrain, TerrainComponents, TerrainConfig},
     terrain_data::{
         gpu_node_atlas::GpuNodeAtlas, gpu_quadtree::GpuQuadtree, node_atlas::NodeAtlas,
@@ -36,6 +38,7 @@ pub struct TerrainPlugin;
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((
+            #[cfg(feature = "high_precision")]
             BigSpacePlugin::default(),
             ExtractComponentPlugin::<Terrain>::default(),
             ExtractComponentPlugin::<TerrainView>::default(),
@@ -56,9 +59,8 @@ impl Plugin for TerrainPlugin {
                 NodeAtlas::update,
                 Quadtree::adjust_to_node_atlas,
                 Quadtree::approximate_height,
-                generate_terrain_model_approximation.after(Quadtree::approximate_height),
-            )
-                .chain(),
+                generate_terrain_model_approximation,
+            ),
         );
 
         app.sub_app_mut(RenderApp)

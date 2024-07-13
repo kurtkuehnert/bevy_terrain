@@ -11,6 +11,9 @@ readme = "README.md"
 authors = ["Kurt Kühnert <kurt@kuehnert.dev>"]
 repository = "https://github.com/kurtkuehnert/bevy_terrain"
 
+[features]
+high_precision = ["dep:big_space"]
+
 [dependencies]
 bevy = "0.14.0" #{ git="https://github.com/bevyengine/bevy/", branch="main" }
 ndarray = "0.15"
@@ -22,8 +25,8 @@ bitflags = "2.4"
 bytemuck = "1.14"
 anyhow = "1.0"
 bincode = "2.0.0-rc.3"
-big_space = "0.7"
 async-channel = "2.1"
+big_space = { version = "0.7", optional = true }
 
 [[example]]
 name = "preprocess_planar"
@@ -46,7 +49,7 @@ description = "Renders a basic flat terrain with only the base attachment."
 [[example]]
 name = "planar_advanced"
 path = "examples/planar.rs"
-required-features = ["bevy/embedded_watcher"]
+required-features = ["high_precision", "bevy/embedded_watcher"]
 
 [package.metadata.example.planar_advanced]
 name = "Planar Advanced"
@@ -64,7 +67,7 @@ description = "Preprocesses the terrain data for the spherical examples."
 [[example]]
 name = "spherical"
 path = "examples/spherical.rs"
-required-features = ["bevy/embedded_watcher"]
+required-features = ["high_precision", "bevy/embedded_watcher"]
 
 [package.metadata.example.spherical]
 name = "Spherical"

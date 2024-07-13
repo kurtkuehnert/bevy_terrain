@@ -43,6 +43,7 @@
 //!
 //! [^note]: Some of these claims are not yet fully implemented.
 
+#[cfg(feature = "high_precision")]
 pub mod big_space;
 pub mod debug;
 pub mod formats;
@@ -59,8 +60,11 @@ pub mod util;
 pub mod prelude {
     //! `use bevy_terrain::prelude::*;` to import common components, bundles, and plugins.
     // #[doc(hidden)]
+
+    #[cfg(feature = "high_precision")]
+    pub use crate::big_space::{BigSpaceCommands, ReferenceFrame};
+
     pub use crate::{
-        big_space::{BigSpaceCommands, ReferenceFrame},
         debug::{
             camera::{DebugCameraBundle, DebugCameraController},
             DebugTerrainMaterial, LoadingImages, TerrainDebugPlugin,
