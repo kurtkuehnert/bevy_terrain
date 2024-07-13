@@ -35,8 +35,12 @@ fn checker_color(coordinate: Coordinate, ratio: f32) -> vec4<f32> {
 
 fn show_tiles(coordinate: Coordinate) -> vec4<f32> {
     let view_distance  = approximate_view_distance(coordinate, view.world_position);
-    let target_lod     = log2(view_config.morph_distance / view_distance);
-    let ratio          = select(inverse_mix(f32(coordinate.lod) + view_config.morph_range, f32(coordinate.lod), target_lod), 0.0, coordinate.lod == 0);
+    let target_lod     = log2(2.0 * view_config.morph_distance / view_distance);
+#ifdef MORPH
+    let ratio = select(inverse_mix(f32(coordinate.lod) + view_config.morph_range, f32(coordinate.lod), target_lod), 0.0, coordinate.lod == 0);
+#else
+    let ratio = 0.0;
+#endif
 
     var color = checker_color(coordinate, ratio);
 

@@ -10,3 +10,4 @@ pub type GridCell = big_space::GridCell<GridPrecision>;
 pub type GridTransform = big_space::world_query::GridTransform<GridPrecision>;
 pub type GridTransformReadOnly = big_space::world_query::GridTransformReadOnly<GridPrecision>;
 pub type GridTransformOwned = big_space::world_query::GridTransformOwned<GridPrecision>;
+pub type GridTransformItem<'w> = big_space::world_query::GridTransformItem<'w, GridPrecision>;

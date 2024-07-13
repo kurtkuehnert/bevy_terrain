@@ -1,5 +1,7 @@
+#[cfg(feature = "high_precision")]
+use crate::big_space::{GridTransformReadOnly, ReferenceFrames};
+
 use crate::{
-    big_space::{GridTransformReadOnly, ReferenceFrames},
     math::{Coordinate, NodeCoordinate, TerrainModel},
     terrain::{Terrain, TerrainConfig},
     terrain_data::{node_atlas::NodeAtlas, sample_height, INVALID_ATLAS_INDEX, INVALID_LOD},
@@ -270,8 +272,77 @@ impl Quadtree {
         }
     }
 
+    fn update(&mut self, model: TerrainModel, view_position: DVec3) {
+        self.model = model;
+        self.view_world_position = view_position;
+
+        let view_coordinate =
+            Coordinate::from_world_position(self.view_world_position, &self.model);
+
+        for side in 0..self.side_count {
+            let view_coordinate = view_coordinate.project_to_side(side, &self.model);
+
+            for lod in 0..self.lod_count {
+                let origin = self.compute_origin(view_coordinate, lod);
+                self.origins[(side as usize, lod as usize)] = origin;
+
+                for (x, y) in iproduct!(0..self.quadtree_size, 0..self.quadtree_size) {
+                    let node_coordinate = NodeCoordinate {
+                        side,
+                        lod,
+                        x: origin.x + x,
+                        y: origin.y + y,
+                    };
+
+                    let node_distance =
+                        self.compute_node_distance(node_coordinate, view_coordinate);
+                    let load_distance = self.load_distance as f64 * self.model.scale()
+                        / NodeCoordinate::node_count(node_coordinate.lod) as f64;
+
+                    let state = if lod == 0 || node_distance < load_distance {
+                        RequestState::Requested
+                    } else {
+                        RequestState::Released
+                    };
+
+                    let node = &mut self.nodes[[
+                        side as usize,
+                        lod as usize,
+                        (node_coordinate.x % self.quadtree_size) as usize,
+                        (node_coordinate.y % self.quadtree_size) as usize,
+                    ]];
+
+                    // check if quadtree slot refers to a new node
+                    if node_coordinate != node.node_coordinate {
+                        // release old node
+                        if node.state == RequestState::Requested {
+                            node.state = RequestState::Released;
+                            self.released_nodes.push(node.node_coordinate);
+                        }
+
+                        node.node_coordinate = node_coordinate;
+                    }
+
+                    // request or release node based on its distance to the view
+                    match (node.state, state) {
+                        (RequestState::Released, RequestState::Requested) => {
+                            node.state = RequestState::Requested;
+                            self.requested_nodes.push(node.node_coordinate);
+                        }
+                        (RequestState::Requested, RequestState::Released) => {
+                            node.state = RequestState::Released;
+                            self.released_nodes.push(node.node_coordinate);
+                        }
+                        (_, _) => {}
+                    }
+                }
+            }
+        }
+    }
+
     /// Traverses all quadtrees and updates the node states,
     /// while selecting newly requested and released nodes.
+    #[cfg(feature = "high_precision")]
     pub(crate) fn compute_requests(
         mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
         view_query: Query<(Entity, GridTransformReadOnly), With<TerrainView>>,
@@ -279,78 +350,26 @@ impl Quadtree {
         frames: ReferenceFrames,
     ) {
         for (terrain, config) in &terrain_query {
-            let frame = frames.parent_frame(terrain).unwrap();
+            for (view, view_transform) in &view_query {
+                let frame = frames.parent_frame(terrain).unwrap();
+                let quadtree = quadtrees.get_mut(&(terrain, view)).unwrap();
+                quadtree.update(config.model.clone(), view_transform.position_double(frame));
+            }
+        }
+    }
 
+    /// Traverses all quadtrees and updates the node states,
+    /// while selecting newly requested and released nodes.
+    #[cfg(not(feature = "high_precision"))]
+    pub(crate) fn compute_requests(
+        mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
+        view_query: Query<(Entity, &Transform), With<TerrainView>>,
+        terrain_query: Query<(Entity, &TerrainConfig), With<Terrain>>,
+    ) {
+        for (terrain, config) in &terrain_query {
             for (view, view_transform) in &view_query {
                 let quadtree = quadtrees.get_mut(&(terrain, view)).unwrap();
-
-                quadtree.model = config.model.clone();
-                quadtree.view_world_position = view_transform.position_double(frame);
-                let view_coordinate =
-                    Coordinate::from_world_position(quadtree.view_world_position, &quadtree.model);
-
-                for side in 0..quadtree.side_count {
-                    let view_coordinate = view_coordinate.project_to_side(side, &quadtree.model);
-
-                    for lod in 0..quadtree.lod_count {
-                        let origin = quadtree.compute_origin(view_coordinate, lod);
-                        quadtree.origins[(side as usize, lod as usize)] = origin;
-
-                        for (x, y) in
-                            iproduct!(0..quadtree.quadtree_size, 0..quadtree.quadtree_size)
-                        {
-                            let node_coordinate = NodeCoordinate {
-                                side,
-                                lod,
-                                x: origin.x + x,
-                                y: origin.y + y,
-                            };
-
-                            let node_distance =
-                                quadtree.compute_node_distance(node_coordinate, view_coordinate);
-                            let load_distance = quadtree.load_distance as f64
-                                * quadtree.model.scale()
-                                / NodeCoordinate::node_count(node_coordinate.lod) as f64;
-
-                            let state = if lod == 0 || node_distance < load_distance {
-                                RequestState::Requested
-                            } else {
-                                RequestState::Released
-                            };
-
-                            let node = &mut quadtree.nodes[[
-                                side as usize,
-                                lod as usize,
-                                (node_coordinate.x % quadtree.quadtree_size) as usize,
-                                (node_coordinate.y % quadtree.quadtree_size) as usize,
-                            ]];
-
-                            // check if quadtree slot refers to a new node
-                            if node_coordinate != node.node_coordinate {
-                                // release old node
-                                if node.state == RequestState::Requested {
-                                    node.state = RequestState::Released;
-                                    quadtree.released_nodes.push(node.node_coordinate);
-                                }
-
-                                node.node_coordinate = node_coordinate;
-                            }
-
-                            // request or release node based on its distance to the view
-                            match (node.state, state) {
-                                (RequestState::Released, RequestState::Requested) => {
-                                    node.state = RequestState::Requested;
-                                    quadtree.requested_nodes.push(node.node_coordinate);
-                                }
-                                (RequestState::Requested, RequestState::Released) => {
-                                    node.state = RequestState::Released;
-                                    quadtree.released_nodes.push(node.node_coordinate);
-                                }
-                                (_, _) => {}
-                            }
-                        }
-                    }
-                }
+                quadtree.update(config.model.clone(), view_transform.translation.as_dvec3());
             }
         }
     }
