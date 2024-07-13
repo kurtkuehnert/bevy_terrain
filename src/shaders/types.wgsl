@@ -16,6 +16,8 @@ struct TerrainViewConfig {
     vertices_per_tile: u32,
     morph_distance: f32,
     blend_distance: f32,
+    load_distance: f32,
+    subdivision_distance: f32,
     morph_range: f32,
     blend_range: f32,
     precision_threshold_distance: f32,

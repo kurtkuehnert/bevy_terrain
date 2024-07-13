@@ -18,7 +18,7 @@ fn should_be_divided(tile: Tile) -> bool {
     let coordinate    = compute_subdivision_coordinate(compute_coordinate(tile, vec2<f32>(0.0)));
     let view_distance = approximate_view_distance(coordinate, culling_view.world_position);
 
-    return view_distance < view_config.morph_distance / tile_count(tile.lod + 1);
+    return view_distance < view_config.subdivision_distance / tile_count(tile.lod + 1);
 }
 
 fn subdivide(tile: Tile) {

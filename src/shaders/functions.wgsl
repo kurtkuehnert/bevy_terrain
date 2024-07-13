@@ -75,6 +75,9 @@ fn inverse_mix(a: f32, b: f32, value: f32) -> f32 {
 
 fn compute_morph(coordinate: Coordinate, view_distance: f32) -> Coordinate {
 #ifdef MORPH
+    // Morphing more than one layer at once is not possible, since the approximate view distance for vertices that
+    // should be placed on the same position will be slightly different, so the target lod and thus the ratio will be
+    // slightly off as well, which results in a pop.
     let even_uv = vec2<f32>(vec2<u32>(coordinate.uv * view_config.grid_size) & vec2<u32>(~1u)) / view_config.grid_size;
 
     let target_lod  = log2(view_config.morph_distance / view_distance);
