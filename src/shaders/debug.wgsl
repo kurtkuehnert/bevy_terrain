@@ -85,7 +85,7 @@ fn show_lod(blend: Blend, lookup: NodeLookup) -> vec4<f32> {
 
 fn show_quadtree(coordinate: Coordinate) -> vec4<f32> {
     let view_distance  = approximate_view_distance(coordinate, view.world_position);
-    let target_lod     = log2(view_config.blend_distance / view_distance); // Todo: replace with load distance or remove
+    let target_lod     = log2(view_config.load_distance / view_distance);
 
     let best_lookup = lookup_best(coordinate);
 

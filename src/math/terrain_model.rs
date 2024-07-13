@@ -27,9 +27,17 @@ pub(crate) fn tile_count(lod: u32) -> f64 {
 
 #[derive(Clone)]
 pub enum TerrainKind {
-    PLANAR { side_length: f64 },
-    SPHERICAL { radius: f64 },
-    ELLIPSOIDAL { major_axis: f64, minor_axis: f64 },
+    PLANAR {
+        side_length: f64,
+    },
+    SPHERICAL {
+        radius: f64,
+    },
+    ELLIPSOIDAL {
+        ellipsoid_from_world: DMat4,
+        major_axis: f64,
+        minor_axis: f64,
+    },
 }
 
 // Todo: keep in sync with terrain transform, make this authoritative?
@@ -107,13 +115,17 @@ impl TerrainModel {
         min_height: f32,
         max_height: f32,
     ) -> Self {
+        let rotation = DQuat::IDENTITY; // ::from_rotation_x(45.0_f64.to_radians());
+        let ellipsoid_from_world = DMat4::from_rotation_translation(rotation, position).inverse();
+
         Self::from_scale_rotation_translation(
             DVec3::new(major_axis, minor_axis, major_axis),
-            DQuat::IDENTITY, // ::from_rotation_x(45.0_f64.to_radians()),
+            rotation,
             position,
             min_height,
             max_height,
             TerrainKind::ELLIPSOIDAL {
+                ellipsoid_from_world,
                 major_axis,
                 minor_axis,
             },
@@ -135,17 +147,15 @@ impl TerrainModel {
                 .transform_point3(world_position)
                 .normalize(),
             TerrainKind::ELLIPSOIDAL {
+                ellipsoid_from_world,
                 major_axis,
                 minor_axis,
             } => {
-                let ellipsoid_from_world =
-                    DMat4::from_rotation_translation(self.rotation, self.translation).inverse();
-
                 let ellipsoid_position = ellipsoid_from_world.transform_point3(world_position);
-
-                let ellipsoid = DVec3::new(major_axis, major_axis, minor_axis);
-                let surface_position = project_point_ellipsoid(ellipsoid, ellipsoid_position);
-
+                let surface_position = project_point_ellipsoid(
+                    DVec3::new(major_axis, major_axis, minor_axis),
+                    ellipsoid_position,
+                );
                 self.local_from_world.transform_point3(surface_position)
             }
         }
@@ -176,6 +186,7 @@ impl TerrainModel {
             TerrainKind::ELLIPSOIDAL {
                 major_axis,
                 minor_axis,
+                ..
             } => (major_axis + minor_axis) / 2.0,
         }
     }
