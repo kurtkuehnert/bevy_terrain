@@ -1,4 +1,7 @@
-use crate::big_space::{FloatingOrigin, GridCell, GridTransform, ReferenceFrame, ReferenceFrames};
+#[cfg(feature = "high_precision")]
+use crate::big_space::{
+    FloatingOrigin, GridCell, GridTransform, GridTransformItem, ReferenceFrame, ReferenceFrames,
+};
 
 use bevy::{input::mouse::MouseMotion, math::DVec3, prelude::*};
 
@@ -6,7 +9,9 @@ use bevy::{input::mouse::MouseMotion, math::DVec3, prelude::*};
 pub struct DebugCameraBundle {
     pub camera: Camera3dBundle,
     pub controller: DebugCameraController,
+    #[cfg(feature = "high_precision")]
     pub cell: GridCell,
+    #[cfg(feature = "high_precision")]
     pub origin: FloatingOrigin,
 }
 
@@ -15,13 +20,16 @@ impl Default for DebugCameraBundle {
         Self {
             camera: default(),
             controller: default(),
+            #[cfg(feature = "high_precision")]
             cell: default(),
+            #[cfg(feature = "high_precision")]
             origin: FloatingOrigin,
         }
     }
 }
 
 impl DebugCameraBundle {
+    #[cfg(feature = "high_precision")]
     pub fn new(position: DVec3, speed: f64, frame: &ReferenceFrame) -> Self {
         let (cell, translation) = frame.translation_to_grid(position);
 
@@ -36,6 +44,26 @@ impl DebugCameraBundle {
                 ..default()
             },
             cell,
+            controller: DebugCameraController {
+                translation_speed: speed,
+                ..default()
+            },
+            ..default()
+        }
+    }
+
+    #[cfg(not(feature = "high_precision"))]
+    pub fn new(position: Vec3, speed: f64) -> Self {
+        Self {
+            camera: Camera3dBundle {
+                transform: Transform::from_translation(position).looking_to(Vec3::X, Vec3::Y),
+                projection: PerspectiveProjection {
+                    near: 0.000001,
+                    ..default()
+                }
+                .into(),
+                ..default()
+            },
             controller: DebugCameraController {
                 translation_speed: speed,
                 ..default()
@@ -75,15 +103,34 @@ impl Default for DebugCameraController {
 }
 
 pub fn camera_controller(
-    frames: ReferenceFrames,
+    #[cfg(feature = "high_precision")] frames: ReferenceFrames,
     time: Res<Time>,
     keyboard: Res<ButtonInput<KeyCode>>,
     mut mouse_move: EventReader<MouseMotion>,
-    mut camera: Query<(Entity, GridTransform, &mut DebugCameraController)>,
+    #[cfg(feature = "high_precision")] mut camera: Query<(
+        Entity,
+        GridTransform,
+        &mut DebugCameraController,
+    )>,
+    #[cfg(not(feature = "high_precision"))] mut camera: Query<(
+        &mut Transform,
+        &mut DebugCameraController,
+    )>,
 ) {
-    let (camera, mut position, mut controller) = camera.single_mut();
-
+    #[cfg(feature = "high_precision")]
+    let (
+        camera,
+        GridTransformItem {
+            mut transform,
+            mut cell,
+        },
+        mut controller,
+    ) = camera.single_mut();
+    #[cfg(feature = "high_precision")]
     let frame = frames.parent_frame(camera).unwrap();
+
+    #[cfg(not(feature = "high_precision"))]
+    let (mut transform, mut controller) = camera.single_mut();
 
     keyboard
         .just_pressed(KeyCode::KeyT)
@@ -118,7 +165,7 @@ pub fn camera_controller(
     keyboard.pressed(KeyCode::Home).then(|| acceleration -= 1.0);
     keyboard.pressed(KeyCode::End).then(|| acceleration += 1.0);
 
-    translation_direction = position.transform.rotation.as_dquat() * translation_direction;
+    translation_direction = transform.rotation.as_dquat() * translation_direction;
 
     let dt = time.delta_seconds_f64();
     let lerp_translation = 1.0 - controller.translational_smoothness.clamp(0.0, 0.999);
@@ -135,15 +182,23 @@ pub fn camera_controller(
         .lerp(rotation_velocity_target, lerp_rotation);
     controller.translation_speed *= 1.0 + acceleration * controller.acceleration_speed * dt;
 
-    let (cell_delta, translation_delta) =
-        frame.translation_to_grid(controller.translation_velocity);
-
-    let (yaw, pitch, _) = position.transform.rotation.to_euler(EulerRot::YXZ);
+    let (yaw, pitch, _) = transform.rotation.to_euler(EulerRot::YXZ);
     let new_yaw = (yaw + controller.rotation_velocity.x) % std::f32::consts::TAU;
     let new_pitch = (pitch + controller.rotation_velocity.y)
         .clamp(-std::f32::consts::FRAC_PI_2, std::f32::consts::FRAC_PI_2);
 
-    *position.cell += cell_delta;
-    position.transform.translation += translation_delta;
-    position.transform.rotation = Quat::from_euler(EulerRot::YXZ, new_yaw, new_pitch, 0.0);
+    #[cfg(feature = "high_precision")]
+    {
+        let (cell_delta, translation_delta) =
+            frame.translation_to_grid(controller.translation_velocity);
+
+        *cell += cell_delta;
+        transform.translation += translation_delta;
+    }
+    #[cfg(not(feature = "high_precision"))]
+    {
+        transform.translation += controller.translation_velocity.as_vec3();
+    }
+
+    transform.rotation = Quat::from_euler(EulerRot::YXZ, new_yaw, new_pitch, 0.0);
 }

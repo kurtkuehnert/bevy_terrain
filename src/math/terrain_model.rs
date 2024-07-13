@@ -1,5 +1,9 @@
+#[cfg(feature = "high_precision")]
+use crate::big_space::{
+    GridTransformOwned, GridTransformReadOnly, ReferenceFrame, ReferenceFrames,
+};
+
 use crate::{
-    big_space::{GridTransformOwned, GridTransformReadOnly, ReferenceFrame, ReferenceFrames},
     math::{coordinate::Coordinate, ellipsoid::project_point_ellipsoid, C_SQR},
     terrain::{Terrain, TerrainConfig},
     terrain_data::quadtree::Quadtree,
@@ -191,6 +195,16 @@ impl TerrainModel {
         }
     }
 
+    #[cfg(not(feature = "high_precision"))]
+    pub(crate) fn transform(&self) -> Transform {
+        Transform {
+            translation: self.translation.as_vec3(),
+            scale: self.scale.as_vec3(),
+            rotation: self.rotation.as_quat(),
+        }
+    }
+
+    #[cfg(feature = "high_precision")]
     pub(crate) fn grid_transform(&self, frame: &ReferenceFrame) -> GridTransformOwned {
         let (cell, translation) = frame.translation_to_grid(self.translation);
 
@@ -347,6 +361,7 @@ impl TerrainModelApproximation {
     }
 }
 
+#[cfg(feature = "high_precision")]
 pub fn generate_terrain_model_approximation(
     mut terrain_model_approximations: ResMut<TerrainViewComponents<TerrainModelApproximation>>,
     quadtrees: Res<TerrainViewComponents<Quadtree>>,
@@ -363,6 +378,29 @@ pub fn generate_terrain_model_approximation(
             let model = TerrainModelApproximation::compute(
                 &config.model,
                 view_transform.position_double(&frame),
+                10, // Todo: make this configurable
+                quadtree.approximate_height,
+            );
+
+            terrain_model_approximations.insert((terrain, view), model);
+        }
+    }
+}
+
+#[cfg(not(feature = "high_precision"))]
+pub fn generate_terrain_model_approximation(
+    mut terrain_model_approximations: ResMut<TerrainViewComponents<TerrainModelApproximation>>,
+    quadtrees: Res<TerrainViewComponents<Quadtree>>,
+    view_query: Query<(Entity, &Transform), With<TerrainView>>,
+    terrain_query: Query<(Entity, &TerrainConfig), With<Terrain>>,
+) {
+    for (terrain, config) in &terrain_query {
+        for (view, view_transform) in &view_query {
+            let quadtree = quadtrees.get(&(terrain, view)).unwrap();
+
+            let model = TerrainModelApproximation::compute(
+                &config.model,
+                view_transform.translation.as_dvec3(),
                 10, // Todo: make this configurable
                 quadtree.approximate_height,
             );

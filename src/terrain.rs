@@ -1,7 +1,9 @@
 //! Types for configuring terrains.
+//!
+#[cfg(feature = "high_precision")]
+use crate::big_space::{GridCell, GridTransformOwned, ReferenceFrame};
 
 use crate::{
-    big_space::{GridCell, GridTransformOwned, ReferenceFrame},
     math::TerrainModel,
     terrain_data::{node_atlas::NodeAtlas, AttachmentConfig},
 };
@@ -69,6 +71,7 @@ pub struct TerrainBundle {
     pub terrain: Terrain,
     pub node_atlas: NodeAtlas,
     pub config: TerrainConfig,
+    #[cfg(feature = "high_precision")]
     pub cell: GridCell,
     pub transform: Transform,
     pub global_transform: GlobalTransform,
@@ -78,6 +81,7 @@ pub struct TerrainBundle {
 
 impl TerrainBundle {
     /// Creates a new terrain bundle from the config.
+    #[cfg(feature = "high_precision")]
     pub fn new(config: TerrainConfig, frame: &ReferenceFrame) -> Self {
         let GridTransformOwned { transform, cell } = config.model.grid_transform(frame);
 
@@ -87,6 +91,25 @@ impl TerrainBundle {
             transform,
             config,
             cell,
+            global_transform: default(),
+            visibility_bundle: VisibilityBundle {
+                visibility: Visibility::Visible,
+                inherited_visibility: default(),
+                view_visibility: default(),
+            },
+            no_frustum_culling: NoFrustumCulling,
+        }
+    }
+
+    #[cfg(not(feature = "high_precision"))]
+    pub fn new(config: TerrainConfig) -> Self {
+        let transform = config.model.transform();
+
+        Self {
+            terrain: Terrain,
+            node_atlas: NodeAtlas::from_config(&config),
+            transform,
+            config,
             global_transform: default(),
             visibility_bundle: VisibilityBundle {
                 visibility: Visibility::Visible,

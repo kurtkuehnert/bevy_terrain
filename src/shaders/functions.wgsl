@@ -80,7 +80,7 @@ fn compute_morph(coordinate: Coordinate, view_distance: f32) -> Coordinate {
     // slightly off as well, which results in a pop.
     let even_uv = vec2<f32>(vec2<u32>(coordinate.uv * view_config.grid_size) & vec2<u32>(~1u)) / view_config.grid_size;
 
-    let target_lod  = log2(view_config.morph_distance / view_distance);
+    let target_lod  = log2(2.0 * view_config.morph_distance / view_distance);
     let ratio       = select(inverse_mix(f32(coordinate.lod) + view_config.morph_range, f32(coordinate.lod), target_lod), 0.0, coordinate.lod == 0);
 
     return Coordinate(coordinate.side, coordinate.lod, coordinate.xy, mix(coordinate.uv, even_uv, ratio));
