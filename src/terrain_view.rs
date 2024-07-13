@@ -30,10 +30,15 @@ pub struct TerrainViewConfig {
     pub refinement_count: u32,
     /// The number of rows and columns of the tile grid.
     pub grid_size: u32,
+    /// The percentage tolerance added to the morph distance during tile subdivision.
+    /// This is required to counteracted the distortion of the subdivision distance estimation near the corners of the cube sphere.
+    /// For planar terrains this can be set to zero and for spherical / ellipsoidal terrains a value of around 0.1 is necessary.
+    pub subdivision_tolerance: f32,
     pub load_distance: f32,
-    // Todo: this currently has to be larger than about 3, since the tiles can only morph to the adjacent layer.
-    //       Should the morph distance be too small, this will result in morph transitions suddenly being canceled, by the next LOD.
-    //       This is dependent on both the morph distance and the morph ratio. It can be debug with the show tiles debug view.
+    /// The distance measured in tile sizes between adjacent LOD layers.
+    /// This currently has to be larger than about 6, since the tiles can only morph to the adjacent layer.
+    /// Should the morph distance be too small, this will result in morph transitions suddenly being canceled, by the next LOD.
+    /// This is dependent on the morph distance, the morph ratio and the subdivision tolerance. It can be debug with the show tiles debug view.
     pub morph_distance: f32,
     pub blend_distance: f32,
     /// The morph percentage of the mesh.
@@ -50,8 +55,9 @@ impl Default for TerrainViewConfig {
             tile_count: 1000000,
             refinement_count: 30,
             grid_size: 32,
+            subdivision_tolerance: 0.1,
             load_distance: 2.5,
-            morph_distance: 4.0,
+            morph_distance: 6.0,
             blend_distance: 2.0,
             morph_range: 0.2,
             blend_range: 0.2,

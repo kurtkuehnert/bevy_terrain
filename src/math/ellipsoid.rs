@@ -5,59 +5,9 @@ use std::cmp::Ordering;
 // Original licensed under Creative Commons Attribution 4.0 International License
 // http://creativecommons.org/licenses/by/4.0/
 
-const MAX_ITERATIONS: usize = 100;
-
-fn get_root_2d(r: DVec2, z: DVec2, g: f64) -> f64 {
-    let n = r * z;
-
-    let mut s0 = z.y - 1.0;
-    let mut s1 = if g < 0.0 { 0.0 } else { n.length() - 1.0 };
-    let mut s = 0.0;
-
-    for _ in 0..MAX_ITERATIONS {
-        s = (s0 + s1) / 2.0;
-        if s == s0 || s == s1 {
-            break;
-        }
-
-        let ratio = n / (s + r);
-        let g = ratio.length_squared() - 1.0;
-
-        match g.total_cmp(&0.0) {
-            Ordering::Less => s1 = s,
-            Ordering::Equal => break,
-            Ordering::Greater => s0 = s,
-        }
-    }
-
-    s
-}
-
-fn get_root_3d(r: DVec3, z: DVec3, g: f64) -> f64 {
-    let n = r * z;
-
-    let mut s0 = z.z - 1.0;
-    let mut s1 = if g < 0.0 { 0.0 } else { n.length() - 1.0 };
-    let mut s = 0.0;
-
-    for _ in 0..MAX_ITERATIONS {
-        s = (s0 + s1) / 2.0;
-        if s == s0 || s == s1 {
-            break;
-        }
-
-        let ratio = n / (s + r);
-        let g = ratio.length_squared() - 1.0;
-
-        match g.total_cmp(&0.0) {
-            Ordering::Less => s1 = s,
-            Ordering::Equal => break,
-            Ordering::Greater => s0 = s,
-        }
-    }
-
-    s
-}
+// After 1074 iterations, s0 == s1 == s
+// This should probably be relaxed to only limit the error s1-s0 to a constant e.
+const MAX_ITERATIONS: usize = 1074;
 
 pub fn project_point_ellipsoid(e: DVec3, y: DVec3) -> DVec3 {
     let sign = y.signum();
@@ -137,4 +87,56 @@ fn project_point_ellipse(e: DVec2, y: DVec2) -> DVec2 {
             DVec2::new(e.x, 0.0)
         }
     }
+}
+
+fn get_root_3d(r: DVec3, z: DVec3, g: f64) -> f64 {
+    let n = r * z;
+
+    let mut s0 = z.z - 1.0;
+    let mut s1 = if g < 0.0 { 0.0 } else { n.length() - 1.0 };
+    let mut s = 0.0;
+
+    for _ in 0..MAX_ITERATIONS {
+        s = (s0 + s1) / 2.0;
+        if s == s0 || s == s1 {
+            break;
+        }
+
+        let ratio = n / (s + r);
+        let g = ratio.length_squared() - 1.0;
+
+        match g.total_cmp(&0.0) {
+            Ordering::Less => s1 = s,
+            Ordering::Equal => break,
+            Ordering::Greater => s0 = s,
+        }
+    }
+
+    s
+}
+
+fn get_root_2d(r: DVec2, z: DVec2, g: f64) -> f64 {
+    let n = r * z;
+
+    let mut s0 = z.y - 1.0;
+    let mut s1 = if g < 0.0 { 0.0 } else { n.length() - 1.0 };
+    let mut s = 0.0;
+
+    for _ in 0..MAX_ITERATIONS {
+        s = (s0 + s1) / 2.0;
+        if s == s0 || s == s1 {
+            break;
+        }
+
+        let ratio = n / (s + r);
+        let g = ratio.length_squared() - 1.0;
+
+        match g.total_cmp(&0.0) {
+            Ordering::Less => s1 = s,
+            Ordering::Equal => break,
+            Ordering::Greater => s0 = s,
+        }
+    }
+
+    s
 }

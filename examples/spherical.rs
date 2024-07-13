@@ -3,8 +3,8 @@ use bevy_terrain::prelude::*;
 
 const PATH: &str = "terrains/spherical";
 const RADIUS: f64 = 6371000.0;
-const MIN_HEIGHT: f32 = 0.0; // -12000.0;
-const MAX_HEIGHT: f32 = 0.0; // 9000.0;
+const MIN_HEIGHT: f32 = -12000.0;
+const MAX_HEIGHT: f32 = 9000.0;
 const TEXTURE_SIZE: u32 = 512;
 const LOD_COUNT: u32 = 16;
 
@@ -56,20 +56,20 @@ fn setup(
     // Configure all the important properties of the terrain, as well as its attachments.
     let config = TerrainConfig {
         lod_count: LOD_COUNT,
-        // model: TerrainModel::ellipsoid(
-        //     DVec3::ZERO,
-        //     6378137.0,
-        //     6356752.314245,
-        //     MIN_HEIGHT,
-        //     MAX_HEIGHT,
-        // ),
         model: TerrainModel::ellipsoid(
             DVec3::ZERO,
             6378137.0,
-            6378137.0 * 0.5,
+            6356752.314245,
             MIN_HEIGHT,
             MAX_HEIGHT,
         ),
+        // model: TerrainModel::ellipsoid(
+        //     DVec3::ZERO,
+        //     6378137.0,
+        //     6378137.0 * 0.5,
+        //     MIN_HEIGHT,
+        //     MAX_HEIGHT,
+        // ),
         // model: TerrainModel::sphere(DVec3::ZERO, RADIUS),
         path: PATH.to_string(),
         ..default()
