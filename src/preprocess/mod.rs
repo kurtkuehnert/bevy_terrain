@@ -8,13 +8,13 @@ use crate::{
     },
     shaders::{load_preprocess_shaders, DOWNSAMPLE_SHADER, SPLIT_SHADER, STITCH_SHADER},
     terrain::{Terrain, TerrainComponents},
-    terrain_data::gpu_node_atlas::{create_attachment_layout, GpuNodeAtlas},
+    terrain_data::gpu_tile_atlas::{create_attachment_layout, GpuTileAtlas},
 };
 use bevy::{
     prelude::*,
     render::{
         graph::CameraDriverLabel,
-        render_graph::{self, NodeRunError, RenderGraph, RenderGraphContext, RenderLabel},
+        render_graph::{self, RenderGraph, RenderLabel},
         render_resource::*,
         renderer::{RenderContext, RenderDevice},
         Render, RenderApp, RenderSet,
@@ -58,15 +58,7 @@ impl TerrainPreprocessItem {
     }
 
     pub(crate) fn is_loaded(&self, pipeline_cache: &PipelineCache) -> bool {
-        pipeline_cache
-            .get_compute_pipeline(self.split_pipeline)
-            .is_some()
-            && pipeline_cache
-                .get_compute_pipeline(self.stitch_pipeline)
-                .is_some()
-            && pipeline_cache
-                .get_compute_pipeline(self.downsample_pipeline)
-                .is_some()
+        self.pipelines(pipeline_cache).is_some()
     }
 }
 
@@ -166,14 +158,14 @@ impl render_graph::Node for TerrainPreprocessNode {
 
     fn run<'w>(
         &self,
-        _graph: &mut RenderGraphContext,
+        _graph: &mut render_graph::RenderGraphContext,
         context: &mut RenderContext<'w>,
         world: &'w World,
-    ) -> Result<(), NodeRunError> {
+    ) -> Result<(), render_graph::NodeRunError> {
         let preprocess_items = world.resource::<TerrainComponents<TerrainPreprocessItem>>();
         let pipeline_cache = world.resource::<PipelineCache>();
         let preprocess_data = world.resource::<TerrainComponents<GpuPreprocessor>>();
-        let gpu_node_atlases = world.resource::<TerrainComponents<GpuNodeAtlas>>();
+        let gpu_tile_atlases = world.resource::<TerrainComponents<GpuTileAtlas>>();
 
         let terrains = self.terrain_query.iter_manual(world).collect_vec();
 
@@ -191,10 +183,10 @@ impl render_graph::Node for TerrainPreprocessNode {
                 };
 
                 let preprocess_data = preprocess_data.get(&terrain).unwrap();
-                let gpu_node_atlas = gpu_node_atlases.get(&terrain).unwrap();
+                let gpu_tile_atlas = gpu_tile_atlases.get(&terrain).unwrap();
 
-                for attachment in &gpu_node_atlas.attachments {
-                    attachment.copy_nodes_to_write_section(&mut command_encoder);
+                for attachment in &gpu_tile_atlas.attachments {
+                    attachment.copy_tiles_to_write_section(&mut command_encoder);
                 }
 
                 if !preprocess_data.processing_tasks.is_empty() {
@@ -203,7 +195,7 @@ impl render_graph::Node for TerrainPreprocessNode {
 
                     for task in &preprocess_data.processing_tasks {
                         let attachment =
-                            &gpu_node_atlas.attachments[task.task.node.attachment_index as usize];
+                            &gpu_tile_atlas.attachments[task.task.tile.attachment_index as usize];
 
                         let pipeline = match task.task.task_type {
                             PreprocessTaskType::Split { .. } => split_pipeline,
@@ -223,14 +215,14 @@ impl render_graph::Node for TerrainPreprocessNode {
                     }
                 }
 
-                for attachment in &gpu_node_atlas.attachments {
-                    attachment.copy_nodes_from_write_section(&mut command_encoder);
+                for attachment in &gpu_tile_atlas.attachments {
+                    attachment.copy_tiles_from_write_section(&mut command_encoder);
 
-                    attachment.download_nodes(&mut command_encoder);
+                    attachment.download_tiles(&mut command_encoder);
 
                     // if !attachment.atlas_write_slots.is_empty() {
                     //     println!(
-                    //         "Ran preprocessing pipeline with {} nodes.",
+                    //         "Ran preprocessing pipeline with {} tiles.",
                     //         attachment.atlas_write_slots.len()
                     //     )
                     // }
@@ -302,7 +294,7 @@ impl Plugin for TerrainPreprocessPlugin {
                     queue_terrain_preprocess.in_set(RenderSet::Queue),
                     GpuPreprocessor::prepare
                         .in_set(RenderSet::PrepareAssets)
-                        .before(GpuNodeAtlas::prepare),
+                        .before(GpuTileAtlas::prepare),
                 ),
             );
     }

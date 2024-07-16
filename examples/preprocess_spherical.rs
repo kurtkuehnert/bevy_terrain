@@ -20,7 +20,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     let config = TerrainConfig {
         lod_count: LOD_COUNT,
         path: PATH.to_string(),
-        node_atlas_size: 2048,
+        tile_atlas_size: 2048,
         ..default()
     }
     .add_attachment(AttachmentConfig {
@@ -31,10 +31,10 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         ..default()
     });
 
-    let mut node_atlas = NodeAtlas::from_config(&config);
+    let mut tile_atlas = TileAtlas::from_config(&config);
 
     let preprocessor = Preprocessor::new()
-        .clear_attachment(0, &mut node_atlas)
+        .clear_attachment(0, &mut tile_atlas)
         .preprocess_spherical(
             SphericalDataset {
                 attachment_index: 0,
@@ -44,8 +44,8 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
                 lod_range: 0..LOD_COUNT,
             },
             &asset_server,
-            &mut node_atlas,
+            &mut tile_atlas,
         );
 
-    commands.spawn((Terrain, node_atlas, preprocessor));
+    commands.spawn((Terrain, tile_atlas, preprocessor));
 }

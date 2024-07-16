@@ -155,22 +155,22 @@ impl Coordinate {
     }
 }
 
-/// The global coordinate and identifier of a node.
+/// The global coordinate and identifier of a tile.
 #[derive(Copy, Clone, Default, Debug, Hash, Eq, PartialEq, ShaderType, Encode, Decode)]
-pub struct NodeCoordinate {
-    /// The side of the cube sphere the node is located on.
+pub struct TileCoordinate {
+    /// The side of the cube sphere the tile is located on.
     pub side: u32,
-    /// The lod of the node, where 0 is the highest level of detail with the smallest size
+    /// The lod of the tile, where 0 is the highest level of detail with the smallest size
     /// and highest resolution
     pub lod: u32,
-    /// The x position of the node in node sizes.
+    /// The x position of the tile in tile sizes.
     pub x: u32,
-    /// The y position of the node in node sizes.
+    /// The y position of the tile in tile sizes.
     pub y: u32,
 }
 
-impl NodeCoordinate {
-    pub const INVALID: NodeCoordinate = NodeCoordinate {
+impl TileCoordinate {
+    pub const INVALID: TileCoordinate = TileCoordinate {
         side: u32::MAX,
         lod: u32::MAX,
         x: u32::MAX,
@@ -181,8 +181,12 @@ impl NodeCoordinate {
         Self { side, lod, x, y }
     }
 
-    pub fn node_count(lod: u32) -> u32 {
+    pub fn count(lod: u32) -> u32 {
         1 << lod
+    }
+
+    pub fn path(self, path: &str, extension: &str) -> String {
+        format!("{path}/{self}.{extension}")
     }
 
     pub fn parent(self) -> Self {
@@ -196,7 +200,7 @@ impl NodeCoordinate {
 
     pub fn children(self) -> impl Iterator<Item = Self> {
         (0..4).map(move |index| {
-            NodeCoordinate::new(
+            TileCoordinate::new(
                 self.side,
                 self.lod + 1,
                 (self.x << 1) + index % 2,
@@ -224,32 +228,28 @@ impl NodeCoordinate {
         })
     }
 
-    pub fn path(self, path: &str, extension: &str) -> String {
-        format!("{path}/{self}.{extension}")
-    }
-
     fn neighbour_coordinate(self, neighbour_position: IVec2, spherical: bool) -> Self {
-        let node_count = Self::node_count(self.lod) as i32;
+        let tile_count = Self::count(self.lod) as i32;
 
         if spherical {
             let edge_index = match neighbour_position {
                 IVec2 { x, y }
                     if x < 0 && y < 0
-                        || x < 0 && y >= node_count
-                        || x >= node_count && y < 0
-                        || x >= node_count && y >= node_count =>
+                        || x < 0 && y >= tile_count
+                        || x >= tile_count && y < 0
+                        || x >= tile_count && y >= tile_count =>
                 {
                     return Self::INVALID;
                 }
                 IVec2 { x, .. } if x < 0 => 1,
                 IVec2 { y, .. } if y < 0 => 2,
-                IVec2 { x, .. } if x >= node_count => 3,
-                IVec2 { y, .. } if y >= node_count => 4,
+                IVec2 { x, .. } if x >= tile_count => 3,
+                IVec2 { y, .. } if y >= tile_count => 4,
                 _ => 0,
             };
 
             let neighbour_position = neighbour_position
-                .clamp(IVec2::ZERO, IVec2::splat(node_count - 1))
+                .clamp(IVec2::ZERO, IVec2::splat(tile_count - 1))
                 .as_uvec2();
 
             let neighbouring_sides = [
@@ -267,7 +267,7 @@ impl NodeCoordinate {
 
             let [x, y] = info.map(|info| match info {
                 SideInfo::Fixed0 => 0,
-                SideInfo::Fixed1 => node_count as u32 - 1,
+                SideInfo::Fixed1 => tile_count as u32 - 1,
                 SideInfo::PositiveS => neighbour_position.x,
                 SideInfo::PositiveT => neighbour_position.y,
             });
@@ -276,8 +276,8 @@ impl NodeCoordinate {
         } else {
             if neighbour_position.x < 0
                 || neighbour_position.y < 0
-                || neighbour_position.x >= node_count
-                || neighbour_position.y >= node_count
+                || neighbour_position.x >= tile_count
+                || neighbour_position.y >= tile_count
             {
                 Self::INVALID
             } else {
@@ -292,7 +292,7 @@ impl NodeCoordinate {
     }
 }
 
-impl fmt::Display for NodeCoordinate {
+impl fmt::Display for TileCoordinate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(f, "{}_{}_{}_{}", self.side, self.lod, self.x, self.y)
     }

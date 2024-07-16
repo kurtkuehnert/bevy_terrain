@@ -8,7 +8,7 @@ struct TerrainConfig {
 }
 
 struct TerrainViewConfig {
-    quadtree_size: u32,
+    tree_size: u32,
     tile_count: u32,
     refinement_count: u32,
     grid_size: f32,
@@ -23,7 +23,7 @@ struct TerrainViewConfig {
     precision_threshold_distance: f32,
 }
 
-struct Tile {
+struct TileCoordinate {
     side: u32,
     lod: u32,
     xy: vec2<u32>,
@@ -52,20 +52,20 @@ struct Blend {
     ratio: f32,
 }
 
-struct QuadtreeEntry {
+struct TileTreeEntry {
     atlas_index: u32,
     atlas_lod: u32,
 }
 
-// A lookup of a node inside the node atlas based on the view of a quadtree.
-struct NodeLookup {
+// A tile inside the tile atlas, looked up based on the view of a tile tree.
+struct AtlasTile {
     index: u32,
     coordinate: Coordinate,
 }
 
 struct BestLookup {
-    lookup: NodeLookup,
-    quadtree_uv: vec2<f32>,
+    tile: AtlasTile,
+    tile_tree_uv: vec2<f32>,
 }
 
 struct AttachmentConfig {

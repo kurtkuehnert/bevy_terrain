@@ -4,7 +4,7 @@ use crate::{
         TerrainPreprocessItem,
     },
     terrain::{Terrain, TerrainComponents},
-    terrain_data::{gpu_node_atlas::GpuNodeAtlas, node_atlas::AtlasNode},
+    terrain_data::{gpu_tile_atlas::GpuTileAtlas, tile_atlas::AtlasTile},
     util::StaticBuffer,
 };
 use bevy::{
@@ -26,24 +26,24 @@ pub(crate) struct ProcessingTask {
 
 #[derive(Clone, Debug, ShaderType)]
 pub(crate) struct SplitData {
-    node: AtlasNode,
+    tile: AtlasTile,
     top_left: Vec2,
     bottom_right: Vec2,
-    node_index: u32,
+    tile_index: u32,
 }
 
 #[derive(Clone, Debug, ShaderType)]
 struct StitchData {
-    node: AtlasNode,
-    neighbour_nodes: [AtlasNode; 8],
-    node_index: u32,
+    tile: AtlasTile,
+    neighbour_tiles: [AtlasTile; 8],
+    tile_index: u32,
 }
 
 #[derive(Clone, Debug, ShaderType)]
 struct DownsampleData {
-    node: AtlasNode,
-    child_nodes: [AtlasNode; 4],
-    node_index: u32,
+    tile: AtlasTile,
+    child_tiles: [AtlasTile; 4],
+    tile_index: u32,
 }
 
 pub(crate) fn create_split_layout(device: &RenderDevice) -> BindGroupLayout {
@@ -119,7 +119,7 @@ impl GpuPreprocessor {
         images: Res<RenderAssets<GpuImage>>,
         preprocess_items: Res<TerrainComponents<TerrainPreprocessItem>>,
         mut gpu_preprocessors: ResMut<TerrainComponents<GpuPreprocessor>>,
-        mut gpu_node_atlases: ResMut<TerrainComponents<GpuNodeAtlas>>,
+        mut gpu_tile_atlases: ResMut<TerrainComponents<GpuTileAtlas>>,
         pipeline_cache: Res<PipelineCache>,
         terrain_query: Query<Entity, With<Terrain>>,
     ) {
@@ -132,34 +132,34 @@ impl GpuPreprocessor {
             }
 
             let gpu_preprocessor = gpu_preprocessors.get_mut(&terrain).unwrap();
-            let gpu_node_atlas = gpu_node_atlases.get_mut(&terrain).unwrap();
+            let gpu_tile_atlas = gpu_tile_atlases.get_mut(&terrain).unwrap();
 
             gpu_preprocessor.processing_tasks.clear();
 
             while !gpu_preprocessor.ready_tasks.is_empty() {
                 let task = gpu_preprocessor.ready_tasks.back().unwrap();
                 let attachment =
-                    &mut gpu_node_atlas.attachments[task.node.attachment_index as usize];
+                    &mut gpu_tile_atlas.attachments[task.tile.attachment_index as usize];
 
-                if let Some(section_index) = attachment.reserve_write_slot(task.node) {
+                if let Some(section_index) = attachment.reserve_write_slot(task.tile) {
                     let task = gpu_preprocessor.ready_tasks.pop_back().unwrap();
 
                     let bind_group = match &task.task_type {
                         PreprocessTaskType::Split {
-                            tile,
+                            tile_data,
                             top_left,
                             bottom_right,
                         } => {
-                            let tile = images.get(tile).unwrap();
+                            let tile_data = images.get(tile_data).unwrap();
 
                             let split_buffer = StaticBuffer::create(
                                 format!("{}_split_buffer", attachment.name).as_str(),
                                 &device,
                                 &SplitData {
-                                    node: task.node.into(),
+                                    tile: task.tile.into(),
                                     top_left: *top_left,
                                     bottom_right: *bottom_right,
-                                    node_index: section_index,
+                                    tile_index: section_index,
                                 },
                                 BufferUsages::UNIFORM,
                             );
@@ -169,19 +169,19 @@ impl GpuPreprocessor {
                                 &create_split_layout(&device),
                                 &BindGroupEntries::sequential((
                                     &split_buffer,
-                                    &tile.texture_view,
-                                    &tile.sampler,
+                                    &tile_data.texture_view,
+                                    &tile_data.sampler,
                                 )),
                             ))
                         }
-                        PreprocessTaskType::Stitch { neighbour_nodes } => {
+                        PreprocessTaskType::Stitch { neighbour_tiles } => {
                             let stitch_buffer = StaticBuffer::create(
                                 format!("{}_stitch_buffer", attachment.name).as_str(),
                                 &device,
                                 &StitchData {
-                                    node: task.node.into(),
-                                    neighbour_nodes: *neighbour_nodes,
-                                    node_index: section_index,
+                                    tile: task.tile.into(),
+                                    neighbour_tiles: *neighbour_tiles,
+                                    tile_index: section_index,
                                 },
                                 BufferUsages::UNIFORM,
                             );
@@ -192,14 +192,14 @@ impl GpuPreprocessor {
                                 &BindGroupEntries::single(&stitch_buffer),
                             ))
                         }
-                        PreprocessTaskType::Downsample { child_nodes } => {
+                        PreprocessTaskType::Downsample { child_tiles } => {
                             let downsample_buffer = StaticBuffer::create(
                                 format!("{}_downsample_buffer", attachment.name).as_str(),
                                 &device,
                                 &DownsampleData {
-                                    node: task.node.into(),
-                                    child_nodes: *child_nodes,
-                                    node_index: section_index,
+                                    tile: task.tile.into(),
+                                    child_tiles: *child_tiles,
+                                    tile_index: section_index,
                                 },
                                 BufferUsages::UNIFORM,
                             );

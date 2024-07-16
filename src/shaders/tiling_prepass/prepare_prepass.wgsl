@@ -1,4 +1,4 @@
-#import bevy_terrain::types::Tile
+#import bevy_terrain::types::TileCoordinate
 #import bevy_terrain::bindings::{view_config, temporary_tiles, parameters, indirect_buffer}
 
 @compute @workgroup_size(1, 1, 1)
@@ -11,12 +11,12 @@ fn prepare_root() {
     parameters.tile_count = 6u;
 
     for (var i: u32 = 0u; i < 6u; i = i + 1u) {
-        temporary_tiles[i] = Tile(i, 0u, vec2<u32>(0u));
+        temporary_tiles[i] = TileCoordinate(i, 0u, vec2<u32>(0u));
     }
 #else
     parameters.tile_count = 1u;
 
-    temporary_tiles[0] = Tile(0u, 0u, vec2<u32>(0u));
+    temporary_tiles[0] = TileCoordinate(0u, 0u, vec2<u32>(0u));
 #endif
 
     indirect_buffer.workgroup_count = vec3<u32>(1u, 1u, 1u);

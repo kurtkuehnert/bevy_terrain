@@ -1,7 +1,7 @@
 use crate::{
-    math::TerrainModelApproximation,
+    math::{TerrainModelApproximation, TileCoordinate},
     terrain::{Terrain, TerrainConfig},
-    terrain_data::gpu_quadtree::GpuQuadtree,
+    terrain_data::gpu_tile_tree::GpuTileTree,
     terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
     util::StaticBuffer,
 };
@@ -18,9 +18,6 @@ use bevy::{
         Extract,
     },
 };
-
-const TILE_SIZE: BufferAddress = 16 * 4;
-const TILE_BUFFER_MIN_SIZE: Option<BufferSize> = BufferSize::new(32 + TILE_SIZE);
 
 pub(crate) fn create_prepare_indirect_layout(device: &RenderDevice) -> BindGroupLayout {
     device.create_bind_group_layout(
@@ -40,10 +37,10 @@ pub(crate) fn create_refine_tiles_layout(device: &RenderDevice) -> BindGroupLayo
             (
                 uniform_buffer::<TerrainViewConfigUniform>(false), // terrain view config
                 uniform_buffer::<TerrainModelApproximation>(false), // model view approximation
-                storage_buffer_read_only_sized(false, None),       // quadtree
+                storage_buffer_read_only_sized(false, None),       // tile_tree
                 storage_buffer_read_only_sized(false, None),       // origins
-                storage_buffer_sized(false, TILE_BUFFER_MIN_SIZE), // final tiles
-                storage_buffer_sized(false, TILE_BUFFER_MIN_SIZE), // temporary tiles
+                storage_buffer_sized(false, None),                 // final tiles
+                storage_buffer_sized(false, None),                 // temporary tiles
                 storage_buffer::<Parameters>(false),               // parameters
             ),
         ),
@@ -58,9 +55,9 @@ pub(crate) fn create_terrain_view_layout(device: &RenderDevice) -> BindGroupLayo
             (
                 uniform_buffer::<TerrainViewConfigUniform>(false), // terrain view config
                 uniform_buffer::<TerrainModelApproximation>(false), // model view approximation
-                storage_buffer_read_only_sized(false, None),       // quadtree
+                storage_buffer_read_only_sized(false, None),       // tile_tree
                 storage_buffer_read_only_sized(false, None),       // origins
-                storage_buffer_read_only_sized(false, TILE_BUFFER_MIN_SIZE), // tiles
+                storage_buffer_read_only_sized(false, None),       // tiles
             ),
         ),
     )
@@ -84,8 +81,8 @@ struct Parameters {
 
 #[derive(Default, ShaderType)]
 struct TerrainViewConfigUniform {
-    quadtree_size: u32,
-    tile_count: u32,
+    tree_size: u32,
+    geometry_tile_count: u32,
     refinement_count: u32,
     grid_size: f32,
     vertices_per_row: u32,
@@ -104,8 +101,8 @@ impl TerrainViewConfigUniform {
         let scale = config.model.scale() as f32;
 
         TerrainViewConfigUniform {
-            quadtree_size: view_config.quadtree_size,
-            tile_count: view_config.tile_count,
+            tree_size: view_config.tree_size,
+            geometry_tile_count: view_config.geometry_tile_count,
             refinement_count: view_config.refinement_count,
             grid_size: view_config.grid_size as f32,
             vertices_per_row: 2 * (view_config.grid_size + 2),
@@ -136,10 +133,11 @@ impl TerrainViewData {
     fn new(
         device: &RenderDevice,
         view_config: &TerrainViewConfig,
-        gpu_quadtree: &GpuQuadtree,
+        gpu_tile_tree: &GpuTileTree,
     ) -> Self {
         // Todo: figure out a better way of limiting the tile buffer size
-        let tile_buffer_size = 32 + TILE_SIZE * view_config.tile_count as BufferAddress;
+        let tile_buffer_size =
+            TileCoordinate::min_size().get() * view_config.geometry_tile_count as BufferAddress;
 
         let view_config_buffer =
             StaticBuffer::empty(None, device, BufferUsages::UNIFORM | BufferUsages::COPY_DST);
@@ -168,8 +166,8 @@ impl TerrainViewData {
             &BindGroupEntries::sequential((
                 &view_config_buffer,
                 &terrain_model_approximation_buffer,
-                &gpu_quadtree.quadtree_buffer,
-                &gpu_quadtree.origins_buffer,
+                &gpu_tile_tree.tile_tree_buffer,
+                &gpu_tile_tree.origins_buffer,
                 &final_tile_buffer,
                 &temporary_tile_buffer,
                 &parameter_buffer,
@@ -181,8 +179,8 @@ impl TerrainViewData {
             &BindGroupEntries::sequential((
                 &view_config_buffer,
                 &terrain_model_approximation_buffer,
-                &gpu_quadtree.quadtree_buffer,
-                &gpu_quadtree.origins_buffer,
+                &gpu_tile_tree.tile_tree_buffer,
+                &gpu_tile_tree.origins_buffer,
                 &final_tile_buffer,
             )),
         );
@@ -204,7 +202,7 @@ impl TerrainViewData {
     pub(crate) fn initialize(
         device: Res<RenderDevice>,
         mut terrain_view_data: ResMut<TerrainViewComponents<TerrainViewData>>,
-        gpu_quadtrees: Res<TerrainViewComponents<GpuQuadtree>>,
+        gpu_tile_trees: Res<TerrainViewComponents<GpuTileTree>>,
         view_configs: Extract<Res<TerrainViewComponents<TerrainViewConfig>>>,
         view_query: Extract<Query<Entity, With<TerrainView>>>,
         terrain_query: Extract<Query<Entity, Added<Terrain>>>,
@@ -212,11 +210,11 @@ impl TerrainViewData {
         for terrain in &terrain_query {
             for view in &view_query {
                 let view_config = view_configs.get(&(terrain, view)).unwrap();
-                let gpu_quadtree = gpu_quadtrees.get(&(terrain, view)).unwrap();
+                let gpu_tile_tree = gpu_tile_trees.get(&(terrain, view)).unwrap();
 
                 terrain_view_data.insert(
                     (terrain, view),
-                    TerrainViewData::new(&device, view_config, gpu_quadtree),
+                    TerrainViewData::new(&device, view_config, gpu_tile_tree),
                 );
             }
         }

@@ -15,8 +15,8 @@ use crate::{
     shaders::{load_terrain_shaders, InternalShaders},
     terrain::{Terrain, TerrainComponents, TerrainConfig},
     terrain_data::{
-        gpu_node_atlas::GpuNodeAtlas, gpu_quadtree::GpuQuadtree, node_atlas::NodeAtlas,
-        quadtree::Quadtree,
+        gpu_tile_atlas::GpuTileAtlas, gpu_tile_tree::GpuTileTree, tile_atlas::TileAtlas,
+        tile_tree::TileTree,
     },
     terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
 };
@@ -45,7 +45,7 @@ impl Plugin for TerrainPlugin {
             ExtractComponentPlugin::<TerrainConfig>::default(),
         ))
         .init_resource::<InternalShaders>()
-        .init_resource::<TerrainViewComponents<Quadtree>>()
+        .init_resource::<TerrainViewComponents<TileTree>>()
         .init_resource::<TerrainViewComponents<TerrainViewConfig>>()
         .init_resource::<TerrainViewComponents<TerrainModelApproximation>>()
         .add_systems(
@@ -55,30 +55,31 @@ impl Plugin for TerrainPlugin {
         .add_systems(
             Last,
             (
-                Quadtree::compute_requests,
-                NodeAtlas::update,
-                Quadtree::adjust_to_node_atlas,
-                Quadtree::approximate_height,
+                TileTree::compute_requests,
+                TileAtlas::update,
+                TileTree::adjust_to_tile_atlas,
+                TileTree::approximate_height,
                 generate_terrain_model_approximation,
-            ),
+            )
+                .chain(),
         );
 
         app.sub_app_mut(RenderApp)
-            .init_resource::<TerrainComponents<GpuNodeAtlas>>()
+            .init_resource::<TerrainComponents<GpuTileAtlas>>()
             .init_resource::<TerrainComponents<TerrainData>>()
-            .init_resource::<TerrainViewComponents<GpuQuadtree>>()
+            .init_resource::<TerrainViewComponents<GpuTileTree>>()
             .init_resource::<TerrainViewComponents<TerrainViewData>>()
             .init_resource::<TerrainViewComponents<CullingBindGroup>>()
             .init_resource::<TerrainViewComponents<TilingPrepassItem>>()
             .add_systems(
                 ExtractSchedule,
                 (
-                    GpuNodeAtlas::initialize,
-                    GpuQuadtree::initialize,
-                    TerrainData::initialize.after(GpuNodeAtlas::initialize),
-                    TerrainViewData::initialize.after(GpuQuadtree::initialize),
-                    GpuNodeAtlas::extract.after(GpuNodeAtlas::initialize),
-                    GpuQuadtree::extract.after(GpuQuadtree::initialize),
+                    GpuTileAtlas::initialize,
+                    GpuTileTree::initialize,
+                    TerrainData::initialize.after(GpuTileAtlas::initialize),
+                    TerrainViewData::initialize.after(GpuTileTree::initialize),
+                    GpuTileAtlas::extract.after(GpuTileAtlas::initialize),
+                    GpuTileTree::extract.after(GpuTileTree::initialize),
                     TerrainData::extract.after(TerrainData::initialize),
                     TerrainViewData::extract.after(TerrainViewData::initialize),
                 ),
@@ -87,15 +88,15 @@ impl Plugin for TerrainPlugin {
                 Render,
                 (
                     (
-                        GpuQuadtree::prepare,
-                        GpuNodeAtlas::prepare,
+                        GpuTileTree::prepare,
+                        GpuTileAtlas::prepare,
                         TerrainData::prepare,
                         TerrainViewData::prepare,
                         CullingBindGroup::prepare,
                     )
                         .in_set(RenderSet::Prepare),
                     queue_tiling_prepass.in_set(RenderSet::Queue),
-                    GpuNodeAtlas::cleanup
+                    GpuTileAtlas::cleanup
                         .before(World::clear_entities)
                         .in_set(RenderSet::Cleanup),
                 ),
