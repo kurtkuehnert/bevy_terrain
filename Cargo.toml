@@ -47,11 +47,11 @@ name = "Minimal"
 description = "Renders a basic flat terrain with only the base attachment."
 
 [[example]]
-name = "planar_advanced"
+name = "planar"
 path = "examples/planar.rs"
 required-features = ["high_precision", "bevy/embedded_watcher"]
 
-[package.metadata.example.planar_advanced]
+[package.metadata.example.planar]
 name = "Planar Advanced"
 description = "Renders a flat terrain with the base attachment and an albedo texture, using a custom shader."
 

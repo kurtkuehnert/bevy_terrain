@@ -14,7 +14,7 @@ use crate::{
 use bevy::{
     prelude::*,
     render::{
-        render_graph::{self, NodeRunError, RenderGraphContext, RenderLabel},
+        render_graph::{self, RenderLabel},
         render_resource::*,
         renderer::{RenderContext, RenderDevice},
     },
@@ -28,13 +28,15 @@ bitflags::bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     #[repr(transparent)]
     pub struct TilingPrepassPipelineKey: u32 {
-        const NONE           = 1 << 0;
-        const REFINE_TILES   = 1 << 1;
-        const PREPARE_ROOT   = 1 << 2;
-        const PREPARE_NEXT   = 1 << 3;
-        const PREPARE_RENDER = 1 << 4;
-        const SPHERICAL      = 1 << 5;
-        const TEST1          = 1 << 6;
+        const NONE           = 0;
+        const REFINE_TILES   = 1 << 0;
+        const PREPARE_ROOT   = 1 << 1;
+        const PREPARE_NEXT   = 1 << 2;
+        const PREPARE_RENDER = 1 << 3;
+        const SPHERICAL      = 1 << 4;
+        const TEST1          = 1 << 5;
+        const TEST2          = 1 << 6;
+        const TEST3          = 1 << 7;
     }
 }
 
@@ -44,6 +46,12 @@ impl TilingPrepassPipelineKey {
 
         if debug.test1 {
             key |= TilingPrepassPipelineKey::TEST1;
+        }
+        if debug.test2 {
+            key |= TilingPrepassPipelineKey::TEST2;
+        }
+        if debug.test3 {
+            key |= TilingPrepassPipelineKey::TEST3;
         }
 
         key
@@ -57,6 +65,12 @@ impl TilingPrepassPipelineKey {
         }
         if self.contains(TilingPrepassPipelineKey::TEST1) {
             shader_defs.push("TEST1".into());
+        }
+        if self.contains(TilingPrepassPipelineKey::TEST2) {
+            shader_defs.push("TEST2".into());
+        }
+        if self.contains(TilingPrepassPipelineKey::TEST3) {
+            shader_defs.push("TEST3".into());
         }
 
         shader_defs
@@ -206,10 +220,10 @@ impl render_graph::Node for TilingPrepassNode {
 
     fn run<'w>(
         &self,
-        _graph: &mut RenderGraphContext,
+        _graph: &mut render_graph::RenderGraphContext,
         context: &mut RenderContext<'w>,
         world: &'w World,
-    ) -> Result<(), NodeRunError> {
+    ) -> Result<(), render_graph::NodeRunError> {
         let prepass_items = world.resource::<TerrainViewComponents<TilingPrepassItem>>();
         let pipeline_cache = world.resource::<PipelineCache>();
         let terrain_data = world.resource::<TerrainComponents<TerrainData>>();

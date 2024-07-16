@@ -4,9 +4,9 @@ use crate::big_space::{
 };
 
 use crate::{
-    math::{coordinate::Coordinate, ellipsoid::project_point_ellipsoid, C_SQR},
+    math::{coordinate::Coordinate, ellipsoid::project_point_ellipsoid, TileCoordinate, C_SQR},
     terrain::{Terrain, TerrainConfig},
-    terrain_data::quadtree::Quadtree,
+    terrain_data::tile_tree::TileTree,
     terrain_view::{TerrainView, TerrainViewComponents},
 };
 use bevy::{
@@ -24,10 +24,6 @@ const SIDE_MATRICES: [DMat3; 6] = [
     DMat3::from_cols_array(&[0.0, 0.0, -1.0, 0.0, -1.0, 0.0, 1.0, 0.0, 0.0]),
     DMat3::from_cols_array(&[0.0, -1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0]),
 ];
-
-pub(crate) fn tile_count(lod: u32) -> f64 {
-    (1 << lod) as f64
-}
 
 #[derive(Clone)]
 pub enum TerrainKind {
@@ -266,7 +262,7 @@ impl TerrainModelApproximation {
         origin_lod: u32,
         approximate_height: f32,
     ) -> TerrainModelApproximation {
-        let origin_count = tile_count(origin_lod);
+        let origin_count = TileCoordinate::count(origin_lod) as f64;
 
         // Coordinate of the location vertically below the view.
         let view_coordinate = Coordinate::from_world_position(view_position, model);
@@ -364,7 +360,7 @@ impl TerrainModelApproximation {
 #[cfg(feature = "high_precision")]
 pub fn generate_terrain_model_approximation(
     mut terrain_model_approximations: ResMut<TerrainViewComponents<TerrainModelApproximation>>,
-    quadtrees: Res<TerrainViewComponents<Quadtree>>,
+    tile_trees: Res<TerrainViewComponents<TileTree>>,
     view_query: Query<(Entity, GridTransformReadOnly), With<TerrainView>>,
     terrain_query: Query<(Entity, &TerrainConfig), With<Terrain>>,
     frames: ReferenceFrames,
@@ -373,13 +369,13 @@ pub fn generate_terrain_model_approximation(
         let frame = frames.parent_frame(terrain).unwrap();
 
         for (view, view_transform) in &view_query {
-            let quadtree = quadtrees.get(&(terrain, view)).unwrap();
+            let tile_tree = tile_trees.get(&(terrain, view)).unwrap();
 
             let model = TerrainModelApproximation::compute(
                 &config.model,
                 view_transform.position_double(&frame),
                 10, // Todo: make this configurable
-                quadtree.approximate_height,
+                tile_tree.approximate_height,
             );
 
             terrain_model_approximations.insert((terrain, view), model);
@@ -390,19 +386,19 @@ pub fn generate_terrain_model_approximation(
 #[cfg(not(feature = "high_precision"))]
 pub fn generate_terrain_model_approximation(
     mut terrain_model_approximations: ResMut<TerrainViewComponents<TerrainModelApproximation>>,
-    quadtrees: Res<TerrainViewComponents<Quadtree>>,
+    tile_trees: Res<TerrainViewComponents<TileTree>>,
     view_query: Query<(Entity, &Transform), With<TerrainView>>,
     terrain_query: Query<(Entity, &TerrainConfig), With<Terrain>>,
 ) {
     for (terrain, config) in &terrain_query {
         for (view, view_transform) in &view_query {
-            let quadtree = quadtrees.get(&(terrain, view)).unwrap();
+            let tile_tree = tile_trees.get(&(terrain, view)).unwrap();
 
             let model = TerrainModelApproximation::compute(
                 &config.model,
                 view_transform.translation.as_dvec3(),
                 10, // Todo: make this configurable
-                quadtree.approximate_height,
+                tile_tree.approximate_height,
             );
 
             terrain_model_approximations.insert((terrain, view), model);

@@ -6,15 +6,15 @@ const FORMAT_R16: u32 = 1u;
 
 const INVALID_ATLAS_INDEX: u32 = 4294967295u;
 
-struct NodeCoordinate {
+struct TileCoordinate {
     side: u32,
     lod: u32,
     x: u32,
     y: u32,
 }
 
-struct AtlasNode {
-    coordinate: NodeCoordinate,
+struct AtlasTile {
+    coordinate: TileCoordinate,
     atlas_index: u32,
     _padding_a: u32,
     _padding_b: u32,
@@ -29,7 +29,7 @@ struct AttachmentMeta {
     center_size: u32,
     pixels_per_entry: u32,
     entries_per_side: u32,
-    entries_per_node: u32,
+    entries_per_tile: u32,
 }
 
 @group(0) @binding(0)
@@ -63,7 +63,7 @@ fn pixel_coords(entry_coords: vec3<u32>, pixel_offset: u32) -> vec2<u32> {
 virtual fn pixel_value(coords: vec2<u32>) -> vec4<f32> { return vec4<f32>(0.0); }
 
 fn store_entry(entry_coords: vec3<u32>, entry_value: u32) {
-    let entry_index = entry_coords.z * attachment.entries_per_node +
+    let entry_index = entry_coords.z * attachment.entries_per_tile +
                       entry_coords.y * attachment.entries_per_side +
                       entry_coords.x;
 

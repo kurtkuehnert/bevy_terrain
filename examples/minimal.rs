@@ -23,7 +23,7 @@ fn main() {
 fn setup(
     mut commands: Commands,
     mut materials: ResMut<Assets<DebugTerrainMaterial>>,
-    mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
+    mut tile_trees: ResMut<TerrainViewComponents<TileTree>>,
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
@@ -34,13 +34,13 @@ fn setup(
         path: PATH.to_string(),
         ..default()
     }
-    .add_attachment(AttachmentConfig {
-        name: "height".to_string(),
-        texture_size: TEXTURE_SIZE,
-        border_size: 2,
-        mip_level_count: 4,
-        format: AttachmentFormat::R16,
-    });
+        .add_attachment(AttachmentConfig {
+            name: "height".to_string(),
+            texture_size: TEXTURE_SIZE,
+            border_size: 2,
+            mip_level_count: 4,
+            format: AttachmentFormat::R16,
+        });
 
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
     let view_config = TerrainViewConfig::default();
@@ -61,7 +61,7 @@ fn setup(
         view,
         &config,
         view_config,
-        &mut quadtrees,
+        &mut tile_trees,
         &mut view_configs,
     );
 

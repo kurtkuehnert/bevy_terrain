@@ -1,8 +1,8 @@
 #define_import_path bevy_terrain::vertex
 
-#import bevy_terrain::types::{Blend, NodeLookup, Coordinate}
-#import bevy_terrain::bindings::{config, view_config, tiles, terrain_model_approximation}
-#import bevy_terrain::functions::{lookup_node, compute_coordinate, compute_tile_uv, compute_local_position, compute_relative_position, compute_morph, compute_blend, normal_local_to_world, position_local_to_world}
+#import bevy_terrain::types::{Blend, AtlasTile, Coordinate}
+#import bevy_terrain::bindings::{config, view_config, geometry_tiles, terrain_model_approximation}
+#import bevy_terrain::functions::{lookup_tile, compute_tile_uv, compute_local_position, compute_relative_position, compute_morph, compute_blend, normal_local_to_world, position_local_to_world}
 #import bevy_terrain::attachments::{sample_height}
 #import bevy_pbr::mesh_view_bindings::view
 #import bevy_pbr::view_transformations::position_world_to_clip
@@ -28,16 +28,16 @@ struct VertexInfo {
 }
 
 fn vertex_info(input: VertexInput) -> VertexInfo {
-    let tile_index = input.vertex_index / view_config.vertices_per_tile;
-    let grid_index = input.vertex_index % view_config.vertices_per_tile;
-
-    let approximate_coordinate     = compute_coordinate(tiles[tile_index], compute_tile_uv(grid_index));
+    let tile_index                 = input.vertex_index / view_config.vertices_per_tile;
+    let tile                       = geometry_tiles[tile_index];
+    let tile_uv                    = compute_tile_uv(input.vertex_index);
+    let approximate_coordinate     = Coordinate(tile.side, tile.lod, tile.xy, tile_uv);
     let approximate_local_position = compute_local_position(approximate_coordinate);
     let approximate_world_position = position_local_to_world(approximate_local_position);
     let approximate_world_normal   = normal_local_to_world(approximate_local_position);
     var approximate_view_distance  = distance(approximate_world_position + terrain_model_approximation.approximate_height * approximate_world_normal, view.world_position);
 
-#ifdef TEST1
+#ifdef HIGH_PRECISION
     let high_precision = approximate_view_distance < view_config.precision_threshold_distance;
 #else
     let high_precision = false;
@@ -86,12 +86,12 @@ fn vertex_output(info: ptr<function, VertexInfo>, height: f32) -> VertexOutput {
 fn vertex(input: VertexInput) -> VertexOutput {
     var info = vertex_info(input);
 
-    let lookup = lookup_node(info.coordinate, info.blend, 0u);
-    var height = sample_height(lookup);
+    let tile   = lookup_tile(info.coordinate, info.blend, 0u);
+    var height = sample_height(tile);
 
     if (info.blend.ratio > 0.0) {
-        let lookup2 = lookup_node(info.coordinate, info.blend, 1u);
-        height      = mix(height, sample_height(lookup2), info.blend.ratio);
+        let tile2 = lookup_tile(info.coordinate, info.blend, 1u);
+        height    = mix(height, sample_height(tile2), info.blend.ratio);
     }
 
     return vertex_output(&info, height);

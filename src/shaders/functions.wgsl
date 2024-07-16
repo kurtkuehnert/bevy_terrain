@@ -1,7 +1,7 @@
 #define_import_path bevy_terrain::functions
 
-#import bevy_terrain::bindings::{mesh, config, origins, view_config, tiles, quadtree, terrain_model_approximation}
-#import bevy_terrain::types::{Tile, Quadtree, QuadtreeEntry, NodeLookup, Blend, BestLookup, Coordinate, Morph}
+#import bevy_terrain::bindings::{mesh, config, origins, view_config, geometry_tiles, tile_tree, terrain_model_approximation}
+#import bevy_terrain::types::{TileCoordinate, TileTree, TileTreeEntry, AtlasTile, Blend, BestLookup, Coordinate, Morph}
 #import bevy_pbr::mesh_view_bindings::view
 #import bevy_render::maths::{affine3_to_square, mat2x4_f32_to_mat3x3_unpack}
 
@@ -102,21 +102,13 @@ fn compute_blend(view_distance: f32) -> Blend {
 #endif
 }
 
-fn compute_tile_uv(grid_index: u32) -> vec2<f32>{
+fn compute_tile_uv(vertex_index: u32) -> vec2<f32>{
     // use first and last indices of the rows twice, to form degenerate triangles
+    let grid_index   = vertex_index % view_config.vertices_per_tile;
     let row_index    = clamp(grid_index % view_config.vertices_per_row, 1u, view_config.vertices_per_row - 2u) - 1u;
     let column_index = grid_index / view_config.vertices_per_row;
-    let tile_uv = vec2<u32>(column_index + (row_index & 1u), row_index >> 1u);
 
-    return vec2<f32>(tile_uv) / view_config.grid_size;
-}
-
-fn compute_coordinate(tile: Tile, uv: vec2<f32>) -> Coordinate {
-#ifdef FRAGMENT
-    return Coordinate(tile.side, tile.lod, tile.xy, uv, dpdx(uv), dpdy(uv));
-#else
-    return Coordinate(tile.side, tile.lod, tile.xy, uv);
-#endif
+    return vec2<f32>(f32(column_index + (row_index & 1u)), f32(row_index >> 1u)) / view_config.grid_size;
 }
 
 fn compute_local_position(coordinate: Coordinate) -> vec3<f32> {
@@ -143,11 +135,12 @@ fn compute_local_position(coordinate: Coordinate) -> vec3<f32> {
 #endif
 }
 
-fn compute_relative_position(coordinate: Coordinate) -> vec3<f32> {
-    let params = terrain_model_approximation.sides[coordinate.side];
+fn compute_relative_position(coord: Coordinate) -> vec3<f32> {
+    var coordinate = coord;
+    coordinate_change_lod(&coordinate, terrain_model_approximation.origin_lod);
 
-    let test        = coordinate_change_lod(coordinate, terrain_model_approximation.origin_lod);
-    let relative_st = (vec2<f32>(vec2<i32>(test.xy) - params.view_xy) + test.uv - params.view_uv) / tile_count(terrain_model_approximation.origin_lod);
+    let params = terrain_model_approximation.sides[coordinate.side];
+    let relative_st = (vec2<f32>(vec2<i32>(coordinate.xy) - params.view_xy) + coordinate.uv - params.view_uv) / tile_count(terrain_model_approximation.origin_lod);
 
     let s = relative_st.x;
     let t = relative_st.y;
@@ -167,7 +160,7 @@ fn approximate_view_distance(coordinate: Coordinate, view_world_position: vec3<f
     let world_normal   = normal_local_to_world(local_position);
     var view_distance  = distance(world_position + terrain_model_approximation.approximate_height * world_normal, view_world_position);
 
-#ifdef TEST1
+#ifdef HIGH_PRECISION
     if (view_distance < view_config.precision_threshold_distance) {
         let relative_position = compute_relative_position(coordinate);
         view_distance         = length(relative_position + terrain_model_approximation.approximate_height * world_normal);
@@ -186,7 +179,7 @@ fn compute_subdivision_coordinate(coordinate: Coordinate) -> Coordinate {
     var view_coordinate = Coordinate(coordinate.side, terrain_model_approximation.origin_lod, vec2<u32>(params.view_xy), params.view_uv);
 #endif
 
-    view_coordinate = coordinate_change_lod(view_coordinate, coordinate.lod);
+    coordinate_change_lod(&view_coordinate, coordinate.lod);
     var offset = vec2<i32>(view_coordinate.xy) - vec2<i32>(coordinate.xy);
     var uv = view_coordinate.uv;
 
@@ -200,9 +193,7 @@ fn compute_subdivision_coordinate(coordinate: Coordinate) -> Coordinate {
     return subdivision_coordinate;
 }
 
-// Todo: remove/replace this
 fn tile_count(lod: u32) -> f32 { return f32(1u << lod); }
-fn node_count(lod: u32) -> f32 { return f32(1u << lod); }
 
 fn inside_square(position: vec2<f32>, origin: vec2<f32>, size: f32) -> f32 {
     let inside = step(origin, position) * step(position, origin + size);
@@ -210,85 +201,86 @@ fn inside_square(position: vec2<f32>, origin: vec2<f32>, size: f32) -> f32 {
     return inside.x * inside.y;
 }
 
-fn coordinate_change_lod(coordinate: Coordinate, new_lod: u32) -> Coordinate {
-    var new_coordinate = coordinate;
-    new_coordinate.lod = new_lod;
+fn coordinate_change_lod(coordinate: ptr<function, Coordinate>, new_lod: u32) {
+    let lod_difference = i32(new_lod) - i32((*coordinate).lod);
 
-    let lod_difference = i32(coordinate.lod) - i32(new_lod);
+    if (lod_difference == 0) { return; }
 
-    if (lod_difference < 0) {
-        let size          = 1u << u32(-lod_difference);
-        let scaled_uv     = coordinate.uv * f32(size);
-        new_coordinate.xy = vec2<u32>(coordinate.xy * size) + vec2<u32>(scaled_uv);
-        new_coordinate.uv = scaled_uv % 1.0;
-        #ifdef FRAGMENT
-            new_coordinate.uv_dx *= f32(size);
-            new_coordinate.uv_dy *= f32(size);
-        #endif
+    let delta_count = 1u << u32(abs(lod_difference));
+    let delta_size  = pow(2.0, f32(lod_difference));
+
+    (*coordinate).lod = new_lod;
+
+    if (lod_difference > 0) {
+        let scaled_uv    = (*coordinate).uv * delta_size;
+        (*coordinate).xy = (*coordinate).xy * delta_count + vec2<u32>(scaled_uv);
+        (*coordinate).uv = scaled_uv % 1.0;
     } else {
-        let size          = 1u << u32(lod_difference);
-        new_coordinate.xy = vec2<u32>(coordinate.xy / size);
-        new_coordinate.uv = (vec2<f32>(coordinate.xy % size) + coordinate.uv) / f32(size);
-        #ifdef FRAGMENT
-            new_coordinate.uv_dx /= f32(size);
-            new_coordinate.uv_dy /= f32(size);
-        #endif
+        let xy = (*coordinate).xy;
+        (*coordinate).xy = xy / delta_count;
+        (*coordinate).uv = (vec2<f32>(xy % delta_count) + (*coordinate).uv) * delta_size;
     }
 
-    return new_coordinate;
+#ifdef FRAGMENT
+    (*coordinate).uv_dx *= delta_size;
+    (*coordinate).uv_dy *= delta_size;
+#endif
 }
 
-fn quadtree_uv(coordinate: Coordinate) -> vec2<f32> {
+fn compute_tile_tree_uv(coordinate: Coordinate) -> vec2<f32> {
     let origin_xy = vec2<i32>(origins[coordinate.side * config.lod_count + coordinate.lod]);
-    let quadtree_size = f32(min(view_config.quadtree_size, 1u << coordinate.lod));
+    let tree_size = min(f32(view_config.tree_size), tile_count(coordinate.lod));
 
-    return (vec2<f32>(vec2<i32>(coordinate.xy) - origin_xy) + coordinate.uv) / quadtree_size;
+    return (vec2<f32>(vec2<i32>(coordinate.xy) - origin_xy) + coordinate.uv) / tree_size;
 }
 
 
-fn lookup_quadtree_entry(coordinate: Coordinate) -> QuadtreeEntry {
-    let quadtree_side  = coordinate.side;
-    let quadtree_lod   = coordinate.lod;
-    let quadtree_xy    = vec2<u32>(coordinate.xy) % view_config.quadtree_size;
-    let quadtree_index = ((quadtree_side  * config.lod_count +
-                           quadtree_lod)  * view_config.quadtree_size +
-                           quadtree_xy.x) * view_config.quadtree_size +
-                           quadtree_xy.y;
+fn lookup_tile_tree_entry(coordinate: Coordinate) -> TileTreeEntry {
+    let tree_xy    = vec2<u32>(coordinate.xy) % view_config.tree_size;
+    let tree_index = ((coordinate.side * config.lod_count +
+                       coordinate.lod) * view_config.tree_size +
+                       tree_xy.x)      * view_config.tree_size +
+                       tree_xy.y;
 
-    return quadtree[quadtree_index];
+    return tile_tree[tree_index];
 }
 
+// Todo: implement this more efficiently
 fn lookup_best(lookup_coordinate: Coordinate) -> BestLookup {
-    var coordinate: Coordinate; var quadtree_uv: vec2<f32>;
+    var coordinate: Coordinate; var tile_tree_uv: vec2<f32>;
 
-    var new_coordinate  = coordinate_change_lod(lookup_coordinate, 0u);
-    var new_quadtree_uv = new_coordinate.uv;
+    var new_coordinate   = lookup_coordinate;
+    coordinate_change_lod(&new_coordinate , 0u);
+    var new_tile_tree_uv = new_coordinate.uv;
 
-    while (new_coordinate.lod < config.lod_count && !any(new_quadtree_uv < vec2<f32>(0.0)) && !any(new_quadtree_uv > vec2<f32>(1.0))) {
+    while (new_coordinate.lod < config.lod_count && !any(new_tile_tree_uv <= vec2<f32>(0.0)) && !any(new_tile_tree_uv >= vec2<f32>(1.0))) {
         coordinate  = new_coordinate;
-        quadtree_uv = new_quadtree_uv;
+        tile_tree_uv = new_tile_tree_uv;
 
-        new_coordinate  = coordinate_change_lod(lookup_coordinate, new_coordinate.lod + 1u);
-        new_quadtree_uv = quadtree_uv(new_coordinate);
+        new_coordinate = lookup_coordinate;
+        coordinate_change_lod(&new_coordinate, coordinate.lod + 1u);
+        new_tile_tree_uv = compute_tile_tree_uv(new_coordinate);
     }
 
-    let quadtree_entry = lookup_quadtree_entry(coordinate);
+    let tile_tree_entry = lookup_tile_tree_entry(coordinate);
 
-    coordinate = coordinate_change_lod(coordinate, quadtree_entry.atlas_lod);
+    coordinate_change_lod(&coordinate, tile_tree_entry.atlas_lod);
 
-    return BestLookup(NodeLookup(quadtree_entry.atlas_index, coordinate), quadtree_uv);
+    return BestLookup(AtlasTile(tile_tree_entry.atlas_index, coordinate), tile_tree_uv);
 }
 
-fn lookup_node(lookup_coordinate: Coordinate, blend: Blend, lod_offset: u32) -> NodeLookup {
-#ifdef QUADTREE_LOD
-    return lookup_best(lookup_coordinate).lookup;
+fn lookup_tile(lookup_coordinate: Coordinate, blend: Blend, lod_offset: u32) -> AtlasTile {
+#ifdef TILE_TREE_LOD
+    return lookup_best(lookup_coordinate).tile;
 #else
-    var coordinate = coordinate_change_lod(lookup_coordinate, blend.lod - lod_offset);
+    var coordinate = lookup_coordinate;
 
-    let quadtree_entry = lookup_quadtree_entry(coordinate);
+    coordinate_change_lod(&coordinate, blend.lod - lod_offset);
 
-    coordinate = coordinate_change_lod(coordinate, quadtree_entry.atlas_lod);
+    let tile_tree_entry = lookup_tile_tree_entry(coordinate);
 
-    return NodeLookup(quadtree_entry.atlas_index, coordinate);
+    coordinate_change_lod(&coordinate, tile_tree_entry.atlas_lod);
+
+    return AtlasTile(tile_tree_entry.atlas_index, coordinate);
 #endif
 }

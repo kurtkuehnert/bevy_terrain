@@ -5,7 +5,7 @@ use crate::big_space::{GridCell, GridTransformOwned, ReferenceFrame};
 
 use crate::{
     math::TerrainModel,
-    terrain_data::{node_atlas::NodeAtlas, AttachmentConfig},
+    terrain_data::{tile_atlas::TileAtlas, AttachmentConfig},
 };
 use bevy::{
     ecs::entity::EntityHashMap,
@@ -36,8 +36,8 @@ pub struct TerrainConfig {
     /// The count of level of detail layers.
     pub lod_count: u32,
     pub model: TerrainModel,
-    /// The amount of nodes the can be loaded simultaneously in the node atlas.
-    pub node_atlas_size: u32,
+    /// The amount of tiles the can be loaded simultaneously in the tile atlas.
+    pub tile_atlas_size: u32,
     /// The path to the terrain folder inside the assets directory.
     pub path: String,
     /// The attachments of the terrain.
@@ -49,7 +49,7 @@ impl Default for TerrainConfig {
         Self {
             lod_count: 1,
             model: TerrainModel::sphere(default(), 1.0, 0.0, 1.0),
-            node_atlas_size: 1024,
+            tile_atlas_size: 1024,
             path: default(),
             attachments: default(),
         }
@@ -69,7 +69,7 @@ impl TerrainConfig {
 #[derive(Bundle)]
 pub struct TerrainBundle {
     pub terrain: Terrain,
-    pub node_atlas: NodeAtlas,
+    pub tile_atlas: TileAtlas,
     pub config: TerrainConfig,
     #[cfg(feature = "high_precision")]
     pub cell: GridCell,
@@ -87,7 +87,7 @@ impl TerrainBundle {
 
         Self {
             terrain: Terrain,
-            node_atlas: NodeAtlas::from_config(&config),
+            tile_atlas: TileAtlas::from_config(&config),
             transform,
             config,
             cell,
@@ -107,7 +107,7 @@ impl TerrainBundle {
 
         Self {
             terrain: Terrain,
-            node_atlas: NodeAtlas::from_config(&config),
+            tile_atlas: TileAtlas::from_config(&config),
             transform,
             config,
             global_transform: default(),

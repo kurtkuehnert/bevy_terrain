@@ -1,13 +1,13 @@
 pub mod tiff;
 
-use crate::math::NodeCoordinate;
+use crate::math::TileCoordinate;
 use anyhow::Result;
 use bincode::{config, Decode, Encode};
 use std::{fs, path::Path};
 
 #[derive(Encode, Decode, Debug)]
 pub struct TC {
-    pub nodes: Vec<NodeCoordinate>,
+    pub tiles: Vec<TileCoordinate>,
 }
 
 impl TC {

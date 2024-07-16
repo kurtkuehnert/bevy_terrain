@@ -18,26 +18,26 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         path: PATH.to_string(),
         ..default()
     }
-        .add_attachment(AttachmentConfig {
-            name: "height".to_string(),
-            texture_size: TEXTURE_SIZE,
-            border_size: 2,
-            format: AttachmentFormat::R16,
-            ..default()
-        })
-        .add_attachment(AttachmentConfig {
-            name: "albedo".to_string(),
-            texture_size: TEXTURE_SIZE,
-            border_size: 2,
-            format: AttachmentFormat::Rgba8,
-            ..default()
-        });
+    .add_attachment(AttachmentConfig {
+        name: "height".to_string(),
+        texture_size: TEXTURE_SIZE,
+        border_size: 2,
+        format: AttachmentFormat::R16,
+        ..default()
+    })
+    .add_attachment(AttachmentConfig {
+        name: "albedo".to_string(),
+        texture_size: TEXTURE_SIZE,
+        border_size: 2,
+        format: AttachmentFormat::Rgba8,
+        ..default()
+    });
 
-    let mut node_atlas = NodeAtlas::from_config(&config);
+    let mut tile_atlas = TileAtlas::from_config(&config);
 
     let preprocessor = Preprocessor::new()
-        .clear_attachment(0, &mut node_atlas)
-        .clear_attachment(1, &mut node_atlas)
+        .clear_attachment(0, &mut tile_atlas)
+        .clear_attachment(1, &mut tile_atlas)
         .preprocess_tile(
             PreprocessDataset {
                 attachment_index: 0,
@@ -46,7 +46,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
                 ..default()
             },
             &asset_server,
-            &mut node_atlas,
+            &mut tile_atlas,
         )
         .preprocess_tile(
             PreprocessDataset {
@@ -56,8 +56,8 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
                 ..default()
             },
             &asset_server,
-            &mut node_atlas,
+            &mut tile_atlas,
         );
 
-    commands.spawn((Terrain, node_atlas, preprocessor));
+    commands.spawn((Terrain, tile_atlas, preprocessor));
 }

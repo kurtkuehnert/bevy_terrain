@@ -1,10 +1,10 @@
 #define_import_path bevy_terrain::fragment
 
-#import bevy_terrain::types::{Blend, NodeLookup, Coordinate}
-#import bevy_terrain::bindings::{config, view_config, tiles}
-#import bevy_terrain::functions::{compute_coordinate, compute_blend, lookup_node}
+#import bevy_terrain::types::{Blend, AtlasTile, Coordinate}
+#import bevy_terrain::bindings::{config, view_config, geometry_tiles}
+#import bevy_terrain::functions::{compute_blend, lookup_tile}
 #import bevy_terrain::attachments::{sample_normal, sample_color}
-#import bevy_terrain::debug::{show_lod, show_tiles, show_quadtree, show_pixels}
+#import bevy_terrain::debug::{show_data_lod, show_geometry_lod, show_tile_tree, show_pixels}
 #import bevy_pbr::mesh_view_bindings::view
 #import bevy_pbr::pbr_types::{PbrInput, pbr_input_new}
 #import bevy_pbr::pbr_functions::{calculate_view, apply_pbr_lighting}
@@ -33,10 +33,12 @@ struct FragmentInfo {
 }
 
 fn fragment_info(input: FragmentInput) -> FragmentInfo{
+    let tile          = geometry_tiles[input.tile_index];
+    let uv            = input.coordinate_uv;
     let view_distance = distance(input.world_position.xyz, view.world_position);
 
     var info: FragmentInfo;
-    info.coordinate     = compute_coordinate(tiles[input.tile_index], input.coordinate_uv);
+    info.coordinate     = Coordinate(tile.side, tile.lod, tile.xy, uv, dpdx(uv), dpdy(uv));
     info.view_distance  = view_distance;
     info.blend          = compute_blend(view_distance);
     info.clip_position  = input.clip_position;
@@ -64,26 +66,27 @@ fn fragment_output(info: ptr<function, FragmentInfo>, output: ptr<function, Frag
 #endif
 }
 
-fn fragment_debug(info: ptr<function, FragmentInfo>, output: ptr<function, FragmentOutput>, lookup: NodeLookup, normal: vec3<f32>) {
-#ifdef SHOW_LOD
-    (*output).color = show_lod((*info).blend, lookup);
+fn fragment_debug(info: ptr<function, FragmentInfo>, output: ptr<function, FragmentOutput>, tile: AtlasTile, normal: vec3<f32>) {
+#ifdef SHOW_DATA_LOD
+    (*output).color = show_data_lod((*info).blend, tile);
 #endif
-#ifdef SHOW_TILES
-    (*output).color = show_tiles((*info).coordinate);
+#ifdef SHOW_GEOMETRY_LOD
+    (*output).color = show_geometry_lod((*info).coordinate);
 #endif
-#ifdef SHOW_UV
-    (*output).color = vec4<f32>(lookup.coordinate.uv, 0.0, 1.0);
-#endif
-#ifdef SHOW_QUADTREE
-    (*output).color = show_quadtree((*info).coordinate);
+#ifdef SHOW_TILE_TREE
+    (*output).color = show_tile_tree((*info).coordinate);
 #endif
 #ifdef SHOW_PIXELS
-    (*output).color = mix((*output).color, show_pixels(lookup), 0.5);
+    (*output).color = mix((*output).color, show_pixels(tile), 0.5);
+#endif
+#ifdef SHOW_UV
+    (*output).color = vec4<f32>(tile.coordinate.uv, 0.0, 1.0);
 #endif
 #ifdef SHOW_NORMALS
     (*output).color = vec4<f32>(normal, 1.0);
 #endif
 
+    // Todo: move this somewhere else
     if ((*info).view_distance < view_config.precision_threshold_distance) {
         (*output).color = mix((*output).color, vec4<f32>(0.1), 0.7);
     }
@@ -93,19 +96,19 @@ fn fragment_debug(info: ptr<function, FragmentInfo>, output: ptr<function, Fragm
 fn fragment(input: FragmentInput) -> FragmentOutput {
     var info = fragment_info(input);
 
-    let lookup = lookup_node(info.coordinate, info.blend, 0u);
-    var color  = sample_color(lookup);
-    var normal = sample_normal(lookup, info.world_normal, info.coordinate.side);
+    let tile   = lookup_tile(info.coordinate, info.blend, 0u);
+    var color  = sample_color(tile);
+    var normal = sample_normal(tile, info.world_normal);
 
     if (info.blend.ratio > 0.0) {
-        let lookup2 = lookup_node(info.coordinate, info.blend, 1u);
-        color       = mix(color,  sample_color(lookup2),                                           info.blend.ratio);
-        normal      = mix(normal, sample_normal(lookup2, info.world_normal, info.coordinate.side), info.blend.ratio);
+        let tile2 = lookup_tile(info.coordinate, info.blend, 1u);
+        color     = mix(color,  sample_color(tile2),                     info.blend.ratio);
+        normal    = mix(normal, sample_normal(tile2, info.world_normal), info.blend.ratio);
     }
 
     var output: FragmentOutput;
     fragment_output(&info, &output, color, normal);
-    fragment_debug(&info, &output, lookup, normal);
+    fragment_debug(&info, &output, tile, normal);
     return output;
 }
 

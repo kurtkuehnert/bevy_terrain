@@ -12,11 +12,11 @@
 //! attachments, can/should not be stored in RAM and VRAM all at once.
 //! Thus they have to be streamed in and out depending on the positions of the
 //! viewers (cameras, lights, etc.).
-//! Therefore the terrain is subdivided into a giant quadtree, whose nodes store their
+//! Therefore the terrain is subdivided into a giant tile_tree, whose tiles store their
 //! section of these attachments.
 //! This crate uses the chunked clipmap data structure, which consist of two pieces working together.
-//! The wrapping [`Quadtree`](prelude::Quadtree) views together with
-//! the [`NodeAtlas`](prelude::NodeAtlas) (the data structure
+//! The wrapping [`TileTree`](prelude::TileTree) views together with
+//! the [`TileAtlas`](prelude::TileAtlas) (the data structure
 //! that stores all of the currently loaded data) can be used to efficiently retrieve
 //! the best currently available data at any position for terrains of any size.
 //! See the [`terrain_data`] module for more information.
@@ -79,7 +79,7 @@ pub mod prelude {
         render::terrain_material::TerrainMaterialPlugin,
         terrain::{Terrain, TerrainBundle, TerrainConfig},
         terrain_data::{
-            node_atlas::NodeAtlas, quadtree::Quadtree, AttachmentConfig, AttachmentFormat,
+            tile_tree::TileTree, tile_atlas::TileAtlas, AttachmentConfig, AttachmentFormat,
         },
         terrain_view::{
             initialize_terrain_view, TerrainView, TerrainViewComponents, TerrainViewConfig,
