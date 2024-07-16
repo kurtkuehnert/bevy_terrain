@@ -1,9 +1,11 @@
 use bevy::{
     asset::{io::Reader, AssetLoader, AsyncReadExt, LoadContext},
     prelude::*,
-    render::render_asset::RenderAssetUsages,
-    render::render_resource::{Extent3d, TextureDimension, TextureFormat},
-    render::texture::TextureError,
+    render::{
+        render_asset::RenderAssetUsages,
+        render_resource::{Extent3d, TextureDimension, TextureFormat},
+        texture::TextureError,
+    },
 };
 use bytemuck::cast_slice;
 use std::io::Cursor;

@@ -1,6 +1,6 @@
 //! Types for configuring terrain views.
 
-use crate::{prelude::Quadtree, terrain::TerrainConfig};
+use crate::{prelude::TileTree, terrain::TerrainConfig};
 use bevy::{prelude::*, render::extract_component::ExtractComponent, utils::HashMap};
 
 /// Resource that stores components that are associated to a terrain entity and a view entity.
@@ -22,10 +22,10 @@ pub struct TerrainView;
 /// A terrain view describes the quality settings the corresponding terrain will be rendered with.
 #[derive(Clone, Component)]
 pub struct TerrainViewConfig {
-    /// The count of nodes in x and y direction per quadtree layer.
-    pub quadtree_size: u32,
+    /// The count of tiles in x and y direction per tile tree layer.
+    pub tree_size: u32,
     /// The size of the tile buffer.
-    pub tile_count: u32,
+    pub geometry_tile_count: u32,
     /// The amount of steps the tile list will be refined.
     pub refinement_count: u32,
     /// The number of rows and columns of the tile grid.
@@ -51,8 +51,8 @@ pub struct TerrainViewConfig {
 impl Default for TerrainViewConfig {
     fn default() -> Self {
         Self {
-            quadtree_size: 8,
-            tile_count: 1000000,
+            tree_size: 8,
+            geometry_tile_count: 1000000,
             refinement_count: 30,
             grid_size: 16,
             subdivision_tolerance: 0.1,
@@ -71,10 +71,10 @@ pub fn initialize_terrain_view(
     view: Entity,
     config: &TerrainConfig,
     view_config: TerrainViewConfig,
-    quadtrees: &mut TerrainViewComponents<Quadtree>,
+    tile_trees: &mut TerrainViewComponents<TileTree>,
     view_configs: &mut TerrainViewComponents<TerrainViewConfig>,
 ) {
-    let quadtree = Quadtree::from_configs(config, &view_config);
+    let tile_tree = TileTree::from_configs(config, &view_config);
     view_configs.insert((terrain, view), view_config);
-    quadtrees.insert((terrain, view), quadtree);
+    tile_trees.insert((terrain, view), tile_tree);
 }

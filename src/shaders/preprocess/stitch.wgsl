@@ -1,9 +1,9 @@
-#import bevy_terrain::preprocessing::{AtlasNode, INVALID_ATLAS_INDEX, atlas, attachment, inside, pixel_coords, pixel_value, process_entry, is_border}
+#import bevy_terrain::preprocessing::{AtlasTile, INVALID_ATLAS_INDEX, atlas, attachment, inside, pixel_coords, pixel_value, process_entry, is_border}
 
 struct StitchData {
-    node: AtlasNode,
-    neighbour_nodes: array<AtlasNode, 8u>,
-    node_index: u32,
+    tile: AtlasTile,
+    neighbour_tiles: array<AtlasTile, 8u>,
+    tile_index: u32,
 }
 
 @group(1) @binding(0)
@@ -87,29 +87,29 @@ fn neighbour_data(coords: vec2<u32>, neighbour_index: u32) -> vec4<f32> {
         vec2( center_size, -center_size)
     );
 
-    let neighbour_node = stitch_data.neighbour_nodes[neighbour_index];
+    let neighbour_tile = stitch_data.neighbour_tiles[neighbour_index];
     let neighbour_coords = project_to_side(vec2<u32>(vec2<i32>(coords) + offsets[neighbour_index]),
-                                           stitch_data.node.coordinate.side,
-                                           neighbour_node.coordinate.side);
+                                           stitch_data.tile.coordinate.side,
+                                           neighbour_tile.coordinate.side);
 
-    return textureLoad(atlas, neighbour_coords, neighbour_node.atlas_index, 0);
+    return textureLoad(atlas, neighbour_coords, neighbour_tile.atlas_index, 0);
 }
 
 fn repeat_data(coords: vec2<u32>) -> vec4<f32> {
     let repeat_coords = clamp(coords, vec2<u32>(attachment.border_size),
                                       vec2<u32>(attachment.border_size + attachment.center_size - 1u));
 
-    return textureLoad(atlas, repeat_coords, stitch_data.node.atlas_index, 0);
+    return textureLoad(atlas, repeat_coords, stitch_data.tile.atlas_index, 0);
 }
 
 override fn pixel_value(coords: vec2<u32>) -> vec4<f32> {
     if (!is_border(coords)) {
-        return textureLoad(atlas, coords, stitch_data.node.atlas_index, 0);
+        return textureLoad(atlas, coords, stitch_data.tile.atlas_index, 0);
     }
 
     let neighbour_index = neighbour_index(coords);
 
-    if (stitch_data.neighbour_nodes[neighbour_index].atlas_index == INVALID_ATLAS_INDEX) {
+    if (stitch_data.neighbour_tiles[neighbour_index].atlas_index == INVALID_ATLAS_INDEX) {
         return repeat_data(coords);
     }
     else {
@@ -120,5 +120,5 @@ override fn pixel_value(coords: vec2<u32>) -> vec4<f32> {
 // Todo: respect memory coalescing
 @compute @workgroup_size(8, 8, 1)
 fn stitch(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
-    process_entry(vec3<u32>(invocation_id.xy, stitch_data.node_index));
+    process_entry(vec3<u32>(invocation_id.xy, stitch_data.tile_index));
 }

@@ -1,6 +1,6 @@
 use crate::{
     terrain::{Terrain, TerrainComponents, TerrainConfig},
-    terrain_data::gpu_node_atlas::GpuNodeAtlas,
+    terrain_data::gpu_tile_atlas::GpuTileAtlas,
     util::StaticBuffer,
 };
 use bevy::{
@@ -58,10 +58,10 @@ struct AttachmentUniform {
 }
 
 impl AttachmentUniform {
-    fn new(atlas: &GpuNodeAtlas) -> Self {
+    fn new(tile_atlas: &GpuTileAtlas) -> Self {
         let mut uniform = Self::default();
 
-        for (config, attachment) in iter::zip(&mut uniform.data, &atlas.attachments) {
+        for (config, attachment) in iter::zip(&mut uniform.data, &tile_atlas.attachments) {
             config.size = attachment.buffer_info.center_size as f32;
             config.scale = attachment.buffer_info.center_size as f32
                 / attachment.buffer_info.texture_size as f32;
@@ -103,7 +103,7 @@ impl TerrainData {
         device: &RenderDevice,
         fallback_image: &FallbackImage,
         config_uniform: TerrainConfigUniform,
-        gpu_node_atlas: &GpuNodeAtlas,
+        gpu_tile_atlas: &GpuTileAtlas,
     ) -> Self {
         let mesh_buffer = StaticBuffer::empty_sized(
             None,
@@ -124,7 +124,7 @@ impl TerrainData {
 
         let attachments = (0..8)
             .map(|i| {
-                gpu_node_atlas
+                gpu_tile_atlas
                     .attachments
                     .get(i)
                     .map_or(fallback_image.d2_array.texture_view.clone(), |attachment| {
@@ -133,7 +133,7 @@ impl TerrainData {
             })
             .collect_vec();
 
-        let attachment_uniform = AttachmentUniform::new(gpu_node_atlas);
+        let attachment_uniform = AttachmentUniform::new(gpu_tile_atlas);
         let attachment_buffer =
             StaticBuffer::create(None, device, &attachment_uniform, BufferUsages::UNIFORM);
 
@@ -166,15 +166,15 @@ impl TerrainData {
         device: Res<RenderDevice>,
         fallback_image: Res<FallbackImage>,
         mut terrain_data: ResMut<TerrainComponents<TerrainData>>,
-        gpu_node_atlases: Res<TerrainComponents<GpuNodeAtlas>>,
+        gpu_tile_atlases: Res<TerrainComponents<GpuTileAtlas>>,
         terrain_query: Extract<Query<(Entity, &TerrainConfig), Added<Terrain>>>,
     ) {
         for (terrain, config) in terrain_query.iter() {
-            let gpu_node_atlas = gpu_node_atlases.get(&terrain).unwrap();
+            let gpu_tile_atlas = gpu_tile_atlases.get(&terrain).unwrap();
 
             terrain_data.insert(
                 terrain,
-                TerrainData::new(&device, &fallback_image, config.into(), gpu_node_atlas),
+                TerrainData::new(&device, &fallback_image, config.into(), gpu_tile_atlas),
             );
         }
     }

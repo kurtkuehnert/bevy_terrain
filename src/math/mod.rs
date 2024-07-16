@@ -3,7 +3,7 @@ mod ellipsoid;
 mod terrain_model;
 
 pub use crate::math::{
-    coordinate::{Coordinate, NodeCoordinate},
+    coordinate::{Coordinate, TileCoordinate},
     terrain_model::{
         generate_terrain_model_approximation, TerrainModel, TerrainModelApproximation,
     },

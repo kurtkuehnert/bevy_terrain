@@ -1,22 +1,22 @@
 //! This module contains the two fundamental data structures of the terrain:
-//! the [`Quadtree`] and the [`NodeAtlas`].
+//! the [`TileTree`] and the [`TileAtlas`].
 //!
 //! # Explanation
-//! Each terrain possesses one [`NodeAtlas`], which can be configured
-//! to store any [`AtlasAttachment`](node_atlas::AtlasAttachment) required (eg. height, density, albedo, splat, edc.)
+//! Each terrain possesses one [`TileAtlas`], which can be configured
+//! to store any [`AtlasAttachment`](tile_atlas::AtlasAttachment) required (eg. height, density, albedo, splat, edc.)
 //! These attachments can vary in resolution and texture format.
 //!
-//! To decide which nodes should be currently loaded you can create multiple
-//! [`Quadtree`] views that correspond to one node atlas.
-//! These quadtrees request and release nodes from the node atlas based on their quality
+//! To decide which tiles should be currently loaded you can create multiple
+//! [`TileTree`] views that correspond to one tile atlas.
+//! These tile_trees request and release tiles from the tile atlas based on their quality
 //! setting (`load_distance`).
 //! Additionally they are then used to access the best loaded data at any position.
 //!
-//! Both the node atlas and the quadtrees also have a corresponding GPU representation,
+//! Both the tile atlas and the tile_trees also have a corresponding GPU representation,
 //! which can be used to access the terrain data in shaders.
 
 use crate::{
-    terrain_data::{node_atlas::NodeAtlas, quadtree::Quadtree},
+    terrain_data::{tile_tree::TileTree, tile_atlas::TileAtlas},
     util::CollectArray,
 };
 use bevy::{math::DVec3, prelude::*, render::render_resource::*};
@@ -25,10 +25,10 @@ use bytemuck::cast_slice;
 use itertools::iproduct;
 use std::iter;
 
-pub mod gpu_node_atlas;
-pub mod gpu_quadtree;
-pub mod node_atlas;
-pub mod quadtree;
+pub mod gpu_tile_tree;
+pub mod gpu_tile_atlas;
+pub mod tile_tree;
+pub mod tile_atlas;
 
 pub const INVALID_ATLAS_INDEX: u32 = u32::MAX;
 pub const INVALID_LOD: u32 = u32::MAX;
@@ -89,7 +89,7 @@ pub struct AttachmentConfig {
     /// The name of the attachment.
     pub name: String,
     pub texture_size: u32,
-    /// The overlapping border size around the node, used to prevent sampling artifacts.
+    /// The overlapping border size around the tile, used to prevent sampling artifacts.
     pub border_size: u32,
     pub mip_level_count: u32,
     /// The format of the attachment.
@@ -256,42 +256,39 @@ impl AttachmentData {
             };
         }
 
-        // Todo: check the correctness of this interpolation code
         Vec4::lerp(
             Vec4::lerp(values[0][0], values[0][1], remainder.y),
             Vec4::lerp(values[1][0], values[1][1], remainder.y),
             remainder.x,
         )
-
-        // (values[0][0] + values[0][1] + values[1][0] + values[1][1]) / 4.0
     }
 }
 
 pub fn sample_attachment(
-    quadtree: &Quadtree,
-    node_atlas: &NodeAtlas,
+    tile_tree: &TileTree,
+    tile_atlas: &TileAtlas,
     attachment_index: u32,
     sample_world_position: DVec3,
 ) -> Vec4 {
-    let sample_local_position = quadtree
+    let sample_local_position = tile_tree
         .model
         .position_world_to_local(sample_world_position);
-    let world_normal = quadtree.model.normal_local_to_world(sample_local_position);
-    let sample_world_position = quadtree
+    let world_normal = tile_tree.model.normal_local_to_world(sample_local_position);
+    let sample_world_position = tile_tree
         .model
         .position_local_to_world(sample_local_position)
-        + world_normal * quadtree.approximate_height as f64;
+        + world_normal * tile_tree.approximate_height as f64;
 
-    let (lod, blend_ratio) = quadtree.compute_blend(sample_world_position);
+    let (lod, blend_ratio) = tile_tree.compute_blend(sample_world_position);
 
-    let lookup = quadtree.lookup_node(sample_world_position, lod);
-    let mut value = node_atlas.sample_attachment(lookup, attachment_index);
+    let lookup = tile_tree.lookup_tile(sample_world_position, lod);
+    let mut value = tile_atlas.sample_attachment(lookup, attachment_index);
 
     if blend_ratio > 0.0 {
-        let lookup2 = quadtree.lookup_node(sample_world_position, lod - 1);
+        let lookup2 = tile_tree.lookup_tile(sample_world_position, lod - 1);
         value = Vec4::lerp(
             value,
-            node_atlas.sample_attachment(lookup2, attachment_index),
+            tile_atlas.sample_attachment(lookup2, attachment_index),
             blend_ratio,
         );
     }
@@ -300,13 +297,13 @@ pub fn sample_attachment(
 }
 
 pub fn sample_height(
-    quadtree: &Quadtree,
-    node_atlas: &NodeAtlas,
+    tile_tree: &TileTree,
+    tile_atlas: &TileAtlas,
     sample_world_position: DVec3,
 ) -> f32 {
     f32::lerp(
-        quadtree.model.min_height,
-        quadtree.model.max_height,
-        sample_attachment(quadtree, node_atlas, 0, sample_world_position).x,
+        tile_tree.model.min_height,
+        tile_tree.model.max_height,
+        sample_attachment(tile_tree, tile_atlas, 0, sample_world_position).x,
     )
 }

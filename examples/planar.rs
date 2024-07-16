@@ -37,7 +37,7 @@ fn setup(
     mut commands: Commands,
     mut images: ResMut<LoadingImages>,
     mut materials: ResMut<Assets<TerrainMaterial>>,
-    mut quadtrees: ResMut<TerrainViewComponents<Quadtree>>,
+    mut tile_trees: ResMut<TerrainViewComponents<TileTree>>,
     mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
     asset_server: Res<AssetServer>,
 ) {
@@ -55,20 +55,20 @@ fn setup(
         path: PATH.to_string(),
         ..default()
     }
-    .add_attachment(AttachmentConfig {
-        name: "height".to_string(),
-        texture_size: TEXTURE_SIZE,
-        border_size: 2,
-        mip_level_count: 4,
-        format: AttachmentFormat::R16,
-    })
-    .add_attachment(AttachmentConfig {
-        name: "albedo".to_string(),
-        texture_size: TEXTURE_SIZE,
-        border_size: 2,
-        mip_level_count: 4,
-        format: AttachmentFormat::Rgba8,
-    });
+        .add_attachment(AttachmentConfig {
+            name: "height".to_string(),
+            texture_size: TEXTURE_SIZE,
+            border_size: 2,
+            mip_level_count: 4,
+            format: AttachmentFormat::R16,
+        })
+        .add_attachment(AttachmentConfig {
+            name: "albedo".to_string(),
+            texture_size: TEXTURE_SIZE,
+            border_size: 2,
+            mip_level_count: 4,
+            format: AttachmentFormat::Rgba8,
+        });
 
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
     let view_config = TerrainViewConfig::default();
@@ -92,7 +92,7 @@ fn setup(
             view,
             &config,
             view_config,
-            &mut quadtrees,
+            &mut tile_trees,
             &mut view_configs,
         );
     });

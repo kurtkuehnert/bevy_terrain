@@ -42,18 +42,18 @@ impl Plugin for TerrainDebugPlugin {
 #[derive(Clone, Resource)]
 pub struct DebugTerrain {
     pub wireframe: bool,
-    pub show_lod: bool,
-    pub show_uv: bool,
-    pub show_tiles: bool,
-    pub show_quadtree: bool,
+    pub show_data_lod: bool,
+    pub show_geometry_lod: bool,
+    pub show_tile_tree: bool,
     pub show_pixels: bool,
+    pub show_uv: bool,
     pub show_normals: bool,
     pub morph: bool,
     pub blend: bool,
-    pub quadtree_lod: bool,
-    pub albedo: bool,
+    pub tile_tree_lod: bool,
     pub lighting: bool,
     pub sample_grad: bool,
+    pub high_precision: bool,
     pub freeze: bool,
     pub test1: bool,
     pub test2: bool,
@@ -64,18 +64,18 @@ impl Default for DebugTerrain {
     fn default() -> Self {
         Self {
             wireframe: false,
-            show_lod: false,
-            show_uv: false,
-            show_tiles: false,
-            show_quadtree: false,
+            show_data_lod: false,
+            show_geometry_lod: false,
+            show_tile_tree: false,
             show_pixels: false,
+            show_uv: false,
             show_normals: false,
             morph: true,
             blend: true,
-            quadtree_lod: false,
-            albedo: false,
+            tile_tree_lod: false,
             lighting: true,
             sample_grad: true,
+            high_precision: true,
             freeze: false,
             test1: false,
             test2: false,
@@ -97,31 +97,24 @@ pub fn toggle_debug(input: Res<ButtonInput<KeyCode>>, mut debug: ResMut<DebugTer
         )
     }
     if input.just_pressed(KeyCode::KeyL) {
-        debug.show_lod = !debug.show_lod;
+        debug.show_data_lod = !debug.show_data_lod;
         println!(
-            "Toggled the lod view {}.",
-            if debug.show_lod { "on" } else { "off" }
-        )
-    }
-    if input.just_pressed(KeyCode::KeyU) {
-        debug.show_uv = !debug.show_uv;
-        println!(
-            "Toggled the uv view {}.",
-            if debug.show_uv { "on" } else { "off" }
+            "Toggled the terrain data LOD view {}.",
+            if debug.show_data_lod { "on" } else { "off" }
         )
     }
     if input.just_pressed(KeyCode::KeyY) {
-        debug.show_tiles = !debug.show_tiles;
+        debug.show_geometry_lod = !debug.show_geometry_lod;
         println!(
-            "Toggled the tile view {}.",
-            if debug.show_tiles { "on" } else { "off" }
+            "Toggled the terrain geometry LOD view {}.",
+            if debug.show_geometry_lod { "on" } else { "off" }
         )
     }
     if input.just_pressed(KeyCode::KeyQ) {
-        debug.show_quadtree = !debug.show_quadtree;
+        debug.show_tile_tree = !debug.show_tile_tree;
         println!(
-            "Toggled the quadtree view {}.",
-            if debug.show_quadtree { "on" } else { "off" }
+            "Toggled the tile tree LOD view {}.",
+            if debug.show_tile_tree { "on" } else { "off" }
         )
     }
     if input.just_pressed(KeyCode::KeyP) {
@@ -129,6 +122,13 @@ pub fn toggle_debug(input: Res<ButtonInput<KeyCode>>, mut debug: ResMut<DebugTer
         println!(
             "Toggled the pixel view {}.",
             if debug.show_pixels { "on" } else { "off" }
+        )
+    }
+    if input.just_pressed(KeyCode::KeyU) {
+        debug.show_uv = !debug.show_uv;
+        println!(
+            "Toggled the uv view {}.",
+            if debug.show_uv { "on" } else { "off" }
         )
     }
     if input.just_pressed(KeyCode::KeyB) {
@@ -152,18 +152,11 @@ pub fn toggle_debug(input: Res<ButtonInput<KeyCode>>, mut debug: ResMut<DebugTer
             if debug.blend { "on" } else { "off" }
         )
     }
-    if input.just_pressed(KeyCode::KeyH) {
-        debug.quadtree_lod = !debug.quadtree_lod;
+    if input.just_pressed(KeyCode::KeyZ) {
+        debug.tile_tree_lod = !debug.tile_tree_lod;
         println!(
-            "Toggled the quadtree lod {}.",
-            if debug.quadtree_lod { "on" } else { "off" }
-        )
-    }
-    if input.just_pressed(KeyCode::KeyA) {
-        debug.albedo = !debug.albedo;
-        println!(
-            "Toggled the albedo {}.",
-            if debug.albedo { "on" } else { "off" }
+            "Toggled tile tree lod {}.",
+            if debug.tile_tree_lod { "on" } else { "off" }
         )
     }
     if input.just_pressed(KeyCode::KeyS) {
@@ -178,6 +171,13 @@ pub fn toggle_debug(input: Res<ButtonInput<KeyCode>>, mut debug: ResMut<DebugTer
         println!(
             "Toggled the texture sampling using gradients {}.",
             if debug.sample_grad { "on" } else { "off" }
+        )
+    }
+    if input.just_pressed(KeyCode::KeyH) {
+        debug.high_precision = !debug.high_precision;
+        println!(
+            "Toggled high precision coordinates {}.",
+            if debug.high_precision { "on" } else { "off" }
         )
     }
     if input.just_pressed(KeyCode::KeyF) {

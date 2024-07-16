@@ -73,25 +73,23 @@ bitflags::bitflags! {
     #[repr(transparent)]
     pub struct TerrainPipelineFlags: u32 {
         const NONE               = 0;
-        const SPHERICAL          = (1 <<  0);
-        const WIREFRAME          = (1 <<  1);
-        const SHOW_LOD           = (1 <<  2);
-        const SHOW_UV            = (1 <<  3);
-        const SHOW_TILES         = (1 <<  4);
-        const SHOW_QUADTREE      = (1 <<  5);
-        const SHOW_PIXELS        = (1 <<  6);
-        const SHOW_NORMALS       = (1 <<  7);
-        const MORPH              = (1 <<  8);
-        const BLEND              = (1 <<  9);
-        const QUADTREE_LOD       = (1 << 10);
-        const ALBEDO             = (1 << 11);
-        const BRIGHT             = (1 << 12);
-        const LIGHTING           = (1 << 13);
-        const SAMPLE_GRAD        = (1 << 14);
-        const TEST1              = (1 << 15);
-        const TEST2              = (1 << 16);
-        const TEST3              = (1 << 17);
-
+        const SPHERICAL          = 1 <<  0;
+        const WIREFRAME          = 1 <<  1;
+        const SHOW_DATA_LOD      = 1 <<  2;
+        const SHOW_GEOMETRY_LOD  = 1 <<  3;
+        const SHOW_TILE_TREE     = 1 <<  4;
+        const SHOW_PIXELS        = 1 <<  5;
+        const SHOW_UV            = 1 <<  6;
+        const SHOW_NORMALS       = 1 <<  7;
+        const MORPH              = 1 <<  8;
+        const BLEND              = 1 <<  9;
+        const TILE_TREE_LOD      = 1 << 10;
+        const LIGHTING           = 1 << 11;
+        const SAMPLE_GRAD        = 1 << 12;
+        const HIGH_PRECISION     = 1 << 13;
+        const TEST1              = 1 << 14;
+        const TEST2              = 1 << 15;
+        const TEST3              = 1 << 16;
         const MSAA_RESERVED_BITS = TerrainPipelineFlags::MSAA_MASK_BITS << TerrainPipelineFlags::MSAA_SHIFT_BITS;
     }
 }
@@ -111,20 +109,20 @@ impl TerrainPipelineFlags {
         if debug.wireframe {
             key |= TerrainPipelineFlags::WIREFRAME;
         }
-        if debug.show_lod {
-            key |= TerrainPipelineFlags::SHOW_LOD;
+        if debug.show_data_lod {
+            key |= TerrainPipelineFlags::SHOW_DATA_LOD;
         }
-        if debug.show_uv {
-            key |= TerrainPipelineFlags::SHOW_UV;
+        if debug.show_geometry_lod {
+            key |= TerrainPipelineFlags::SHOW_GEOMETRY_LOD;
         }
-        if debug.show_tiles {
-            key |= TerrainPipelineFlags::SHOW_TILES;
-        }
-        if debug.show_quadtree {
-            key |= TerrainPipelineFlags::SHOW_QUADTREE;
+        if debug.show_tile_tree {
+            key |= TerrainPipelineFlags::SHOW_TILE_TREE;
         }
         if debug.show_pixels {
             key |= TerrainPipelineFlags::SHOW_PIXELS;
+        }
+        if debug.show_uv {
+            key |= TerrainPipelineFlags::SHOW_UV;
         }
         if debug.show_normals {
             key |= TerrainPipelineFlags::SHOW_NORMALS;
@@ -135,17 +133,17 @@ impl TerrainPipelineFlags {
         if debug.blend {
             key |= TerrainPipelineFlags::BLEND;
         }
-        if debug.quadtree_lod {
-            key |= TerrainPipelineFlags::QUADTREE_LOD;
-        }
-        if debug.albedo {
-            key |= TerrainPipelineFlags::ALBEDO;
+        if debug.tile_tree_lod {
+            key |= TerrainPipelineFlags::TILE_TREE_LOD;
         }
         if debug.lighting {
             key |= TerrainPipelineFlags::LIGHTING;
         }
         if debug.sample_grad {
             key |= TerrainPipelineFlags::SAMPLE_GRAD;
+        }
+        if debug.high_precision {
+            key |= TerrainPipelineFlags::HIGH_PRECISION;
         }
         if debug.test1 {
             key |= TerrainPipelineFlags::TEST1;
@@ -165,7 +163,7 @@ impl TerrainPipelineFlags {
     }
 
     pub fn polygon_mode(&self) -> PolygonMode {
-        match (self.bits() & TerrainPipelineFlags::WIREFRAME.bits()) != 0 {
+        match self.contains(TerrainPipelineFlags::WIREFRAME) {
             true => PolygonMode::Line,
             false => PolygonMode::Fill,
         }
@@ -174,55 +172,52 @@ impl TerrainPipelineFlags {
     pub fn shader_defs(&self) -> Vec<ShaderDefVal> {
         let mut shader_defs = Vec::new();
 
-        if (self.bits() & TerrainPipelineFlags::SPHERICAL.bits()) != 0 {
+        if self.contains(TerrainPipelineFlags::SPHERICAL) {
             shader_defs.push("SPHERICAL".into());
         }
-        if (self.bits() & TerrainPipelineFlags::SHOW_LOD.bits()) != 0 {
-            shader_defs.push("SHOW_LOD".into());
+        if self.contains(TerrainPipelineFlags::SHOW_DATA_LOD) {
+            shader_defs.push("SHOW_DATA_LOD".into());
         }
-        if (self.bits() & TerrainPipelineFlags::SHOW_UV.bits()) != 0 {
-            shader_defs.push("SHOW_UV".into());
+        if self.contains(TerrainPipelineFlags::SHOW_GEOMETRY_LOD) {
+            shader_defs.push("SHOW_GEOMETRY_LOD".into());
         }
-        if (self.bits() & TerrainPipelineFlags::SHOW_TILES.bits()) != 0 {
-            shader_defs.push("SHOW_TILES".into());
+        if self.contains(TerrainPipelineFlags::SHOW_TILE_TREE) {
+            shader_defs.push("SHOW_TILE_TREE".into());
         }
-        if (self.bits() & TerrainPipelineFlags::SHOW_QUADTREE.bits()) != 0 {
-            shader_defs.push("SHOW_QUADTREE".into());
-        }
-        if (self.bits() & TerrainPipelineFlags::SHOW_PIXELS.bits()) != 0 {
+        if self.contains(TerrainPipelineFlags::SHOW_PIXELS) {
             shader_defs.push("SHOW_PIXELS".into())
         }
-        if (self.bits() & TerrainPipelineFlags::SHOW_NORMALS.bits()) != 0 {
+        if self.contains(TerrainPipelineFlags::SHOW_UV) {
+            shader_defs.push("SHOW_UV".into());
+        }
+        if self.contains(TerrainPipelineFlags::SHOW_NORMALS) {
             shader_defs.push("SHOW_NORMALS".into())
         }
-        if (self.bits() & TerrainPipelineFlags::MORPH.bits()) != 0 {
+        if self.contains(TerrainPipelineFlags::MORPH) {
             shader_defs.push("MORPH".into());
         }
-        if (self.bits() & TerrainPipelineFlags::BLEND.bits()) != 0 {
+        if self.contains(TerrainPipelineFlags::BLEND) {
             shader_defs.push("BLEND".into());
         }
-        if (self.bits() & TerrainPipelineFlags::QUADTREE_LOD.bits()) != 0 {
-            shader_defs.push("QUADTREE_LOD".into());
+        if self.contains(TerrainPipelineFlags::TILE_TREE_LOD) {
+            shader_defs.push("TILE_TREE_LOD".into());
         }
-        if (self.bits() & TerrainPipelineFlags::ALBEDO.bits()) != 0 {
-            shader_defs.push("ALBEDO".into());
-        }
-        if (self.bits() & TerrainPipelineFlags::BRIGHT.bits()) != 0 {
-            shader_defs.push("BRIGHT".into());
-        }
-        if (self.bits() & TerrainPipelineFlags::LIGHTING.bits()) != 0 {
+        if self.contains(TerrainPipelineFlags::LIGHTING) {
             shader_defs.push("LIGHTING".into());
         }
-        if (self.bits() & TerrainPipelineFlags::SAMPLE_GRAD.bits()) != 0 {
+        if self.contains(TerrainPipelineFlags::SAMPLE_GRAD) {
             shader_defs.push("SAMPLE_GRAD".into());
         }
-        if (self.bits() & TerrainPipelineFlags::TEST1.bits()) != 0 {
+        if self.contains(TerrainPipelineFlags::HIGH_PRECISION) {
+            shader_defs.push("HIGH_PRECISION".into());
+        }
+        if self.contains(TerrainPipelineFlags::TEST1) {
             shader_defs.push("TEST1".into());
         }
-        if (self.bits() & TerrainPipelineFlags::TEST2.bits()) != 0 {
+        if self.contains(TerrainPipelineFlags::TEST2) {
             shader_defs.push("TEST2".into());
         }
-        if (self.bits() & TerrainPipelineFlags::TEST3.bits()) != 0 {
+        if self.contains(TerrainPipelineFlags::TEST3) {
             shader_defs.push("TEST3".into());
         }
 
@@ -306,8 +301,6 @@ where
         bind_group_layout.push(self.material_layout.clone());
 
         let vertex_shader_defs = shader_defs.clone();
-        // vertex_shader_defs.push("VERTEX".into());
-
         let mut fragment_shader_defs = shader_defs.clone();
         fragment_shader_defs.push("FRAGMENT".into());
 
