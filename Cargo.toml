@@ -12,54 +12,53 @@ authors = ["Kurt Kühnert <kurt@kuehnert.dev>"]
 repository = "https://github.com/kurtkuehnert/bevy_terrain"
 
 [features]
-spherical = []
+high_precision = ["dep:big_space"]
 
 [dependencies]
-bevy = "0.13.0" #{ git="https://github.com/bevyengine/bevy/", branch="main" }
+bevy = "0.14.0" #{ git="https://github.com/bevyengine/bevy/", branch="main" }
 ndarray = "0.15"
 itertools = "0.12"
-image = "0.24"
+image = "0.25"
 tiff = "0.9"
 lru = "0.12"
 bitflags = "2.4"
-strum = "0.26"
-strum_macros = "0.26"
 bytemuck = "1.14"
 anyhow = "1.0"
 bincode = "2.0.0-rc.3"
-dolly = "0.4"
 async-channel = "2.1"
+big_space = { version = "0.7", optional = true }
 
 [[example]]
 name = "preprocess_planar"
-path = "examples/planar/preprocess_planar.rs"
+path = "examples/preprocess_planar.rs"
+required-features = ["bevy/embedded_watcher"]
 
 [package.metadata.example.preprocess_planar]
 name = "Preprocess Planar"
 description = "Preprocesses the terrain data for the planar examples."
 
 [[example]]
-name = "basic"
-path = "examples/planar/basic.rs"
-# required-features = ["bevy/embedded_watcher"]
+name = "minimal"
+path = "examples/minimal.rs"
+required-features = ["bevy/embedded_watcher"]
 
-[package.metadata.example.basic]
-name = "Basic"
+[package.metadata.example.minial]
+name = "Minimal"
 description = "Renders a basic flat terrain with only the base attachment."
 
 [[example]]
-name = "advanced"
-path = "examples/planar/advanced.rs"
-# required-features = ["bevy/embedded_watcher"]
+name = "planar"
+path = "examples/planar.rs"
+required-features = ["high_precision", "bevy/embedded_watcher"]
 
-[package.metadata.example.advanced]
-name = "Advanced"
+[package.metadata.example.planar]
+name = "Planar Advanced"
 description = "Renders a flat terrain with the base attachment and an albedo texture, using a custom shader."
 
 [[example]]
 name = "preprocess_spherical"
-path = "examples/spherical/preprocess_spherical.rs"
-required-features = ["spherical"]
+path = "examples/preprocess_spherical.rs"
+required-features = ["bevy/embedded_watcher"]
 
 [package.metadata.example.preprocess_spherical]
 name = "Preprocess Spherical"
@@ -67,9 +66,8 @@ description = "Preprocesses the terrain data for the spherical examples."
 
 [[example]]
 name = "spherical"
-path = "examples/spherical/spherical.rs"
-required-features = ["spherical"]
-# required-features = ["spherical", "bevy/embedded_watcher"]
+path = "examples/spherical.rs"
+required-features = ["high_precision", "bevy/embedded_watcher"]
 
 [package.metadata.example.spherical]
 name = "Spherical"

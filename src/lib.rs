@@ -12,11 +12,11 @@
 //! attachments, can/should not be stored in RAM and VRAM all at once.
 //! Thus they have to be streamed in and out depending on the positions of the
 //! viewers (cameras, lights, etc.).
-//! Therefore the terrain is subdivided into a giant quadtree, whose nodes store their
+//! Therefore the terrain is subdivided into a giant tile_tree, whose tiles store their
 //! section of these attachments.
 //! This crate uses the chunked clipmap data structure, which consist of two pieces working together.
-//! The wrapping [`Quadtree`](prelude::Quadtree) views together with
-//! the [`NodeAtlas`](prelude::NodeAtlas) (the data structure
+//! The wrapping [`TileTree`](prelude::TileTree) views together with
+//! the [`TileAtlas`](prelude::TileAtlas) (the data structure
 //! that stores all of the currently loaded data) can be used to efficiently retrieve
 //! the best currently available data at any position for terrains of any size.
 //! See the [`terrain_data`] module for more information.
@@ -43,11 +43,15 @@
 //!
 //! [^note]: Some of these claims are not yet fully implemented.
 
+#[cfg(feature = "high_precision")]
+pub mod big_space;
 pub mod debug;
 pub mod formats;
+pub mod math;
 pub mod plugin;
 pub mod preprocess;
 pub mod render;
+pub mod shaders;
 pub mod terrain;
 pub mod terrain_data;
 pub mod terrain_view;
@@ -56,22 +60,27 @@ pub mod util;
 pub mod prelude {
     //! `use bevy_terrain::prelude::*;` to import common components, bundles, and plugins.
     // #[doc(hidden)]
+
+    #[cfg(feature = "high_precision")]
+    pub use crate::big_space::{BigSpaceCommands, ReferenceFrame};
+
     pub use crate::{
-        debug::{camera::DebugCamera, DebugTerrainMaterial, LoadingImages, TerrainDebugPlugin},
+        debug::{
+            camera::{DebugCameraBundle, DebugCameraController},
+            DebugTerrainMaterial, LoadingImages, TerrainDebugPlugin,
+        },
+        math::TerrainModel,
         plugin::TerrainPlugin,
         preprocess::{
             preprocessor::Preprocessor,
             preprocessor::{PreprocessDataset, SphericalDataset},
             TerrainPreprocessPlugin,
         },
-        render::render_pipeline::TerrainMaterialPlugin,
-        terrain::{Terrain, TerrainBundle, TerrainConfig},
+        render::terrain_material::TerrainMaterialPlugin,
+        terrain::{TerrainBundle, TerrainConfig},
         terrain_data::{
-            node_atlas::NodeAtlas, quadtree::Quadtree, sample_attachment, AttachmentConfig,
-            AttachmentFormat,
+            tile_atlas::TileAtlas, tile_tree::TileTree, AttachmentConfig, AttachmentFormat,
         },
-        terrain_view::{
-            initialize_terrain_view, TerrainView, TerrainViewComponents, TerrainViewConfig,
-        },
+        terrain_view::{TerrainViewComponents, TerrainViewConfig},
     };
 }

@@ -1,10 +1,10 @@
 use crate::{
-    terrain::Terrain,
+    math::TileCoordinate,
     terrain_data::{
-        coordinates::NodeCoordinate,
-        node_atlas::{AtlasNode, AtlasNodeAttachment, NodeAtlas},
+        tile_atlas::{AtlasTile, AtlasTileAttachment, TileAtlas},
         AttachmentFormat,
     },
+    util::CollectArray,
 };
 use bevy::{prelude::*, render::texture::ImageSampler};
 use itertools::{iproduct, Itertools};
@@ -55,56 +55,52 @@ impl Default for PreprocessDataset {
 }
 
 impl PreprocessDataset {
-    fn overlapping_nodes(
-        &self,
-        lod: u32,
-        lod_count: u32,
-    ) -> impl Iterator<Item = NodeCoordinate> + '_ {
-        let node_count = 1 << (lod_count - lod - 1);
+    fn overlapping_tiles(&self, lod: u32) -> impl Iterator<Item = TileCoordinate> + '_ {
+        let tile_count = TileCoordinate::count(lod);
 
-        let lower = (self.top_left * node_count as f32).as_uvec2();
-        let upper = (self.bottom_right * node_count as f32).ceil().as_uvec2();
+        let lower = (self.top_left * tile_count as f32).as_uvec2();
+        let upper = (self.bottom_right * tile_count as f32).ceil().as_uvec2();
 
         iproduct!(lower.x..upper.x, lower.y..upper.y)
-            .map(move |(x, y)| NodeCoordinate::new(self.side, lod, x, y))
+            .map(move |(x, y)| TileCoordinate::new(self.side, lod, x, y))
     }
 }
 
 #[derive(Clone)]
 pub(crate) enum PreprocessTaskType {
     Split {
-        tile: Handle<Image>,
+        tile_data: Handle<Image>,
         top_left: Vec2,
         bottom_right: Vec2,
     },
     Stitch {
-        neighbour_nodes: [AtlasNode; 8],
+        neighbour_tiles: [AtlasTile; 8],
     },
     Downsample {
-        child_nodes: [AtlasNode; 4],
+        child_tiles: [AtlasTile; 4],
     },
     Save,
     Barrier,
 }
 
-// Todo: store node_coordinate, task_type, node_dependencies and tile dependencies
-// loop over all tasks, take n, allocate/load node and its dependencies, process task
+// Todo: store tile_coordinate, task_type, tile_dependencies and tile dependencies
+// loop over all tasks, take n, allocate/load tile and its dependencies, process task
 #[derive(Clone)]
 pub(crate) struct PreprocessTask {
-    pub(crate) node: AtlasNodeAttachment,
+    pub(crate) tile: AtlasTileAttachment,
     pub(crate) task_type: PreprocessTaskType,
 }
 
 impl PreprocessTask {
-    fn is_ready(&self, asset_server: &AssetServer, node_atlas: &NodeAtlas) -> bool {
+    fn is_ready(&self, asset_server: &AssetServer, tile_atlas: &TileAtlas) -> bool {
         match &self.task_type {
-            PreprocessTaskType::Split { tile, .. } => {
-                asset_server.is_loaded_with_dependencies(tile)
+            PreprocessTaskType::Split { tile_data, .. } => {
+                asset_server.is_loaded_with_dependencies(tile_data)
             }
             PreprocessTaskType::Stitch { .. } => true,
             PreprocessTaskType::Downsample { .. } => true,
             PreprocessTaskType::Barrier => {
-                node_atlas.state.download_slots == node_atlas.state.max_download_slots
+                tile_atlas.state.download_slots == tile_atlas.state.max_download_slots
             }
             PreprocessTaskType::Save => true,
         }
@@ -114,55 +110,57 @@ impl PreprocessTask {
     fn debug(&self) {
         match &self.task_type {
             PreprocessTaskType::Split { .. } => {
-                println!("Splitting node: {}", self.node.coordinate)
+                println!("Splitting tile: {}", self.tile.coordinate)
             }
             PreprocessTaskType::Stitch { .. } => {
-                println!("Stitching node: {}", self.node.coordinate)
+                println!("Stitching tile: {}", self.tile.coordinate)
             }
             PreprocessTaskType::Downsample { .. } => {
-                println!("Downsampling node: {}", self.node.coordinate)
+                println!("Downsampling tile: {}", self.tile.coordinate)
             }
-            PreprocessTaskType::Save => println!("Started saving node: {}", self.node.coordinate),
+            PreprocessTaskType::Save => {
+                println!("Started saving tile: {}", self.tile.coordinate)
+            }
             PreprocessTaskType::Barrier => println!("Barrier"),
         }
     }
 
     fn barrier() -> Self {
         Self {
-            node: default(),
+            tile: default(),
             task_type: PreprocessTaskType::Barrier,
         }
     }
 
     fn save(
-        node_coordinate: NodeCoordinate,
-        node_atlas: &mut NodeAtlas,
+        tile_coordinate: TileCoordinate,
+        tile_atlas: &mut TileAtlas,
         dataset: &PreprocessDataset,
     ) -> Self {
-        let node = node_atlas
-            .get_or_allocate(node_coordinate)
+        let tile = tile_atlas
+            .get_or_allocate_tile(tile_coordinate)
             .attachment(dataset.attachment_index);
 
         Self {
-            node,
+            tile,
             task_type: PreprocessTaskType::Save,
         }
     }
 
     fn split(
-        node_coordinate: NodeCoordinate,
-        node_atlas: &mut NodeAtlas,
+        tile_coordinate: TileCoordinate,
+        tile_atlas: &mut TileAtlas,
         dataset: &PreprocessDataset,
-        tile: Handle<Image>,
+        tile_data: Handle<Image>,
     ) -> Self {
-        let node = node_atlas
-            .get_or_allocate(node_coordinate)
+        let tile = tile_atlas
+            .get_or_allocate_tile(tile_coordinate)
             .attachment(dataset.attachment_index);
 
         Self {
-            node,
+            tile,
             task_type: PreprocessTaskType::Split {
-                tile,
+                tile_data,
                 top_left: dataset.top_left,
                 bottom_right: dataset.bottom_right,
             },
@@ -170,48 +168,44 @@ impl PreprocessTask {
     }
 
     fn stitch(
-        node_coordinate: NodeCoordinate,
-        node_atlas: &mut NodeAtlas,
+        tile_coordinate: TileCoordinate,
+        tile_atlas: &mut TileAtlas,
         dataset: &PreprocessDataset,
     ) -> Self {
-        let node = node_atlas
-            .get_or_allocate(node_coordinate)
+        let tile = tile_atlas
+            .get_or_allocate_tile(tile_coordinate)
             .attachment(dataset.attachment_index);
 
-        let neighbour_nodes = node
+        let neighbour_tiles = tile
             .coordinate
-            .neighbours(node_atlas.lod_count)
-            .map(|coordinate| node_atlas.get_or_allocate(coordinate))
-            .collect_vec()
-            .try_into()
-            .unwrap();
+            .neighbours(tile_atlas.model.is_spherical())
+            .map(|coordinate| tile_atlas.get_tile(coordinate))
+            .collect_array();
 
         Self {
-            node,
-            task_type: PreprocessTaskType::Stitch { neighbour_nodes },
+            tile,
+            task_type: PreprocessTaskType::Stitch { neighbour_tiles },
         }
     }
 
     fn downsample(
-        node_coordinate: NodeCoordinate,
-        node_atlas: &mut NodeAtlas,
+        tile_coordinate: TileCoordinate,
+        tile_atlas: &mut TileAtlas,
         dataset: &PreprocessDataset,
     ) -> Self {
-        let node = node_atlas
-            .get_or_allocate(node_coordinate)
+        let tile = tile_atlas
+            .get_or_allocate_tile(tile_coordinate)
             .attachment(dataset.attachment_index);
 
-        let child_nodes = node
+        let child_tiles = tile
             .coordinate
             .children()
-            .map(|coordinate| node_atlas.get_or_allocate(coordinate))
-            .collect_vec()
-            .try_into()
-            .unwrap();
+            .map(|coordinate| tile_atlas.get_tile(coordinate))
+            .collect_array();
 
         Self {
-            node,
-            task_type: PreprocessTaskType::Downsample { child_nodes },
+            tile,
+            task_type: PreprocessTaskType::Downsample { child_tiles },
         }
     }
 }
@@ -241,33 +235,33 @@ impl Preprocessor {
         &mut self,
         dataset: &PreprocessDataset,
         asset_server: &AssetServer,
-        node_atlas: &mut NodeAtlas,
+        tile_atlas: &mut TileAtlas,
     ) {
         let tile_handle = asset_server.load(&dataset.path);
 
         self.loading_tiles.push(LoadingTile {
             id: tile_handle.id(),
-            format: node_atlas.attachments[dataset.attachment_index as usize].format,
+            format: tile_atlas.attachments[dataset.attachment_index as usize].format,
         });
 
-        for node_coordinate in
-            dataset.overlapping_nodes(dataset.lod_range.start, node_atlas.lod_count)
-        {
+        let mut lods = dataset.lod_range.clone().rev();
+
+        for tile_coordinate in dataset.overlapping_tiles(lods.next().unwrap()) {
             self.task_queue.push_back(PreprocessTask::split(
-                node_coordinate,
-                node_atlas,
+                tile_coordinate,
+                tile_atlas,
                 dataset,
                 tile_handle.clone(),
             ));
         }
 
-        for lod in dataset.lod_range.clone().skip(1) {
+        for lod in lods {
             self.task_queue.push_back(PreprocessTask::barrier());
 
-            for node_coordinate in dataset.overlapping_nodes(lod, node_atlas.lod_count) {
+            for tile_coordinate in dataset.overlapping_tiles(lod) {
                 self.task_queue.push_back(PreprocessTask::downsample(
-                    node_coordinate,
-                    node_atlas,
+                    tile_coordinate,
+                    tile_atlas,
                     dataset,
                 ));
             }
@@ -277,28 +271,25 @@ impl Preprocessor {
     fn stitch_and_save_layer(
         &mut self,
         dataset: &PreprocessDataset,
-        node_atlas: &mut NodeAtlas,
+        tile_atlas: &mut TileAtlas,
         lod: u32,
     ) {
-        for node_coordinate in dataset.overlapping_nodes(lod, node_atlas.lod_count) {
-            self.task_queue.push_back(PreprocessTask::stitch(
-                node_coordinate,
-                node_atlas,
-                &dataset,
-            ));
+        for tile_coordinate in dataset.overlapping_tiles(lod) {
+            self.task_queue
+                .push_back(PreprocessTask::stitch(tile_coordinate, tile_atlas, dataset));
         }
 
         self.task_queue.push_back(PreprocessTask::barrier());
 
-        for node_coordinate in dataset.overlapping_nodes(lod, node_atlas.lod_count) {
+        for tile_coordinate in dataset.overlapping_tiles(lod) {
             self.task_queue
-                .push_back(PreprocessTask::save(node_coordinate, node_atlas, &dataset));
+                .push_back(PreprocessTask::save(tile_coordinate, tile_atlas, dataset));
         }
     }
 
-    pub fn clear_attachment(self, attachment_index: u32, node_atlas: &mut NodeAtlas) -> Self {
-        let attachment = &mut node_atlas.attachments[attachment_index as usize];
-        node_atlas.state.existing_nodes.clear();
+    pub fn clear_attachment(self, attachment_index: u32, tile_atlas: &mut TileAtlas) -> Self {
+        let attachment = &mut tile_atlas.attachments[attachment_index as usize];
+        tile_atlas.state.existing_tiles.clear();
         reset_directory(&attachment.path);
 
         self
@@ -308,14 +299,13 @@ impl Preprocessor {
         mut self,
         dataset: PreprocessDataset,
         asset_server: &AssetServer,
-        node_atlas: &mut NodeAtlas,
+        tile_atlas: &mut TileAtlas,
     ) -> Self {
-        self.task_queue.push_back(PreprocessTask::barrier());
-        self.split_and_downsample(&dataset, asset_server, node_atlas);
+        self.split_and_downsample(&dataset, asset_server, tile_atlas);
         self.task_queue.push_back(PreprocessTask::barrier());
 
         for lod in dataset.lod_range.clone() {
-            self.stitch_and_save_layer(&dataset, node_atlas, lod);
+            self.stitch_and_save_layer(&dataset, tile_atlas, lod);
         }
 
         self
@@ -325,7 +315,7 @@ impl Preprocessor {
         mut self,
         dataset: SphericalDataset,
         asset_server: &AssetServer,
-        node_atlas: &mut NodeAtlas,
+        tile_atlas: &mut TileAtlas,
     ) -> Self {
         let side_datasets = (0..6)
             .map(|side| PreprocessDataset {
@@ -338,14 +328,14 @@ impl Preprocessor {
             .collect_vec();
 
         for dataset in &side_datasets {
-            self.split_and_downsample(&dataset, asset_server, node_atlas);
+            self.split_and_downsample(dataset, asset_server, tile_atlas);
         }
 
         self.task_queue.push_back(PreprocessTask::barrier());
 
         for lod in dataset.lod_range {
             for dataset in &side_datasets {
-                self.stitch_and_save_layer(&dataset, node_atlas, lod);
+                self.stitch_and_save_layer(dataset, tile_atlas, lod);
             }
         }
 
@@ -355,9 +345,9 @@ impl Preprocessor {
 
 pub(crate) fn select_ready_tasks(
     asset_server: Res<AssetServer>,
-    mut terrain_query: Query<(&mut Preprocessor, &mut NodeAtlas), With<Terrain>>,
+    mut terrains: Query<(&mut Preprocessor, &mut TileAtlas)>,
 ) {
-    for (mut preprocessor, mut node_atlas) in terrain_query.iter_mut() {
+    for (mut preprocessor, mut tile_atlas) in terrains.iter_mut() {
         let Preprocessor {
             task_queue,
             ready_tasks,
@@ -367,12 +357,15 @@ pub(crate) fn select_ready_tasks(
 
         if let Some(time) = start_time {
             if task_queue.is_empty()
-                && node_atlas.state.download_slots == node_atlas.state.max_download_slots
-                && node_atlas.state.save_slots == node_atlas.state.max_save_slots
+                && tile_atlas.state.download_slots == tile_atlas.state.max_download_slots
+                && tile_atlas.state.save_slots == tile_atlas.state.max_save_slots
             {
                 println!("Preprocessing took {:?}", time.elapsed());
 
-                node_atlas.save_node_config();
+                tile_atlas.save_tile_config();
+                // tile_atlas.state.existing_tiles.iter().for_each(|tile| {
+                //     println!("{tile}");
+                // });
 
                 *start_time = None;
             }
@@ -383,20 +376,20 @@ pub(crate) fn select_ready_tasks(
         ready_tasks.clear();
 
         loop {
-            if (node_atlas.state.download_slots > 0)
+            if (tile_atlas.state.download_slots > 0)
                 && task_queue
                     .front()
-                    .map_or(false, |task| task.is_ready(&asset_server, &node_atlas))
+                    .map_or(false, |task| task.is_ready(&asset_server, &tile_atlas))
             {
                 let task = task_queue.pop_front().unwrap();
 
                 // task.debug();
 
                 if matches!(task.task_type, PreprocessTaskType::Save) {
-                    node_atlas.save(task.node);
+                    tile_atlas.save(task.tile);
                 } else {
                     ready_tasks.push(task);
-                    node_atlas.state.download_slots -= 1;
+                    tile_atlas.state.download_slots -= 1;
                 }
             } else {
                 break;
@@ -406,17 +399,17 @@ pub(crate) fn select_ready_tasks(
 }
 
 pub(crate) fn preprocessor_load_tile(
-    mut terrain_query: Query<&mut Preprocessor, With<Terrain>>,
+    mut preprocessors: Query<&mut Preprocessor>,
     mut images: ResMut<Assets<Image>>,
 ) {
-    for mut preprocessor in terrain_query.iter_mut() {
+    for mut preprocessor in preprocessors.iter_mut() {
         preprocessor.loading_tiles.retain_mut(|tile| {
             if let Some(image) = images.get_mut(tile.id) {
                 image.texture_descriptor.format = tile.format.processing_format();
                 image.sampler = ImageSampler::linear();
-                return false;
+                false
             } else {
-                return true;
+                true
             }
         });
 

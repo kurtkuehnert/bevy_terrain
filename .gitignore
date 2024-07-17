@@ -1,4 +1,5 @@
 .idea
+Cargo.lock
 target
 assets/**/data/*
 assets/**/config.tc
