@@ -3,6 +3,8 @@ use bevy_terrain::prelude::*;
 
 const PATH: &str = "terrains/spherical";
 const RADIUS: f64 = 6371000.0;
+const MAJOR_AXES: f64 = 6378137.0;
+const MINOR_AXES: f64 = 6356752.314245;
 const MIN_HEIGHT: f32 = -12000.0;
 const MAX_HEIGHT: f32 = 9000.0;
 const TEXTURE_SIZE: u32 = 512;
@@ -16,9 +18,6 @@ pub struct TerrainMaterial {
 }
 
 impl Material for TerrainMaterial {
-    // fn vertex_shader() -> ShaderRef {
-    //     "shaders/spherical.wgsl".into()
-    // }
     fn fragment_shader() -> ShaderRef {
         "shaders/spherical.wgsl".into()
     }
@@ -43,7 +42,6 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<TerrainMaterial>>,
     mut tile_trees: ResMut<TerrainViewComponents<TileTree>>,
-    mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
     asset_server: Res<AssetServer>,
 ) {
     let gradient = asset_server.load("textures/gradient.png");
@@ -56,13 +54,7 @@ fn setup(
     // Configure all the important properties of the terrain, as well as its attachments.
     let config = TerrainConfig {
         lod_count: LOD_COUNT,
-        model: TerrainModel::ellipsoid(
-            DVec3::ZERO,
-            6378137.0,
-            6356752.314245,
-            MIN_HEIGHT,
-            MAX_HEIGHT,
-        ),
+        model: TerrainModel::ellipsoid(DVec3::ZERO, MAJOR_AXES, MINOR_AXES, MIN_HEIGHT, MAX_HEIGHT),
         // model: TerrainModel::ellipsoid(
         //     DVec3::ZERO,
         //     6378137.0,
@@ -74,23 +66,26 @@ fn setup(
         path: PATH.to_string(),
         ..default()
     }
-        .add_attachment(AttachmentConfig {
-            name: "height".to_string(),
-            texture_size: TEXTURE_SIZE,
-            border_size: 2,
-            mip_level_count: 4,
-            format: AttachmentFormat::R16,
-        });
+    .add_attachment(AttachmentConfig {
+        name: "height".to_string(),
+        texture_size: TEXTURE_SIZE,
+        border_size: 2,
+        mip_level_count: 4,
+        format: AttachmentFormat::R16,
+    });
 
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
     let view_config = TerrainViewConfig::default();
+
+    let tile_atlas = TileAtlas::new(&config);
+    let tile_tree = TileTree::new(&tile_atlas, &view_config);
 
     commands.spawn_big_space(ReferenceFrame::default(), |root| {
         let frame = root.frame().clone();
 
         let terrain = root
             .spawn_spatial((
-                TerrainBundle::new(config.clone(), &frame),
+                TerrainBundle::new(tile_atlas, &frame),
                 materials.add(TerrainMaterial {
                     gradient: gradient.clone(),
                 }),
@@ -98,20 +93,14 @@ fn setup(
             .id();
 
         let view = root
-            .spawn_spatial((
-                TerrainView,
-                DebugCameraBundle::new(-DVec3::X * RADIUS * 3.0, RADIUS, &frame),
+            .spawn_spatial(DebugCameraBundle::new(
+                -DVec3::X * RADIUS * 3.0,
+                RADIUS,
+                &frame,
             ))
             .id();
 
-        initialize_terrain_view(
-            terrain,
-            view,
-            &config,
-            view_config,
-            &mut tile_trees,
-            &mut view_configs,
-        );
+        tile_trees.insert((terrain, view), tile_tree);
 
         let sun_position = DVec3::new(-1.0, 1.0, -1.0) * RADIUS * 10.0;
         let (sun_cell, sun_translation) = frame.translation_to_grid(sun_position);

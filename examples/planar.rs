@@ -38,7 +38,6 @@ fn setup(
     mut images: ResMut<LoadingImages>,
     mut materials: ResMut<Assets<TerrainMaterial>>,
     mut tile_trees: ResMut<TerrainViewComponents<TileTree>>,
-    mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
     asset_server: Res<AssetServer>,
 ) {
     let gradient = asset_server.load("textures/gradient2.png");
@@ -55,45 +54,39 @@ fn setup(
         path: PATH.to_string(),
         ..default()
     }
-        .add_attachment(AttachmentConfig {
-            name: "height".to_string(),
-            texture_size: TEXTURE_SIZE,
-            border_size: 2,
-            mip_level_count: 4,
-            format: AttachmentFormat::R16,
-        })
-        .add_attachment(AttachmentConfig {
-            name: "albedo".to_string(),
-            texture_size: TEXTURE_SIZE,
-            border_size: 2,
-            mip_level_count: 4,
-            format: AttachmentFormat::Rgba8,
-        });
+    .add_attachment(AttachmentConfig {
+        name: "height".to_string(),
+        texture_size: TEXTURE_SIZE,
+        border_size: 2,
+        mip_level_count: 4,
+        format: AttachmentFormat::R16,
+    })
+    .add_attachment(AttachmentConfig {
+        name: "albedo".to_string(),
+        texture_size: TEXTURE_SIZE,
+        border_size: 2,
+        mip_level_count: 4,
+        format: AttachmentFormat::Rgba8,
+    });
 
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
     let view_config = TerrainViewConfig::default();
+
+    let tile_atlas = TileAtlas::new(&config);
+    let tile_tree = TileTree::new(&tile_atlas, &view_config);
 
     commands.spawn_big_space(ReferenceFrame::default(), |root| {
         let frame = root.frame().clone();
 
         let terrain = root
             .spawn_spatial((
-                TerrainBundle::new(config.clone(), &frame),
+                TerrainBundle::new(tile_atlas, &frame),
                 materials.add(TerrainMaterial { gradient }),
             ))
             .id();
 
-        let view = root
-            .spawn_spatial((TerrainView, DebugCameraBundle::default()))
-            .id();
+        let view = root.spawn_spatial(DebugCameraBundle::default()).id();
 
-        initialize_terrain_view(
-            terrain,
-            view,
-            &config,
-            view_config,
-            &mut tile_trees,
-            &mut view_configs,
-        );
+        tile_trees.insert((terrain, view), tile_tree);
     });
 }

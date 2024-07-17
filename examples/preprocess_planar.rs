@@ -33,7 +33,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         ..default()
     });
 
-    let mut tile_atlas = TileAtlas::from_config(&config);
+    let mut tile_atlas = TileAtlas::new(&config);
 
     let preprocessor = Preprocessor::new()
         .clear_attachment(0, &mut tile_atlas)
@@ -59,5 +59,5 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             &mut tile_atlas,
         );
 
-    commands.spawn((Terrain, tile_atlas, preprocessor));
+    commands.spawn((tile_atlas, preprocessor));
 }
