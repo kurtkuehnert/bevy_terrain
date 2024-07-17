@@ -1,24 +1,30 @@
 use crate::{
+    math::{generate_terrain_model_approximation, TerrainModelApproximation},
     render::{
-        compute_pipelines::{TerrainComputeLabel, TerrainComputeNode, TerrainComputePipelines},
         culling_bind_group::CullingBindGroup,
-        shaders::load_terrain_shaders,
         terrain_bind_group::TerrainData,
         terrain_view_bind_group::TerrainViewData,
+        tiling_prepass::{
+            queue_tiling_prepass, TilingPrepassItem, TilingPrepassLabel, TilingPrepassNode,
+            TilingPrepassPipelines,
+        },
     },
-    terrain::{Terrain, TerrainComponents},
+    shaders::{load_terrain_shaders, InternalShaders},
+    terrain::TerrainComponents,
     terrain_data::{
-        gpu_node_atlas::GpuNodeAtlas, gpu_quadtree::GpuQuadtree, node_atlas::NodeAtlas,
-        quadtree::Quadtree,
+        gpu_tile_atlas::GpuTileAtlas, gpu_tile_tree::GpuTileTree, tile_atlas::TileAtlas,
+        tile_tree::TileTree,
     },
-    terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
-    util::InternalShaders,
+    terrain_view::TerrainViewComponents,
 };
 use bevy::{
     prelude::*,
     render::{
-        extract_component::ExtractComponentPlugin, graph::CameraDriverLabel,
-        render_graph::RenderGraph, render_resource::*, Render, RenderApp, RenderSet,
+        graph::CameraDriverLabel,
+        render_graph::RenderGraph,
+        render_resource::*,
+        view::{check_visibility, VisibilitySystems},
+        Render, RenderApp, RenderSet,
     },
 };
 
@@ -27,39 +33,45 @@ pub struct TerrainPlugin;
 
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins((
-            ExtractComponentPlugin::<Terrain>::default(),
-            ExtractComponentPlugin::<TerrainView>::default(),
-        ))
-        .init_resource::<InternalShaders>()
-        .init_resource::<TerrainViewComponents<Quadtree>>()
-        .init_resource::<TerrainViewComponents<TerrainViewConfig>>()
-        .add_systems(
-            Last,
-            (
-                Quadtree::compute_requests,
-                NodeAtlas::update,
-                Quadtree::adjust_to_node_atlas,
-                Quadtree::approximate_height,
+        #[cfg(feature = "high_precision")]
+        app.add_plugins(crate::big_space::BigSpacePlugin::default());
+
+        app.init_resource::<InternalShaders>()
+            .init_resource::<TerrainViewComponents<TileTree>>()
+            .init_resource::<TerrainViewComponents<TerrainModelApproximation>>()
+            .add_systems(
+                PostUpdate,
+                check_visibility::<With<TileAtlas>>.in_set(VisibilitySystems::CheckVisibility),
             )
-                .chain(),
-        );
+            .add_systems(
+                Last,
+                (
+                    TileTree::compute_requests,
+                    TileAtlas::update,
+                    TileTree::adjust_to_tile_atlas,
+                    TileTree::approximate_height,
+                    generate_terrain_model_approximation,
+                )
+                    .chain(),
+            );
 
         app.sub_app_mut(RenderApp)
-            .init_resource::<TerrainComponents<GpuNodeAtlas>>()
+            .init_resource::<TerrainComponents<GpuTileAtlas>>()
             .init_resource::<TerrainComponents<TerrainData>>()
-            .init_resource::<TerrainViewComponents<GpuQuadtree>>()
+            .init_resource::<TerrainViewComponents<GpuTileTree>>()
             .init_resource::<TerrainViewComponents<TerrainViewData>>()
             .init_resource::<TerrainViewComponents<CullingBindGroup>>()
+            .init_resource::<TerrainViewComponents<TilingPrepassItem>>()
             .add_systems(
                 ExtractSchedule,
                 (
-                    GpuNodeAtlas::initialize,
-                    GpuQuadtree::initialize,
-                    TerrainData::initialize.after(GpuNodeAtlas::initialize),
-                    TerrainViewData::initialize.after(GpuQuadtree::initialize),
-                    GpuNodeAtlas::extract.after(GpuNodeAtlas::initialize),
-                    GpuQuadtree::extract.after(GpuQuadtree::initialize),
+                    GpuTileAtlas::initialize,
+                    GpuTileAtlas::extract.after(GpuTileAtlas::initialize),
+                    GpuTileTree::initialize,
+                    GpuTileTree::extract.after(GpuTileTree::initialize),
+                    TerrainData::initialize.after(GpuTileAtlas::initialize),
+                    TerrainData::extract.after(TerrainData::initialize),
+                    TerrainViewData::initialize.after(GpuTileTree::initialize),
                     TerrainViewData::extract.after(TerrainViewData::initialize),
                 ),
             )
@@ -67,14 +79,15 @@ impl Plugin for TerrainPlugin {
                 Render,
                 (
                     (
-                        GpuQuadtree::prepare,
-                        GpuNodeAtlas::prepare,
+                        GpuTileTree::prepare,
+                        GpuTileAtlas::prepare,
+                        TerrainData::prepare,
                         TerrainViewData::prepare,
                         CullingBindGroup::prepare,
                     )
                         .in_set(RenderSet::Prepare),
-                    TerrainComputePipelines::queue.in_set(RenderSet::Queue),
-                    GpuNodeAtlas::cleanup
+                    queue_tiling_prepass.in_set(RenderSet::Queue),
+                    GpuTileAtlas::cleanup
                         .before(World::clear_entities)
                         .in_set(RenderSet::Cleanup),
                 ),
@@ -86,12 +99,11 @@ impl Plugin for TerrainPlugin {
 
         let render_app = app
             .sub_app_mut(RenderApp)
-            .init_resource::<TerrainComputePipelines>()
-            .init_resource::<SpecializedComputePipelines<TerrainComputePipelines>>();
+            .init_resource::<TilingPrepassPipelines>()
+            .init_resource::<SpecializedComputePipelines<TilingPrepassPipelines>>();
 
-        let compute_node = TerrainComputeNode::from_world(&mut render_app.world);
-        let mut render_graph = render_app.world.resource_mut::<RenderGraph>();
-        render_graph.add_node(TerrainComputeLabel, compute_node);
-        render_graph.add_node_edge(TerrainComputeLabel, CameraDriverLabel);
+        let mut render_graph = render_app.world_mut().resource_mut::<RenderGraph>();
+        render_graph.add_node(TilingPrepassLabel, TilingPrepassNode);
+        render_graph.add_node_edge(TilingPrepassLabel, CameraDriverLabel);
     }
 }

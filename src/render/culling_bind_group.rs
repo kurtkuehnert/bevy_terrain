@@ -1,6 +1,5 @@
 use crate::{
-    terrain::Terrain,
-    terrain_view::{TerrainView, TerrainViewComponents},
+    terrain_data::gpu_tile_tree::GpuTileTree, terrain_view::TerrainViewComponents,
     util::StaticBuffer,
 };
 use bevy::{
@@ -42,21 +41,15 @@ pub fn planes(view_projection: &Mat4) -> [Vec4; 5] {
 pub struct CullingUniform {
     world_position: Vec3,
     view_proj: Mat4,
-    model: Mat4,
     planes: [Vec4; 5],
 }
 
 impl From<&ExtractedView> for CullingUniform {
     fn from(view: &ExtractedView) -> Self {
-        let view_proj = view.projection * view.transform.compute_matrix().inverse();
-        let world_position = view.transform.translation();
-        let planes = planes(&view_proj);
-
         Self {
-            world_position,
-            view_proj,
-            model: default(),
-            planes,
+            world_position: view.world_from_view.translation(),
+            view_proj: view.world_from_view.compute_matrix().inverse(),
+            planes: default(),
         }
     }
 }
@@ -93,18 +86,17 @@ impl CullingBindGroup {
 
     pub(crate) fn prepare(
         device: Res<RenderDevice>,
+        gpu_tile_trees: Res<TerrainViewComponents<GpuTileTree>>,
+        extracted_views: Query<&ExtractedView>,
         mut culling_bind_groups: ResMut<TerrainViewComponents<CullingBindGroup>>,
-        terrain_query: Query<Entity, With<Terrain>>,
-        view_query: Query<(Entity, &ExtractedView), With<TerrainView>>,
     ) {
-        for (view, extracted_view) in view_query.iter() {
-            // todo: save per view not per terrain
+        for &(terrain, view) in gpu_tile_trees.keys() {
+            let extracted_view = extracted_views.get(view).unwrap();
 
-            for terrain in terrain_query.iter() {
-                let culling_bind_group = CullingBindGroup::new(&device, extracted_view.into());
-
-                culling_bind_groups.insert((terrain, view), culling_bind_group);
-            }
+            culling_bind_groups.insert(
+                (terrain, view),
+                CullingBindGroup::new(&device, extracted_view.into()),
+            );
         }
     }
 }

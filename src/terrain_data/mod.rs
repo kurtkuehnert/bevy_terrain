@@ -1,38 +1,34 @@
 //! This module contains the two fundamental data structures of the terrain:
-//! the [`Quadtree`] and the [`NodeAtlas`].
+//! the [`TileTree`] and the [`TileAtlas`].
 //!
 //! # Explanation
-//! Each terrain possesses one [`NodeAtlas`], which can be configured
-//! to store any [`AtlasAttachment`](node_atlas::AtlasAttachment) required (eg. height, density, albedo, splat, edc.)
+//! Each terrain possesses one [`TileAtlas`], which can be configured
+//! to store any [`AtlasAttachment`](tile_atlas::AtlasAttachment) required (eg. height, density, albedo, splat, edc.)
 //! These attachments can vary in resolution and texture format.
 //!
-//! To decide which nodes should be currently loaded you can create multiple
-//! [`Quadtree`] views that correspond to one node atlas.
-//! These quadtrees request and release nodes from the node atlas based on their quality
+//! To decide which tiles should be currently loaded you can create multiple
+//! [`TileTree`] views that correspond to one tile atlas.
+//! These tile_trees request and release tiles from the tile atlas based on their quality
 //! setting (`load_distance`).
 //! Additionally they are then used to access the best loaded data at any position.
 //!
-//! Both the node atlas and the quadtrees also have a corresponding GPU representation,
+//! Both the tile atlas and the tile_trees also have a corresponding GPU representation,
 //! which can be used to access the terrain data in shaders.
 
-use crate::terrain_data::{node_atlas::NodeAtlas, quadtree::Quadtree};
-use bevy::prelude::*;
-use bevy::render::render_resource::*;
+use crate::{
+    terrain_data::{tile_atlas::TileAtlas, tile_tree::TileTree},
+    util::CollectArray,
+};
+use bevy::{math::DVec3, prelude::*, render::render_resource::*};
 use bincode::{Decode, Encode};
 use bytemuck::cast_slice;
-use itertools::{iproduct, Itertools};
+use itertools::iproduct;
 use std::iter;
 
-pub mod coordinates;
-pub mod gpu_node_atlas;
-pub mod gpu_quadtree;
-pub mod node_atlas;
-pub mod quadtree;
-
-#[cfg(feature = "spherical")]
-pub const SIDE_COUNT: u32 = 6;
-#[cfg(not(feature = "spherical"))]
-pub const SIDE_COUNT: u32 = 1;
+pub mod gpu_tile_atlas;
+pub mod gpu_tile_tree;
+pub mod tile_atlas;
+pub mod tile_tree;
 
 pub const INVALID_ATLAS_INDEX: u32 = u32::MAX;
 pub const INVALID_LOD: u32 = u32::MAX;
@@ -93,7 +89,7 @@ pub struct AttachmentConfig {
     /// The name of the attachment.
     pub name: String,
     pub texture_size: u32,
-    /// The overlapping border size around the node, used to prevent sampling artifacts.
+    /// The overlapping border size around the tile, used to prevent sampling artifacts.
     pub border_size: u32,
     pub mip_level_count: u32,
     /// The format of the attachment.
@@ -163,12 +159,7 @@ impl AttachmentData {
                     iter::zip(&mut value, data[index]).for_each(|(value, v)| *value += v as u64);
                 }
 
-                let value = value
-                    .iter()
-                    .map(|value| (value / 4) as u8)
-                    .collect_vec()
-                    .try_into()
-                    .unwrap();
+                let value = value.iter().map(|value| (value / 4) as u8).collect_array();
 
                 data.push(value);
             }
@@ -182,17 +173,25 @@ impl AttachmentData {
         ) {
             for (child_y, child_x) in iproduct!(0..child_size, 0..child_size) {
                 let mut value = 0;
+                let mut count = 0;
 
-                for i in 0..4 {
-                    let parent_x = (child_x << 1) + (i >> 1);
-                    let parent_y = (child_y << 1) + (i & 1);
-
+                for (parent_x, parent_y) in
+                    iproduct!(0..2, 0..2).map(|(x, y)| ((child_x << 1) + x, (child_y << 1) + y))
+                {
                     let index = start + parent_y * parent_size + parent_x;
+                    let data = data[index] as u32;
 
-                    value += data[index] as u64;
+                    if data != 0 {
+                        value += data;
+                        count += 1;
+                    }
                 }
 
-                let value = (value / 4) as u16;
+                let value = if count == 0 {
+                    0
+                } else {
+                    (value / count) as u16
+                };
 
                 data.push(value);
             }
@@ -219,16 +218,16 @@ impl AttachmentData {
         }
     }
 
-    pub(crate) fn sample(&self, coordinate: Vec2, size: u32) -> Vec4 {
-        let coordinate = coordinate * size as f32 - 0.5;
+    pub(crate) fn sample(&self, uv: Vec2, size: u32) -> Vec4 {
+        let uv = uv * size as f32 - 0.5;
 
-        let _remainder = coordinate % 1.0;
-        let coordinate = coordinate.as_ivec2();
+        let remainder = uv % 1.0;
+        let uv = uv.as_ivec2();
 
         let mut values = [[Vec4::ZERO; 2]; 2];
 
         for (x, y) in iproduct!(0..2, 0..2) {
-            let index = (coordinate.y + y) * size as i32 + (coordinate.x + x);
+            let index = (uv.y + y) * size as i32 + (uv.x + x);
 
             values[x as usize][y as usize] = match self {
                 AttachmentData::None => Vec4::splat(0.0),
@@ -257,32 +256,37 @@ impl AttachmentData {
             };
         }
 
-        // Todo: check the correctness of this interpolation code
-        // Vec4::lerp(
-        //     Vec4::lerp(values[1][1], values[1][0], remainder.y),
-        //     Vec4::lerp(values[0][1], values[0][0], remainder.y),
-        //     remainder.x,
-        // )
-
-        (values[0][0] + values[0][1] + values[1][0] + values[1][1]) / 4.0
+        Vec4::lerp(
+            Vec4::lerp(values[0][0], values[0][1], remainder.y),
+            Vec4::lerp(values[1][0], values[1][1], remainder.y),
+            remainder.x,
+        )
     }
 }
 
-pub(crate) fn sample_attachment_local(
-    quadtree: &Quadtree,
-    node_atlas: &NodeAtlas,
+pub fn sample_attachment(
+    tile_tree: &TileTree,
+    tile_atlas: &TileAtlas,
     attachment_index: u32,
-    local_position: Vec3,
+    sample_world_position: DVec3,
 ) -> Vec4 {
-    let (lod, blend_ratio) = quadtree.compute_blend(local_position);
+    let model = &tile_atlas.model;
 
-    let lookup = quadtree.lookup_node(local_position, lod);
-    let mut value = node_atlas.sample_attachment(lookup, attachment_index);
+    // translate the sample position onto the terrain's surface
+    // this is necessary to compute a valid blend LOD and ratio
+    let surface_position =
+        model.surface_position(sample_world_position, tile_tree.approximate_height as f64);
+
+    let (lod, blend_ratio) = tile_tree.compute_blend(surface_position);
+
+    let lookup = tile_tree.lookup_tile(surface_position, lod, model);
+    let mut value = tile_atlas.sample_attachment(lookup, attachment_index);
 
     if blend_ratio > 0.0 {
-        let lookup2 = quadtree.lookup_node(local_position, lod);
-        value = value.lerp(
-            node_atlas.sample_attachment(lookup2, attachment_index),
+        let lookup2 = tile_tree.lookup_tile(surface_position, lod - 1, model);
+        value = Vec4::lerp(
+            value,
+            tile_atlas.sample_attachment(lookup2, attachment_index),
             blend_ratio,
         );
     }
@@ -290,12 +294,14 @@ pub(crate) fn sample_attachment_local(
     value
 }
 
-pub fn sample_attachment(
-    quadtree: &Quadtree,
-    node_atlas: &NodeAtlas,
-    attachment_index: u32,
-    world_position: Vec3,
-) -> Vec4 {
-    let local_position = quadtree.world_to_local_position(world_position);
-    sample_attachment_local(quadtree, node_atlas, attachment_index, local_position)
+pub fn sample_height(
+    tile_tree: &TileTree,
+    tile_atlas: &TileAtlas,
+    sample_world_position: DVec3,
+) -> f32 {
+    f32::lerp(
+        tile_atlas.model.min_height,
+        tile_atlas.model.max_height,
+        sample_attachment(tile_tree, tile_atlas, 0, sample_world_position).x,
+    )
 }
