@@ -5,8 +5,9 @@ use crate::big_space::{
 
 use crate::{
     math::{coordinate::Coordinate, ellipsoid::project_point_ellipsoid, TileCoordinate, C_SQR},
-    terrain::{Terrain, TerrainConfig},
+    terrain::Terrain,
     terrain_data::tile_tree::TileTree,
+    terrain_view::TerrainViewConfig,
     terrain_view::{TerrainView, TerrainViewComponents},
 };
 use bevy::{
@@ -132,8 +133,18 @@ impl TerrainModel {
         )
     }
 
-    pub(crate) fn position_local_to_world(&self, local_position: DVec3) -> DVec3 {
-        self.world_from_local.transform_point3(local_position)
+    pub(crate) fn position_local_to_world(&self, local_position: DVec3, height: f64) -> DVec3 {
+        let world_position = self.world_from_local.transform_point3(local_position);
+        let world_normal = self
+            .world_from_local
+            .transform_vector3(if self.is_spherical() {
+                local_position
+            } else {
+                DVec3::Y
+            })
+            .normalize();
+
+        world_position + height * world_normal
     }
 
     pub(crate) fn position_world_to_local(&self, world_position: DVec3) -> DVec3 {
@@ -156,19 +167,15 @@ impl TerrainModel {
                     DVec3::new(major_axis, major_axis, minor_axis),
                     ellipsoid_position,
                 );
-                self.local_from_world.transform_point3(surface_position)
+                self.local_from_world
+                    .transform_point3(surface_position)
+                    .normalize()
             }
         }
     }
 
-    pub(crate) fn normal_local_to_world(&self, local_position: DVec3) -> DVec3 {
-        self.world_from_local
-            .transform_vector3(if self.is_spherical() {
-                local_position
-            } else {
-                DVec3::Y
-            })
-            .normalize()
+    pub(crate) fn surface_position(&self, world_position: DVec3, height: f64) -> DVec3 {
+        self.position_local_to_world(self.position_world_to_local(world_position), height)
     }
 
     pub(crate) fn side_count(&self) -> u32 {
@@ -283,10 +290,10 @@ impl TerrainModelApproximation {
 
         for (side, &sm) in SIDE_MATRICES.iter().enumerate() {
             let view_coordinate = view_coordinate.project_to_side(side as u32, model);
-            let view_xy = (view_coordinate.st * origin_count).as_ivec2();
-            let view_uv = (view_coordinate.st * origin_count).fract().as_vec2();
+            let view_xy = (view_coordinate.uv * origin_count).as_ivec2();
+            let view_uv = (view_coordinate.uv * origin_count).fract().as_vec2();
 
-            let DVec2 { x: s, y: t } = view_coordinate.st;
+            let DVec2 { x: s, y: t } = view_coordinate.uv;
 
             let u_denom = (1.0 - 4.0 * C_SQR * s * (s - 1.0)).sqrt();
             let u = (2.0 * s - 1.0) / u_denom;
@@ -357,47 +364,37 @@ impl TerrainModelApproximation {
     }
 }
 
-#[cfg(feature = "high_precision")]
 pub fn generate_terrain_model_approximation(
     mut terrain_model_approximations: ResMut<TerrainViewComponents<TerrainModelApproximation>>,
     tile_trees: Res<TerrainViewComponents<TileTree>>,
-    view_query: Query<(Entity, GridTransformReadOnly), With<TerrainView>>,
-    terrain_query: Query<(Entity, &TerrainConfig), With<Terrain>>,
-    frames: ReferenceFrames,
+    view_configs: Res<TerrainViewComponents<TerrainViewConfig>>,
+    terrain_query: Query<Entity, With<Terrain>>,
+    #[cfg(feature = "high_precision")] frames: ReferenceFrames,
+    #[cfg(feature = "high_precision")] view_query: Query<
+        (Entity, GridTransformReadOnly),
+        With<TerrainView>,
+    >,
+    #[cfg(not(feature = "high_precision"))] view_query: Query<
+        (Entity, &Transform),
+        With<TerrainView>,
+    >,
 ) {
-    for (terrain, config) in &terrain_query {
-        let frame = frames.parent_frame(terrain).unwrap();
-
+    for terrain in &terrain_query {
         for (view, view_transform) in &view_query {
             let tile_tree = tile_trees.get(&(terrain, view)).unwrap();
+            let view_config = view_configs.get(&(terrain, view)).unwrap();
+
+            #[cfg(feature = "high_precision")]
+            let frame = frames.parent_frame(terrain).unwrap();
+            #[cfg(feature = "high_precision")]
+            let view_position = view_transform.position_double(&frame);
+            #[cfg(not(feature = "high_precision"))]
+            let view_position = view_transform.translation.as_dvec3();
 
             let model = TerrainModelApproximation::compute(
-                &config.model,
-                view_transform.position_double(&frame),
-                10, // Todo: make this configurable
-                tile_tree.approximate_height,
-            );
-
-            terrain_model_approximations.insert((terrain, view), model);
-        }
-    }
-}
-
-#[cfg(not(feature = "high_precision"))]
-pub fn generate_terrain_model_approximation(
-    mut terrain_model_approximations: ResMut<TerrainViewComponents<TerrainModelApproximation>>,
-    tile_trees: Res<TerrainViewComponents<TileTree>>,
-    view_query: Query<(Entity, &Transform), With<TerrainView>>,
-    terrain_query: Query<(Entity, &TerrainConfig), With<Terrain>>,
-) {
-    for (terrain, config) in &terrain_query {
-        for (view, view_transform) in &view_query {
-            let tile_tree = tile_trees.get(&(terrain, view)).unwrap();
-
-            let model = TerrainModelApproximation::compute(
-                &config.model,
-                view_transform.translation.as_dvec3(),
-                10, // Todo: make this configurable
+                &tile_tree.model,
+                view_position,
+                view_config.origin_lod,
                 tile_tree.approximate_height,
             );
 
