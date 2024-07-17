@@ -11,47 +11,6 @@ const PS = 2u;
 const PT = 3u;
 const C_SQR = 0.87 * 0.87;
 
-#ifdef SPHERICAL
-const SIDE_COUNT = 6u;
-#else
-const SIDE_COUNT = 1u;
-#endif
-
-fn sphere_to_cube(xy: vec2<f32>) -> vec2<f32> {
-    var uv: vec2<f32>;
-
-    // s2 quadtratic as per https://docs.s2cell.aliddell.com/en/stable/s2_concepts.html#st
-    // if (xy.x > 0.0) { uv.x =       0.5 * sqrt(1.0 + 3.0 * xy.x); }
-    // else            { uv.x = 1.0 - 0.5 * sqrt(1.0 - 3.0 * xy.x); }
-//
-    // if (xy.y > 0.0) { uv.y =       0.5 * sqrt(1.0 + 3.0 * xy.y); }
-    // else            { uv.y = 1.0 - 0.5 * sqrt(1.0 - 3.0 * xy.y); }
-
-    // algebraic sigmoid c = 0.87 as per https://marlam.de/publications/cubemaps/lambers2019cubemaps.pdf
-    uv = xy * sqrt((1.0 + C_SQR) / (1.0 + C_SQR * xy * xy));
-    uv = 0.5 * xy + 0.5;
-
-    return uv;
-}
-
-fn cube_to_sphere(uv: vec2<f32>) -> vec2<f32> {
-    var xy: vec2<f32>;
-
-    // s2 quadtratic as per https://docs.s2cell.aliddell.com/en/stable/s2_concepts.html#st
-    // if (uv.x > 0.5) { xy.x =       (4.0 * pow(uv.x, 2.0) - 1.0) / 3.0; }
-    // else            { xy.x = (1.0 - 4.0 * pow(1.0 - uv.x, 2.0)) / 3.0; }
-//
-    // if (uv.y > 0.5) { xy.y =       (4.0 * pow(uv.y, 2.0) - 1.0) / 3.0; }
-    // else            { xy.y = (1.0 - 4.0 * pow(1.0 - uv.y, 2.0)) / 3.0; }
-
-    // algebraic sigmoid c = 0.87 as per https://marlam.de/publications/cubemaps/lambers2019cubemaps.pdf
-
-    xy = (uv - 0.5) / 0.5;
-    xy = xy / sqrt(1.0 + C_SQR - C_SQR * xy * xy);
-
-    return xy;
-}
-
 fn normal_local_to_world(local_position: vec3<f32>) -> vec3<f32> {
 #ifdef SPHERICAL
     let local_normal = local_position;
@@ -112,10 +71,11 @@ fn compute_tile_uv(vertex_index: u32) -> vec2<f32>{
 }
 
 fn compute_local_position(coordinate: Coordinate) -> vec3<f32> {
-    let st = (vec2<f32>(coordinate.xy) + coordinate.uv) / tile_count(coordinate.lod);
+    var uv = (vec2<f32>(coordinate.xy) + coordinate.uv) / tile_count(coordinate.lod);
 
 #ifdef SPHERICAL
-    let uv = cube_to_sphere(st);
+    uv = (uv - 0.5) / 0.5;
+    uv = uv / sqrt(1.0 + C_SQR - C_SQR * uv * uv);
 
     var local_position: vec3<f32>;
 
@@ -131,7 +91,7 @@ fn compute_local_position(coordinate: Coordinate) -> vec3<f32> {
 
     return normalize(local_position);
 #else
-    return vec3<f32>(st.x - 0.5, 0.0, st.y - 0.5);
+    return vec3<f32>(uv.x - 0.5, 0.0, uv.y - 0.5);
 #endif
 }
 

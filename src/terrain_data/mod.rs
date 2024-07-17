@@ -16,7 +16,7 @@
 //! which can be used to access the terrain data in shaders.
 
 use crate::{
-    terrain_data::{tile_tree::TileTree, tile_atlas::TileAtlas},
+    terrain_data::{tile_atlas::TileAtlas, tile_tree::TileTree},
     util::CollectArray,
 };
 use bevy::{math::DVec3, prelude::*, render::render_resource::*};
@@ -25,10 +25,10 @@ use bytemuck::cast_slice;
 use itertools::iproduct;
 use std::iter;
 
-pub mod gpu_tile_tree;
 pub mod gpu_tile_atlas;
-pub mod tile_tree;
+pub mod gpu_tile_tree;
 pub mod tile_atlas;
+pub mod tile_tree;
 
 pub const INVALID_ATLAS_INDEX: u32 = u32::MAX;
 pub const INVALID_LOD: u32 = u32::MAX;
@@ -270,22 +270,19 @@ pub fn sample_attachment(
     attachment_index: u32,
     sample_world_position: DVec3,
 ) -> Vec4 {
-    let sample_local_position = tile_tree
+    // translate the sample position onto the terrain's surface
+    // this is necessary to compute a valid blend LOD and ratio
+    let surface_position = tile_tree
         .model
-        .position_world_to_local(sample_world_position);
-    let world_normal = tile_tree.model.normal_local_to_world(sample_local_position);
-    let sample_world_position = tile_tree
-        .model
-        .position_local_to_world(sample_local_position)
-        + world_normal * tile_tree.approximate_height as f64;
+        .surface_position(sample_world_position, tile_tree.approximate_height as f64);
 
-    let (lod, blend_ratio) = tile_tree.compute_blend(sample_world_position);
+    let (lod, blend_ratio) = tile_tree.compute_blend(surface_position);
 
-    let lookup = tile_tree.lookup_tile(sample_world_position, lod);
+    let lookup = tile_tree.lookup_tile(surface_position, lod);
     let mut value = tile_atlas.sample_attachment(lookup, attachment_index);
 
     if blend_ratio > 0.0 {
-        let lookup2 = tile_tree.lookup_tile(sample_world_position, lod - 1);
+        let lookup2 = tile_tree.lookup_tile(surface_position, lod - 1);
         value = Vec4::lerp(
             value,
             tile_atlas.sample_attachment(lookup2, attachment_index),
