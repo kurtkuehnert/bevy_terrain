@@ -1,4 +1,3 @@
-use crate::shaders::{DEFAULT_FRAGMENT_SHADER, DEFAULT_VERTEX_SHADER};
 use crate::{
     debug::DebugTerrain,
     render::{
@@ -7,8 +6,9 @@ use crate::{
             create_terrain_view_layout, DrawTerrainCommand, SetTerrainViewBindGroup,
         },
     },
-    terrain::{Terrain, TerrainConfig},
-    terrain_view::TerrainView,
+    shaders::{DEFAULT_FRAGMENT_SHADER, DEFAULT_VERTEX_SHADER},
+    terrain::TerrainComponents,
+    terrain_data::gpu_tile_atlas::GpuTileAtlas,
 };
 use bevy::{
     core_pipeline::core_3d::{Opaque3d, Opaque3dBinKey},
@@ -17,11 +17,13 @@ use bevy::{
         RenderMaterialInstances, SetMaterialBindGroup, SetMeshViewBindGroup,
     },
     prelude::*,
-    render::render_phase::{BinnedRenderPhaseType, ViewBinnedRenderPhases},
     render::{
         extract_instances::ExtractInstancesPlugin,
         render_asset::{prepare_assets, RenderAssetPlugin, RenderAssets},
-        render_phase::{AddRenderCommand, DrawFunctions, SetItemPipeline},
+        render_phase::{
+            AddRenderCommand, BinnedRenderPhaseType, DrawFunctions, SetItemPipeline,
+            ViewBinnedRenderPhases,
+        },
         render_resource::*,
         renderer::RenderDevice,
         texture::{BevyDefault, GpuImage},
@@ -380,22 +382,20 @@ pub(crate) fn queue_terrain<M: Material>(
     terrain_pipeline: Res<TerrainRenderPipeline<M>>,
     mut pipelines: ResMut<SpecializedRenderPipelines<TerrainRenderPipeline<M>>>,
     mut opaque_render_phases: ResMut<ViewBinnedRenderPhases<Opaque3d>>,
-    view_query: Query<Entity, With<TerrainView>>,
-    terrain_query: Query<&TerrainConfig, With<Terrain>>,
+    gpu_tile_atlases: Res<TerrainComponents<GpuTileAtlas>>,
     render_material_instances: Res<RenderMaterialInstances<M>>,
 ) where
     M::Data: PartialEq + Eq + Hash + Clone,
 {
-    for view in view_query.iter() {
-        let phase = opaque_render_phases.get_mut(&view).unwrap();
+    for phase in opaque_render_phases.values_mut() {
         let draw_function = draw_functions.read().get_id::<DrawTerrain<M>>().unwrap();
 
         for (&terrain, &material_id) in render_material_instances.iter() {
-            let config = terrain_query.get(terrain).unwrap();
+            let gpu_tile_atlas = gpu_tile_atlases.get(&terrain).unwrap();
             if let Some(material) = render_materials.get(material_id) {
                 let mut flags = TerrainPipelineFlags::from_msaa_samples(msaa.samples());
 
-                if config.model.is_spherical() {
+                if gpu_tile_atlas.is_spherical {
                     flags |= TerrainPipelineFlags::SPHERICAL;
                 }
 

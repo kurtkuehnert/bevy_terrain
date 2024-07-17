@@ -3,8 +3,11 @@ use crate::{
         preprocessor::{PreprocessTask, PreprocessTaskType, Preprocessor},
         TerrainPreprocessItem,
     },
-    terrain::{Terrain, TerrainComponents},
-    terrain_data::{gpu_tile_atlas::GpuTileAtlas, tile_atlas::AtlasTile},
+    terrain::TerrainComponents,
+    terrain_data::{
+        gpu_tile_atlas::GpuTileAtlas,
+        tile_atlas::{AtlasTile, TileAtlas},
+    },
     util::StaticBuffer,
 };
 use bevy::{
@@ -92,18 +95,18 @@ impl GpuPreprocessor {
 
     pub(crate) fn initialize(
         mut gpu_preprocessors: ResMut<TerrainComponents<GpuPreprocessor>>,
-        terrain_query: Extract<Query<Entity, Added<Terrain>>>,
+        terrains: Extract<Query<Entity, Added<TileAtlas>>>,
     ) {
-        for terrain in terrain_query.iter() {
+        for terrain in terrains.iter() {
             gpu_preprocessors.insert(terrain, GpuPreprocessor::new());
         }
     }
 
     pub(crate) fn extract(
         mut gpu_preprocessors: ResMut<TerrainComponents<GpuPreprocessor>>,
-        terrain_query: Extract<Query<(Entity, &Preprocessor), With<Terrain>>>,
+        preprocessors: Extract<Query<(Entity, &Preprocessor)>>,
     ) {
-        for (terrain, preprocessor) in terrain_query.iter() {
+        for (terrain, preprocessor) in preprocessors.iter() {
             let gpu_preprocessor = gpu_preprocessors.get_mut(&terrain).unwrap();
 
             // Todo: mem take using &mut world?
@@ -121,13 +124,9 @@ impl GpuPreprocessor {
         mut gpu_preprocessors: ResMut<TerrainComponents<GpuPreprocessor>>,
         mut gpu_tile_atlases: ResMut<TerrainComponents<GpuTileAtlas>>,
         pipeline_cache: Res<PipelineCache>,
-        terrain_query: Query<Entity, With<Terrain>>,
     ) {
-        for terrain in terrain_query.iter() {
-            if preprocess_items
-                .get(&terrain)
-                .is_some_and(|item| !item.is_loaded(&pipeline_cache))
-            {
+        for (&terrain, item) in preprocess_items.iter() {
+            if !item.is_loaded(&pipeline_cache) {
                 continue;
             }
 

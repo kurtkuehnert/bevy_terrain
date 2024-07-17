@@ -1,6 +1,5 @@
 use crate::{
     math::TileCoordinate,
-    terrain::Terrain,
     terrain_data::{
         tile_atlas::{AtlasTile, AtlasTileAttachment, TileAtlas},
         AttachmentFormat,
@@ -179,7 +178,7 @@ impl PreprocessTask {
 
         let neighbour_tiles = tile
             .coordinate
-            .neighbours(tile_atlas.spherical)
+            .neighbours(tile_atlas.model.is_spherical())
             .map(|coordinate| tile_atlas.get_tile(coordinate))
             .collect_array();
 
@@ -346,9 +345,9 @@ impl Preprocessor {
 
 pub(crate) fn select_ready_tasks(
     asset_server: Res<AssetServer>,
-    mut terrain_query: Query<(&mut Preprocessor, &mut TileAtlas), With<Terrain>>,
+    mut terrains: Query<(&mut Preprocessor, &mut TileAtlas)>,
 ) {
-    for (mut preprocessor, mut tile_atlas) in terrain_query.iter_mut() {
+    for (mut preprocessor, mut tile_atlas) in terrains.iter_mut() {
         let Preprocessor {
             task_queue,
             ready_tasks,
@@ -400,10 +399,10 @@ pub(crate) fn select_ready_tasks(
 }
 
 pub(crate) fn preprocessor_load_tile(
-    mut terrain_query: Query<&mut Preprocessor, With<Terrain>>,
+    mut preprocessors: Query<&mut Preprocessor>,
     mut images: ResMut<Assets<Image>>,
 ) {
-    for mut preprocessor in terrain_query.iter_mut() {
+    for mut preprocessor in preprocessors.iter_mut() {
         preprocessor.loading_tiles.retain_mut(|tile| {
             if let Some(image) = images.get_mut(tile.id) {
                 image.texture_descriptor.format = tile.format.processing_format();

@@ -270,19 +270,20 @@ pub fn sample_attachment(
     attachment_index: u32,
     sample_world_position: DVec3,
 ) -> Vec4 {
+    let model = &tile_atlas.model;
+
     // translate the sample position onto the terrain's surface
     // this is necessary to compute a valid blend LOD and ratio
-    let surface_position = tile_tree
-        .model
-        .surface_position(sample_world_position, tile_tree.approximate_height as f64);
+    let surface_position =
+        model.surface_position(sample_world_position, tile_tree.approximate_height as f64);
 
     let (lod, blend_ratio) = tile_tree.compute_blend(surface_position);
 
-    let lookup = tile_tree.lookup_tile(surface_position, lod);
+    let lookup = tile_tree.lookup_tile(surface_position, lod, model);
     let mut value = tile_atlas.sample_attachment(lookup, attachment_index);
 
     if blend_ratio > 0.0 {
-        let lookup2 = tile_tree.lookup_tile(surface_position, lod - 1);
+        let lookup2 = tile_tree.lookup_tile(surface_position, lod - 1, model);
         value = Vec4::lerp(
             value,
             tile_atlas.sample_attachment(lookup2, attachment_index),
@@ -299,8 +300,8 @@ pub fn sample_height(
     sample_world_position: DVec3,
 ) -> f32 {
     f32::lerp(
-        tile_tree.model.min_height,
-        tile_tree.model.max_height,
+        tile_atlas.model.min_height,
+        tile_atlas.model.max_height,
         sample_attachment(tile_tree, tile_atlas, 0, sample_world_position).x,
     )
 }

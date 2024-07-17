@@ -1,8 +1,8 @@
 //! Contains a debug resource and systems controlling it to visualize different internal
 //! data of the plugin.
 use crate::{
-    debug::camera::camera_controller,
-    terrain_view::{TerrainViewComponents, TerrainViewConfig},
+    debug::camera::camera_controller, terrain_data::tile_tree::TileTree,
+    terrain_view::TerrainViewComponents,
 };
 use bevy::{
     asset::LoadState,
@@ -27,7 +27,10 @@ impl Plugin for TerrainDebugPlugin {
         app.init_resource::<DebugTerrain>()
             .init_resource::<LoadingImages>()
             .add_systems(Startup, (debug_lighting, debug_window))
-            .add_systems(Update, (toggle_debug, change_config, finish_loading_images))
+            .add_systems(
+                Update,
+                (toggle_debug, update_view_parameter, finish_loading_images),
+            )
             .add_systems(
                 PostUpdate,
                 camera_controller.before(TransformSystem::TransformPropagate),
@@ -210,48 +213,48 @@ pub fn toggle_debug(input: Res<ButtonInput<KeyCode>>, mut debug: ResMut<DebugTer
     }
 }
 
-pub fn change_config(
+pub fn update_view_parameter(
     input: Res<ButtonInput<KeyCode>>,
-    mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
+    mut tile_trees: ResMut<TerrainViewComponents<TileTree>>,
 ) {
-    for view_config in &mut view_configs.0.values_mut() {
+    for tile_tree in &mut tile_trees.values_mut() {
         if input.just_pressed(KeyCode::KeyN) {
-            view_config.blend_distance -= 0.25;
+            tile_tree.blend_distance -= 0.25;
             println!(
                 "Decreased the blend distance to {}.",
-                view_config.blend_distance
+                tile_tree.blend_distance
             );
         }
         if input.just_pressed(KeyCode::KeyE) {
-            view_config.blend_distance += 0.25;
+            tile_tree.blend_distance += 0.25;
             println!(
                 "Increased the blend distance to {}.",
-                view_config.blend_distance
+                tile_tree.blend_distance
             );
         }
 
         if input.just_pressed(KeyCode::KeyI) {
-            view_config.morph_distance -= 0.25;
+            tile_tree.morph_distance -= 0.25;
             println!(
                 "Decreased the morph distance to {}.",
-                view_config.morph_distance
+                tile_tree.morph_distance
             );
         }
         if input.just_pressed(KeyCode::KeyO) {
-            view_config.morph_distance += 0.25;
+            tile_tree.morph_distance += 0.25;
             println!(
                 "Increased the morph distance to {}.",
-                view_config.morph_distance
+                tile_tree.morph_distance
             );
         }
 
-        if input.just_pressed(KeyCode::KeyX) && view_config.grid_size > 2 {
-            view_config.grid_size -= 2;
-            println!("Decreased the grid size to {}.", view_config.grid_size);
+        if input.just_pressed(KeyCode::KeyX) && tile_tree.grid_size > 2 {
+            tile_tree.grid_size -= 2;
+            println!("Decreased the grid size to {}.", tile_tree.grid_size);
         }
         if input.just_pressed(KeyCode::KeyJ) {
-            view_config.grid_size += 2;
-            println!("Increased the grid size to {}.", view_config.grid_size);
+            tile_tree.grid_size += 2;
+            println!("Increased the grid size to {}.", tile_tree.grid_size);
         }
     }
 }

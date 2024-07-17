@@ -1,14 +1,8 @@
-#[cfg(feature = "high_precision")]
-use crate::big_space::{
-    GridTransformOwned, GridTransformReadOnly, ReferenceFrame, ReferenceFrames,
-};
-
 use crate::{
     math::{coordinate::Coordinate, ellipsoid::project_point_ellipsoid, TileCoordinate, C_SQR},
-    terrain::Terrain,
+    terrain_data::tile_atlas::TileAtlas,
     terrain_data::tile_tree::TileTree,
-    terrain_view::TerrainViewConfig,
-    terrain_view::{TerrainView, TerrainViewComponents},
+    terrain_view::TerrainViewComponents,
 };
 use bevy::{
     math::{DMat3, DMat4, DQuat, DVec2, DVec3, IVec2},
@@ -208,10 +202,13 @@ impl TerrainModel {
     }
 
     #[cfg(feature = "high_precision")]
-    pub(crate) fn grid_transform(&self, frame: &ReferenceFrame) -> GridTransformOwned {
+    pub(crate) fn grid_transform(
+        &self,
+        frame: &crate::big_space::ReferenceFrame,
+    ) -> crate::big_space::GridTransformOwned {
         let (cell, translation) = frame.translation_to_grid(self.translation);
 
-        GridTransformOwned {
+        crate::big_space::GridTransformOwned {
             transform: Transform {
                 translation,
                 scale: self.scale.as_vec3(),
@@ -264,15 +261,14 @@ pub struct TerrainModelApproximation {
 impl TerrainModelApproximation {
     /// Computes the view parameters based on the it's world position.
     pub(crate) fn compute(
-        model: &TerrainModel,
-        view_position: DVec3,
-        origin_lod: u32,
-        approximate_height: f32,
+        tile_tree: &TileTree,
+        tile_atlas: &TileAtlas,
     ) -> TerrainModelApproximation {
-        let origin_count = TileCoordinate::count(origin_lod) as f64;
+        let origin_count = TileCoordinate::count(tile_tree.origin_lod) as f64;
 
         // Coordinate of the location vertically below the view.
-        let view_coordinate = Coordinate::from_world_position(view_position, model);
+        let view_coordinate =
+            Coordinate::from_world_position(tile_tree.view_world_position, &tile_atlas.model);
 
         // We want to approximate the position relative to the view using a second order Taylor series.
         // For that, we have to calculate the Taylor coefficients for each cube side separately.
@@ -289,7 +285,7 @@ impl TerrainModelApproximation {
         let mut sides = [SideParameter::default(); 6];
 
         for (side, &sm) in SIDE_MATRICES.iter().enumerate() {
-            let view_coordinate = view_coordinate.project_to_side(side as u32, model);
+            let view_coordinate = view_coordinate.project_to_side(side as u32, &tile_atlas.model);
             let view_xy = (view_coordinate.uv * origin_count).as_ivec2();
             let view_uv = (view_coordinate.uv * origin_count).fract().as_vec2();
 
@@ -336,7 +332,7 @@ impl TerrainModelApproximation {
             // The model matrix is used to transform the local position and directions into the corresponding world position and directions.
             // p is transformed as a point, takes the model position into account
             // the other coefficients are transformed as vectors, discards the translation
-            let m = model.world_from_local;
+            let m = tile_atlas.model.world_from_local;
             let p = m.transform_point3(sm * DVec3::new(a, b, c) / l);
             let p_ds = m.transform_vector3(sm * DVec3::new(a_ds, b_ds, c_ds) / l.powi(2));
             let p_dt = m.transform_vector3(sm * DVec3::new(a_dt, b_dt, c_dt) / l.powi(2));
@@ -347,7 +343,7 @@ impl TerrainModelApproximation {
             sides[side] = SideParameter {
                 origin_xy: view_xy,
                 origin_uv: view_uv,
-                c: (p - view_position).as_vec3(),
+                c: (p - tile_tree.view_world_position).as_vec3(),
                 c_s: p_ds.as_vec3(),
                 c_t: p_dt.as_vec3(),
                 c_ss: (p_dss / 2.0).as_vec3(),
@@ -357,48 +353,24 @@ impl TerrainModelApproximation {
         }
 
         TerrainModelApproximation {
-            origin_lod,
-            approximate_height,
+            origin_lod: tile_tree.origin_lod,
+            approximate_height: tile_tree.approximate_height,
             sides,
         }
     }
 }
 
 pub fn generate_terrain_model_approximation(
-    mut terrain_model_approximations: ResMut<TerrainViewComponents<TerrainModelApproximation>>,
     tile_trees: Res<TerrainViewComponents<TileTree>>,
-    view_configs: Res<TerrainViewComponents<TerrainViewConfig>>,
-    terrain_query: Query<Entity, With<Terrain>>,
-    #[cfg(feature = "high_precision")] frames: ReferenceFrames,
-    #[cfg(feature = "high_precision")] view_query: Query<
-        (Entity, GridTransformReadOnly),
-        With<TerrainView>,
-    >,
-    #[cfg(not(feature = "high_precision"))] view_query: Query<
-        (Entity, &Transform),
-        With<TerrainView>,
-    >,
+    tile_atlases: Query<&TileAtlas>,
+    mut terrain_model_approximations: ResMut<TerrainViewComponents<TerrainModelApproximation>>,
 ) {
-    for terrain in &terrain_query {
-        for (view, view_transform) in &view_query {
-            let tile_tree = tile_trees.get(&(terrain, view)).unwrap();
-            let view_config = view_configs.get(&(terrain, view)).unwrap();
+    for (&(terrain, view), tile_tree) in tile_trees.iter() {
+        let tile_atlas = tile_atlases.get(terrain).unwrap();
 
-            #[cfg(feature = "high_precision")]
-            let frame = frames.parent_frame(terrain).unwrap();
-            #[cfg(feature = "high_precision")]
-            let view_position = view_transform.position_double(&frame);
-            #[cfg(not(feature = "high_precision"))]
-            let view_position = view_transform.translation.as_dvec3();
-
-            let model = TerrainModelApproximation::compute(
-                &tile_tree.model,
-                view_position,
-                view_config.origin_lod,
-                tile_tree.approximate_height,
-            );
-
-            terrain_model_approximations.insert((terrain, view), model);
-        }
+        terrain_model_approximations.insert(
+            (terrain, view),
+            TerrainModelApproximation::compute(tile_tree, tile_atlas),
+        );
     }
 }

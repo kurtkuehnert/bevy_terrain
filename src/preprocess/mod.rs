@@ -7,7 +7,7 @@ use crate::{
         preprocessor::{preprocessor_load_tile, select_ready_tasks, PreprocessTaskType},
     },
     shaders::{load_preprocess_shaders, DOWNSAMPLE_SHADER, SPLIT_SHADER, STITCH_SHADER},
-    terrain::{Terrain, TerrainComponents},
+    terrain::TerrainComponents,
     terrain_data::gpu_tile_atlas::{create_attachment_layout, GpuTileAtlas},
 };
 use bevy::{
@@ -20,7 +20,6 @@ use bevy::{
         Render, RenderApp, RenderSet,
     },
 };
-use itertools::Itertools;
 
 pub mod gpu_preprocessor;
 pub mod preprocessor;
@@ -139,23 +138,9 @@ impl SpecializedComputePipeline for TerrainPreprocessPipelines {
     }
 }
 
-pub struct TerrainPreprocessNode {
-    terrain_query: QueryState<Entity, With<Terrain>>,
-}
-
-impl FromWorld for TerrainPreprocessNode {
-    fn from_world(world: &mut World) -> Self {
-        Self {
-            terrain_query: world.query_filtered(),
-        }
-    }
-}
+pub struct TerrainPreprocessNode;
 
 impl render_graph::Node for TerrainPreprocessNode {
-    fn update(&mut self, world: &mut World) {
-        self.terrain_query.update_archetypes(world);
-    }
-
     fn run<'w>(
         &self,
         _graph: &mut render_graph::RenderGraphContext,
@@ -167,17 +152,13 @@ impl render_graph::Node for TerrainPreprocessNode {
         let preprocess_data = world.resource::<TerrainComponents<GpuPreprocessor>>();
         let gpu_tile_atlases = world.resource::<TerrainComponents<GpuTileAtlas>>();
 
-        let terrains = self.terrain_query.iter_manual(world).collect_vec();
-
         context.add_command_buffer_generation_task(move |device| {
             let mut command_encoder =
                 device.create_command_encoder(&CommandEncoderDescriptor::default());
 
-            for terrain in terrains {
-                let item = preprocess_items.get(&terrain).unwrap();
-
+            for (&terrain, preprocess_item) in preprocess_items.iter() {
                 let Some((split_pipeline, stitch_pipeline, downsample_pipeline)) =
-                    item.pipelines(pipeline_cache)
+                    preprocess_item.pipelines(pipeline_cache)
                 else {
                     continue;
                 };
@@ -241,9 +222,9 @@ pub(crate) fn queue_terrain_preprocess(
     preprocess_pipelines: ResMut<TerrainPreprocessPipelines>,
     mut pipelines: ResMut<SpecializedComputePipelines<TerrainPreprocessPipelines>>,
     mut preprocess_items: ResMut<TerrainComponents<TerrainPreprocessItem>>,
-    terrain_query: Query<Entity, With<Terrain>>,
+    gpu_tile_atlas: Res<TerrainComponents<GpuTileAtlas>>,
 ) {
-    for terrain in terrain_query.iter() {
+    for &terrain in gpu_tile_atlas.keys() {
         let split_pipeline = pipelines.specialize(
             &pipeline_cache,
             &preprocess_pipelines,
@@ -307,9 +288,8 @@ impl Plugin for TerrainPreprocessPlugin {
             .init_resource::<SpecializedComputePipelines<TerrainPreprocessPipelines>>()
             .init_resource::<TerrainPreprocessPipelines>();
 
-        let preprocess_node = TerrainPreprocessNode::from_world(render_app.world_mut());
         let mut render_graph = render_app.world_mut().resource_mut::<RenderGraph>();
-        render_graph.add_node(TerrainPreprocessLabel, preprocess_node);
+        render_graph.add_node(TerrainPreprocessLabel, TerrainPreprocessNode);
         render_graph.add_node_edge(TerrainPreprocessLabel, CameraDriverLabel);
     }
 }
