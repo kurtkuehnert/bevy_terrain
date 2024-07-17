@@ -189,7 +189,7 @@ impl TileTree {
 
     fn compute_tree_xy(coordinate: Coordinate, tile_count: f64) -> DVec2 {
         // scale and clamp the coordinate to the tile tree bounds
-        (coordinate.st * tile_count).min(DVec2::splat(tile_count - 0.000001))
+        (coordinate.uv * tile_count).min(DVec2::splat(tile_count - 0.000001))
     }
 
     fn compute_origin(&self, coordinate: Coordinate, lod: u32) -> UVec2 {

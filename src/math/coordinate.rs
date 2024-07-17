@@ -6,18 +6,14 @@ use bevy::{
 use bincode::{Decode, Encode};
 use std::fmt;
 
-fn sphere_to_cube(st: DVec2) -> DVec2 {
-    let w = (st - 0.5) / 0.5;
-    w / (1.0 + C_SQR - C_SQR * w * w).powf(0.5)
-}
-
-/// Converts uv coordinates in range [-1,1] to st coordinates in range [0,1].
-/// The uv coordinates are spaced equally on the surface of the cube and
-/// the st coordinates are spaced equally on the surface of the sphere.
-fn cube_to_sphere(uv: DVec2) -> DVec2 {
-    let w = uv * ((1.0 + C_SQR) / (1.0 + C_SQR * uv * uv)).powf(0.5);
-    0.5 * w + 0.5
-}
+const NEIGHBOURING_SIDES: [[u32; 5]; 6] = [
+    [0, 4, 2, 1, 5],
+    [1, 0, 2, 3, 5],
+    [2, 0, 4, 3, 1],
+    [3, 2, 4, 5, 1],
+    [4, 2, 0, 5, 3],
+    [5, 4, 0, 1, 3],
+];
 
 #[derive(Clone, Copy)]
 enum SideInfo {
@@ -57,23 +53,23 @@ impl SideInfo {
 }
 
 /// Describes a location on the unit cube sphere.
-/// The side index refers to one of the six cube faces and the st coordinate describes the location within this side.
+/// The side index refers to one of the six cube faces and the uv coordinate describes the location within this side.
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Coordinate {
     pub side: u32,
-    pub st: DVec2,
+    pub uv: DVec2,
 }
 
 impl Coordinate {
-    pub fn new(side: u32, st: DVec2) -> Self {
-        Self { side, st }
+    pub fn new(side: u32, uv: DVec2) -> Self {
+        Self { side, uv }
     }
 
     /// Calculates the coordinate for for the local position on the unit cube sphere.
     pub(crate) fn from_world_position(world_position: DVec3, model: &TerrainModel) -> Self {
         let local_position = model.position_world_to_local(world_position);
 
-        if model.is_spherical() {
+        let (side, uv) = if model.is_spherical() {
             let normal = local_position;
             let abs_normal = normal.abs();
 
@@ -97,21 +93,24 @@ impl Coordinate {
                 }
             };
 
-            let st = cube_to_sphere(uv);
+            let w = uv * ((1.0 + C_SQR) / (1.0 + C_SQR * uv * uv)).powf(0.5);
+            let uv = 0.5 * w + 0.5;
 
-            Self { side, st }
+            (side, uv)
         } else {
-            Self {
-                side: 0,
-                st: DVec2::new(local_position.x + 0.5, local_position.z + 0.5)
-                    .clamp(DVec2::ZERO, DVec2::ONE),
-            }
-        }
+            let uv = DVec2::new(local_position.x + 0.5, local_position.z + 0.5)
+                .clamp(DVec2::ZERO, DVec2::ONE);
+
+            (0, uv)
+        };
+
+        Self { side, uv }
     }
 
     pub(crate) fn world_position(self, model: &TerrainModel, height: f32) -> DVec3 {
         let local_position = if model.is_spherical() {
-            let uv = sphere_to_cube(self.st);
+            let w = (self.uv - 0.5) / 0.5;
+            let uv = w / (1.0 + C_SQR - C_SQR * w * w).powf(0.5);
 
             match self.side {
                 0 => DVec3::new(-1.0, -uv.y, uv.x),
@@ -124,13 +123,10 @@ impl Coordinate {
             }
             .normalize()
         } else {
-            DVec3::new(self.st.x - 0.5, 0.0, self.st.y - 0.5)
+            DVec3::new(self.uv.x - 0.5, 0.0, self.uv.y - 0.5)
         };
 
-        let world_position = model.position_local_to_world(local_position);
-        let world_normal = model.normal_local_to_world(local_position);
-
-        world_position + height as f64 * world_normal
+        model.position_local_to_world(local_position, height as f64)
     }
 
     /// Projects the coordinate onto one of the six cube faces.
@@ -139,16 +135,16 @@ impl Coordinate {
         if model.is_spherical() {
             let info = SideInfo::project_to_side(self.side, side);
 
-            let st = info
+            let uv = info
                 .map(|info| match info {
                     SideInfo::Fixed0 => 0.0,
                     SideInfo::Fixed1 => 1.0,
-                    SideInfo::PositiveS => self.st.x,
-                    SideInfo::PositiveT => self.st.y,
+                    SideInfo::PositiveS => self.uv.x,
+                    SideInfo::PositiveT => self.uv.y,
                 })
                 .into();
 
-            Self { side, st }
+            Self { side, uv }
         } else {
             self
         }
@@ -252,16 +248,7 @@ impl TileCoordinate {
                 .clamp(IVec2::ZERO, IVec2::splat(tile_count - 1))
                 .as_uvec2();
 
-            let neighbouring_sides = [
-                [0, 4, 2, 1, 5],
-                [1, 0, 2, 3, 5],
-                [2, 0, 4, 3, 1],
-                [3, 2, 4, 5, 1],
-                [4, 2, 0, 5, 3],
-                [5, 4, 0, 1, 3],
-            ];
-
-            let neighbour_side = neighbouring_sides[self.side as usize][edge_index];
+            let neighbour_side = NEIGHBOURING_SIDES[self.side as usize][edge_index];
 
             let info = SideInfo::project_to_side(self.side, neighbour_side);
 
