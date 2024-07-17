@@ -1,6 +1,5 @@
 use crate::{
-    terrain::{Terrain, TerrainComponents, TerrainConfig},
-    terrain_data::gpu_tile_atlas::GpuTileAtlas,
+    prelude::TileAtlas, terrain::TerrainComponents, terrain_data::gpu_tile_atlas::GpuTileAtlas,
     util::StaticBuffer,
 };
 use bevy::{
@@ -82,13 +81,13 @@ struct TerrainConfigUniform {
     scale: f32,
 }
 
-impl From<&TerrainConfig> for TerrainConfigUniform {
-    fn from(config: &TerrainConfig) -> Self {
+impl TerrainConfigUniform {
+    fn from_tile_atlas(tile_atlas: &TileAtlas) -> Self {
         Self {
-            lod_count: config.lod_count,
-            min_height: config.model.min_height,
-            max_height: config.model.max_height,
-            scale: config.model.scale() as f32,
+            lod_count: tile_atlas.lod_count,
+            min_height: tile_atlas.model.min_height,
+            max_height: tile_atlas.model.max_height,
+            scale: tile_atlas.model.scale() as f32,
         }
     }
 }
@@ -102,7 +101,7 @@ impl TerrainData {
     fn new(
         device: &RenderDevice,
         fallback_image: &FallbackImage,
-        config_uniform: TerrainConfigUniform,
+        tile_atlas: &TileAtlas,
         gpu_tile_atlas: &GpuTileAtlas,
     ) -> Self {
         let mesh_buffer = StaticBuffer::empty_sized(
@@ -111,8 +110,12 @@ impl TerrainData {
             MeshUniform::SHADER_SIZE.get(),
             BufferUsages::STORAGE | BufferUsages::COPY_DST,
         );
-        let terrain_config_buffer =
-            StaticBuffer::create(None, device, &config_uniform, BufferUsages::UNIFORM);
+        let terrain_config_buffer = StaticBuffer::create(
+            None,
+            device,
+            &TerrainConfigUniform::from_tile_atlas(tile_atlas),
+            BufferUsages::UNIFORM,
+        );
 
         let atlas_sampler = device.create_sampler(&SamplerDescriptor {
             mag_filter: FilterMode::Linear,
@@ -167,25 +170,25 @@ impl TerrainData {
         fallback_image: Res<FallbackImage>,
         mut terrain_data: ResMut<TerrainComponents<TerrainData>>,
         gpu_tile_atlases: Res<TerrainComponents<GpuTileAtlas>>,
-        terrain_query: Extract<Query<(Entity, &TerrainConfig), Added<Terrain>>>,
+        tile_atlases: Extract<Query<(Entity, &TileAtlas), Added<TileAtlas>>>,
     ) {
-        for (terrain, config) in terrain_query.iter() {
+        for (terrain, tile_atlas) in &tile_atlases {
             let gpu_tile_atlas = gpu_tile_atlases.get(&terrain).unwrap();
 
             terrain_data.insert(
                 terrain,
-                TerrainData::new(&device, &fallback_image, config.into(), gpu_tile_atlas),
+                TerrainData::new(&device, &fallback_image, tile_atlas.into(), gpu_tile_atlas),
             );
         }
     }
 
     pub(crate) fn extract(
         mut terrain_data: ResMut<TerrainComponents<TerrainData>>,
-        terrain_query: Extract<
-            Query<(Entity, &GlobalTransform, Option<&PreviousGlobalTransform>), With<Terrain>>,
+        terrains: Extract<
+            Query<(Entity, &GlobalTransform, Option<&PreviousGlobalTransform>), With<TileAtlas>>,
         >,
     ) {
-        for (terrain, transform, previous_transform) in terrain_query.iter() {
+        for (terrain, transform, previous_transform) in terrains.iter() {
             let mesh_transforms = MeshTransforms {
                 world_from_local: (&transform.affine()).into(),
                 flags: 0,

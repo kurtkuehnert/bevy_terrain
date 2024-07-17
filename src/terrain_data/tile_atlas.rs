@@ -1,13 +1,13 @@
 use crate::{
     formats::TC,
-    math::TileCoordinate,
+    math::{TerrainModel, TileCoordinate},
     prelude::{AttachmentConfig, AttachmentFormat},
-    terrain::{Terrain, TerrainConfig},
+    terrain::TerrainConfig,
     terrain_data::{
         tile_tree::{TileLookup, TileTree, TileTreeEntry},
         AttachmentData, INVALID_ATLAS_INDEX, INVALID_LOD,
     },
-    terrain_view::{TerrainView, TerrainViewComponents},
+    terrain_view::TerrainViewComponents,
 };
 use anyhow::Result;
 use bevy::{
@@ -523,49 +523,31 @@ pub struct TileAtlas {
     pub(crate) path: String,
     pub(crate) atlas_size: u32,
     pub(crate) lod_count: u32,
-    pub(crate) spherical: bool,
+    pub(crate) model: TerrainModel,
 }
 
 impl TileAtlas {
-    /// Creates a new tile_tree from parameters.
-    ///
-    /// * `size` - The amount of tiles the can be loaded simultaneously in the tile atlas.
-    /// * `attachments` - The atlas attachments of the terrain.
-    pub fn new(
-        path: &str,
-        atlas_size: u32,
-        lod_count: u32,
-        spherical: bool,
-        attachments: &[AttachmentConfig],
-    ) -> Self {
-        let attachments = attachments
+    /// Creates a new tile_tree from a terrain config.
+    pub fn new(config: &TerrainConfig) -> Self {
+        let attachments = config
+            .attachments
             .iter()
-            .map(|attachment| AtlasAttachment::new(attachment, atlas_size, path))
+            .map(|attachment| AtlasAttachment::new(attachment, config.atlas_size, &config.path))
             .collect_vec();
 
-        let existing_tiles = Self::load_tile_config(path);
+        let existing_tiles = Self::load_tile_config(&config.path);
 
-        let state = TileAtlasState::new(atlas_size, attachments.len() as u32, existing_tiles);
+        let state =
+            TileAtlasState::new(config.atlas_size, attachments.len() as u32, existing_tiles);
 
         Self {
+            model: config.model.clone(),
             attachments,
             state,
-            path: path.to_string(),
-            atlas_size,
-            lod_count,
-            spherical,
+            path: config.path.to_string(),
+            atlas_size: config.atlas_size,
+            lod_count: config.lod_count,
         }
-    }
-
-    /// Creates a new tile_tree from a terrain config.
-    pub fn from_config(config: &TerrainConfig) -> Self {
-        Self::new(
-            &config.path,
-            config.tile_atlas_size,
-            config.lod_count,
-            config.model.is_spherical(),
-            &config.attachments,
-        )
     }
 
     pub fn get_tile(&mut self, tile_coordinate: TileCoordinate) -> AtlasTile {
@@ -591,10 +573,9 @@ impl TileAtlas {
     /// Updates the tile atlas according to all corresponding tile_trees.
     pub(crate) fn update(
         mut tile_trees: ResMut<TerrainViewComponents<TileTree>>,
-        view_query: Query<Entity, With<TerrainView>>,
-        mut terrain_query: Query<(Entity, &mut TileAtlas), With<Terrain>>,
+        mut tile_atlases: Query<&mut TileAtlas>,
     ) {
-        for (terrain, mut tile_atlas) in terrain_query.iter_mut() {
+        for mut tile_atlas in tile_atlases.iter_mut() {
             let TileAtlas {
                 state, attachments, ..
             } = tile_atlas.deref_mut();
@@ -604,17 +585,17 @@ impl TileAtlas {
             for attachment in attachments {
                 attachment.update(state);
             }
+        }
 
-            for view in view_query.iter() {
-                if let Some(tile_tree) = tile_trees.get_mut(&(terrain, view)) {
-                    for tile_coordinate in tile_tree.released_tiles.drain(..) {
-                        tile_atlas.state.release_tile(tile_coordinate);
-                    }
+        for (&(terrain, _view), tile_tree) in tile_trees.iter_mut() {
+            let mut tile_atlas = tile_atlases.get_mut(terrain).unwrap();
 
-                    for tile_coordinate in tile_tree.requested_tiles.drain(..) {
-                        tile_atlas.state.request_tile(tile_coordinate);
-                    }
-                }
+            for tile_coordinate in tile_tree.released_tiles.drain(..) {
+                tile_atlas.state.release_tile(tile_coordinate);
+            }
+
+            for tile_coordinate in tile_tree.requested_tiles.drain(..) {
+                tile_atlas.state.request_tile(tile_coordinate);
             }
         }
     }

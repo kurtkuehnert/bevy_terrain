@@ -1,5 +1,5 @@
 use crate::{
-    terrain::{Terrain, TerrainComponents},
+    terrain::TerrainComponents,
     terrain_data::{
         tile_atlas::{
             AtlasAttachment, AtlasTileAttachment, AtlasTileAttachmentWithData, TileAtlas,
@@ -420,6 +420,7 @@ impl GpuAtlasAttachment {
 pub struct GpuTileAtlas {
     /// Stores the atlas attachments of the terrain.
     pub(crate) attachments: Vec<GpuAtlasAttachment>,
+    pub(crate) is_spherical: bool,
 }
 
 impl GpuTileAtlas {
@@ -431,16 +432,19 @@ impl GpuTileAtlas {
             .map(|attachment| GpuAtlasAttachment::new(device, attachment, tile_atlas))
             .collect_vec();
 
-        Self { attachments }
+        Self {
+            attachments,
+            is_spherical: tile_atlas.model.is_spherical(),
+        }
     }
 
     /// Initializes the [`GpuTileAtlas`] of newly created terrains.
     pub(crate) fn initialize(
         device: Res<RenderDevice>,
         mut gpu_tile_atlases: ResMut<TerrainComponents<GpuTileAtlas>>,
-        mut terrain_query: Extract<Query<(Entity, &TileAtlas), Added<Terrain>>>,
+        mut tile_atlases: Extract<Query<(Entity, &TileAtlas), Added<TileAtlas>>>,
     ) {
-        for (terrain, tile_atlas) in terrain_query.iter_mut() {
+        for (terrain, tile_atlas) in tile_atlases.iter_mut() {
             gpu_tile_atlases.insert(terrain, GpuTileAtlas::new(&device, tile_atlas));
         }
     }
@@ -451,9 +455,9 @@ impl GpuTileAtlas {
         mut main_world: ResMut<MainWorld>,
         mut gpu_tile_atlases: ResMut<TerrainComponents<GpuTileAtlas>>,
     ) {
-        let mut terrain_query = main_world.query::<(Entity, &mut TileAtlas)>();
+        let mut tile_atlases = main_world.query::<(Entity, &mut TileAtlas)>();
 
-        for (terrain, mut tile_atlas) in terrain_query.iter_mut(&mut main_world) {
+        for (terrain, mut tile_atlas) in tile_atlases.iter_mut(&mut main_world) {
             let gpu_tile_atlas = gpu_tile_atlases.get_mut(&terrain).unwrap();
 
             for (attachment, gpu_attachment) in
@@ -477,11 +481,8 @@ impl GpuTileAtlas {
         device: Res<RenderDevice>,
         queue: Res<RenderQueue>,
         mut gpu_tile_atlases: ResMut<TerrainComponents<GpuTileAtlas>>,
-        terrain_query: Query<Entity, With<Terrain>>,
     ) {
-        for terrain in &terrain_query {
-            let gpu_tile_atlas = gpu_tile_atlases.get_mut(&terrain).unwrap();
-
+        for gpu_tile_atlas in gpu_tile_atlases.values_mut() {
             for attachment in &mut gpu_tile_atlas.attachments {
                 attachment.create_download_buffers(&device);
                 attachment.upload_tiles(&queue);
@@ -489,13 +490,8 @@ impl GpuTileAtlas {
         }
     }
 
-    pub(crate) fn cleanup(
-        mut gpu_tile_atlases: ResMut<TerrainComponents<GpuTileAtlas>>,
-        terrain_query: Query<Entity, With<Terrain>>,
-    ) {
-        for terrain in &terrain_query {
-            let gpu_tile_atlas = gpu_tile_atlases.get_mut(&terrain).unwrap();
-
+    pub(crate) fn cleanup(mut gpu_tile_atlases: ResMut<TerrainComponents<GpuTileAtlas>>) {
+        for gpu_tile_atlas in gpu_tile_atlases.values_mut() {
             for attachment in &mut gpu_tile_atlas.attachments {
                 attachment.start_downloading_tiles();
             }

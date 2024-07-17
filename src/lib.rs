@@ -77,12 +77,10 @@ pub mod prelude {
             TerrainPreprocessPlugin,
         },
         render::terrain_material::TerrainMaterialPlugin,
-        terrain::{Terrain, TerrainBundle, TerrainConfig},
+        terrain::{TerrainBundle, TerrainConfig},
         terrain_data::{
-            tile_tree::TileTree, tile_atlas::TileAtlas, AttachmentConfig, AttachmentFormat,
+            tile_atlas::TileAtlas, tile_tree::TileTree, AttachmentConfig, AttachmentFormat,
         },
-        terrain_view::{
-            initialize_terrain_view, TerrainView, TerrainViewComponents, TerrainViewConfig,
-        },
+        terrain_view::{TerrainViewComponents, TerrainViewConfig},
     };
 }

@@ -24,7 +24,6 @@ fn setup(
     mut commands: Commands,
     mut materials: ResMut<Assets<DebugTerrainMaterial>>,
     mut tile_trees: ResMut<TerrainViewComponents<TileTree>>,
-    mut view_configs: ResMut<TerrainViewComponents<TerrainViewConfig>>,
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
     // Configure all the important properties of the terrain, as well as its attachments.
@@ -34,36 +33,30 @@ fn setup(
         path: PATH.to_string(),
         ..default()
     }
-        .add_attachment(AttachmentConfig {
-            name: "height".to_string(),
-            texture_size: TEXTURE_SIZE,
-            border_size: 2,
-            mip_level_count: 4,
-            format: AttachmentFormat::R16,
-        });
+    .add_attachment(AttachmentConfig {
+        name: "height".to_string(),
+        texture_size: TEXTURE_SIZE,
+        border_size: 2,
+        mip_level_count: 4,
+        format: AttachmentFormat::R16,
+    });
 
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
     let view_config = TerrainViewConfig::default();
 
+    let tile_atlas = TileAtlas::new(&config);
+    let tile_tree = TileTree::new(&tile_atlas, &view_config);
+
     let terrain = commands
         .spawn((
-            TerrainBundle::new(config.clone()),
+            TerrainBundle::new(tile_atlas),
             materials.add(DebugTerrainMaterial::default()),
         ))
         .id();
 
-    let view = commands
-        .spawn((TerrainView, DebugCameraBundle::default()))
-        .id();
+    let view = commands.spawn(DebugCameraBundle::default()).id();
 
-    initialize_terrain_view(
-        terrain,
-        view,
-        &config,
-        view_config,
-        &mut tile_trees,
-        &mut view_configs,
-    );
+    tile_trees.insert((terrain, view), tile_tree);
 
     commands.spawn(PbrBundle {
         mesh: meshes.add(Cuboid::from_length(10.0)),

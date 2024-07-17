@@ -1,8 +1,7 @@
 use crate::{
     math::{TerrainModelApproximation, TileCoordinate},
-    terrain::{Terrain, TerrainConfig},
-    terrain_data::gpu_tile_tree::GpuTileTree,
-    terrain_view::{TerrainView, TerrainViewComponents, TerrainViewConfig},
+    terrain_data::{gpu_tile_tree::GpuTileTree, tile_tree::TileTree},
+    terrain_view::TerrainViewComponents,
     util::StaticBuffer,
 };
 use bevy::{
@@ -97,25 +96,21 @@ struct TerrainViewConfigUniform {
 }
 
 impl TerrainViewConfigUniform {
-    fn new(config: &TerrainConfig, view_config: &TerrainViewConfig) -> Self {
-        let scale = config.model.scale() as f32;
-
+    fn from_tile_tree(tile_tree: &TileTree) -> Self {
         TerrainViewConfigUniform {
-            tree_size: view_config.tree_size,
-            geometry_tile_count: view_config.geometry_tile_count,
-            refinement_count: view_config.refinement_count,
-            grid_size: view_config.grid_size as f32,
-            vertices_per_row: 2 * (view_config.grid_size + 2),
-            vertices_per_tile: 2 * view_config.grid_size * (view_config.grid_size + 2),
-            morph_distance: view_config.morph_distance * scale,
-            blend_distance: view_config.blend_distance * scale,
-            load_distance: view_config.load_distance * scale,
-            subdivision_distance: view_config.morph_distance
-                * scale
-                * (1.0 + view_config.subdivision_tolerance),
-            morph_range: view_config.morph_range,
-            blend_range: view_config.blend_range,
-            precision_threshold_distance: view_config.precision_threshold_distance * scale,
+            tree_size: tile_tree.tree_size,
+            geometry_tile_count: tile_tree.geometry_tile_count,
+            refinement_count: tile_tree.refinement_count,
+            grid_size: tile_tree.grid_size as f32,
+            vertices_per_row: 2 * (tile_tree.grid_size + 2),
+            vertices_per_tile: 2 * tile_tree.grid_size * (tile_tree.grid_size + 2),
+            morph_distance: tile_tree.morph_distance as f32,
+            blend_distance: tile_tree.blend_distance as f32,
+            load_distance: tile_tree.load_distance as f32,
+            subdivision_distance: tile_tree.subdivision_distance as f32,
+            precision_threshold_distance: tile_tree.precision_threshold_distance as f32,
+            morph_range: tile_tree.morph_range,
+            blend_range: tile_tree.blend_range,
         }
     }
 }
@@ -130,14 +125,10 @@ pub struct TerrainViewData {
 }
 
 impl TerrainViewData {
-    fn new(
-        device: &RenderDevice,
-        view_config: &TerrainViewConfig,
-        gpu_tile_tree: &GpuTileTree,
-    ) -> Self {
+    fn new(device: &RenderDevice, tile_tree: &TileTree, gpu_tile_tree: &GpuTileTree) -> Self {
         // Todo: figure out a better way of limiting the tile buffer size
         let tile_buffer_size =
-            TileCoordinate::min_size().get() * view_config.geometry_tile_count as BufferAddress;
+            TileCoordinate::min_size().get() * tile_tree.geometry_tile_count as BufferAddress;
 
         let view_config_buffer =
             StaticBuffer::empty(None, device, BufferUsages::UNIFORM | BufferUsages::COPY_DST);
@@ -203,38 +194,35 @@ impl TerrainViewData {
         device: Res<RenderDevice>,
         mut terrain_view_data: ResMut<TerrainViewComponents<TerrainViewData>>,
         gpu_tile_trees: Res<TerrainViewComponents<GpuTileTree>>,
-        view_configs: Extract<Res<TerrainViewComponents<TerrainViewConfig>>>,
-        view_query: Extract<Query<Entity, With<TerrainView>>>,
-        terrain_query: Extract<Query<Entity, Added<Terrain>>>,
+        tile_trees: Extract<Res<TerrainViewComponents<TileTree>>>,
     ) {
-        for terrain in &terrain_query {
-            for view in &view_query {
-                let view_config = view_configs.get(&(terrain, view)).unwrap();
-                let gpu_tile_tree = gpu_tile_trees.get(&(terrain, view)).unwrap();
-
-                terrain_view_data.insert(
-                    (terrain, view),
-                    TerrainViewData::new(&device, view_config, gpu_tile_tree),
-                );
+        for (&(terrain, view), tile_tree) in tile_trees.iter() {
+            if terrain_view_data.contains_key(&(terrain, view)) {
+                return;
             }
+
+            let gpu_tile_tree = gpu_tile_trees.get(&(terrain, view)).unwrap();
+
+            terrain_view_data.insert(
+                (terrain, view),
+                TerrainViewData::new(&device, tile_tree, gpu_tile_tree),
+            );
         }
     }
 
     pub(crate) fn extract(
         mut terrain_view_data: ResMut<TerrainViewComponents<TerrainViewData>>,
+        tile_trees: Extract<Res<TerrainViewComponents<TileTree>>>,
         terrain_model_approximations: Extract<
             Res<TerrainViewComponents<TerrainModelApproximation>>,
         >,
-        terrain_query: Extract<Query<&TerrainConfig, With<Terrain>>>,
-        view_configs: Extract<Res<TerrainViewComponents<TerrainViewConfig>>>,
     ) {
-        for (&(terrain, view), view_config) in &view_configs.0 {
-            let config = terrain_query.get(terrain).unwrap();
+        for (&(terrain, view), tile_tree) in tile_trees.iter() {
             let terrain_view_data = terrain_view_data.get_mut(&(terrain, view)).unwrap();
 
             terrain_view_data
                 .view_config_buffer
-                .set_value(TerrainViewConfigUniform::new(config, view_config));
+                .set_value(TerrainViewConfigUniform::from_tile_tree(tile_tree));
 
             terrain_view_data
                 .terrain_model_approximation_buffer
@@ -251,7 +239,7 @@ impl TerrainViewData {
         queue: Res<RenderQueue>,
         mut terrain_view_data: ResMut<TerrainViewComponents<TerrainViewData>>,
     ) {
-        for data in &mut terrain_view_data.0.values_mut() {
+        for data in &mut terrain_view_data.values_mut() {
             data.view_config_buffer.update(&queue);
             data.terrain_model_approximation_buffer.update(&queue);
         }

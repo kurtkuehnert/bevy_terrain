@@ -1,7 +1,6 @@
 use crate::{
-    terrain::Terrain,
     terrain_data::tile_tree::{TileTree, TileTreeEntry},
-    terrain_view::{TerrainView, TerrainViewComponents},
+    terrain_view::TerrainViewComponents,
     util::StaticBuffer,
 };
 use bevy::{
@@ -58,15 +57,13 @@ impl GpuTileTree {
         device: Res<RenderDevice>,
         mut gpu_tile_trees: ResMut<TerrainViewComponents<GpuTileTree>>,
         tile_trees: Extract<Res<TerrainViewComponents<TileTree>>>,
-        view_query: Extract<Query<Entity, With<TerrainView>>>,
-        terrain_query: Extract<Query<Entity, Added<Terrain>>>,
     ) {
-        for terrain in &terrain_query {
-            for view in &view_query {
-                let tile_tree = tile_trees.get(&(terrain, view)).unwrap();
-
-                gpu_tile_trees.insert((terrain, view), GpuTileTree::new(&device, tile_tree));
+        for (&(terrain, view), tile_tree) in tile_trees.iter() {
+            if gpu_tile_trees.contains_key(&(terrain, view)) {
+                return;
             }
+
+            gpu_tile_trees.insert((terrain, view), GpuTileTree::new(&device, tile_tree));
         }
     }
 
@@ -74,17 +71,12 @@ impl GpuTileTree {
     pub(crate) fn extract(
         mut gpu_tile_trees: ResMut<TerrainViewComponents<GpuTileTree>>,
         tile_trees: Extract<Res<TerrainViewComponents<TileTree>>>,
-        view_query: Extract<Query<Entity, With<TerrainView>>>,
-        terrain_query: Extract<Query<Entity, With<Terrain>>>,
     ) {
-        for terrain in &terrain_query {
-            for view in &view_query {
-                let tile_tree = tile_trees.get(&(terrain, view)).unwrap();
-                let gpu_tile_tree = gpu_tile_trees.get_mut(&(terrain, view)).unwrap();
+        for (&(terrain, view), tile_tree) in tile_trees.iter() {
+            let gpu_tile_tree = gpu_tile_trees.get_mut(&(terrain, view)).unwrap();
 
-                gpu_tile_tree.data = tile_tree.data.clone();
-                gpu_tile_tree.origins = tile_tree.origins.clone();
-            }
+            gpu_tile_tree.data = tile_tree.data.clone();
+            gpu_tile_tree.origins = tile_tree.origins.clone();
         }
     }
 
@@ -92,19 +84,13 @@ impl GpuTileTree {
     pub(crate) fn prepare(
         queue: Res<RenderQueue>,
         mut gpu_tile_trees: ResMut<TerrainViewComponents<GpuTileTree>>,
-        view_query: Query<Entity, With<TerrainView>>,
-        terrain_query: Query<Entity, With<Terrain>>,
     ) {
-        for terrain in &terrain_query {
-            for view in &view_query {
-                let gpu_tile_tree = gpu_tile_trees.get_mut(&(terrain, view)).unwrap();
+        for gpu_tile_tree in gpu_tile_trees.values_mut() {
+            let data = cast_slice(gpu_tile_tree.data.as_slice().unwrap());
+            gpu_tile_tree.tile_tree_buffer.update_bytes(&queue, data);
 
-                let data = cast_slice(gpu_tile_tree.data.as_slice().unwrap());
-                gpu_tile_tree.tile_tree_buffer.update_bytes(&queue, data);
-
-                let origins = cast_slice(gpu_tile_tree.origins.as_slice().unwrap());
-                gpu_tile_tree.origins_buffer.update_bytes(&queue, origins);
-            }
+            let origins = cast_slice(gpu_tile_tree.origins.as_slice().unwrap());
+            gpu_tile_tree.origins_buffer.update_bytes(&queue, origins);
         }
     }
 }
