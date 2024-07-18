@@ -1,13 +1,13 @@
 #define_import_path bevy_terrain::types
 
-struct TerrainConfig {
+struct Terrain {
     lod_count: u32,
     min_height: f32,
     max_height: f32,
     scale: f32,
 }
 
-struct TerrainViewConfig {
+struct TerrainView {
     tree_size: u32,
     tile_count: u32,
     refinement_count: u32,
@@ -21,6 +21,8 @@ struct TerrainViewConfig {
     morph_range: f32,
     blend_range: f32,
     precision_threshold_distance: f32,
+    approximate_height: f32,
+    surface_approximation: array<SurfaceApproximation, 6>,
 }
 
 struct TileCoordinate {
@@ -63,6 +65,18 @@ struct AtlasTile {
     coordinate: Coordinate,
 }
 
+struct SurfaceApproximation {
+    origin_lod: u32,
+    origin_xy: vec2<i32>,
+    origin_uv: vec2<f32>,
+    c: vec3<f32>,
+    c_u: vec3<f32>,
+    c_v: vec3<f32>,
+    c_uu: vec3<f32>,
+    c_uv: vec3<f32>,
+    c_vv: vec3<f32>,
+}
+
 struct BestLookup {
     tile: AtlasTile,
     tile_tree_uv: vec2<f32>,
@@ -75,22 +89,6 @@ struct AttachmentConfig {
     _padding: u32,
 }
 
-struct SideParameter {
-    view_xy: vec2<i32>,
-    view_uv: vec2<f32>,
-    c: vec3<f32>,
-    c_s: vec3<f32>,
-    c_t: vec3<f32>,
-    c_ss: vec3<f32>,
-    c_st: vec3<f32>,
-    c_tt: vec3<f32>,
-}
-
-struct TerrainModelApproximation {
-    origin_lod: u32,
-    approximate_height: f32,
-    sides: array<SideParameter, 6>,
-}
 
 struct IndirectBuffer {
     workgroup_count: vec3<u32>,

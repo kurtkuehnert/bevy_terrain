@@ -66,7 +66,7 @@ impl Coordinate {
     }
 
     /// Calculates the coordinate for for the local position on the unit cube sphere.
-    pub(crate) fn from_world_position(world_position: DVec3, model: &TerrainModel) -> Self {
+    pub fn from_world_position(world_position: DVec3, model: &TerrainModel) -> Self {
         let local_position = model.position_world_to_local(world_position);
 
         let (side, uv) = if model.is_spherical() {
@@ -107,7 +107,7 @@ impl Coordinate {
         Self { side, uv }
     }
 
-    pub(crate) fn world_position(self, model: &TerrainModel, height: f32) -> DVec3 {
+    pub fn world_position(self, model: &TerrainModel, height: f32) -> DVec3 {
         let local_position = if model.is_spherical() {
             let w = (self.uv - 0.5) / 0.5;
             let uv = w / (1.0 + C_SQR - C_SQR * w * w).powf(0.5);
@@ -179,6 +179,10 @@ impl TileCoordinate {
 
     pub fn count(lod: u32) -> u32 {
         1 << lod
+    }
+
+    pub fn xy(&self) -> IVec2 {
+        IVec2::new(self.x as i32, self.y as i32)
     }
 
     pub fn path(self, path: &str, extension: &str) -> String {

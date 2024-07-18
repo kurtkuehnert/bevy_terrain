@@ -15,20 +15,27 @@
 //! Both the tile atlas and the tile_trees also have a corresponding GPU representation,
 //! which can be used to access the terrain data in shaders.
 
-use crate::{
-    terrain_data::{tile_atlas::TileAtlas, tile_tree::TileTree},
-    util::CollectArray,
-};
+use crate::util::CollectArray;
 use bevy::{math::DVec3, prelude::*, render::render_resource::*};
 use bincode::{Decode, Encode};
 use bytemuck::cast_slice;
 use itertools::iproduct;
 use std::iter;
 
-pub mod gpu_tile_atlas;
-pub mod gpu_tile_tree;
-pub mod tile_atlas;
-pub mod tile_tree;
+mod gpu_tile_atlas;
+mod gpu_tile_tree;
+mod tile_atlas;
+mod tile_tree;
+
+pub(crate) use crate::terrain_data::{
+    gpu_tile_atlas::create_attachment_layout,
+    tile_atlas::{AtlasAttachment, AtlasTile, AtlasTileAttachment, AtlasTileAttachmentWithData},
+    tile_tree::{TileLookup, TileTreeEntry},
+};
+pub use crate::terrain_data::{
+    gpu_tile_atlas::GpuTileAtlas, gpu_tile_tree::GpuTileTree, tile_atlas::TileAtlas,
+    tile_tree::TileTree,
+};
 
 pub const INVALID_ATLAS_INDEX: u32 = u32::MAX;
 pub const INVALID_LOD: u32 = u32::MAX;

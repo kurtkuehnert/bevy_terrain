@@ -1,14 +1,12 @@
 use crate::{
     debug::DebugTerrain,
     render::{
-        terrain_bind_group::{create_terrain_layout, SetTerrainBindGroup},
-        terrain_view_bind_group::{
-            create_terrain_view_layout, DrawTerrainCommand, SetTerrainViewBindGroup,
-        },
+        create_terrain_layout, create_terrain_view_layout, DrawTerrainCommand, SetTerrainBindGroup,
+        SetTerrainViewBindGroup,
     },
     shaders::{DEFAULT_FRAGMENT_SHADER, DEFAULT_VERTEX_SHADER},
     terrain::TerrainComponents,
-    terrain_data::gpu_tile_atlas::GpuTileAtlas,
+    terrain_data::GpuTileAtlas,
 };
 use bevy::{
     core_pipeline::core_3d::{Opaque3d, Opaque3dBinKey},

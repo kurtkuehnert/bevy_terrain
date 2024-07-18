@@ -1,6 +1,6 @@
 use crate::{
-    math::{TerrainModelApproximation, TileCoordinate},
-    terrain_data::{gpu_tile_tree::GpuTileTree, tile_tree::TileTree},
+    math::{SurfaceApproximation, TileCoordinate},
+    terrain_data::{GpuTileTree, TileTree},
     terrain_view::TerrainViewComponents,
     util::StaticBuffer,
 };
@@ -34,13 +34,12 @@ pub(crate) fn create_refine_tiles_layout(device: &RenderDevice) -> BindGroupLayo
         &BindGroupLayoutEntries::sequential(
             ShaderStages::COMPUTE,
             (
-                uniform_buffer::<TerrainViewConfigUniform>(false), // terrain view config
-                uniform_buffer::<TerrainModelApproximation>(false), // model view approximation
-                storage_buffer_read_only_sized(false, None),       // tile_tree
-                storage_buffer_read_only_sized(false, None),       // origins
-                storage_buffer_sized(false, None),                 // final tiles
-                storage_buffer_sized(false, None),                 // temporary tiles
-                storage_buffer::<Parameters>(false),               // parameters
+                uniform_buffer::<TerrainViewUniform>(false), // terrain view config
+                storage_buffer_read_only_sized(false, None), // tile_tree
+                storage_buffer_read_only_sized(false, None), // origins
+                storage_buffer_sized(false, None),           // final tiles
+                storage_buffer_sized(false, None),           // temporary tiles
+                storage_buffer::<Parameters>(false),         // parameters
             ),
         ),
     )
@@ -52,11 +51,10 @@ pub(crate) fn create_terrain_view_layout(device: &RenderDevice) -> BindGroupLayo
         &BindGroupLayoutEntries::sequential(
             ShaderStages::VERTEX_FRAGMENT,
             (
-                uniform_buffer::<TerrainViewConfigUniform>(false), // terrain view config
-                uniform_buffer::<TerrainModelApproximation>(false), // model view approximation
-                storage_buffer_read_only_sized(false, None),       // tile_tree
-                storage_buffer_read_only_sized(false, None),       // origins
-                storage_buffer_read_only_sized(false, None),       // tiles
+                uniform_buffer::<TerrainViewUniform>(false), // terrain view config
+                storage_buffer_read_only_sized(false, None), // tile_tree
+                storage_buffer_read_only_sized(false, None), // origins
+                storage_buffer_read_only_sized(false, None), // tiles
             ),
         ),
     )
@@ -79,7 +77,7 @@ struct Parameters {
 }
 
 #[derive(Default, ShaderType)]
-struct TerrainViewConfigUniform {
+struct TerrainViewUniform {
     tree_size: u32,
     geometry_tile_count: u32,
     refinement_count: u32,
@@ -93,11 +91,13 @@ struct TerrainViewConfigUniform {
     morph_range: f32,
     blend_range: f32,
     precision_threshold_distance: f32,
+    approximate_height: f32,
+    surface_approximation: [SurfaceApproximation; 6],
 }
 
-impl TerrainViewConfigUniform {
+impl TerrainViewUniform {
     fn from_tile_tree(tile_tree: &TileTree) -> Self {
-        TerrainViewConfigUniform {
+        TerrainViewUniform {
             tree_size: tile_tree.tree_size,
             geometry_tile_count: tile_tree.geometry_tile_count,
             refinement_count: tile_tree.refinement_count,
@@ -111,17 +111,18 @@ impl TerrainViewConfigUniform {
             precision_threshold_distance: tile_tree.precision_threshold_distance as f32,
             morph_range: tile_tree.morph_range,
             blend_range: tile_tree.blend_range,
+            approximate_height: tile_tree.approximate_height,
+            surface_approximation: tile_tree.surface_approximation,
         }
     }
 }
 
 pub struct TerrainViewData {
-    view_config_buffer: StaticBuffer<TerrainViewConfigUniform>,
-    terrain_model_approximation_buffer: StaticBuffer<TerrainModelApproximation>,
-    pub(super) indirect_buffer: StaticBuffer<Indirect>,
-    pub(super) prepare_indirect_bind_group: BindGroup,
-    pub(super) refine_tiles_bind_group: BindGroup,
-    pub(super) terrain_view_bind_group: BindGroup,
+    view_config_buffer: StaticBuffer<TerrainViewUniform>,
+    pub(crate) indirect_buffer: StaticBuffer<Indirect>,
+    pub(crate) prepare_indirect_bind_group: BindGroup,
+    pub(crate) refine_tiles_bind_group: BindGroup,
+    pub(crate) terrain_view_bind_group: BindGroup,
 }
 
 impl TerrainViewData {
@@ -140,11 +141,6 @@ impl TerrainViewData {
             StaticBuffer::<()>::empty_sized(None, device, tile_buffer_size, BufferUsages::STORAGE);
         let final_tile_buffer =
             StaticBuffer::<()>::empty_sized(None, device, tile_buffer_size, BufferUsages::STORAGE);
-        let terrain_model_approximation_buffer = StaticBuffer::<TerrainModelApproximation>::empty(
-            None,
-            device,
-            BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-        );
 
         let prepare_indirect_bind_group = device.create_bind_group(
             "prepare_indirect_bind_group",
@@ -156,7 +152,6 @@ impl TerrainViewData {
             &create_refine_tiles_layout(device),
             &BindGroupEntries::sequential((
                 &view_config_buffer,
-                &terrain_model_approximation_buffer,
                 &gpu_tile_tree.tile_tree_buffer,
                 &gpu_tile_tree.origins_buffer,
                 &final_tile_buffer,
@@ -169,7 +164,6 @@ impl TerrainViewData {
             &create_terrain_view_layout(device),
             &BindGroupEntries::sequential((
                 &view_config_buffer,
-                &terrain_model_approximation_buffer,
                 &gpu_tile_tree.tile_tree_buffer,
                 &gpu_tile_tree.origins_buffer,
                 &final_tile_buffer,
@@ -178,7 +172,6 @@ impl TerrainViewData {
 
         Self {
             view_config_buffer,
-            terrain_model_approximation_buffer,
             indirect_buffer,
             prepare_indirect_bind_group,
             refine_tiles_bind_group,
@@ -186,7 +179,7 @@ impl TerrainViewData {
         }
     }
 
-    pub(super) fn refinement_count(&self) -> u32 {
+    pub(crate) fn refinement_count(&self) -> u32 {
         self.view_config_buffer.value().refinement_count
     }
 
@@ -213,25 +206,13 @@ impl TerrainViewData {
     pub(crate) fn extract(
         mut terrain_view_data: ResMut<TerrainViewComponents<TerrainViewData>>,
         tile_trees: Extract<Res<TerrainViewComponents<TileTree>>>,
-        terrain_model_approximations: Extract<
-            Res<TerrainViewComponents<TerrainModelApproximation>>,
-        >,
     ) {
         for (&(terrain, view), tile_tree) in tile_trees.iter() {
             let terrain_view_data = terrain_view_data.get_mut(&(terrain, view)).unwrap();
 
             terrain_view_data
                 .view_config_buffer
-                .set_value(TerrainViewConfigUniform::from_tile_tree(tile_tree));
-
-            terrain_view_data
-                .terrain_model_approximation_buffer
-                .set_value(
-                    terrain_model_approximations
-                        .get(&(terrain, view))
-                        .unwrap()
-                        .clone(),
-                );
+                .set_value(TerrainViewUniform::from_tile_tree(tile_tree));
         }
     }
 
@@ -241,7 +222,6 @@ impl TerrainViewData {
     ) {
         for data in &mut terrain_view_data.values_mut() {
             data.view_config_buffer.update(&queue);
-            data.terrain_model_approximation_buffer.update(&queue);
         }
     }
 }

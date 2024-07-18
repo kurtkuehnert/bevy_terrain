@@ -1,9 +1,6 @@
 use crate::{
     math::TileCoordinate,
-    terrain_data::{
-        tile_atlas::{AtlasTile, AtlasTileAttachment, TileAtlas},
-        AttachmentFormat,
-    },
+    terrain_data::{AtlasTile, AtlasTileAttachment, AttachmentFormat, TileAtlas},
     util::CollectArray,
 };
 use bevy::{prelude::*, render::texture::ImageSampler};

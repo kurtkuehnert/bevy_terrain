@@ -1,9 +1,11 @@
-pub mod tiff;
-
 use crate::math::TileCoordinate;
 use anyhow::Result;
 use bincode::{config, Decode, Encode};
 use std::{fs, path::Path};
+
+mod tiff;
+
+pub use crate::formats::tiff::TiffLoader;
 
 #[derive(Encode, Decode, Debug)]
 pub struct TC {

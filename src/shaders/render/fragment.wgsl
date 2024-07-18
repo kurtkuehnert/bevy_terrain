@@ -1,7 +1,7 @@
 #define_import_path bevy_terrain::fragment
 
 #import bevy_terrain::types::{Blend, AtlasTile, Coordinate}
-#import bevy_terrain::bindings::{config, view_config, geometry_tiles}
+#import bevy_terrain::bindings::{terrain, terrain_view, geometry_tiles}
 #import bevy_terrain::functions::{compute_blend, lookup_tile}
 #import bevy_terrain::attachments::{sample_normal, sample_color}
 #import bevy_terrain::debug::{show_data_lod, show_geometry_lod, show_tile_tree, show_pixels}
@@ -87,7 +87,7 @@ fn fragment_debug(info: ptr<function, FragmentInfo>, output: ptr<function, Fragm
 #endif
 
     // Todo: move this somewhere else
-    if ((*info).view_distance < view_config.precision_threshold_distance) {
+    if ((*info).view_distance < terrain_view.precision_threshold_distance) {
         (*output).color = mix((*output).color, vec4<f32>(0.1), 0.7);
     }
 }

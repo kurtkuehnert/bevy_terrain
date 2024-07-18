@@ -1,16 +1,12 @@
-use crate::terrain_data::gpu_tile_tree::GpuTileTree;
 use crate::{
     debug::DebugTerrain,
     render::{
-        culling_bind_group::{create_culling_layout, CullingBindGroup},
-        terrain_bind_group::{create_terrain_layout, TerrainData},
-        terrain_view_bind_group::{
-            create_prepare_indirect_layout, create_refine_tiles_layout, TerrainViewData,
-        },
+        create_culling_layout, create_prepare_indirect_layout, create_refine_tiles_layout,
+        create_terrain_layout, CullingBindGroup, TerrainData, TerrainViewData,
     },
     shaders::{PREPARE_PREPASS_SHADER, REFINE_TILES_SHADER},
     terrain::TerrainComponents,
-    terrain_data::gpu_tile_atlas::GpuTileAtlas,
+    terrain_data::{GpuTileAtlas, GpuTileTree},
     terrain_view::TerrainViewComponents,
 };
 use bevy::{

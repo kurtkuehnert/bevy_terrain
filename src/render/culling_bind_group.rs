@@ -1,7 +1,4 @@
-use crate::{
-    terrain_data::gpu_tile_tree::GpuTileTree, terrain_view::TerrainViewComponents,
-    util::StaticBuffer,
-};
+use crate::{terrain_data::GpuTileTree, terrain_view::TerrainViewComponents, util::StaticBuffer};
 use bevy::{
     prelude::*,
     render::{
@@ -20,21 +17,6 @@ pub(crate) fn create_culling_layout(device: &RenderDevice) -> BindGroupLayout {
             uniform_buffer::<CullingUniform>(false), // culling data
         ),
     )
-}
-
-pub fn planes(view_projection: &Mat4) -> [Vec4; 5] {
-    let row3 = view_projection.row(3);
-    let mut planes = [default(); 5];
-    for (i, plane) in planes.iter_mut().enumerate() {
-        let row = view_projection.row(i / 2);
-        *plane = if (i & 1) == 0 && i != 4 {
-            row3 + row
-        } else {
-            row3 - row
-        };
-    }
-
-    planes
 }
 
 #[derive(Default, ShaderType)]

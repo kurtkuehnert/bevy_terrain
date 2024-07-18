@@ -1,20 +1,11 @@
 use crate::{
-    math::{generate_terrain_model_approximation, TerrainModelApproximation},
     render::{
-        culling_bind_group::CullingBindGroup,
-        terrain_bind_group::TerrainData,
-        terrain_view_bind_group::TerrainViewData,
-        tiling_prepass::{
-            queue_tiling_prepass, TilingPrepassItem, TilingPrepassLabel, TilingPrepassNode,
-            TilingPrepassPipelines,
-        },
+        queue_tiling_prepass, CullingBindGroup, TerrainData, TerrainViewData, TilingPrepassItem,
+        TilingPrepassLabel, TilingPrepassNode, TilingPrepassPipelines,
     },
     shaders::{load_terrain_shaders, InternalShaders},
     terrain::TerrainComponents,
-    terrain_data::{
-        gpu_tile_atlas::GpuTileAtlas, gpu_tile_tree::GpuTileTree, tile_atlas::TileAtlas,
-        tile_tree::TileTree,
-    },
+    terrain_data::{GpuTileAtlas, GpuTileTree, TileAtlas, TileTree},
     terrain_view::TerrainViewComponents,
 };
 use bevy::{
@@ -38,7 +29,6 @@ impl Plugin for TerrainPlugin {
 
         app.init_resource::<InternalShaders>()
             .init_resource::<TerrainViewComponents<TileTree>>()
-            .init_resource::<TerrainViewComponents<TerrainModelApproximation>>()
             .add_systems(
                 PostUpdate,
                 check_visibility::<With<TileAtlas>>.in_set(VisibilitySystems::CheckVisibility),
@@ -50,7 +40,7 @@ impl Plugin for TerrainPlugin {
                     TileAtlas::update,
                     TileTree::adjust_to_tile_atlas,
                     TileTree::approximate_height,
-                    generate_terrain_model_approximation,
+                    TileTree::generate_surface_approximation,
                 )
                     .chain(),
             );

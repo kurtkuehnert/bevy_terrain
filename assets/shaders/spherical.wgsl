@@ -1,5 +1,5 @@
 #import bevy_terrain::types::{AtlasTile}
-#import bevy_terrain::bindings::config
+#import bevy_terrain::bindings::terrain
 #import bevy_terrain::attachments::{sample_height, sample_normal}
 #import bevy_terrain::fragment::{FragmentInput, FragmentOutput, fragment_info, fragment_output, fragment_debug}
 #import bevy_terrain::functions::lookup_tile
@@ -18,10 +18,10 @@ fn sample_color(tile: AtlasTile) -> vec4<f32> {
     var color: vec4<f32>;
 
     if (height < 0.0) {
-        color = textureSampleLevel(gradient, gradient_sampler, mix(0.0, 0.075, pow(height / config.min_height, 0.25)), 0.0);
+        color = textureSampleLevel(gradient, gradient_sampler, mix(0.0, 0.075, pow(height / terrain.min_height, 0.25)), 0.0);
     }
     else {
-        color = textureSampleLevel(gradient, gradient_sampler, mix(0.09, 1.0, pow(height / config.max_height * 2.0, 1.0)), 0.0);
+        color = textureSampleLevel(gradient, gradient_sampler, mix(0.09, 1.0, pow(height / terrain.max_height * 2.0, 1.0)), 0.0);
     }
 
     return color;

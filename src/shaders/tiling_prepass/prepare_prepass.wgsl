@@ -1,10 +1,10 @@
 #import bevy_terrain::types::TileCoordinate
-#import bevy_terrain::bindings::{view_config, temporary_tiles, parameters, indirect_buffer}
+#import bevy_terrain::bindings::{terrain_view, temporary_tiles, parameters, indirect_buffer}
 
 @compute @workgroup_size(1, 1, 1)
 fn prepare_root() {
     parameters.counter = -1;
-    atomicStore(&parameters.child_index, i32(view_config.tile_count - 1u));
+    atomicStore(&parameters.child_index, i32(terrain_view.tile_count - 1u));
     atomicStore(&parameters.final_index, 0);
 
 #ifdef SPHERICAL
@@ -25,10 +25,10 @@ fn prepare_root() {
 @compute @workgroup_size(1, 1, 1)
 fn prepare_next() {
     if (parameters.counter == 1) {
-        parameters.tile_count = u32(atomicExchange(&parameters.child_index, i32(view_config.tile_count - 1u)));
+        parameters.tile_count = u32(atomicExchange(&parameters.child_index, i32(terrain_view.tile_count - 1u)));
     }
     else {
-        parameters.tile_count = view_config.tile_count - 1u - u32(atomicExchange(&parameters.child_index, 0));
+        parameters.tile_count = terrain_view.tile_count - 1u - u32(atomicExchange(&parameters.child_index, 0));
     }
 
     parameters.counter = -parameters.counter;
@@ -38,7 +38,7 @@ fn prepare_next() {
 @compute @workgroup_size(1, 1, 1)
 fn prepare_render() {
     let tile_count = u32(atomicLoad(&parameters.final_index));
-    let vertex_count = view_config.vertices_per_tile * tile_count;
+    let vertex_count = terrain_view.vertices_per_tile * tile_count;
 
     indirect_buffer.workgroup_count = vec3<u32>(vertex_count, 1u, 0u);
 }
