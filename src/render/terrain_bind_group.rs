@@ -1,5 +1,6 @@
 use crate::{
-    prelude::TileAtlas, terrain::TerrainComponents, terrain_data::gpu_tile_atlas::GpuTileAtlas,
+    terrain::TerrainComponents,
+    terrain_data::{GpuTileAtlas, TileAtlas},
     util::StaticBuffer,
 };
 use bevy::{

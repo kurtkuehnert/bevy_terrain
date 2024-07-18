@@ -2,8 +2,14 @@ use bevy::render::{
     render_resource::{encase::internal::WriteInto, *},
     renderer::{RenderDevice, RenderQueue},
 };
+use image::{ImageBuffer, Luma, LumaA, Rgb, Rgba};
 use itertools::Itertools;
 use std::{fmt::Debug, marker::PhantomData, ops::Deref};
+
+pub type Rgb8Image = ImageBuffer<Rgb<u8>, Vec<u8>>;
+pub type Rgba8Image = ImageBuffer<Rgba<u8>, Vec<u8>>;
+pub type R16Image = ImageBuffer<Luma<u16>, Vec<u16>>;
+pub type Rg16Image = ImageBuffer<LumaA<u16>, Vec<u16>>;
 
 pub(crate) fn inverse_mix(a: f32, b: f32, value: f32) -> f32 {
     return f32::clamp((value - a) / (b - a), 0.0, 1.0);

@@ -1,6 +1,6 @@
 use crate::{
-    math::{Coordinate, TerrainModel, TileCoordinate},
-    terrain_data::{sample_height, tile_atlas::TileAtlas, INVALID_ATLAS_INDEX, INVALID_LOD},
+    math::{Coordinate, SurfaceApproximation, TerrainModel, TileCoordinate},
+    terrain_data::{sample_height, TileAtlas, INVALID_ATLAS_INDEX, INVALID_LOD},
     terrain_view::{TerrainViewComponents, TerrainViewConfig},
     util::inverse_mix,
 };
@@ -48,11 +48,11 @@ impl Default for TileState {
 /// [`GpuTileTree`](super::gpu_tile_tree::GpuTileTree) for access on the GPU.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Zeroable, Pod)]
-pub(super) struct TileTreeEntry {
+pub(crate) struct TileTreeEntry {
     /// The atlas index of the best entry.
-    pub(super) atlas_index: u32,
+    pub(crate) atlas_index: u32,
     /// The atlas lod of the best entry.
-    pub(super) atlas_lod: u32,
+    pub(crate) atlas_lod: u32,
 }
 
 impl Default for TileTreeEntry {
@@ -66,14 +66,14 @@ impl Default for TileTreeEntry {
 
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug)]
-pub(super) struct TileLookup {
-    pub(super) atlas_index: u32,
-    pub(super) atlas_lod: u32,
-    pub(super) atlas_uv: Vec2,
+pub(crate) struct TileLookup {
+    pub(crate) atlas_index: u32,
+    pub(crate) atlas_lod: u32,
+    pub(crate) atlas_uv: Vec2,
 }
 
 impl TileLookup {
-    pub(super) const INVALID: Self = Self {
+    pub(crate) const INVALID: Self = Self {
         atlas_index: INVALID_ATLAS_INDEX,
         atlas_lod: INVALID_LOD,
         atlas_uv: Vec2::ZERO,
@@ -102,13 +102,12 @@ impl TileLookup {
 /// currently loaded tiles from the tile atlas via the `adjust` methode, which can later be used to access the terrain data.
 #[derive(Component)]
 pub struct TileTree {
-    pub(super) origins: Array2<UVec2>,
     /// The current cpu tile_tree data. This is synced each frame with the gpu tile_tree data.
-    pub(super) data: Array4<TileTreeEntry>,
+    pub(crate) data: Array4<TileTreeEntry>,
     /// Tiles that are no longer required by this tile_tree.
-    pub(super) released_tiles: Vec<TileCoordinate>,
+    pub(crate) released_tiles: Vec<TileCoordinate>,
     /// Tiles that are requested to be loaded by this tile_tree.
-    pub(super) requested_tiles: Vec<TileCoordinate>,
+    pub(crate) requested_tiles: Vec<TileCoordinate>,
     /// The internal tile states of the tile_tree.
     tiles: Array4<TileState>,
     /// The count of level of detail layers.
@@ -128,6 +127,8 @@ pub struct TileTree {
     pub(crate) origin_lod: u32,
     pub(crate) view_world_position: DVec3,
     pub(crate) approximate_height: f32,
+    pub(crate) surface_approximation: [SurfaceApproximation; 6],
+    pub(crate) origins: Array2<UVec2>,
 }
 
 impl TileTree {
@@ -169,6 +170,7 @@ impl TileTree {
             )),
             released_tiles: default(),
             requested_tiles: default(),
+            surface_approximation: default(),
         }
     }
 
@@ -197,9 +199,8 @@ impl TileTree {
         model: &TerrainModel,
     ) -> f64 {
         let tile_count = TileCoordinate::count(tile.lod) as f64;
-        let tile_xy = IVec2::new(tile.x as i32, tile.y as i32);
         let view_tile_xy = Self::compute_tree_xy(view_coordinate, tile_count);
-        let tile_offset = view_tile_xy.as_ivec2() - tile_xy;
+        let tile_offset = view_tile_xy.as_ivec2() - tile.xy();
         let mut offset = view_tile_xy % 1.0;
 
         if tile_offset.x < 0 {
@@ -214,13 +215,13 @@ impl TileTree {
         }
 
         let tile_world_position =
-            Coordinate::new(tile.side, (tile_xy.as_dvec2() + offset) / tile_count)
+            Coordinate::new(tile.side, (tile.xy().as_dvec2() + offset) / tile_count)
                 .world_position(model, self.approximate_height);
 
         tile_world_position.distance(self.view_world_position)
     }
 
-    pub(super) fn compute_blend(&self, sample_world_position: DVec3) -> (u32, f32) {
+    pub(crate) fn compute_blend(&self, sample_world_position: DVec3) -> (u32, f32) {
         let view_distance = self.view_world_position.distance(sample_world_position);
         let target_lod = (self.blend_distance / view_distance)
             .log2()
@@ -236,7 +237,7 @@ impl TileTree {
         (lod, ratio)
     }
 
-    pub(super) fn lookup_tile(
+    pub(crate) fn lookup_tile(
         &self,
         world_position: DVec3,
         tree_lod: u32,
@@ -382,6 +383,21 @@ impl TileTree {
 
             tile_tree.approximate_height =
                 sample_height(tile_tree, tile_atlas, tile_tree.view_world_position);
+        }
+    }
+
+    pub fn generate_surface_approximation(
+        mut tile_trees: ResMut<TerrainViewComponents<TileTree>>,
+        tile_atlases: Query<&TileAtlas>,
+    ) {
+        for (&(terrain, _view), tile_tree) in tile_trees.iter_mut() {
+            let tile_atlas = tile_atlases.get(terrain).unwrap();
+
+            tile_tree.surface_approximation = SurfaceApproximation::compute(
+                tile_tree.view_world_position,
+                tile_tree.origin_lod,
+                &tile_atlas.model,
+            );
         }
     }
 }

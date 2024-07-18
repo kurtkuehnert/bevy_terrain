@@ -1,12 +1,12 @@
 mod coordinate;
 mod ellipsoid;
+mod surface_approximation;
 mod terrain_model;
 
 pub use crate::math::{
     coordinate::{Coordinate, TileCoordinate},
-    terrain_model::{
-        generate_terrain_model_approximation, TerrainModel, TerrainModelApproximation,
-    },
+    surface_approximation::SurfaceApproximation,
+    terrain_model::TerrainModel,
 };
 
 /// The square of the parameter c of the algebraic sigmoid function, used to convert between uv and st coordinates.

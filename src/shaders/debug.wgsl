@@ -1,7 +1,7 @@
 #define_import_path bevy_terrain::debug
 
 #import bevy_terrain::types::{Coordinate, AtlasTile, Blend}
-#import bevy_terrain::bindings::{config, tile_tree, view_config, geometry_tiles, attachments, origins, terrain_model_approximation}
+#import bevy_terrain::bindings::{terrain, tile_tree, terrain_view, geometry_tiles, attachments, origins}
 #import bevy_terrain::functions::{inverse_mix, compute_coordinate, lookup_best, approximate_view_distance, compute_blend, tree_lod, inside_square, tile_coordinate, coordinate_from_local_position, compute_subdivision_coordinate}
 #import bevy_pbr::mesh_view_bindings::view
 
@@ -55,10 +55,10 @@ fn show_data_lod(blend: Blend, tile: AtlasTile) -> vec4<f32> {
 
 fn show_geometry_lod(coordinate: Coordinate) -> vec4<f32> {
     let view_distance  = approximate_view_distance(coordinate, view.world_position);
-    let target_lod     = log2(2.0 * view_config.morph_distance / view_distance);
+    let target_lod     = log2(2.0 * terrain_view.morph_distance / view_distance);
 
 #ifdef MORPH
-    let ratio = select(inverse_mix(f32(coordinate.lod) + view_config.morph_range, f32(coordinate.lod), target_lod), 0.0, coordinate.lod == 0);
+    let ratio = select(inverse_mix(f32(coordinate.lod) + terrain_view.morph_range, f32(coordinate.lod), target_lod), 0.0, coordinate.lod == 0);
 #else
     let ratio = 0.0;
 #endif
@@ -77,7 +77,7 @@ fn show_geometry_lod(coordinate: Coordinate) -> vec4<f32> {
     color = mix(color, index_color(coordinate.side), 0.3);
 #endif
 
-    if (max(0.0, target_lod) < f32(coordinate.lod) - 1.0 + view_config.morph_range) {
+    if (max(0.0, target_lod) < f32(coordinate.lod) - 1.0 + terrain_view.morph_range) {
         // The view_distance and morph range are not sufficient.
         // The same tile overlapps two morph zones.
         // -> increase morph distance
@@ -94,7 +94,7 @@ fn show_geometry_lod(coordinate: Coordinate) -> vec4<f32> {
 }
 fn show_tile_tree(coordinate: Coordinate) -> vec4<f32> {
     let view_distance  = approximate_view_distance(coordinate, view.world_position);
-    let target_lod     = log2(view_config.load_distance / view_distance);
+    let target_lod     = log2(terrain_view.load_distance / view_distance);
 
     let best_lookup = lookup_best(coordinate);
 
