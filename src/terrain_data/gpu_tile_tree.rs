@@ -1,5 +1,5 @@
 use crate::{
-    terrain_data::tile_tree::{TileTree, TileTreeEntry},
+    terrain_data::{TileTree, TileTreeEntry},
     terrain_view::TerrainViewComponents,
     util::StaticBuffer,
 };

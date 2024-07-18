@@ -1,8 +1,7 @@
 //! Contains a debug resource and systems controlling it to visualize different internal
 //! data of the plugin.
 use crate::{
-    debug::camera::camera_controller, terrain_data::tile_tree::TileTree,
-    terrain_view::TerrainViewComponents,
+    debug::camera::camera_controller, terrain_data::TileTree, terrain_view::TerrainViewComponents,
 };
 use bevy::{
     asset::LoadState,
@@ -12,7 +11,9 @@ use bevy::{
     window::PrimaryWindow,
 };
 
-pub mod camera;
+mod camera;
+
+pub use crate::debug::camera::{DebugCameraBundle, DebugCameraController};
 
 #[derive(Asset, AsBindGroup, TypePath, Clone, Default)]
 pub struct DebugTerrainMaterial {}

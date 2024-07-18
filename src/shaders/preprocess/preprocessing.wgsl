@@ -37,7 +37,7 @@ var<storage, read_write> atlas_write_section: array<u32>;
 @group(0) @binding(1)
 var atlas: texture_2d_array<f32>;
 @group(0) @binding(2)
-var atlas_sampler: sampler;
+var terrain_sampler: sampler;
 @group(0) @binding(3)
 var<uniform> attachment: AttachmentMeta;
 

@@ -1,10 +1,8 @@
 use crate::{
     terrain::TerrainComponents,
     terrain_data::{
-        tile_atlas::{
-            AtlasAttachment, AtlasTileAttachment, AtlasTileAttachmentWithData, TileAtlas,
-        },
-        AttachmentData, AttachmentFormat,
+        AtlasAttachment, AtlasTileAttachment, AtlasTileAttachmentWithData, AttachmentData,
+        AttachmentFormat, TileAtlas,
     },
     util::StaticBuffer,
 };

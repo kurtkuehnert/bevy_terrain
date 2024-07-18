@@ -5,8 +5,26 @@
 //! each view. Then they are drawn using a single draw indirect call and morphed together to form
 //! one continuous surface.
 
-pub mod culling_bind_group;
-pub mod terrain_bind_group;
-pub mod terrain_material;
-pub mod terrain_view_bind_group;
-pub mod tiling_prepass;
+mod culling_bind_group;
+mod terrain_bind_group;
+mod terrain_material;
+mod terrain_view_bind_group;
+mod tiling_prepass;
+
+pub use crate::render::{
+    terrain_bind_group::TerrainData, terrain_material::TerrainMaterialPlugin,
+    terrain_view_bind_group::TerrainViewData,
+};
+
+pub(crate) use crate::render::{
+    culling_bind_group::{create_culling_layout, CullingBindGroup},
+    terrain_bind_group::{create_terrain_layout, SetTerrainBindGroup},
+    terrain_view_bind_group::{
+        create_prepare_indirect_layout, create_refine_tiles_layout, create_terrain_view_layout,
+        DrawTerrainCommand, SetTerrainViewBindGroup,
+    },
+    tiling_prepass::{
+        queue_tiling_prepass, TilingPrepassItem, TilingPrepassLabel, TilingPrepassNode,
+        TilingPrepassPipelines,
+    },
+};

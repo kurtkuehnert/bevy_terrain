@@ -1,5 +1,5 @@
 #import bevy_terrain::types::{TileCoordinate, Coordinate}
-#import bevy_terrain::bindings::{config, culling_view, view_config, final_tiles, temporary_tiles, parameters, terrain_model_approximation}
+#import bevy_terrain::bindings::{terrain, culling_view, terrain_view, final_tiles, temporary_tiles, parameters}
 #import bevy_terrain::functions::{approximate_view_distance, compute_relative_position, position_local_to_world, normal_local_to_world, tile_count, compute_subdivision_coordinate}
 
 fn child_index() -> i32 {
@@ -7,7 +7,7 @@ fn child_index() -> i32 {
 }
 
 fn parent_index(id: u32) -> i32 {
-    return i32(view_config.tile_count - 1u) * clamp(parameters.counter, 0, 1) - i32(id) * parameters.counter;
+    return i32(terrain_view.tile_count - 1u) * clamp(parameters.counter, 0, 1) - i32(id) * parameters.counter;
 }
 
 fn final_index() -> i32 {
@@ -18,7 +18,7 @@ fn should_be_divided(tile: TileCoordinate) -> bool {
     let coordinate    = compute_subdivision_coordinate(Coordinate(tile.side, tile.lod, tile.xy, vec2<f32>(0.0)));
     let view_distance = approximate_view_distance(coordinate, culling_view.world_position);
 
-    return view_distance < view_config.subdivision_distance / tile_count(tile.lod);
+    return view_distance < terrain_view.subdivision_distance / tile_count(tile.lod);
 }
 
 fn subdivide(tile: TileCoordinate) {

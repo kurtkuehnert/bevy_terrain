@@ -1,13 +1,13 @@
 use crate::{
     formats::TC,
     math::{TerrainModel, TileCoordinate},
-    prelude::{AttachmentConfig, AttachmentFormat},
     terrain::TerrainConfig,
     terrain_data::{
-        tile_tree::{TileLookup, TileTree, TileTreeEntry},
-        AttachmentData, INVALID_ATLAS_INDEX, INVALID_LOD,
+        AttachmentConfig, AttachmentData, AttachmentFormat, TileLookup, TileTree, TileTreeEntry,
+        INVALID_ATLAS_INDEX, INVALID_LOD,
     },
     terrain_view::TerrainViewComponents,
+    util::{R16Image, Rg16Image, Rgba8Image},
 };
 use anyhow::Result;
 use bevy::{
@@ -16,14 +16,9 @@ use bevy::{
     tasks::{futures_lite::future, AsyncComputeTaskPool, Task},
     utils::{HashMap, HashSet},
 };
-use image::{io::Reader, DynamicImage, ImageBuffer, Luma, LumaA, Rgb, Rgba};
+use image::{io::Reader, DynamicImage};
 use itertools::Itertools;
 use std::{collections::VecDeque, fs, mem, ops::DerefMut};
-
-pub type Rgb8Image = ImageBuffer<Rgb<u8>, Vec<u8>>;
-pub type Rgba8Image = ImageBuffer<Rgba<u8>, Vec<u8>>;
-pub type R16Image = ImageBuffer<Luma<u16>, Vec<u16>>;
-pub type Rg16Image = ImageBuffer<LumaA<u16>, Vec<u16>>;
 
 const STORE_PNG: bool = false;
 
@@ -562,11 +557,11 @@ impl TileAtlas {
         self.state.to_save.push_back(tile);
     }
 
-    pub(super) fn get_best_tile(&self, tile_coordinate: TileCoordinate) -> TileTreeEntry {
+    pub(crate) fn get_best_tile(&self, tile_coordinate: TileCoordinate) -> TileTreeEntry {
         self.state.get_best_tile(tile_coordinate)
     }
 
-    pub(super) fn sample_attachment(&self, tile_lookup: TileLookup, attachment_index: u32) -> Vec4 {
+    pub(crate) fn sample_attachment(&self, tile_lookup: TileLookup, attachment_index: u32) -> Vec4 {
         self.attachments[attachment_index as usize].sample(tile_lookup)
     }
 
