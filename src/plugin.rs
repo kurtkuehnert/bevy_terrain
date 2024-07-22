@@ -40,6 +40,7 @@ impl Plugin for TerrainPlugin {
                     TileAtlas::update,
                     TileTree::adjust_to_tile_atlas,
                     TileTree::approximate_height,
+                    #[cfg(feature = "high_precision")]
                     TileTree::generate_surface_approximation,
                 )
                     .chain(),

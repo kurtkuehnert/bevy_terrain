@@ -22,7 +22,11 @@ struct TerrainView {
     blend_range: f32,
     precision_threshold_distance: f32,
     approximate_height: f32,
+    view_lod: u32,
+    view_coordinates: array<ViewCoordinate, 6>,
+#ifdef HIGH_PRECISION
     surface_approximation: array<SurfaceApproximation, 6>,
+#endif
 }
 
 struct TileCoordinate {
@@ -40,6 +44,11 @@ struct Coordinate {
     uv_dx: vec2<f32>,
     uv_dy: vec2<f32>,
 #endif
+}
+
+struct ViewCoordinate {
+    xy: vec2<u32>,
+    uv: vec2<f32>,
 }
 
 struct Parameters {
@@ -65,10 +74,8 @@ struct AtlasTile {
     coordinate: Coordinate,
 }
 
+#ifdef HIGH_PRECISION
 struct SurfaceApproximation {
-    origin_lod: u32,
-    origin_xy: vec2<i32>,
-    origin_uv: vec2<f32>,
     c: vec3<f32>,
     c_u: vec3<f32>,
     c_v: vec3<f32>,
@@ -76,6 +83,7 @@ struct SurfaceApproximation {
     c_uv: vec3<f32>,
     c_vv: vec3<f32>,
 }
+#endif
 
 struct BestLookup {
     tile: AtlasTile,

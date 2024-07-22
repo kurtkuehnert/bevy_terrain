@@ -142,6 +142,7 @@ impl TerrainPipelineFlags {
         if debug.sample_grad {
             key |= TerrainPipelineFlags::SAMPLE_GRAD;
         }
+        #[cfg(feature = "high_precision")]
         if debug.high_precision {
             key |= TerrainPipelineFlags::HIGH_PRECISION;
         }
@@ -208,6 +209,7 @@ impl TerrainPipelineFlags {
         if self.contains(TerrainPipelineFlags::SAMPLE_GRAD) {
             shader_defs.push("SAMPLE_GRAD".into());
         }
+        #[cfg(feature = "high_precision")]
         if self.contains(TerrainPipelineFlags::HIGH_PRECISION) {
             shader_defs.push("HIGH_PRECISION".into());
         }

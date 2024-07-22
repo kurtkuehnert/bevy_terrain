@@ -35,16 +35,14 @@ var<uniform> terrain_view: TerrainView;
 @group(2) @binding(1)
 var<storage> tile_tree: array<TileTreeEntry>;
 @group(2) @binding(2)
-var<storage> origins: array<vec2<u32>>;
-@group(2) @binding(3)
 var<storage> geometry_tiles: array<TileCoordinate>;
 
 // refine geometry_tiles bindings
-@group(2) @binding(3)
+@group(2) @binding(2)
 var<storage, read_write> final_tiles: array<TileCoordinate>;
-@group(2) @binding(4)
+@group(2) @binding(3)
 var<storage, read_write> temporary_tiles: array<TileCoordinate>;
-@group(2) @binding(5)
+@group(2) @binding(4)
 var<storage, read_write> parameters: Parameters;
 
 @group(3) @binding(0)

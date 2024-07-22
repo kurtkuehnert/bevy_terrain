@@ -152,7 +152,7 @@ impl TerrainModel {
         self.position_local_to_world(self.position_world_to_local(world_position), height)
     }
 
-    pub(crate) fn side_count(&self) -> u32 {
+    pub fn side_count(&self) -> u32 {
         if self.is_spherical() {
             6
         } else {

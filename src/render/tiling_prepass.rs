@@ -31,9 +31,10 @@ bitflags::bitflags! {
         const PREPARE_NEXT   = 1 << 2;
         const PREPARE_RENDER = 1 << 3;
         const SPHERICAL      = 1 << 4;
-        const TEST1          = 1 << 5;
-        const TEST2          = 1 << 6;
-        const TEST3          = 1 << 7;
+        const HIGH_PRECISION = 1 << 5;
+        const TEST1          = 1 << 6;
+        const TEST2          = 1 << 7;
+        const TEST3          = 1 << 8;
     }
 }
 
@@ -41,6 +42,10 @@ impl TilingPrepassPipelineKey {
     pub fn from_debug(debug: &DebugTerrain) -> Self {
         let mut key = TilingPrepassPipelineKey::NONE;
 
+        #[cfg(feature = "high_precision")]
+        if debug.high_precision {
+            key |= TilingPrepassPipelineKey::HIGH_PRECISION;
+        }
         if debug.test1 {
             key |= TilingPrepassPipelineKey::TEST1;
         }
@@ -59,6 +64,10 @@ impl TilingPrepassPipelineKey {
 
         if self.contains(TilingPrepassPipelineKey::SPHERICAL) {
             shader_defs.push("SPHERICAL".into());
+        }
+        #[cfg(feature = "high_precision")]
+        if self.contains(TilingPrepassPipelineKey::HIGH_PRECISION) {
+            shader_defs.push("HIGH_PRECISION".into());
         }
         if self.contains(TilingPrepassPipelineKey::TEST1) {
             shader_defs.push("TEST1".into());

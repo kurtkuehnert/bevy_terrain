@@ -12,7 +12,7 @@ use bevy::{
     },
 };
 use bytemuck::cast_slice;
-use ndarray::{Array2, Array4};
+use ndarray::Array4;
 use std::mem;
 
 /// Stores the GPU representation of the [`TileTree`] (array texture)
@@ -22,10 +22,8 @@ use std::mem;
 #[derive(Component)]
 pub struct GpuTileTree {
     pub(crate) tile_tree_buffer: StaticBuffer<()>,
-    pub(crate) origins_buffer: StaticBuffer<()>,
     /// The current cpu tile_tree data. This is synced each frame with the tile_tree data.
     data: Array4<TileTreeEntry>,
-    origins: Array2<UVec2>,
 }
 
 impl GpuTileTree {
@@ -37,18 +35,9 @@ impl GpuTileTree {
             BufferUsages::STORAGE | BufferUsages::COPY_DST,
         );
 
-        let origins_buffer = StaticBuffer::empty_sized(
-            None,
-            device,
-            (tile_tree.origins.len() * mem::size_of::<UVec2>()) as BufferAddress,
-            BufferUsages::STORAGE | BufferUsages::COPY_DST,
-        );
-
         Self {
             tile_tree_buffer,
-            origins_buffer,
             data: default(),
-            origins: default(),
         }
     }
 
@@ -76,7 +65,6 @@ impl GpuTileTree {
             let gpu_tile_tree = gpu_tile_trees.get_mut(&(terrain, view)).unwrap();
 
             gpu_tile_tree.data = tile_tree.data.clone();
-            gpu_tile_tree.origins = tile_tree.origins.clone();
         }
     }
 
@@ -88,9 +76,6 @@ impl GpuTileTree {
         for gpu_tile_tree in gpu_tile_trees.values_mut() {
             let data = cast_slice(gpu_tile_tree.data.as_slice().unwrap());
             gpu_tile_tree.tile_tree_buffer.update_bytes(&queue, data);
-
-            let origins = cast_slice(gpu_tile_tree.origins.as_slice().unwrap());
-            gpu_tile_tree.origins_buffer.update_bytes(&queue, origins);
         }
     }
 }
