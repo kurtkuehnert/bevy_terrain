@@ -75,7 +75,7 @@ fn setup(
     let tile_atlas = TileAtlas::new(&config);
     let tile_tree = TileTree::new(&tile_atlas, &view_config);
 
-    commands.spawn_big_space(ReferenceFrame::default(), |root| {
+    commands.spawn_big_space(ReferenceFrame::new(1.0, 0.05), |root| {
         let frame = root.frame().clone();
 
         let terrain = root

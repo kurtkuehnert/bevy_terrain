@@ -28,17 +28,17 @@ pub(crate) fn create_terrain_layout(device: &RenderDevice) -> BindGroupLayout {
             ShaderStages::all(),
             (
                 storage_buffer_read_only::<MeshUniform>(false), // mesh
-                uniform_buffer::<TerrainConfigUniform>(false),  // terrain config
-                uniform_buffer::<AttachmentUniform>(false),
-                sampler(SamplerBindingType::Filtering), // atlas sampler
-                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment 1
-                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment 2
-                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment 3
-                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment 4
-                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment 5
-                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment 6
-                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment 7
-                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment 8
+                uniform_buffer::<TerrainConfigUniform>(false),  // terrain
+                uniform_buffer::<AttachmentUniform>(false),     // attachments
+                sampler(SamplerBindingType::Filtering),         // terrain_sampler
+                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment_0
+                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment_1
+                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment_2
+                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment_3
+                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment_4
+                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment_5
+                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment_6
+                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment_7
             ),
         ),
     )

@@ -1,5 +1,5 @@
 use crate::{
-    math::{Coordinate, SurfaceApproximation, TerrainModel, TileCoordinate},
+    math::{Coordinate, TerrainModel, TileCoordinate},
     terrain_data::{sample_height, TileAtlas, INVALID_ATLAS_INDEX, INVALID_LOD},
     terrain_view::{TerrainViewComponents, TerrainViewConfig},
     util::inverse_mix,
@@ -10,7 +10,7 @@ use bevy::{
 };
 use bytemuck::{Pod, Zeroable};
 use itertools::iproduct;
-use ndarray::{Array2, Array4};
+use ndarray::Array4;
 use std::iter;
 
 /// The current state of a tile of a [`TileTree`].
@@ -124,11 +124,12 @@ pub struct TileTree {
     pub(crate) precision_threshold_distance: f64,
     pub(crate) morph_range: f32,
     pub(crate) blend_range: f32,
-    pub(crate) origin_lod: u32,
+    pub(crate) view_lod: u32,
     pub(crate) view_world_position: DVec3,
     pub(crate) approximate_height: f32,
-    pub(crate) surface_approximation: [SurfaceApproximation; 6],
-    pub(crate) origins: Array2<UVec2>,
+    pub(crate) view_coordinates: [Coordinate; 6],
+    #[cfg(feature = "high_precision")]
+    pub(crate) surface_approximation: [crate::math::SurfaceApproximation; 6],
 }
 
 impl TileTree {
@@ -152,10 +153,9 @@ impl TileTree {
             morph_range: view_config.morph_range,
             blend_range: view_config.blend_range,
             precision_threshold_distance: view_config.precision_threshold_distance * scale,
-            origin_lod: view_config.origin_lod,
+            view_lod: view_config.origin_lod,
             view_world_position: default(),
             approximate_height: (model.min_height + model.max_height) / 2.0,
-            origins: Array2::default((model.side_count() as usize, tile_atlas.lod_count as usize)),
             data: Array4::default((
                 model.side_count() as usize,
                 tile_atlas.lod_count as usize,
@@ -170,6 +170,8 @@ impl TileTree {
             )),
             released_tiles: default(),
             requested_tiles: default(),
+            view_coordinates: default(),
+            #[cfg(feature = "high_precision")]
             surface_approximation: default(),
         }
     }
@@ -179,9 +181,9 @@ impl TileTree {
         (coordinate.uv * tile_count).min(DVec2::splat(tile_count - 0.000001))
     }
 
-    fn compute_origin(&self, coordinate: Coordinate, lod: u32) -> UVec2 {
+    fn compute_origin(&self, view_coordinate: Coordinate, lod: u32) -> UVec2 {
         let tile_count = TileCoordinate::count(lod) as f64;
-        let tree_xy = Self::compute_tree_xy(coordinate, tile_count);
+        let tree_xy = Self::compute_tree_xy(view_coordinate, tile_count);
 
         (tree_xy - 0.5 * self.tree_size as f64)
             .round()
@@ -274,10 +276,10 @@ impl TileTree {
 
         for side in 0..model.side_count() {
             let view_coordinate = view_coordinate.project_to_side(side, model);
+            self.view_coordinates[side as usize] = view_coordinate;
 
             for lod in 0..tile_atlas.lod_count {
                 let origin = self.compute_origin(view_coordinate, lod);
-                self.origins[(side as usize, lod as usize)] = origin;
 
                 for (x, y) in iproduct!(0..self.tree_size, 0..self.tree_size) {
                     let tile_coordinate = TileCoordinate {
@@ -386,6 +388,7 @@ impl TileTree {
         }
     }
 
+    #[cfg(feature = "high_precision")]
     pub fn generate_surface_approximation(
         mut tile_trees: ResMut<TerrainViewComponents<TileTree>>,
         tile_atlases: Query<&TileAtlas>,
@@ -393,11 +396,13 @@ impl TileTree {
         for (&(terrain, _view), tile_tree) in tile_trees.iter_mut() {
             let tile_atlas = tile_atlases.get(terrain).unwrap();
 
-            tile_tree.surface_approximation = SurfaceApproximation::compute(
-                tile_tree.view_world_position,
-                tile_tree.origin_lod,
-                &tile_atlas.model,
-            );
+            tile_tree.surface_approximation = tile_tree.view_coordinates.map(|view_coordinate| {
+                crate::math::SurfaceApproximation::compute(
+                    view_coordinate,
+                    tile_tree.view_world_position,
+                    &tile_atlas.model,
+                )
+            });
         }
     }
 }
