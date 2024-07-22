@@ -37,15 +37,10 @@ fn vertex_info(input: VertexInput) -> VertexInfo {
     let approximate_world_normal   = normal_local_to_world(approximate_local_position);
     var approximate_view_distance  = distance(approximate_world_position + terrain_view.approximate_height * approximate_world_normal, view.world_position);
 
-#ifdef HIGH_PRECISION
-    let high_precision = approximate_view_distance < terrain_view.precision_threshold_distance;
-#else
-    let high_precision = false;
-#endif
-
     var coordinate: Coordinate; var world_position: vec3<f32>; var world_normal: vec3<f32>;
 
-    if (high_precision) {
+#ifdef HIGH_PRECISION
+    if (approximate_view_distance < terrain_view.precision_threshold_distance) {
         let approximate_relative_position = compute_relative_position(approximate_coordinate);
         approximate_view_distance         = length(approximate_relative_position + terrain_view.approximate_height * approximate_world_normal);
 
@@ -54,11 +49,14 @@ fn vertex_info(input: VertexInput) -> VertexInfo {
         world_position        = view.world_position + relative_position;
         world_normal          = approximate_world_normal;
     } else {
+#endif
         coordinate         = compute_morph(approximate_coordinate, approximate_view_distance);
         let local_position = compute_local_position(coordinate);
         world_position     = position_local_to_world(local_position);
         world_normal       = normal_local_to_world(local_position);
+#ifdef HIGH_PRECISION
     }
+#endif
 
     var info: VertexInfo;
     info.tile_index     = tile_index;

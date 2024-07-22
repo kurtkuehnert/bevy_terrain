@@ -1,6 +1,6 @@
 use crate::math::{TerrainModel, C_SQR};
 use bevy::{
-    math::{DVec2, DVec3, IVec2},
+    math::{DVec2, DVec3, IVec2, Vec2},
     render::render_resource::ShaderType,
 };
 use bincode::{Decode, Encode};
@@ -131,7 +131,7 @@ impl Coordinate {
 
     /// Projects the coordinate onto one of the six cube faces.
     /// Thereby it chooses the closest location on this face to the original coordinate.
-    pub(crate) fn project_to_side(self, side: u32, model: &TerrainModel) -> Self {
+    pub fn project_to_side(self, side: u32, model: &TerrainModel) -> Self {
         if model.is_spherical() {
             let info = SideInfo::project_to_side(self.side, side);
 
@@ -286,5 +286,22 @@ impl TileCoordinate {
 impl fmt::Display for TileCoordinate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(f, "{}_{}_{}_{}", self.side, self.lod, self.x, self.y)
+    }
+}
+
+#[derive(Copy, Clone, Default, Debug, ShaderType)]
+pub struct ViewCoordinate {
+    pub xy: IVec2,
+    pub uv: Vec2,
+}
+
+impl ViewCoordinate {
+    pub fn new(coordinate: Coordinate, lod: u32) -> Self {
+        let count = TileCoordinate::count(lod) as f64;
+
+        Self {
+            xy: (coordinate.uv * count).as_ivec2(),
+            uv: (coordinate.uv * count).fract().as_vec2(),
+        }
     }
 }

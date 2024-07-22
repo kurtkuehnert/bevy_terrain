@@ -95,15 +95,15 @@ fn compute_local_position(coordinate: Coordinate) -> vec3<f32> {
 #endif
 }
 
-fn compute_relative_position(coord: Coordinate) -> vec3<f32> {
-    let approximation = terrain_view.surface_approximation[coord.side];
+#ifdef HIGH_PRECISION
+fn compute_relative_position(coordinate: Coordinate) -> vec3<f32> {
+    let view_coordinate = compute_view_coordinate(coordinate.side, coordinate.lod);
 
-    var coordinate = coord;
-    coordinate_change_lod(&coordinate, approximation.origin_lod);
-    let relative_uv = (vec2<f32>(vec2<i32>(coordinate.xy) - approximation.origin_xy) + coordinate.uv - approximation.origin_uv) / tile_count(approximation.origin_lod);
-
+    let relative_uv = (vec2<f32>(vec2<i32>(coordinate.xy) - vec2<i32>(view_coordinate.xy)) + coordinate.uv - view_coordinate.uv) / tile_count(coordinate.lod);
     let u = relative_uv.x;
     let v = relative_uv.y;
+
+    let approximation = terrain_view.surface_approximation[coordinate.side];
     let c = approximation.c;
     let c_u = approximation.c_u;
     let c_v = approximation.c_v;
@@ -113,6 +113,7 @@ fn compute_relative_position(coord: Coordinate) -> vec3<f32> {
 
     return c + c_u * u + c_v * v + c_uu * u * u + c_uv * u * v + c_vv * v * v;
 }
+#endif
 
 fn approximate_view_distance(coordinate: Coordinate, view_world_position: vec3<f32>) -> f32 {
     let local_position = compute_local_position(coordinate);
@@ -131,17 +132,10 @@ fn approximate_view_distance(coordinate: Coordinate, view_world_position: vec3<f
 }
 
 fn compute_subdivision_coordinate(coordinate: Coordinate) -> Coordinate {
-    let approximation = terrain_view.surface_approximation[coordinate.side];
+    let view_coordinate = compute_view_coordinate(coordinate.side, coordinate.lod);
 
-#ifdef FRAGMENT
-    var origin_coordinate = Coordinate(coordinate.side, approximation.origin_lod, vec2<u32>(approximation.origin_xy), approximation.origin_uv, vec2<f32>(0.0), vec2<f32>(0.0));
-#else
-    var origin_coordinate = Coordinate(coordinate.side, approximation.origin_lod, vec2<u32>(approximation.origin_xy), approximation.origin_uv);
-#endif
-
-    coordinate_change_lod(&origin_coordinate, coordinate.lod);
-    var offset = vec2<i32>(origin_coordinate.xy) - vec2<i32>(coordinate.xy);
-    var uv     = origin_coordinate.uv;
+    var offset = vec2<i32>(view_coordinate.xy) - vec2<i32>(coordinate.xy);
+    var uv     = view_coordinate.uv;
 
     if      (offset.x < 0) { uv.x = 0.0; }
     else if (offset.x > 0) { uv.x = 1.0; }
@@ -187,11 +181,29 @@ fn coordinate_change_lod(coordinate: ptr<function, Coordinate>, new_lod: u32) {
 #endif
 }
 
-fn compute_tile_tree_uv(coordinate: Coordinate) -> vec2<f32> {
-    let origin_xy = vec2<i32>(origins[coordinate.side * terrain.lod_count + coordinate.lod]);
-    let tree_size = min(f32(terrain_view.tree_size), tile_count(coordinate.lod));
+fn compute_view_coordinate(side: u32, lod: u32) -> Coordinate {
+    let coordinate = terrain_view.view_coordinates[side];
 
-    return (vec2<f32>(vec2<i32>(coordinate.xy) - origin_xy) + coordinate.uv) / tree_size;
+#ifdef FRAGMENT
+    var view_coordinate = Coordinate(side, terrain_view.view_lod, coordinate.xy, coordinate.uv, vec2<f32>(0.0), vec2<f32>(0.0));
+#else
+    var view_coordinate = Coordinate(side, terrain_view.view_lod, coordinate.xy, coordinate.uv);
+#endif
+
+    coordinate_change_lod(&view_coordinate, lod);
+
+    return view_coordinate;
+}
+
+fn compute_tile_tree_uv(coordinate: Coordinate) -> vec2<f32> {
+    let view_coordinate = compute_view_coordinate(coordinate.side, coordinate.lod);
+
+    let tile_count = i32(tile_count(coordinate.lod));
+    let tree_size  = min(i32(terrain_view.tree_size), tile_count);
+    let tree_xy    = vec2<i32>(view_coordinate.xy) + vec2<i32>(round(view_coordinate.uv)) - vec2<i32>(terrain_view.tree_size / 2);
+    let view_xy  = clamp(tree_xy, vec2<i32>(0), vec2<i32>(tile_count - tree_size));
+
+    return (vec2<f32>(vec2<i32>(coordinate.xy) - view_xy) + coordinate.uv) / f32(tree_size);
 }
 
 
