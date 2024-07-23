@@ -157,13 +157,13 @@ impl TileTree {
             view_world_position: default(),
             approximate_height: (model.min_height + model.max_height) / 2.0,
             data: Array4::default((
-                model.side_count() as usize,
+                model.face_count() as usize,
                 tile_atlas.lod_count as usize,
                 view_config.tree_size as usize,
                 view_config.tree_size as usize,
             )),
             tiles: Array4::default((
-                model.side_count() as usize,
+                model.face_count() as usize,
                 tile_atlas.lod_count as usize,
                 view_config.tree_size as usize,
                 view_config.tree_size as usize,
@@ -217,7 +217,7 @@ impl TileTree {
         }
 
         let tile_world_position =
-            Coordinate::new(tile.side, (tile.xy().as_dvec2() + offset) / tile_count)
+            Coordinate::new(tile.face, (tile.xy().as_dvec2() + offset) / tile_count)
                 .world_position(model, self.approximate_height);
 
         tile_world_position.distance(self.view_world_position)
@@ -251,7 +251,7 @@ impl TileTree {
         let tree_xy = Self::compute_tree_xy(coordinate, tile_count);
 
         let entry = self.data[[
-            coordinate.side as usize,
+            coordinate.face as usize,
             tree_lod as usize,
             tree_xy.x as usize % self.tree_size as usize,
             tree_xy.y as usize % self.tree_size as usize,
@@ -274,16 +274,16 @@ impl TileTree {
 
         let view_coordinate = Coordinate::from_world_position(self.view_world_position, model);
 
-        for side in 0..model.side_count() {
-            let view_coordinate = view_coordinate.project_to_side(side, model);
-            self.view_coordinates[side as usize] = view_coordinate;
+        for face in 0..model.face_count() {
+            let view_coordinate = view_coordinate.project_to_face(face);
+            self.view_coordinates[face as usize] = view_coordinate;
 
             for lod in 0..tile_atlas.lod_count {
                 let origin = self.compute_origin(view_coordinate, lod);
 
                 for (x, y) in iproduct!(0..self.tree_size, 0..self.tree_size) {
                     let tile_coordinate = TileCoordinate {
-                        side,
+                        face,
                         lod,
                         x: origin.x + x,
                         y: origin.y + y,
@@ -301,7 +301,7 @@ impl TileTree {
                     };
 
                     let tile = &mut self.tiles[[
-                        side as usize,
+                        face as usize,
                         lod as usize,
                         (tile_coordinate.x % self.tree_size) as usize,
                         (tile_coordinate.y % self.tree_size) as usize,

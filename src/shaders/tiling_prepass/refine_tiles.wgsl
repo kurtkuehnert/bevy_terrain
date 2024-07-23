@@ -15,7 +15,7 @@ fn final_index() -> i32 {
 }
 
 fn should_be_divided(tile: TileCoordinate) -> bool {
-    let coordinate    = compute_subdivision_coordinate(Coordinate(tile.side, tile.lod, tile.xy, vec2<f32>(0.0)));
+    let coordinate    = compute_subdivision_coordinate(Coordinate(tile.face, tile.lod, tile.xy, vec2<f32>(0.0)));
     let view_distance = approximate_view_distance(coordinate, culling_view.world_position);
 
     return view_distance < terrain_view.subdivision_distance / tile_count(tile.lod);
@@ -26,7 +26,7 @@ fn subdivide(tile: TileCoordinate) {
         let child_xy  = vec2<u32>((tile.xy.x << 1u) + (i & 1u), (tile.xy.y << 1u) + (i >> 1u & 1u));
         let child_lod = tile.lod + 1u;
 
-        temporary_tiles[child_index()] = TileCoordinate(tile.side, child_lod, child_xy);
+        temporary_tiles[child_index()] = TileCoordinate(tile.face, child_lod, child_xy);
     }
 }
 

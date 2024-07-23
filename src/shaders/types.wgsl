@@ -30,13 +30,13 @@ struct TerrainView {
 }
 
 struct TileCoordinate {
-    side: u32,
+    face: u32,
     lod: u32,
     xy: vec2<u32>,
 }
 
 struct Coordinate {
-    side: u32,
+    face: u32,
     lod: u32,
     xy: vec2<u32>,
     uv: vec2<f32>,

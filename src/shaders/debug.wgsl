@@ -47,7 +47,7 @@ fn show_data_lod(blend: Blend, tile: AtlasTile) -> vec4<f32> {
     }
 
 // #ifdef SPHERICAL
-//     color = mix(color, index_color(tile.coordinate.side), 0.3);
+//     color = mix(color, index_color(tile.coordinate.face), 0.3);
 // #endif
 
     return color;
@@ -74,7 +74,7 @@ fn show_geometry_lod(coordinate: Coordinate) -> vec4<f32> {
     }
 
 #ifdef SPHERICAL
-    color = mix(color, index_color(coordinate.side), 0.3);
+    color = mix(color, index_color(coordinate.face), 0.3);
 #endif
 
     if (max(0.0, target_lod) < f32(coordinate.lod) - 1.0 + terrain_view.morph_range) {

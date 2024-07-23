@@ -39,7 +39,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
             SphericalDataset {
                 attachment_index: 0,
                 paths: (0..6)
-                    .map(|side| format!("{PATH}/source/height/face{side}.tif"))
+                    .map(|face| format!("{PATH}/source/height/face{face}.tif"))
                     .collect(),
                 lod_range: 0..LOD_COUNT,
             },
