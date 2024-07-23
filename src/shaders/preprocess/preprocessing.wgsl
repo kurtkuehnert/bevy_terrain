@@ -7,7 +7,7 @@ const FORMAT_R16: u32 = 1u;
 const INVALID_ATLAS_INDEX: u32 = 4294967295u;
 
 struct TileCoordinate {
-    side: u32,
+    face: u32,
     lod: u32,
     x: u32,
     y: u32,

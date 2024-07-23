@@ -38,7 +38,7 @@ fn fragment_info(input: FragmentInput) -> FragmentInfo{
     let view_distance = distance(input.world_position.xyz, view.world_position);
 
     var info: FragmentInfo;
-    info.coordinate     = Coordinate(tile.side, tile.lod, tile.xy, uv, dpdx(uv), dpdy(uv));
+    info.coordinate     = Coordinate(tile.face, tile.lod, tile.xy, uv, dpdx(uv), dpdy(uv));
     info.view_distance  = view_distance;
     info.blend          = compute_blend(view_distance);
     info.clip_position  = input.clip_position;

@@ -32,7 +32,7 @@ pub struct SphericalDataset {
 pub struct PreprocessDataset {
     pub attachment_index: u32,
     pub path: String,
-    pub side: u32,
+    pub face: u32,
     pub top_left: Vec2,
     pub bottom_right: Vec2,
     pub lod_range: Range<u32>,
@@ -43,7 +43,7 @@ impl Default for PreprocessDataset {
         Self {
             attachment_index: 0,
             path: "".to_string(),
-            side: 0,
+            face: 0,
             top_left: Vec2::splat(0.0),
             bottom_right: Vec2::splat(1.0),
             lod_range: 0..1,
@@ -59,7 +59,7 @@ impl PreprocessDataset {
         let upper = (self.bottom_right * tile_count as f32).ceil().as_uvec2();
 
         iproduct!(lower.x..upper.x, lower.y..upper.y)
-            .map(move |(x, y)| TileCoordinate::new(self.side, lod, x, y))
+            .map(move |(x, y)| TileCoordinate::new(self.face, lod, x, y))
     }
 }
 
@@ -314,24 +314,24 @@ impl Preprocessor {
         asset_server: &AssetServer,
         tile_atlas: &mut TileAtlas,
     ) -> Self {
-        let side_datasets = (0..6)
-            .map(|side| PreprocessDataset {
+        let face_datasets = (0..6)
+            .map(|face| PreprocessDataset {
                 attachment_index: dataset.attachment_index,
-                path: dataset.paths[side as usize].clone(),
-                side,
+                path: dataset.paths[face as usize].clone(),
+                face,
                 lod_range: dataset.lod_range.clone(),
                 ..default()
             })
             .collect_vec();
 
-        for dataset in &side_datasets {
+        for dataset in &face_datasets {
             self.split_and_downsample(dataset, asset_server, tile_atlas);
         }
 
         self.task_queue.push_back(PreprocessTask::barrier());
 
         for lod in dataset.lod_range {
-            for dataset in &side_datasets {
+            for dataset in &face_datasets {
                 self.stitch_and_save_layer(dataset, tile_atlas, lod);
             }
         }

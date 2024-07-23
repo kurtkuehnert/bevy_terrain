@@ -42,7 +42,7 @@ fn compute_morph(coordinate: Coordinate, view_distance: f32) -> Coordinate {
     let target_lod  = log2(2.0 * terrain_view.morph_distance / view_distance);
     let ratio       = select(inverse_mix(f32(coordinate.lod) + terrain_view.morph_range, f32(coordinate.lod), target_lod), 0.0, coordinate.lod == 0);
 
-    return Coordinate(coordinate.side, coordinate.lod, coordinate.xy, mix(coordinate.uv, even_uv, ratio));
+    return Coordinate(coordinate.face, coordinate.lod, coordinate.xy, mix(coordinate.uv, even_uv, ratio));
 #else
     return coordinate;
 #endif
@@ -78,7 +78,7 @@ fn compute_local_position(coordinate: Coordinate) -> vec3<f32> {
 
     // this is faster than the CPU SIDE_MATRICES approach
     var local_position: vec3<f32>;
-    switch (coordinate.side) {
+    switch (coordinate.face) {
         case 0u:      { local_position = vec3( -1.0, -xy.y,  xy.x); }
         case 1u:      { local_position = vec3( xy.x, -xy.y,   1.0); }
         case 2u:      { local_position = vec3( xy.x,   1.0,  xy.y); }
@@ -96,13 +96,13 @@ fn compute_local_position(coordinate: Coordinate) -> vec3<f32> {
 
 #ifdef HIGH_PRECISION
 fn compute_relative_position(coordinate: Coordinate) -> vec3<f32> {
-    let view_coordinate = compute_view_coordinate(coordinate.side, coordinate.lod);
+    let view_coordinate = compute_view_coordinate(coordinate.face, coordinate.lod);
 
     let relative_uv = (vec2<f32>(vec2<i32>(coordinate.xy) - vec2<i32>(view_coordinate.xy)) + coordinate.uv - view_coordinate.uv) / tile_count(coordinate.lod);
     let u = relative_uv.x;
     let v = relative_uv.y;
 
-    let approximation = terrain_view.surface_approximation[coordinate.side];
+    let approximation = terrain_view.surface_approximation[coordinate.face];
     let c = approximation.c;
     let c_u = approximation.c_u;
     let c_v = approximation.c_v;
@@ -131,7 +131,7 @@ fn approximate_view_distance(coordinate: Coordinate, view_world_position: vec3<f
 }
 
 fn compute_subdivision_coordinate(coordinate: Coordinate) -> Coordinate {
-    let view_coordinate = compute_view_coordinate(coordinate.side, coordinate.lod);
+    let view_coordinate = compute_view_coordinate(coordinate.face, coordinate.lod);
 
     var offset = vec2<i32>(view_coordinate.xy) - vec2<i32>(coordinate.xy);
     var uv     = view_coordinate.uv;
@@ -180,13 +180,13 @@ fn coordinate_change_lod(coordinate: ptr<function, Coordinate>, new_lod: u32) {
 #endif
 }
 
-fn compute_view_coordinate(side: u32, lod: u32) -> Coordinate {
-    let coordinate = terrain_view.view_coordinates[side];
+fn compute_view_coordinate(face: u32, lod: u32) -> Coordinate {
+    let coordinate = terrain_view.view_coordinates[face];
 
 #ifdef FRAGMENT
-    var view_coordinate = Coordinate(side, terrain_view.view_lod, coordinate.xy, coordinate.uv, vec2<f32>(0.0), vec2<f32>(0.0));
+    var view_coordinate = Coordinate(face, terrain_view.view_lod, coordinate.xy, coordinate.uv, vec2<f32>(0.0), vec2<f32>(0.0));
 #else
-    var view_coordinate = Coordinate(side, terrain_view.view_lod, coordinate.xy, coordinate.uv);
+    var view_coordinate = Coordinate(face, terrain_view.view_lod, coordinate.xy, coordinate.uv);
 #endif
 
     coordinate_change_lod(&view_coordinate, lod);
@@ -195,7 +195,7 @@ fn compute_view_coordinate(side: u32, lod: u32) -> Coordinate {
 }
 
 fn compute_tile_tree_uv(coordinate: Coordinate) -> vec2<f32> {
-    let view_coordinate = compute_view_coordinate(coordinate.side, coordinate.lod);
+    let view_coordinate = compute_view_coordinate(coordinate.face, coordinate.lod);
 
     let tile_count = i32(tile_count(coordinate.lod));
     let tree_size  = min(i32(terrain_view.tree_size), tile_count);
@@ -208,7 +208,7 @@ fn compute_tile_tree_uv(coordinate: Coordinate) -> vec2<f32> {
 
 fn lookup_tile_tree_entry(coordinate: Coordinate) -> TileTreeEntry {
     let tree_xy    = vec2<u32>(coordinate.xy) % terrain_view.tree_size;
-    let tree_index = ((coordinate.side * terrain.lod_count +
+    let tree_index = ((coordinate.face * terrain.lod_count +
                        coordinate.lod) * terrain_view.tree_size +
                        tree_xy.x)      * terrain_view.tree_size +
                        tree_xy.y;

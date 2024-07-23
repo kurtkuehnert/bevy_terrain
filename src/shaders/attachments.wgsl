@@ -61,7 +61,7 @@ fn sample_normal(tile: AtlasTile, vertex_normal: vec3<f32>) -> vec3<f32> {
         vec3(-1.0, 0.0,  0.0),
     );
 
-    let face_up = FACE_UP[tile.coordinate.side];
+    let face_up = FACE_UP[tile.coordinate.face];
 
     let normal    = normalize(vertex_normal);
     let tangent   = cross(face_up, normal);
