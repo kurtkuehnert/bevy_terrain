@@ -1,30 +1,8 @@
-use crate::math::{Coordinate, TerrainModel, C_SQR};
+use crate::math::{Coordinate, TerrainModel, C_SQR, SIDE_MATRICES};
 use bevy::{
     math::{DMat4, DVec2, DVec3, Vec3},
     render::render_resource::ShaderType,
 };
-
-/// One matrix per side, which shuffles the a, b, and c component to their corresponding position.
-const SIDE_MATRICES: [DMat4; 6] = [
-    DMat4::from_cols_array(&[
-        -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0,
-    ]),
-    DMat4::from_cols_array(&[
-        0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0,
-    ]),
-    DMat4::from_cols_array(&[
-        0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
-    ]),
-    DMat4::from_cols_array(&[
-        1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
-    ]),
-    DMat4::from_cols_array(&[
-        0.0, 0.0, -1.0, 0.0, 0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0,
-    ]),
-    DMat4::from_cols_array(&[
-        0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0,
-    ]),
-];
 
 /// Parameters of the view used to compute the position of a location on the sphere's surface relative to the view.
 /// This can be calculated directly using f64 operations, or approximated using a Taylor series and f32 operations.
@@ -114,11 +92,7 @@ impl SurfaceApproximation {
             // The model matrix is used to transform the local position and directions into the corresponding world position and directions.
             // p is transformed as a point, thus it takes the model position into account.
             // The other coefficients are transformed as vectors, so they discard the translation.
-            let m = if model.is_spherical() {
-                model.world_from_local * SIDE_MATRICES[side]
-            } else {
-                model.world_from_local
-            };
+            let m = model.world_from_local * DMat4::from_mat3(SIDE_MATRICES[side]);
             let p = m.transform_point3(DVec3::new(a, b, c) / l);
             let p_du = m.transform_vector3(DVec3::new(a_du, b_du, c_du) / l.powi(2));
             let p_dv = m.transform_vector3(DVec3::new(a_dv, b_dv, c_dv) / l.powi(2));
