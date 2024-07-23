@@ -1,4 +1,4 @@
-use crate::math::{Coordinate, TerrainModel, C_SQR, SIDE_MATRICES};
+use crate::math::{Coordinate, TerrainModel, C_SQR, FACE_MATRICES};
 use bevy::{
     math::{DMat4, DVec2, DVec3, Vec3},
     render::render_resource::ShaderType,
@@ -36,8 +36,8 @@ impl SurfaceApproximation {
         model: &TerrainModel,
     ) -> SurfaceApproximation {
         // We want to approximate the position relative to the view using a second order Taylor series.
-        // For that, we have to calculate the Taylor coefficients for each cube side separately.
-        // As the basis, we use the view coordinate projected to the specific side.
+        // For that, we have to calculate the Taylor coefficients for each cube face separately.
+        // As the basis, we use the view coordinate projected to the specific face.
         // Then we calculate the relative position vector and derivatives at the view coordinate.
 
         // x(u)=(2u-1)/sqrt(1-4cu(u-1))
@@ -49,7 +49,7 @@ impl SurfaceApproximation {
 
         if model.is_spherical() {
             let DVec2 { x: u, y: v } = view_coordinate.uv;
-            let side = view_coordinate.side as usize;
+            let face = view_coordinate.face as usize;
 
             let x_denom = (1.0 - 4.0 * C_SQR * u * (u - 1.0)).sqrt();
             let x = (2.0 * u - 1.0) / x_denom;
@@ -92,7 +92,7 @@ impl SurfaceApproximation {
             // The model matrix is used to transform the local position and directions into the corresponding world position and directions.
             // p is transformed as a point, thus it takes the model position into account.
             // The other coefficients are transformed as vectors, so they discard the translation.
-            let m = model.world_from_local * DMat4::from_mat3(SIDE_MATRICES[side]);
+            let m = model.world_from_local * DMat4::from_mat3(FACE_MATRICES[face]);
             let p = m.transform_point3(DVec3::new(a, b, c) / l);
             let p_du = m.transform_vector3(DVec3::new(a_du, b_du, c_du) / l.powi(2));
             let p_dv = m.transform_vector3(DVec3::new(a_dv, b_dv, c_dv) / l.powi(2));

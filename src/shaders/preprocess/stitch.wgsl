@@ -89,8 +89,8 @@ fn neighbour_data(coords: vec2<u32>, neighbour_index: u32) -> vec4<f32> {
 
     let neighbour_tile = stitch_data.neighbour_tiles[neighbour_index];
     let neighbour_coords = project_to_side(vec2<u32>(vec2<i32>(coords) + offsets[neighbour_index]),
-                                           stitch_data.tile.coordinate.side,
-                                           neighbour_tile.coordinate.side);
+                                           stitch_data.tile.coordinate.face,
+                                           neighbour_tile.coordinate.face);
 
     return textureLoad(atlas, neighbour_coords, neighbour_tile.atlas_index, 0);
 }

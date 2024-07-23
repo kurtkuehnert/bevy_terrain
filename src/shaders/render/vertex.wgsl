@@ -31,7 +31,7 @@ fn vertex_info(input: VertexInput) -> VertexInfo {
     let tile_index                 = input.vertex_index / terrain_view.vertices_per_tile;
     let tile                       = geometry_tiles[tile_index];
     let tile_uv                    = compute_tile_uv(input.vertex_index);
-    let approximate_coordinate     = Coordinate(tile.side, tile.lod, tile.xy, tile_uv);
+    let approximate_coordinate     = Coordinate(tile.face, tile.lod, tile.xy, tile_uv);
     let approximate_local_position = compute_local_position(approximate_coordinate);
     let approximate_world_position = position_local_to_world(approximate_local_position);
     let approximate_world_normal   = normal_local_to_world(approximate_local_position);

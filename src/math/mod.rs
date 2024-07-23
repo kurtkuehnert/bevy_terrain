@@ -16,8 +16,8 @@ pub use crate::math::{
 /// The square of the parameter c of the algebraic sigmoid function, used to convert between uv and st coordinates.
 const C_SQR: f64 = 0.87 * 0.87;
 
-/// One matrix per side, which shuffles the a, b, and c component to their corresponding position.
-const SIDE_MATRICES: [DMat3; 6] = [
+/// One matrix per face, which shuffles the a, b, and c component to their corresponding position.
+const FACE_MATRICES: [DMat3; 6] = [
     DMat3::from_cols_array(&[-1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0, 0.0]),
     DMat3::from_cols_array(&[0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.0, -1.0, 0.0]),
     DMat3::from_cols_array(&[0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]),
@@ -27,7 +27,7 @@ const SIDE_MATRICES: [DMat3; 6] = [
 ];
 
 /// Inverse/Transpose of `SIDE_MATRICES`.
-const INVERSE_SIDE_MATRICES: [DMat3; 6] = [
+const INVERSE_FACE_MATRICES: [DMat3; 6] = [
     DMat3::from_cols_array(&[-1.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 1.0, 0.0]),
     DMat3::from_cols_array(&[0.0, 1.0, 0.0, 0.0, 0.0, -1.0, 1.0, 0.0, 0.0]),
     DMat3::from_cols_array(&[0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0]),
