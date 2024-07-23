@@ -71,21 +71,20 @@ fn compute_tile_uv(vertex_index: u32) -> vec2<f32>{
 }
 
 fn compute_local_position(coordinate: Coordinate) -> vec3<f32> {
-    var uv = (vec2<f32>(coordinate.xy) + coordinate.uv) / tile_count(coordinate.lod);
+    let uv = (vec2<f32>(coordinate.xy) + coordinate.uv) / tile_count(coordinate.lod);
 
 #ifdef SPHERICAL
-    uv = (uv - 0.5) / 0.5;
-    uv = uv / sqrt(1.0 + C_SQR - C_SQR * uv * uv);
+    let xy = (2.0 * uv - 1.0) / sqrt(1.0 - 4.0 * C_SQR * (uv - 1.0) * uv);
 
+    // this is faster than the CPU SIDE_MATRICES approach
     var local_position: vec3<f32>;
-
     switch (coordinate.side) {
-        case 0u:      { local_position = vec3( -1.0, -uv.y,  uv.x); }
-        case 1u:      { local_position = vec3( uv.x, -uv.y,   1.0); }
-        case 2u:      { local_position = vec3( uv.x,   1.0,  uv.y); }
-        case 3u:      { local_position = vec3(  1.0, -uv.x,  uv.y); }
-        case 4u:      { local_position = vec3( uv.y, -uv.x,  -1.0); }
-        case 5u:      { local_position = vec3( uv.y,  -1.0,  uv.x); }
+        case 0u:      { local_position = vec3( -1.0, -xy.y,  xy.x); }
+        case 1u:      { local_position = vec3( xy.x, -xy.y,   1.0); }
+        case 2u:      { local_position = vec3( xy.x,   1.0,  xy.y); }
+        case 3u:      { local_position = vec3(  1.0, -xy.x,  xy.y); }
+        case 4u:      { local_position = vec3( xy.y, -xy.x,  -1.0); }
+        case 5u:      { local_position = vec3( xy.y,  -1.0,  xy.x); }
         case default: {}
     }
 

@@ -46,9 +46,9 @@ fn show_data_lod(blend: Blend, tile: AtlasTile) -> vec4<f32> {
         color = mix(color, vec4<f32>(0.0), 0.8);
     }
 
-#ifdef SPHERICAL
-    color = mix(color, index_color(tile.coordinate.side), 0.3);
-#endif
+// #ifdef SPHERICAL
+//     color = mix(color, index_color(tile.coordinate.side), 0.3);
+// #endif
 
     return color;
 }
