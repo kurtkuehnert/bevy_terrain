@@ -1,6 +1,7 @@
-use crate::math::{TerrainModel, C_SQR};
+use crate::math::{TerrainModel, C_SQR, INVERSE_SIDE_MATRICES, SIDE_MATRICES};
 use bevy::{
-    math::{DVec2, DVec3, IVec2, Vec2},
+    math::{DVec2, DVec3},
+    prelude::*,
     render::render_resource::ShaderType,
 };
 use bincode::{Decode, Encode};
@@ -69,59 +70,36 @@ impl Coordinate {
     pub fn from_world_position(world_position: DVec3, model: &TerrainModel) -> Self {
         let local_position = model.position_world_to_local(world_position);
 
-        let (side, uv) = if model.is_spherical() {
-            let normal = local_position;
-            let abs_normal = normal.abs();
-
-            let (side, uv) = if abs_normal.x > abs_normal.y && abs_normal.x > abs_normal.z {
-                if normal.x < 0.0 {
-                    (0, DVec2::new(-normal.z / normal.x, normal.y / normal.x))
-                } else {
-                    (3, DVec2::new(-normal.y / normal.x, normal.z / normal.x))
-                }
-            } else if abs_normal.z > abs_normal.y {
-                if normal.z > 0.0 {
-                    (1, DVec2::new(normal.x / normal.z, -normal.y / normal.z))
-                } else {
-                    (4, DVec2::new(normal.y / normal.z, -normal.x / normal.z))
-                }
-            } else {
-                if normal.y > 0.0 {
-                    (2, DVec2::new(normal.x / normal.y, normal.z / normal.y))
-                } else {
-                    (5, DVec2::new(-normal.z / normal.y, -normal.x / normal.y))
-                }
+        if model.is_spherical() {
+            let side = match local_position {
+                DVec3 { x, y, z } if x.abs() > y.abs() && x.abs() > z.abs() && x < 0.0 => 0,
+                DVec3 { x, y, z } if x.abs() > y.abs() && x.abs() > z.abs() => 3,
+                DVec3 { y, z, .. } if z.abs() > y.abs() && z > 0.0 => 1,
+                DVec3 { y, z, .. } if z.abs() > y.abs() => 4,
+                DVec3 { y, .. } if y > 0.0 => 2,
+                _ => 5,
             };
 
-            let w = uv * ((1.0 + C_SQR) / (1.0 + C_SQR * uv * uv)).powf(0.5);
-            let uv = 0.5 * w + 0.5;
+            let abc = INVERSE_SIDE_MATRICES[side as usize] * local_position;
+            let xy = abc.yz() / abc.x;
 
-            (side, uv)
+            let uv = 0.5 * (xy * ((1.0 + C_SQR) / (1.0 + C_SQR * xy * xy)).powf(0.5)) + 0.5;
+
+            Self { side, uv }
         } else {
             let uv = DVec2::new(local_position.x + 0.5, local_position.z + 0.5)
                 .clamp(DVec2::ZERO, DVec2::ONE);
 
-            (0, uv)
-        };
-
-        Self { side, uv }
+            Self { side: 0, uv }
+        }
     }
 
     pub fn world_position(self, model: &TerrainModel, height: f32) -> DVec3 {
         let local_position = if model.is_spherical() {
-            let w = (self.uv - 0.5) / 0.5;
-            let uv = w / (1.0 + C_SQR - C_SQR * w * w).powf(0.5);
+            let xy =
+                (2.0 * self.uv - 1.0) / (1.0 - 4.0 * C_SQR * (self.uv - 1.0) * self.uv).powf(0.5);
 
-            match self.side {
-                0 => DVec3::new(-1.0, -uv.y, uv.x),
-                1 => DVec3::new(uv.x, -uv.y, 1.0),
-                2 => DVec3::new(uv.x, 1.0, uv.y),
-                3 => DVec3::new(1.0, -uv.x, uv.y),
-                4 => DVec3::new(uv.y, -uv.x, -1.0),
-                5 => DVec3::new(uv.y, -1.0, uv.x),
-                _ => unreachable!(),
-            }
-            .normalize()
+            SIDE_MATRICES[self.side as usize] * DVec3::new(1.0, xy.x, xy.y).normalize()
         } else {
             DVec3::new(self.uv.x - 0.5, 0.0, self.uv.y - 0.5)
         };
