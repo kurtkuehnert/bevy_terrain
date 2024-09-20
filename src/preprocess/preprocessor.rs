@@ -1,7 +1,7 @@
 use crate::{
     math::TileCoordinate,
     terrain_data::{
-        tile_atlas::{AtlasTile, AtlasTileAttachment, TileAtlas},
+        tile_atlas::{AtlasTile, AtlasTileAttachment, PathOrTileIo, TileAtlas},
         AttachmentFormat,
     },
     util::CollectArray,
@@ -290,7 +290,10 @@ impl Preprocessor {
     pub fn clear_attachment(self, attachment_index: u32, tile_atlas: &mut TileAtlas) -> Self {
         let attachment = &mut tile_atlas.attachments[attachment_index as usize];
         tile_atlas.state.existing_tiles.clear();
-        reset_directory(&attachment.path);
+        match &attachment.path_or_io {
+            PathOrTileIo::Path(path) => reset_directory(&path),
+            PathOrTileIo::ReadWrite(rw) => rw.clear(),
+        };
 
         self
     }

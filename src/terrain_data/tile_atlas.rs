@@ -8,17 +8,21 @@ use crate::{
         AttachmentData, INVALID_ATLAS_INDEX, INVALID_LOD,
     },
     terrain_view::TerrainViewComponents,
+    preprocess::preprocessor::reset_directory,
 };
 use anyhow::Result;
 use bevy::{
     prelude::*,
     render::render_resource::*,
-    tasks::{futures_lite::future, AsyncComputeTaskPool, Task},
+    tasks::{
+        futures_lite::{future, AsyncWrite, FutureExt},
+        AsyncComputeTaskPool, Task,
+    },
     utils::{HashMap, HashSet},
 };
 use image::{io::Reader, DynamicImage, ImageBuffer, Luma, LumaA, Rgb, Rgba};
 use itertools::Itertools;
-use std::{collections::VecDeque, fs, mem, ops::DerefMut};
+use std::{collections::VecDeque, fmt::Debug, fs, mem, ops::DerefMut, sync::Arc};
 
 pub type Rgb8Image = ImageBuffer<Rgb<u8>, Vec<u8>>;
 pub type Rgba8Image = ImageBuffer<Rgba<u8>, Vec<u8>>;
@@ -73,69 +77,100 @@ pub(crate) struct AtlasTileAttachmentWithData {
     pub(crate) texture_size: u32,
 }
 
-impl AtlasTileAttachmentWithData {
-    pub(crate) fn start_saving(self, path: String) -> Task<AtlasTileAttachment> {
-        AsyncComputeTaskPool::get().spawn(async move {
-            if STORE_PNG {
-                let path = self.tile.coordinate.path(&path, "png");
+/// Trait that allows different Io adapters.
+pub trait TileIoTrait: Send + Debug + Sync {
+    fn save(&self, coord: TileCoordinate, texture_size: u32, data: AttachmentData) -> future::Boxed<Result<()>>;
+    fn load(&self, coord: TileCoordinate, texture_size: u32, format: AttachmentFormat) -> future::Boxed<Result<AttachmentData>>;
+    fn clear(&self);
+}
 
-                let image = match self.data {
-                    AttachmentData::Rgba8(data) => {
-                        let data = data.into_iter().flatten().collect_vec();
-                        DynamicImage::from(
-                            Rgba8Image::from_raw(self.texture_size, self.texture_size, data)
-                                .unwrap(),
-                        )
-                    }
-                    AttachmentData::R16(data) => DynamicImage::from(
-                        R16Image::from_raw(self.texture_size, self.texture_size, data).unwrap(),
-                    ),
-                    AttachmentData::Rg16(data) => {
-                        let data = data.into_iter().flatten().collect_vec();
-                        DynamicImage::from(
-                            Rg16Image::from_raw(self.texture_size, self.texture_size, data)
-                                .unwrap(),
-                        )
-                    }
-                    AttachmentData::None => panic!("Attachment has not data."),
-                };
+#[derive(Debug, Clone)]
+pub enum PathOrTileIo {
+    Path(String),
+    ReadWrite(Arc<dyn TileIoTrait>),
+}
 
-                image.save(&path).unwrap();
+/// PNG path tileloader
+#[derive(Debug)]
+struct PngTileIo {
+    path: String,
+}
 
-                println!("Finished saving tile: {path}");
-            } else {
-                let path = self.tile.coordinate.path(&path, "bin");
 
-                fs::write(path, self.data.bytes()).unwrap();
-
-                // println!("Finished saving tile: {path}");
+impl TileIoTrait for PngTileIo {
+    fn save(&self, coord: TileCoordinate, texture_size: u32, data: AttachmentData) -> future::Boxed<Result<()>>{
+        let path = coord.path(&self.path, "png");
+        let image = match data {
+            AttachmentData::Rgba8(data) => {
+                let data = data.into_iter().flatten().collect_vec();
+                DynamicImage::from(Rgba8Image::from_raw(texture_size, texture_size, data).unwrap())
             }
+            AttachmentData::R16(data) => {
+                DynamicImage::from(R16Image::from_raw(texture_size, texture_size, data).unwrap())
+            }
+            AttachmentData::Rg16(data) => {
+                let data = data.into_iter().flatten().collect_vec();
+                DynamicImage::from(Rg16Image::from_raw(texture_size, texture_size, data).unwrap())
+            }
+            AttachmentData::None => panic!("Attachment has not data."),
+        };
 
+        image.save(&path).unwrap();
+
+        println!("Finished saving tile: {path}");
+
+        // this is a bit weird, idk what it expands to?
+        async {Ok(())}.boxed()
+    }
+
+    fn load(&self, coord: TileCoordinate, texture_size: u32, format: AttachmentFormat) -> future::Boxed<Result<AttachmentData>> {
+        let path = coord.path(&self.path, "png");
+        async move {
+        let mut reader = Reader::open(path)?;
+        reader.no_limits();
+        let image = reader.decode().unwrap();
+        Ok(AttachmentData::from_bytes(image.as_bytes(), format))
+    }.boxed()
+    }
+
+    fn clear(&self) {
+        reset_directory(&self.path)
+    }
+}
+
+impl AtlasTileAttachmentWithData {
+    pub(crate) fn start_saving(self, path_or_io: PathOrTileIo) -> Task<AtlasTileAttachment> {
+        AsyncComputeTaskPool::get().spawn(async move {
+            match path_or_io {
+                PathOrTileIo::Path(p) => {
+                    let path = self.tile.coordinate.path(&p, "bin");
+
+                    fs::write(path, self.data.bytes()).unwrap();
+                }
+                PathOrTileIo::ReadWrite(f) => {
+                    f.save(self.tile.coordinate, self.texture_size, self.data);
+                }
+            }
             self.tile
         })
     }
 
     pub(crate) fn start_loading(
         tile: AtlasTileAttachment,
-        path: String,
+        path_or_io: PathOrTileIo,
         texture_size: u32,
         format: AttachmentFormat,
         mip_level_count: u32,
     ) -> Task<Result<Self>> {
         AsyncComputeTaskPool::get().spawn(async move {
-            let mut data = if STORE_PNG {
-                let path = tile.coordinate.path(&path, "png");
+            let mut data = match path_or_io {
+                PathOrTileIo::Path(path) => {
+                    let path = tile.coordinate.path(&path, "bin");
+                    let bytes = fs::read(path)?;
 
-                let mut reader = Reader::open(path)?;
-                reader.no_limits();
-                let image = reader.decode().unwrap();
-                AttachmentData::from_bytes(image.as_bytes(), format)
-            } else {
-                let path = tile.coordinate.path(&path, "bin");
-
-                let bytes = fs::read(path)?;
-
-                AttachmentData::from_bytes(&bytes, format)
+                    AttachmentData::from_bytes(&bytes, format)
+                }
+                PathOrTileIo::ReadWrite(rw) => rw.load(tile.coordinate, texture_size, format).await?,
             };
 
             data.generate_mipmaps(texture_size, mip_level_count);
@@ -152,7 +187,7 @@ impl AtlasTileAttachmentWithData {
 /// An attachment of a [`TileAtlas`].
 pub struct AtlasAttachment {
     pub(crate) name: String,
-    pub(crate) path: String,
+    pub(crate) path_or_io: PathOrTileIo,
     pub(crate) texture_size: u32,
     pub(crate) center_size: u32,
     pub(crate) border_size: u32,
@@ -176,7 +211,7 @@ impl AtlasAttachment {
 
         Self {
             name,
-            path,
+            path_or_io: PathOrTileIo::Path(path),
             texture_size: config.texture_size,
             center_size,
             border_size: config.border_size,
@@ -228,7 +263,7 @@ impl AtlasAttachment {
         self.loading_tiles
             .push(AtlasTileAttachmentWithData::start_loading(
                 tile,
-                self.path.clone(),
+                self.path_or_io.clone(),
                 self.texture_size,
                 self.format,
                 self.mip_level_count,
@@ -242,7 +277,7 @@ impl AtlasAttachment {
                 data: self.data[tile.atlas_index as usize].clone(),
                 texture_size: self.texture_size,
             }
-            .start_saving(self.path.clone()),
+            .start_saving(self.path_or_io.clone()),
         );
     }
 

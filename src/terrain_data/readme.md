@@ -31,6 +31,10 @@ For this, we need to know what happens, what is exposed to the user etc.. Follow
     - if we start changing the terrain, we can be saving diffs to disk rather than updated files.
     - Loading a specific area to disk y walking around in it or old-school pre-fetching a bbox based on history?
 
+- what does `AtlasWithTileAttachmentWithData{data.generate_mipmaps(size, mips)}`  do? Aren't the mipmaps stored and loaded? -> from [here:](../../docs/implementation.md) they are used for trilinear filtering apparently...
+- What does `../../config.tc do?`
+
+
 ## From image/tiff side
 
 From image/tiff side, we need to use their multithreaded reader. basically:
@@ -113,3 +117,8 @@ Since cogs do not have any overlap at tile edges, the currently used technique o
 2. add moar preprocessing, requesting also tiles around the currently selected tile and adding edges manually. This is actually not the worst idea, since we're possibly adding resampling from multiple chunks anyways.
    - But first check how bad edge artifacts are with 0 overlap:
      ![edge artifact image](./img/edge_artifacts.png)
+
+
+### ramblings
+
+- Just came across [this answer about parallelization](https://stackoverflow.com/a/77281862/14681457), and [this blogpost on allocating CPU's](https://nitschinger.at/Binding-Threads-And-Processes-to-CPUs-in-Rust/)
