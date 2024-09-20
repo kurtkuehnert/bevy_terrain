@@ -1,8 +1,10 @@
+use std::sync::Arc;
+
 use bevy::math::DVec3;
 use bevy::{prelude::*, reflect::TypePath, render::render_resource::*};
 use bevy_terrain::prelude::*;
 
-const PATH: &str = "terrains/planar";
+const PATH: &str = "terrains/planar_png";
 const TERRAIN_SIZE: f64 = 2000.0;
 const HEIGHT: f32 = 500.0;
 const TEXTURE_SIZE: u32 = 512;
@@ -60,7 +62,7 @@ fn setup(
         border_size: 2,
         mip_level_count: 4,
         format: AttachmentFormat::R16,
-        ..default()
+        tile_io: Some(Arc::new(bevy_terrain::terrain_data::tile_atlas::PngTileIo{path: PATH.to_string()})),
     })
     .add_attachment(AttachmentConfig {
         name: "albedo".to_string(),
@@ -92,3 +94,4 @@ fn setup(
         tile_trees.insert((terrain, view), tile_tree);
     });
 }
+

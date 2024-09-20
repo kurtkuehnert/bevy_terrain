@@ -4,8 +4,6 @@ For this, we need to know what happens, what is exposed to the user etc.. Follow
 
 - `existing_tiles` is a problem, since we'd be theoretically unbounded or whatever... Completely filling with all coords for all possible tiles is a no-go....
   - `TileAtlas.new(TerrainConfig.attachments[AttachmentConfig])`
-  
-  
   - AttachmentConfig is a user-provided thing. Ideally, we'd add a trait to the crate where it becomes:
   ```rust
   /// Configures an attachment.
