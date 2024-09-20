@@ -16,14 +16,14 @@
 //! which can be used to access the terrain data in shaders.
 
 use crate::{
-    terrain_data::{tile_atlas::TileAtlas, tile_tree::TileTree},
+    terrain_data::{tile_atlas::{TileAtlas, TileIoTrait}, tile_tree::TileTree},
     util::CollectArray,
 };
 use bevy::{math::DVec3, prelude::*, render::render_resource::*};
 use bincode::{Decode, Encode};
 use bytemuck::cast_slice;
 use itertools::iproduct;
-use std::iter;
+use std::{iter, sync::Arc};
 
 pub mod gpu_tile_atlas;
 pub mod gpu_tile_tree;
@@ -84,7 +84,7 @@ impl AttachmentFormat {
 }
 
 /// Configures an attachment.
-#[derive(Encode, Decode, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct AttachmentConfig {
     /// The name of the attachment.
     pub name: String,
@@ -94,6 +94,9 @@ pub struct AttachmentConfig {
     pub mip_level_count: u32,
     /// The format of the attachment.
     pub format: AttachmentFormat,
+    /// _Optional:_ alternative tile loading method. Will use local disk space otherwise.
+    /// Maybe: make this only a server and internalize more things, but I think, I'd rather make a wrapper thing
+    pub tile_io: Option<Arc<dyn TileIoTrait>>,
 }
 
 impl Default for AttachmentConfig {
@@ -104,6 +107,7 @@ impl Default for AttachmentConfig {
             border_size: 1,
             mip_level_count: 1,
             format: AttachmentFormat::R16,
+            tile_io: None,
         }
     }
 }

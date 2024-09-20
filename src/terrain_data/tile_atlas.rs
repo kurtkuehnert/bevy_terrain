@@ -92,10 +92,9 @@ pub enum PathOrTileIo {
 
 /// PNG path tileloader
 #[derive(Debug)]
-struct PngTileIo {
-    path: String,
+pub struct PngTileIo {
+    pub path: String,
 }
-
 
 impl TileIoTrait for PngTileIo {
     fn save(&self, coord: TileCoordinate, texture_size: u32, data: AttachmentData) -> future::Boxed<Result<()>>{
@@ -211,7 +210,7 @@ impl AtlasAttachment {
 
         Self {
             name,
-            path_or_io: PathOrTileIo::Path(path),
+            path_or_io: if let Some(tio) = &config.tile_io {PathOrTileIo::ReadWrite(tio.clone())} else {PathOrTileIo::Path(path)},
             texture_size: config.texture_size,
             center_size,
             border_size: config.border_size,
