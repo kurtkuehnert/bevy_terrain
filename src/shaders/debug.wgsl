@@ -109,7 +109,7 @@ fn show_tile_tree(coordinate: Coordinate) -> vec4<f32> {
 }
 
 fn show_pixels(tile: AtlasTile) -> vec4<f32> {
-    let pixel_size = 4.0;
+    let pixel_size = 1.0;
     let pixel_coordinate = tile.coordinate.uv * f32(attachments[0].size) / pixel_size;
 
     let is_even = (u32(pixel_coordinate.x) + u32(pixel_coordinate.y)) % 2u == 0u;

@@ -59,14 +59,14 @@ fn setup(
         texture_size: TEXTURE_SIZE,
         border_size: 2,
         mip_level_count: 4,
-        format: AttachmentFormat::R16,
+        format: AttachmentFormat::RU16,
     })
     .add_attachment(AttachmentConfig {
         name: "albedo".to_string(),
         texture_size: TEXTURE_SIZE,
         border_size: 2,
         mip_level_count: 4,
-        format: AttachmentFormat::Rgba8,
+        format: AttachmentFormat::RgbaU8,
     });
 
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.

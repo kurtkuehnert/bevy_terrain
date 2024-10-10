@@ -37,9 +37,9 @@ fn sample_attachment1(tile: AtlasTile) -> vec4<f32> {
 #endif
 }
 
-fn sample_attachment1_gather0(tile: AtlasTile) -> vec4<f32> {
-    let uv = attachment_uv(tile.coordinate.uv, 1u);
-    return textureGather(0, attachment1, terrain_sampler, uv, tile.index);
+fn sample_attachment0_gather0(tile: AtlasTile) -> vec4<f32> {
+    let uv = attachment_uv(tile.coordinate.uv, 0u);
+    return textureGather(0, attachment0, terrain_sampler, uv, tile.index);
 }
 
 fn sample_height(tile: AtlasTile) -> f32 {

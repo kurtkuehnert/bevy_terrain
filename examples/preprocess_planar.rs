@@ -22,14 +22,14 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         name: "height".to_string(),
         texture_size: TEXTURE_SIZE,
         border_size: 2,
-        format: AttachmentFormat::R16,
+        format: AttachmentFormat::RU16,
         ..default()
     })
     .add_attachment(AttachmentConfig {
         name: "albedo".to_string(),
         texture_size: TEXTURE_SIZE,
         border_size: 2,
-        format: AttachmentFormat::Rgba8,
+        format: AttachmentFormat::RgbaU8,
         ..default()
     });
 

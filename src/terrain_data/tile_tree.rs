@@ -181,7 +181,7 @@ impl TileTree {
         (coordinate.uv * tile_count).min(DVec2::splat(tile_count - 0.000001))
     }
 
-    fn compute_origin(&self, view_coordinate: Coordinate, lod: u32) -> UVec2 {
+    fn compute_origin(&self, view_coordinate: Coordinate, lod: u32) -> IVec2 {
         let tile_count = TileCoordinate::count(lod) as f64;
         let tree_xy = Self::compute_tree_xy(view_coordinate, tile_count);
 
@@ -191,7 +191,7 @@ impl TileTree {
                 DVec2::splat(0.0),
                 DVec2::splat(tile_count - self.tree_size as f64),
             )
-            .as_uvec2()
+            .as_ivec2()
     }
 
     fn compute_tile_distance(
@@ -202,7 +202,7 @@ impl TileTree {
     ) -> f64 {
         let tile_count = TileCoordinate::count(tile.lod) as f64;
         let view_tile_xy = Self::compute_tree_xy(view_coordinate, tile_count);
-        let tile_offset = view_tile_xy.as_ivec2() - tile.xy();
+        let tile_offset = view_tile_xy.as_ivec2() - tile.xy;
         let mut offset = view_tile_xy % 1.0;
 
         if tile_offset.x < 0 {
@@ -217,7 +217,7 @@ impl TileTree {
         }
 
         let tile_world_position =
-            Coordinate::new(tile.face, (tile.xy().as_dvec2() + offset) / tile_count)
+            Coordinate::new(tile.face, (tile.xy.as_dvec2() + offset) / tile_count)
                 .world_position(model, self.approximate_height);
 
         tile_world_position.distance(self.view_world_position)
@@ -285,8 +285,7 @@ impl TileTree {
                     let tile_coordinate = TileCoordinate {
                         face,
                         lod,
-                        x: origin.x + x,
-                        y: origin.y + y,
+                        xy: origin + IVec2::new(x as i32, y as i32),
                     };
 
                     let tile_distance =
@@ -303,8 +302,8 @@ impl TileTree {
                     let tile = &mut self.tiles[[
                         face as usize,
                         lod as usize,
-                        (tile_coordinate.x % self.tree_size) as usize,
-                        (tile_coordinate.y % self.tree_size) as usize,
+                        (tile_coordinate.xy.x as usize % self.tree_size as usize),
+                        (tile_coordinate.xy.y as usize % self.tree_size as usize),
                     ]];
 
                     // check if tile_tree slot refers to a new tile
@@ -383,8 +382,12 @@ impl TileTree {
         for (&(terrain, _view), tile_tree) in tile_trees.iter_mut() {
             let tile_atlas = tile_atlases.get(terrain).unwrap();
 
-            tile_tree.approximate_height =
-                sample_height(tile_tree, tile_atlas, tile_tree.view_world_position);
+            let height = sample_height(tile_tree, tile_atlas, tile_tree.view_world_position);
+
+            if height != 0.0 {
+                dbg!(height);
+                tile_tree.approximate_height = height;
+            }
         }
     }
 

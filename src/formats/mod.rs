@@ -1,37 +1,26 @@
 use crate::math::TileCoordinate;
 use anyhow::Result;
-use bincode::{config, Decode, Encode};
+use ron::error::SpannedResult;
+use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
 
 mod tiff;
 
 pub use crate::formats::tiff::TiffLoader;
 
-#[derive(Encode, Decode, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct TC {
     pub tiles: Vec<TileCoordinate>,
 }
 
 impl TC {
-    pub fn decode_alloc(encoded: &[u8]) -> Result<Self> {
-        let config = config::standard();
-        let decoded = bincode::decode_from_slice(encoded, config)?;
-        Ok(decoded.0)
-    }
-
-    pub fn encode_alloc(&self) -> Result<Vec<u8>> {
-        let config = config::standard();
-        let encoded = bincode::encode_to_vec(self, config)?;
-        Ok(encoded)
-    }
-
-    pub fn load_file<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let encoded = fs::read(path)?;
-        Self::decode_alloc(&encoded)
+    pub fn load_file<P: AsRef<Path>>(path: P) -> SpannedResult<Self> {
+        let encoded = fs::read_to_string(path)?;
+        ron::from_str(&encoded)
     }
 
     pub fn save_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
-        let encoded = self.encode_alloc()?;
+        let encoded = ron::to_string(self)?;
         fs::write(path, encoded)?;
         Ok(())
     }

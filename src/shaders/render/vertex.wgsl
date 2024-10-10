@@ -3,7 +3,7 @@
 #import bevy_terrain::types::{Blend, AtlasTile, Coordinate}
 #import bevy_terrain::bindings::{terrain, terrain_view, geometry_tiles}
 #import bevy_terrain::functions::{lookup_tile, compute_tile_uv, compute_local_position, compute_relative_position, compute_morph, compute_blend, normal_local_to_world, position_local_to_world}
-#import bevy_terrain::attachments::{sample_height}
+#import bevy_terrain::attachments::{sample_height, sample_attachment0_gather0}
 #import bevy_pbr::mesh_view_bindings::view
 #import bevy_pbr::view_transformations::position_world_to_clip
 

@@ -27,7 +27,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         name: "height".to_string(),
         texture_size: TEXTURE_SIZE,
         border_size: 2,
-        format: AttachmentFormat::R16,
+        format: AttachmentFormat::RU16,
         ..default()
     });
 

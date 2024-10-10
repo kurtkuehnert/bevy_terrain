@@ -16,11 +16,11 @@ use bevy::{
     tasks::{futures_lite::future, AsyncComputeTaskPool, Task},
     utils::{HashMap, HashSet},
 };
-use image::{io::Reader, DynamicImage};
+use bytemuck::cast_slice;
+use image::DynamicImage;
 use itertools::Itertools;
-use std::{collections::VecDeque, fs, mem, ops::DerefMut};
-
-const STORE_PNG: bool = false;
+use std::{collections::VecDeque, fs::File, io::BufReader, mem, ops::DerefMut, path::PathBuf};
+use tiff::decoder::{Decoder, DecodingResult};
 
 #[derive(Copy, Clone, Debug, Default, ShaderType)]
 pub struct AtlasTile {
@@ -71,40 +71,33 @@ pub(crate) struct AtlasTileAttachmentWithData {
 impl AtlasTileAttachmentWithData {
     pub(crate) fn start_saving(self, path: String) -> Task<AtlasTileAttachment> {
         AsyncComputeTaskPool::get().spawn(async move {
-            if STORE_PNG {
-                let path = self.tile.coordinate.path(&path, "png");
+            let path = PathBuf::from(path);
 
-                let image = match self.data {
-                    AttachmentData::Rgba8(data) => {
-                        let data = data.into_iter().flatten().collect_vec();
-                        DynamicImage::from(
-                            Rgba8Image::from_raw(self.texture_size, self.texture_size, data)
-                                .unwrap(),
-                        )
-                    }
-                    AttachmentData::R16(data) => DynamicImage::from(
-                        R16Image::from_raw(self.texture_size, self.texture_size, data).unwrap(),
-                    ),
-                    AttachmentData::Rg16(data) => {
-                        let data = data.into_iter().flatten().collect_vec();
-                        DynamicImage::from(
-                            Rg16Image::from_raw(self.texture_size, self.texture_size, data)
-                                .unwrap(),
-                        )
-                    }
-                    AttachmentData::None => panic!("Attachment has not data."),
-                };
+            let path = self.tile.coordinate.path(&path);
 
-                image.save(&path).unwrap();
+            let image = match self.data {
+                AttachmentData::RgbaU8(data) => {
+                    let data = data.into_iter().flatten().collect_vec();
+                    DynamicImage::from(
+                        Rgba8Image::from_raw(self.texture_size, self.texture_size, data).unwrap(),
+                    )
+                }
+                AttachmentData::RU16(data) => DynamicImage::from(
+                    R16Image::from_raw(self.texture_size, self.texture_size, data).unwrap(),
+                ),
+                AttachmentData::RgU16(data) => {
+                    let data = data.into_iter().flatten().collect_vec();
+                    DynamicImage::from(
+                        Rg16Image::from_raw(self.texture_size, self.texture_size, data).unwrap(),
+                    )
+                }
+                AttachmentData::None => panic!("Attachment has not data."),
+                _ => unimplemented!(),
+            };
 
-                println!("Finished saving tile: {path}");
-            } else {
-                let path = self.tile.coordinate.path(&path, "bin");
+            image.save(&path).unwrap();
 
-                fs::write(path, self.data.bytes()).unwrap();
-
-                // println!("Finished saving tile: {path}");
-            }
+            println!("Finished saving tile: {path:?}");
 
             self.tile
         })
@@ -118,20 +111,31 @@ impl AtlasTileAttachmentWithData {
         mip_level_count: u32,
     ) -> Task<Result<Self>> {
         AsyncComputeTaskPool::get().spawn(async move {
-            let mut data = if STORE_PNG {
-                let path = tile.coordinate.path(&path, "png");
+            let path = PathBuf::from(path);
+            let path = tile.coordinate.path(&path);
 
-                let mut reader = Reader::open(path)?;
-                reader.no_limits();
-                let image = reader.decode().unwrap();
-                AttachmentData::from_bytes(image.as_bytes(), format)
-            } else {
-                let path = tile.coordinate.path(&path, "bin");
+            let reader = BufReader::new(File::open(path)?);
 
-                let bytes = fs::read(path)?;
+            let mut decoder = Decoder::new(reader).unwrap();
+            let result = decoder.read_image().unwrap();
 
-                AttachmentData::from_bytes(&bytes, format)
+            // Todo: validate that decoding result and attachment format match
+            // Todo: handle the transformation from DecodingResult -> AttachmentData without copying
+
+            let bytes = match &result {
+                DecodingResult::U8(data) => cast_slice(data),
+                DecodingResult::U16(data) => cast_slice(data),
+                DecodingResult::U32(data) => cast_slice(data),
+                DecodingResult::U64(data) => cast_slice(data),
+                DecodingResult::F32(data) => cast_slice(data),
+                DecodingResult::F64(data) => cast_slice(data),
+                DecodingResult::I8(data) => cast_slice(data),
+                DecodingResult::I16(data) => cast_slice(data),
+                DecodingResult::I32(data) => cast_slice(data),
+                DecodingResult::I64(data) => cast_slice(data),
             };
+
+            let mut data = AttachmentData::from_bytes(bytes, format);
 
             data.generate_mipmaps(texture_size, mip_level_count);
 
@@ -166,7 +170,8 @@ pub struct AtlasAttachment {
 impl AtlasAttachment {
     fn new(config: &AttachmentConfig, tile_atlas_size: u32, path: &str) -> Self {
         let name = config.name.clone();
-        let path = format!("assets/{path}/data/{name}");
+        let path = format!("{path}/{name}");
+        // let path = format!("assets/{path}/data/{name}");
         let center_size = config.texture_size - 2 * config.border_size;
 
         Self {
@@ -233,7 +238,7 @@ impl AtlasAttachment {
     fn save(&mut self, tile: AtlasTileAttachment) {
         self.saving_tiles.push(
             AtlasTileAttachmentWithData {
-                tile: tile,
+                tile,
                 data: self.data[tile.atlas_index as usize].clone(),
                 texture_size: self.texture_size,
             }
@@ -473,9 +478,7 @@ impl TileAtlasState {
         let mut best_tile_coordinate = tile_coordinate;
 
         loop {
-            if best_tile_coordinate == TileCoordinate::INVALID
-                || best_tile_coordinate.lod == INVALID_LOD
-            {
+            if best_tile_coordinate == TileCoordinate::INVALID {
                 // highest lod is not loaded
                 return TileTreeEntry {
                     atlas_index: INVALID_ATLAS_INDEX,
@@ -493,7 +496,9 @@ impl TileAtlasState {
                 }
             }
 
-            best_tile_coordinate = best_tile_coordinate.parent();
+            best_tile_coordinate = best_tile_coordinate
+                .parent()
+                .unwrap_or(TileCoordinate::INVALID);
         }
     }
 }
@@ -602,14 +607,13 @@ impl TileAtlas {
             tiles: self.state.existing_tiles.iter().copied().collect_vec(),
         };
 
-        tc.save_file(format!("assets/{}/config.tc", &self.path))
-            .unwrap();
+        tc.save_file(format!("{}/config.ron", &self.path)).unwrap();
     }
 
     /// Loads the tile configuration of the terrain, which stores the [`TileCoordinate`]s of all the tiles
     /// of the terrain.
     pub(crate) fn load_tile_config(path: &str) -> HashSet<TileCoordinate> {
-        if let Ok(tc) = TC::load_file(format!("assets/{}/config.tc", path)) {
+        if let Ok(tc) = TC::load_file(format!("{}/config.ron", path)) {
             tc.tiles.into_iter().collect()
         } else {
             println!("Tile config not found.");
