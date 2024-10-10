@@ -17,9 +17,8 @@
 
 use crate::util::CollectArray;
 use bevy::{math::DVec3, prelude::*, render::render_resource::*};
-use bincode::{Decode, Encode};
 use bytemuck::cast_slice;
-use itertools::iproduct;
+use itertools::{iproduct, Itertools};
 use std::iter;
 
 mod gpu_tile_atlas;
@@ -41,57 +40,66 @@ pub const INVALID_ATLAS_INDEX: u32 = u32::MAX;
 pub const INVALID_LOD: u32 = u32::MAX;
 
 /// The data format of an attachment.
-#[derive(Encode, Decode, Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum AttachmentFormat {
-    /// Three channels  8 bit
-    Rgb8,
-    /// Four  channels  8 bit
-    Rgba8,
-    /// One   channel  16 bit
-    R16,
-    /// Two   channels 16 bit
-    Rg16,
+    /// Three channels  8 bit unsigned integer
+    RgbU8,
+    /// Four channels  8 bit unsigned integer
+    RgbaU8,
+    /// One channel  16 bit unsigned integer
+    RU16,
+    /// One channel  16 bit integer
+    RI16,
+    /// Two channels 16 bit unsigned integer
+    RgU16,
+    /// One channel 32 bit float
+    RF32,
 }
 
 impl AttachmentFormat {
     pub(crate) fn id(self) -> u32 {
         match self {
-            AttachmentFormat::Rgb8 => 5,
-            AttachmentFormat::Rgba8 => 0,
-            AttachmentFormat::R16 => 1,
-            AttachmentFormat::Rg16 => 3,
+            AttachmentFormat::RgbU8 => 5,
+            AttachmentFormat::RgbaU8 => 0,
+            AttachmentFormat::RU16 => 1,
+            AttachmentFormat::RgU16 => 3,
+            AttachmentFormat::RF32 => 4,
+            AttachmentFormat::RI16 => 6,
         }
     }
     pub(crate) fn render_format(self) -> TextureFormat {
         match self {
-            AttachmentFormat::Rgb8 => TextureFormat::Rgba8UnormSrgb,
-            AttachmentFormat::Rgba8 => TextureFormat::Rgba8UnormSrgb,
-            AttachmentFormat::R16 => TextureFormat::R16Unorm,
-            AttachmentFormat::Rg16 => TextureFormat::Rg16Unorm,
+            AttachmentFormat::RgbU8 => TextureFormat::Rgba8UnormSrgb,
+            AttachmentFormat::RgbaU8 => TextureFormat::Rgba8UnormSrgb,
+            AttachmentFormat::RU16 => TextureFormat::R16Unorm,
+            AttachmentFormat::RgU16 => TextureFormat::Rg16Unorm,
+            AttachmentFormat::RF32 => TextureFormat::R32Float,
+            AttachmentFormat::RI16 => TextureFormat::R16Snorm,
         }
     }
 
     pub(crate) fn processing_format(self) -> TextureFormat {
         match self {
-            AttachmentFormat::Rgb8 => TextureFormat::Rgba8Unorm,
-            AttachmentFormat::Rgba8 => TextureFormat::Rgba8Unorm,
-            AttachmentFormat::R16 => TextureFormat::R16Unorm,
-            AttachmentFormat::Rg16 => TextureFormat::Rg16Unorm,
+            AttachmentFormat::RgbU8 => TextureFormat::Rgba8Unorm,
+            AttachmentFormat::RgbaU8 => TextureFormat::Rgba8Unorm,
+            _ => self.render_format(),
         }
     }
 
     pub(crate) fn pixel_size(self) -> u32 {
         match self {
-            AttachmentFormat::Rgb8 => 3,
-            AttachmentFormat::Rgba8 => 4,
-            AttachmentFormat::R16 => 2,
-            AttachmentFormat::Rg16 => 4,
+            AttachmentFormat::RgbU8 => 4,
+            AttachmentFormat::RgbaU8 => 4,
+            AttachmentFormat::RU16 => 2,
+            AttachmentFormat::RgU16 => 4,
+            AttachmentFormat::RF32 => 4,
+            AttachmentFormat::RI16 => 2,
         }
     }
 }
 
 /// Configures an attachment.
-#[derive(Encode, Decode, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct AttachmentConfig {
     /// The name of the attachment.
     pub name: String,
@@ -110,7 +118,7 @@ impl Default for AttachmentConfig {
             texture_size: 512,
             border_size: 1,
             mip_level_count: 1,
-            format: AttachmentFormat::R16,
+            format: AttachmentFormat::RU16,
         }
     }
 }
@@ -121,28 +129,39 @@ pub(crate) enum AttachmentData {
     /// Three channels  8 bit
     // Rgb8(Vec<(u8, u8, u8)>), Can not be represented currently
     /// Four  channels  8 bit
-    Rgba8(Vec<[u8; 4]>),
+    RgbaU8(Vec<[u8; 4]>),
     /// One   channel  16 bit
-    R16(Vec<u16>),
+    RU16(Vec<u16>),
+    /// One   channel  16 bit
+    RI16(Vec<i16>),
     /// Two   channels 16 bit
-    Rg16(Vec<[u16; 2]>),
+    RgU16(Vec<[u16; 2]>),
+    RF32(Vec<f32>),
 }
 
 impl AttachmentData {
     pub(crate) fn from_bytes(data: &[u8], format: AttachmentFormat) -> Self {
         match format {
-            AttachmentFormat::Rgb8 => unimplemented!(),
-            AttachmentFormat::Rgba8 => Self::Rgba8(cast_slice(data).to_vec()),
-            AttachmentFormat::R16 => Self::R16(cast_slice(data).to_vec()),
-            AttachmentFormat::Rg16 => Self::Rg16(cast_slice(data).to_vec()),
+            AttachmentFormat::RgbU8 => Self::RgbaU8(
+                data.chunks(3)
+                    .map(|chunk| [chunk[0], chunk[1], chunk[2], 255])
+                    .collect_vec(),
+            ),
+            AttachmentFormat::RgbaU8 => Self::RgbaU8(cast_slice(data).to_vec()),
+            AttachmentFormat::RU16 => Self::RU16(cast_slice(data).to_vec()),
+            AttachmentFormat::RI16 => Self::RI16(cast_slice(data).to_vec()),
+            AttachmentFormat::RgU16 => Self::RgU16(cast_slice(data).to_vec()),
+            AttachmentFormat::RF32 => Self::RF32(cast_slice(data).to_vec()),
         }
     }
 
     pub(crate) fn bytes(&self) -> &[u8] {
         match self {
-            AttachmentData::Rgba8(data) => cast_slice(data),
-            AttachmentData::R16(data) => cast_slice(data),
-            AttachmentData::Rg16(data) => cast_slice(data),
+            AttachmentData::RgbaU8(data) => cast_slice(data),
+            AttachmentData::RU16(data) => cast_slice(data),
+            AttachmentData::RI16(data) => cast_slice(data),
+            AttachmentData::RgU16(data) => cast_slice(data),
+            AttachmentData::RF32(data) => cast_slice(data),
             AttachmentData::None => panic!("Attachment has no data."),
         }
     }
@@ -211,10 +230,10 @@ impl AttachmentData {
             let child_size = parent_size >> 1;
 
             match self {
-                AttachmentData::Rgba8(data) => {
+                AttachmentData::RgbaU8(data) => {
                     generate_mipmap_rgba8(data, parent_size, child_size, start)
                 }
-                AttachmentData::R16(data) => {
+                AttachmentData::RU16(data) => {
                     generate_mipmap_r16(data, parent_size, child_size, start)
                 }
                 _ => {}
@@ -236,9 +255,12 @@ impl AttachmentData {
         for (x, y) in iproduct!(0..2, 0..2) {
             let index = (uv.y + y) * size as i32 + (uv.x + x);
 
+            // Todo: fix this
+            let index = index.clamp(0, (size * size - 1) as i32);
+
             values[x as usize][y as usize] = match self {
                 AttachmentData::None => Vec4::splat(0.0),
-                AttachmentData::Rgba8(data) => {
+                AttachmentData::RgbaU8(data) => {
                     let value = data[index as usize];
                     Vec4::new(
                         value[0] as f32 / u8::MAX as f32,
@@ -247,11 +269,15 @@ impl AttachmentData {
                         value[3] as f32 / u8::MAX as f32,
                     )
                 }
-                AttachmentData::R16(data) => {
+                AttachmentData::RU16(data) => {
                     let value = data[index as usize];
                     Vec4::new(value as f32 / u16::MAX as f32, 0.0, 0.0, 0.0)
                 }
-                AttachmentData::Rg16(data) => {
+                AttachmentData::RI16(data) => {
+                    let value = data[index as usize];
+                    Vec4::new(value as f32 / u16::MAX as f32, 0.0, 0.0, 0.0)
+                }
+                AttachmentData::RgU16(data) => {
                     let value = data[index as usize];
                     Vec4::new(
                         value[0] as f32 / u16::MAX as f32,
@@ -260,7 +286,20 @@ impl AttachmentData {
                         0.0,
                     )
                 }
+                AttachmentData::RF32(data) => {
+                    let value = data[index as usize];
+                    Vec4::new(value, 0.0, 0.0, 0.0)
+                }
             };
+        }
+
+        let x = values[0][0].x.to_bits() & 1;
+        let y = values[0][1].x.to_bits() & 1;
+        let z = values[1][1].x.to_bits() & 1;
+        let w = values[1][0].x.to_bits() & 1;
+
+        if x == 0 || y == 0 || z == 0 || w == 0 {
+            return Vec4::ZERO;
         }
 
         Vec4::lerp(
@@ -289,6 +328,10 @@ pub fn sample_attachment(
     let lookup = tile_tree.lookup_tile(surface_position, lod, model);
     let mut value = tile_atlas.sample_attachment(lookup, attachment_index);
 
+    if value == Vec4::ZERO {
+        return Vec4::ZERO;
+    }
+
     if blend_ratio > 0.0 {
         let lookup2 = tile_tree.lookup_tile(surface_position, lod - 1, model);
         value = Vec4::lerp(
@@ -306,9 +349,15 @@ pub fn sample_height(
     tile_atlas: &TileAtlas,
     sample_world_position: DVec3,
 ) -> f32 {
+    let height = sample_attachment(tile_tree, tile_atlas, 0, sample_world_position).x;
+
+    if height == 0.0 {
+        return 0.0;
+    }
+
     f32::lerp(
         tile_atlas.model.min_height,
         tile_atlas.model.max_height,
-        sample_attachment(tile_tree, tile_atlas, 0, sample_world_position).x,
+        height,
     )
 }

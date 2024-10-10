@@ -87,9 +87,11 @@ fn fragment_debug(info: ptr<function, FragmentInfo>, output: ptr<function, Fragm
 #endif
 
     // Todo: move this somewhere else
+#ifdef TEST1
     if ((*info).view_distance < terrain_view.precision_threshold_distance) {
         (*output).color = mix((*output).color, vec4<f32>(0.1), 0.7);
     }
+#endif
 }
 
 @fragment

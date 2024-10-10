@@ -24,7 +24,8 @@ lru = "0.12"
 bitflags = "2.4"
 bytemuck = "1.14"
 anyhow = "1.0"
-bincode = "2.0.0-rc.3"
+serde = "1.0.210"
+ron = "0.8.1"
 async-channel = "2.1"
 big_space = { version = "0.7", optional = true }
 

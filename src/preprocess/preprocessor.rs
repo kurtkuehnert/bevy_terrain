@@ -55,11 +55,11 @@ impl PreprocessDataset {
     fn overlapping_tiles(&self, lod: u32) -> impl Iterator<Item = TileCoordinate> + '_ {
         let tile_count = TileCoordinate::count(lod);
 
-        let lower = (self.top_left * tile_count as f32).as_uvec2();
-        let upper = (self.bottom_right * tile_count as f32).ceil().as_uvec2();
+        let lower = (self.top_left * tile_count as f32).as_ivec2();
+        let upper = (self.bottom_right * tile_count as f32).ceil().as_ivec2();
 
         iproduct!(lower.x..upper.x, lower.y..upper.y)
-            .map(move |(x, y)| TileCoordinate::new(self.face, lod, x, y))
+            .map(move |(x, y)| TileCoordinate::new(self.face, lod, IVec2::new(x, y)))
     }
 }
 
@@ -176,7 +176,7 @@ impl PreprocessTask {
         let neighbour_tiles = tile
             .coordinate
             .neighbours(tile_atlas.model.is_spherical())
-            .map(|coordinate| tile_atlas.get_tile(coordinate))
+            .map(|(coordinate, _)| tile_atlas.get_tile(coordinate))
             .collect_array();
 
         Self {

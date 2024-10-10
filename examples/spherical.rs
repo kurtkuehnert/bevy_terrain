@@ -1,12 +1,12 @@
 use bevy::{math::DVec3, prelude::*, reflect::TypePath, render::render_resource::*};
 use bevy_terrain::prelude::*;
 
-const PATH: &str = "terrains/spherical";
+const PATH: &str = "/Volumes/ExternalSSD/tiles";
 const RADIUS: f64 = 6371000.0;
 const MAJOR_AXES: f64 = 6378137.0;
 const MINOR_AXES: f64 = 6356752.314245;
-const MIN_HEIGHT: f32 = -12000.0;
-const MAX_HEIGHT: f32 = 9000.0;
+const MIN_HEIGHT: f32 = 0.0; // -12000.0;
+const MAX_HEIGHT: f32 = 1.0; // 65000.0; // 9000.0;
 const TEXTURE_SIZE: u32 = 512;
 const LOD_COUNT: u32 = 16;
 
@@ -70,9 +70,16 @@ fn setup(
         name: "height".to_string(),
         texture_size: TEXTURE_SIZE,
         border_size: 2,
-        mip_level_count: 4,
-        format: AttachmentFormat::R16,
+        mip_level_count: 1,
+        format: AttachmentFormat::RF32,
     });
+    // .add_attachment(AttachmentConfig {
+    //     name: "albedo".to_string(),
+    //     texture_size: TEXTURE_SIZE,
+    //     border_size: 0,
+    //     mip_level_count: 1,
+    //     format: AttachmentFormat::RgbU8,
+    // });
 
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
     let view_config = TerrainViewConfig::default();

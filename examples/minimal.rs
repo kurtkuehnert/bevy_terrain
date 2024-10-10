@@ -38,7 +38,7 @@ fn setup(
         texture_size: TEXTURE_SIZE,
         border_size: 2,
         mip_level_count: 4,
-        format: AttachmentFormat::R16,
+        format: AttachmentFormat::RU16,
     });
 
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
