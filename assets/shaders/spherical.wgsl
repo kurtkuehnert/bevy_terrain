@@ -27,7 +27,11 @@ fn sample_color(tile: AtlasTile) -> vec4<f32> {
         color = textureSampleLevel(gradient, gradient_sampler, mix(0.09, 1.0, pow(height / MAX_HEIGHT * 2.0, 1.0)), 0.0);
     }
 
-    // color = sample_albedo(tile);
+    let albedo = sample_albedo(tile);
+
+    if (!all(albedo == vec4<f32>(1.0))) {
+        color = sample_albedo(tile);
+    }
 
     return color;
 }
@@ -55,7 +59,7 @@ fn fragment(input: FragmentInput) -> FragmentOutput {
         normal    = mix(normal, sample_normal(tile2, info.world_normal), info.blend.ratio);
     }
 
-
+    // color = vec4<f32>(0.3);
 
     var output: FragmentOutput;
     fragment_output(&info, &output, color, normal);

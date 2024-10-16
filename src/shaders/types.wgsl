@@ -21,7 +21,7 @@ struct TerrainView {
     morph_range: f32,
     blend_range: f32,
     precision_threshold_distance: f32,
-    approximate_height: f32,
+    view_face: u32,
     view_lod: u32,
     view_coordinates: array<ViewCoordinate, 6>,
 #ifdef HIGH_PRECISION

@@ -1,6 +1,6 @@
 #define_import_path bevy_terrain::functions
 
-#import bevy_terrain::bindings::{mesh, terrain, origins, terrain_view, geometry_tiles, tile_tree}
+#import bevy_terrain::bindings::{mesh, terrain, origins, terrain_view, approximate_height, geometry_tiles, tile_tree}
 #import bevy_terrain::types::{TileCoordinate, TileTree, TileTreeEntry, AtlasTile, Blend, BestLookup, Coordinate, Morph}
 #import bevy_pbr::mesh_view_bindings::view
 #import bevy_render::maths::{affine3_to_square, mat2x4_f32_to_mat3x3_unpack}
@@ -118,12 +118,12 @@ fn approximate_view_distance(coordinate: Coordinate, view_world_position: vec3<f
     let local_position = compute_local_position(coordinate);
     var world_position = position_local_to_world(local_position);
     let world_normal   = normal_local_to_world(local_position);
-    var view_distance  = distance(world_position + terrain_view.approximate_height * world_normal, view_world_position);
+    var view_distance  = distance(world_position + approximate_height * world_normal, view_world_position);
 
 #ifdef HIGH_PRECISION
     if (view_distance < terrain_view.precision_threshold_distance) {
         let relative_position = compute_relative_position(coordinate);
-        view_distance         = length(relative_position + terrain_view.approximate_height * world_normal);
+        view_distance         = length(relative_position + approximate_height * world_normal);
     }
 #endif
 

@@ -17,6 +17,8 @@ use bevy::{
         Extract,
     },
 };
+use std::sync::{Arc, Mutex};
+use wgpu::util::DownloadBuffer;
 
 pub(crate) fn create_prepare_indirect_layout(device: &RenderDevice) -> BindGroupLayout {
     device.create_bind_group_layout(
@@ -34,11 +36,12 @@ pub(crate) fn create_refine_tiles_layout(device: &RenderDevice) -> BindGroupLayo
         &BindGroupLayoutEntries::sequential(
             ShaderStages::COMPUTE,
             (
-                uniform_buffer::<TerrainViewUniform>(false), // terrain_view
-                storage_buffer_read_only_sized(false, None), // tile_tree
-                storage_buffer_sized(false, None),           // final_tiles
-                storage_buffer_sized(false, None),           // temporary_tiles
-                storage_buffer::<Parameters>(false),         // parameters
+                storage_buffer_read_only::<TerrainView>(false), // terrain_view
+                storage_buffer_sized(false, None),              // approximate_height
+                storage_buffer_read_only_sized(false, None),    // tile_tree
+                storage_buffer_sized(false, None),              // final_tiles
+                storage_buffer_sized(false, None),              // temporary_tiles
+                storage_buffer::<Parameters>(false),            // parameters
             ),
         ),
     )
@@ -50,9 +53,10 @@ pub(crate) fn create_terrain_view_layout(device: &RenderDevice) -> BindGroupLayo
         &BindGroupLayoutEntries::sequential(
             ShaderStages::VERTEX_FRAGMENT,
             (
-                uniform_buffer::<TerrainViewUniform>(false), // terrain_view
-                storage_buffer_read_only_sized(false, None), // tile_tree
-                storage_buffer_read_only_sized(false, None), // geometry_tiles
+                storage_buffer_read_only::<TerrainView>(false), // terrain_view
+                storage_buffer_sized(false, None),              // approximate_height
+                storage_buffer_read_only_sized(false, None),    // tile_tree
+                storage_buffer_read_only_sized(false, None),    // geometry_tiles
             ),
         ),
     )
@@ -75,7 +79,7 @@ struct Parameters {
 }
 
 #[derive(Default, ShaderType)]
-struct TerrainViewUniform {
+struct TerrainView {
     tree_size: u32,
     geometry_tile_count: u32,
     refinement_count: u32,
@@ -89,16 +93,16 @@ struct TerrainViewUniform {
     morph_range: f32,
     blend_range: f32,
     precision_threshold_distance: f32,
-    approximate_height: f32,
+    view_face: u32,
     view_lod: u32,
     view_coordinates: [ViewCoordinate; 6],
     #[cfg(feature = "high_precision")]
     surface_approximation: [crate::math::SurfaceApproximation; 6],
 }
 
-impl TerrainViewUniform {
+impl TerrainView {
     fn from_tile_tree(tile_tree: &TileTree) -> Self {
-        TerrainViewUniform {
+        TerrainView {
             tree_size: tile_tree.tree_size,
             geometry_tile_count: tile_tree.geometry_tile_count,
             refinement_count: tile_tree.refinement_count,
@@ -112,7 +116,7 @@ impl TerrainViewUniform {
             precision_threshold_distance: tile_tree.precision_threshold_distance as f32,
             morph_range: tile_tree.morph_range,
             blend_range: tile_tree.blend_range,
-            approximate_height: tile_tree.approximate_height,
+            view_face: tile_tree.view_face,
             view_lod: tile_tree.view_lod,
             view_coordinates: tile_tree
                 .view_coordinates
@@ -123,22 +127,29 @@ impl TerrainViewUniform {
     }
 }
 
-pub struct TerrainViewData {
-    view_config_buffer: StaticBuffer<TerrainViewUniform>,
+pub struct GpuTerrainView {
+    terrain_view_buffer: StaticBuffer<TerrainView>,
+    approximate_height_buffer: StaticBuffer<f32>,
+    approximate_height_readback: Arc<Mutex<f32>>,
     pub(crate) indirect_buffer: StaticBuffer<Indirect>,
     pub(crate) prepare_indirect_bind_group: BindGroup,
     pub(crate) refine_tiles_bind_group: BindGroup,
     pub(crate) terrain_view_bind_group: BindGroup,
 }
 
-impl TerrainViewData {
+impl GpuTerrainView {
     fn new(device: &RenderDevice, tile_tree: &TileTree, gpu_tile_tree: &GpuTileTree) -> Self {
         // Todo: figure out a better way of limiting the tile buffer size
         let tile_buffer_size =
             TileCoordinate::min_size().get() * tile_tree.geometry_tile_count as BufferAddress;
 
-        let view_config_buffer =
-            StaticBuffer::empty(None, device, BufferUsages::UNIFORM | BufferUsages::COPY_DST);
+        let terrain_view_buffer =
+            StaticBuffer::empty(None, device, BufferUsages::STORAGE | BufferUsages::COPY_DST);
+        let approximate_height_buffer = StaticBuffer::<f32>::empty(
+            None,
+            device,
+            BufferUsages::STORAGE | BufferUsages::COPY_SRC,
+        );
         let indirect_buffer =
             StaticBuffer::empty(None, device, BufferUsages::STORAGE | BufferUsages::INDIRECT);
         let parameter_buffer =
@@ -157,7 +168,8 @@ impl TerrainViewData {
             "refine_tiles_bind_group",
             &create_refine_tiles_layout(device),
             &BindGroupEntries::sequential((
-                &view_config_buffer,
+                &terrain_view_buffer,
+                &approximate_height_buffer,
                 &gpu_tile_tree.tile_tree_buffer,
                 &final_tile_buffer,
                 &temporary_tile_buffer,
@@ -168,14 +180,17 @@ impl TerrainViewData {
             "terrain_view_bind_group",
             &create_terrain_view_layout(device),
             &BindGroupEntries::sequential((
-                &view_config_buffer,
+                &terrain_view_buffer,
+                &approximate_height_buffer,
                 &gpu_tile_tree.tile_tree_buffer,
                 &final_tile_buffer,
             )),
         );
 
         Self {
-            view_config_buffer,
+            terrain_view_buffer,
+            approximate_height_buffer,
+            approximate_height_readback: tile_tree.approximate_height_readback.clone(),
             indirect_buffer,
             prepare_indirect_bind_group,
             refine_tiles_bind_group,
@@ -184,56 +199,71 @@ impl TerrainViewData {
     }
 
     pub(crate) fn refinement_count(&self) -> u32 {
-        self.view_config_buffer.value().refinement_count
+        self.terrain_view_buffer.value().refinement_count
     }
 
     pub(crate) fn initialize(
         device: Res<RenderDevice>,
-        mut terrain_view_data: ResMut<TerrainViewComponents<TerrainViewData>>,
+        mut gpu_terrain_views: ResMut<TerrainViewComponents<GpuTerrainView>>,
         gpu_tile_trees: Res<TerrainViewComponents<GpuTileTree>>,
         tile_trees: Extract<Res<TerrainViewComponents<TileTree>>>,
     ) {
         for (&(terrain, view), tile_tree) in tile_trees.iter() {
-            if terrain_view_data.contains_key(&(terrain, view)) {
+            if gpu_terrain_views.contains_key(&(terrain, view)) {
                 return;
             }
 
             let gpu_tile_tree = gpu_tile_trees.get(&(terrain, view)).unwrap();
 
-            terrain_view_data.insert(
+            gpu_terrain_views.insert(
                 (terrain, view),
-                TerrainViewData::new(&device, tile_tree, gpu_tile_tree),
+                GpuTerrainView::new(&device, tile_tree, gpu_tile_tree),
             );
         }
     }
 
     pub(crate) fn extract(
-        mut terrain_view_data: ResMut<TerrainViewComponents<TerrainViewData>>,
+        mut gpu_terrain_views: ResMut<TerrainViewComponents<GpuTerrainView>>,
         tile_trees: Extract<Res<TerrainViewComponents<TileTree>>>,
     ) {
         for (&(terrain, view), tile_tree) in tile_trees.iter() {
-            let terrain_view_data = terrain_view_data.get_mut(&(terrain, view)).unwrap();
+            let gpu_terrain_views = gpu_terrain_views.get_mut(&(terrain, view)).unwrap();
 
-            terrain_view_data
-                .view_config_buffer
-                .set_value(TerrainViewUniform::from_tile_tree(tile_tree));
+            gpu_terrain_views
+                .terrain_view_buffer
+                .set_value(TerrainView::from_tile_tree(tile_tree));
         }
     }
 
     pub(crate) fn prepare(
         queue: Res<RenderQueue>,
-        mut terrain_view_data: ResMut<TerrainViewComponents<TerrainViewData>>,
+        mut gpu_terrain_views: ResMut<TerrainViewComponents<GpuTerrainView>>,
     ) {
-        for data in &mut terrain_view_data.values_mut() {
-            data.view_config_buffer.update(&queue);
+        for data in &mut gpu_terrain_views.values_mut() {
+            data.terrain_view_buffer.update(&queue);
         }
+    }
+
+    pub(crate) fn readback_view_height(&self, device: &RenderDevice, queue: &RenderQueue) {
+        let readback = self.approximate_height_readback.clone();
+
+        DownloadBuffer::read_buffer(
+            device.wgpu_device(),
+            &queue,
+            &self.approximate_height_buffer.slice(..),
+            move |result| {
+                let buffer = result.expect("Reading buffer failed!");
+
+                *readback.lock().unwrap() = bytemuck::cast_slice::<u8, f32>(&buffer)[0];
+            },
+        );
     }
 }
 
 pub struct SetTerrainViewBindGroup<const I: usize>;
 
 impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetTerrainViewBindGroup<I> {
-    type Param = SRes<TerrainViewComponents<TerrainViewData>>;
+    type Param = SRes<TerrainViewComponents<GpuTerrainView>>;
     type ViewQuery = Entity;
     type ItemQuery = ();
 
@@ -242,10 +272,10 @@ impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetTerrainViewBindGroup<
         item: &P,
         view: ROQueryItem<'w, Self::ViewQuery>,
         _: Option<ROQueryItem<'w, Self::ItemQuery>>,
-        terrain_view_data: SystemParamItem<'w, '_, Self::Param>,
+        gpu_terrain_views: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let data = terrain_view_data
+        let data = gpu_terrain_views
             .into_inner()
             .get(&(item.entity(), view))
             .unwrap();
@@ -258,7 +288,7 @@ impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetTerrainViewBindGroup<
 pub(crate) struct DrawTerrainCommand;
 
 impl<P: PhaseItem> RenderCommand<P> for DrawTerrainCommand {
-    type Param = SRes<TerrainViewComponents<TerrainViewData>>;
+    type Param = SRes<TerrainViewComponents<GpuTerrainView>>;
     type ViewQuery = Entity;
     type ItemQuery = ();
 
@@ -267,10 +297,10 @@ impl<P: PhaseItem> RenderCommand<P> for DrawTerrainCommand {
         item: &P,
         view: ROQueryItem<'w, Self::ViewQuery>,
         _: Option<ROQueryItem<'w, Self::ItemQuery>>,
-        terrain_view_data: SystemParamItem<'w, '_, Self::Param>,
+        gpu_terrain_views: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let data = terrain_view_data
+        let data = gpu_terrain_views
             .into_inner()
             .get(&(item.entity(), view))
             .unwrap();
