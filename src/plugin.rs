@@ -1,6 +1,6 @@
 use crate::{
     render::{
-        queue_tiling_prepass, CullingBindGroup, TerrainData, TerrainViewData, TilingPrepassItem,
+        queue_tiling_prepass, CullingBindGroup, GpuTerrainView, TerrainData, TilingPrepassItem,
         TilingPrepassLabel, TilingPrepassNode, TilingPrepassPipelines,
     },
     shaders::{load_terrain_shaders, InternalShaders},
@@ -39,7 +39,6 @@ impl Plugin for TerrainPlugin {
                     TileTree::compute_requests,
                     TileAtlas::update,
                     TileTree::adjust_to_tile_atlas,
-                    TileTree::approximate_height,
                     #[cfg(feature = "high_precision")]
                     TileTree::generate_surface_approximation,
                 )
@@ -50,7 +49,7 @@ impl Plugin for TerrainPlugin {
             .init_resource::<TerrainComponents<GpuTileAtlas>>()
             .init_resource::<TerrainComponents<TerrainData>>()
             .init_resource::<TerrainViewComponents<GpuTileTree>>()
-            .init_resource::<TerrainViewComponents<TerrainViewData>>()
+            .init_resource::<TerrainViewComponents<GpuTerrainView>>()
             .init_resource::<TerrainViewComponents<CullingBindGroup>>()
             .init_resource::<TerrainViewComponents<TilingPrepassItem>>()
             .add_systems(
@@ -62,8 +61,8 @@ impl Plugin for TerrainPlugin {
                     GpuTileTree::extract.after(GpuTileTree::initialize),
                     TerrainData::initialize.after(GpuTileAtlas::initialize),
                     TerrainData::extract.after(TerrainData::initialize),
-                    TerrainViewData::initialize.after(GpuTileTree::initialize),
-                    TerrainViewData::extract.after(TerrainViewData::initialize),
+                    GpuTerrainView::initialize.after(GpuTileTree::initialize),
+                    GpuTerrainView::extract.after(GpuTerrainView::initialize),
                 ),
             )
             .add_systems(
@@ -73,7 +72,7 @@ impl Plugin for TerrainPlugin {
                         GpuTileTree::prepare,
                         GpuTileAtlas::prepare,
                         TerrainData::prepare,
-                        TerrainViewData::prepare,
+                        GpuTerrainView::prepare,
                         CullingBindGroup::prepare,
                     )
                         .in_set(RenderSet::Prepare),

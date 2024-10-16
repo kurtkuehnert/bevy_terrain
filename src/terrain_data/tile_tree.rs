@@ -1,8 +1,7 @@
 use crate::{
     math::{Coordinate, TerrainModel, TileCoordinate},
-    terrain_data::{sample_height, TileAtlas, INVALID_ATLAS_INDEX, INVALID_LOD},
+    terrain_data::{TileAtlas, INVALID_ATLAS_INDEX, INVALID_LOD},
     terrain_view::{TerrainViewComponents, TerrainViewConfig},
-    util::inverse_mix,
 };
 use bevy::{
     math::{DVec2, DVec3},
@@ -11,7 +10,10 @@ use bevy::{
 use bytemuck::{Pod, Zeroable};
 use itertools::iproduct;
 use ndarray::Array4;
-use std::iter;
+use std::{
+    iter,
+    sync::{Arc, Mutex},
+};
 
 /// The current state of a tile of a [`TileTree`].
 ///
@@ -124,12 +126,14 @@ pub struct TileTree {
     pub(crate) subdivision_distance: f64,
     pub(crate) load_distance: f64,
     pub(crate) precision_threshold_distance: f64,
+    pub(crate) view_face: u32,
     pub(crate) view_lod: u32,
     pub(crate) view_world_position: DVec3,
-    pub(crate) approximate_height: f32,
     pub(crate) view_coordinates: [Coordinate; 6],
     #[cfg(feature = "high_precision")]
     pub(crate) surface_approximation: [crate::math::SurfaceApproximation; 6],
+    pub(crate) approximate_height: f32,
+    pub(crate) approximate_height_readback: Arc<Mutex<f32>>,
 }
 
 impl TileTree {
@@ -153,9 +157,9 @@ impl TileTree {
             morph_range: view_config.morph_range,
             blend_range: view_config.blend_range,
             precision_threshold_distance: view_config.precision_threshold_distance * scale,
+            view_face: 0,
             view_lod: view_config.view_lod,
             view_world_position: default(),
-            approximate_height: (model.min_height + model.max_height) / 2.0,
             data: Array4::default((
                 model.face_count() as usize,
                 tile_atlas.lod_count as usize,
@@ -173,6 +177,8 @@ impl TileTree {
             view_coordinates: default(),
             #[cfg(feature = "high_precision")]
             surface_approximation: default(),
+            approximate_height: 0.0,
+            approximate_height_readback: Arc::new(Mutex::new(0.0)),
         }
     }
 
@@ -223,56 +229,14 @@ impl TileTree {
         tile_world_position.distance(self.view_world_position)
     }
 
-    pub(crate) fn compute_blend(&self, sample_world_position: DVec3) -> (u32, f32) {
-        let view_distance = self.view_world_position.distance(sample_world_position);
-        let target_lod = (self.blend_distance / view_distance)
-            .log2()
-            .min(self.lod_count as f64 - 0.00001) as f32;
-        let lod = target_lod as u32;
-
-        let ratio = if lod == 0 {
-            0.0
-        } else {
-            inverse_mix(lod as f32 + self.blend_range, lod as f32, target_lod)
-        };
-
-        (lod, ratio)
-    }
-
-    pub(crate) fn lookup_tile(
-        &self,
-        world_position: DVec3,
-        tree_lod: u32,
-        model: &TerrainModel,
-    ) -> TileLookup {
-        let coordinate = Coordinate::from_world_position(world_position, model);
-
-        let tile_count = TileCoordinate::count(tree_lod) as f64;
-        let tree_xy = Self::compute_tree_xy(coordinate, tile_count);
-
-        let entry = self.data[[
-            coordinate.face as usize,
-            tree_lod as usize,
-            tree_xy.x as usize % self.tree_size as usize,
-            tree_xy.y as usize % self.tree_size as usize,
-        ]];
-
-        if entry.atlas_lod == INVALID_LOD {
-            return TileLookup::INVALID;
-        }
-
-        TileLookup {
-            atlas_index: entry.atlas_index,
-            atlas_lod: entry.atlas_lod,
-            atlas_uv: ((tree_xy / (1 << (tree_lod - entry.atlas_lod)) as f64) % 1.0).as_vec2(),
-        }
-    }
-
     fn update(&mut self, view_position: DVec3, tile_atlas: &TileAtlas) {
         let model = &tile_atlas.model;
         self.view_world_position = view_position;
 
+        self.approximate_height = *self.approximate_height_readback.lock().unwrap();
+
         let view_coordinate = Coordinate::from_world_position(self.view_world_position, model);
+        self.view_face = view_coordinate.face;
 
         for face in 0..model.face_count() {
             let view_coordinate = view_coordinate.project_to_face(face);
@@ -371,22 +335,6 @@ impl TileTree {
 
             for (tile, entry) in iter::zip(&tile_tree.tiles, &mut tile_tree.data) {
                 *entry = tile_atlas.get_best_tile(tile.coordinate);
-            }
-        }
-    }
-
-    pub(crate) fn approximate_height(
-        mut tile_trees: ResMut<TerrainViewComponents<TileTree>>,
-        tile_atlases: Query<&TileAtlas>,
-    ) {
-        for (&(terrain, _view), tile_tree) in tile_trees.iter_mut() {
-            let tile_atlas = tile_atlases.get(terrain).unwrap();
-
-            let height = sample_height(tile_tree, tile_atlas, tile_tree.view_world_position);
-
-            if height != 0.0 {
-                dbg!(height);
-                tile_tree.approximate_height = height;
             }
         }
     }

@@ -1,7 +1,7 @@
 #define_import_path bevy_terrain::vertex
 
 #import bevy_terrain::types::{Blend, AtlasTile, Coordinate}
-#import bevy_terrain::bindings::{terrain, terrain_view, geometry_tiles}
+#import bevy_terrain::bindings::{terrain, terrain_view, approximate_height, geometry_tiles}
 #import bevy_terrain::functions::{lookup_tile, compute_tile_uv, compute_local_position, compute_relative_position, compute_morph, compute_blend, normal_local_to_world, position_local_to_world}
 #import bevy_terrain::attachments::{sample_height, sample_attachment0_gather0}
 #import bevy_pbr::mesh_view_bindings::view
@@ -35,14 +35,14 @@ fn vertex_info(input: VertexInput) -> VertexInfo {
     let approximate_local_position = compute_local_position(approximate_coordinate);
     let approximate_world_position = position_local_to_world(approximate_local_position);
     let approximate_world_normal   = normal_local_to_world(approximate_local_position);
-    var approximate_view_distance  = distance(approximate_world_position + terrain_view.approximate_height * approximate_world_normal, view.world_position);
+    var approximate_view_distance  = distance(approximate_world_position + approximate_height * approximate_world_normal, view.world_position);
 
     var coordinate: Coordinate; var world_position: vec3<f32>; var world_normal: vec3<f32>;
 
 #ifdef HIGH_PRECISION
     if (approximate_view_distance < terrain_view.precision_threshold_distance) {
         let approximate_relative_position = compute_relative_position(approximate_coordinate);
-        approximate_view_distance         = length(approximate_relative_position + terrain_view.approximate_height * approximate_world_normal);
+        approximate_view_distance         = length(approximate_relative_position + approximate_height * approximate_world_normal);
 
         coordinate            = compute_morph(approximate_coordinate, approximate_view_distance);
         let relative_position = compute_relative_position(coordinate);

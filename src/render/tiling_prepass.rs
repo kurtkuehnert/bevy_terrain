@@ -2,7 +2,7 @@ use crate::{
     debug::DebugTerrain,
     render::{
         create_culling_layout, create_prepare_indirect_layout, create_refine_tiles_layout,
-        create_terrain_layout, CullingBindGroup, TerrainData, TerrainViewData,
+        create_terrain_layout, CullingBindGroup, GpuTerrainView, TerrainData,
     },
     shaders::{PREPARE_PREPASS_SHADER, REFINE_TILES_SHADER},
     terrain::TerrainComponents,
@@ -14,7 +14,7 @@ use bevy::{
     render::{
         render_graph::{self, RenderLabel},
         render_resource::*,
-        renderer::{RenderContext, RenderDevice},
+        renderer::{RenderContext, RenderDevice, RenderQueue},
     },
 };
 
@@ -216,7 +216,7 @@ impl render_graph::Node for TilingPrepassNode {
         let prepass_items = world.resource::<TerrainViewComponents<TilingPrepassItem>>();
         let pipeline_cache = world.resource::<PipelineCache>();
         let terrain_data = world.resource::<TerrainComponents<TerrainData>>();
-        let terrain_view_data = world.resource::<TerrainViewComponents<TerrainViewData>>();
+        let gpu_terrain_views = world.resource::<TerrainViewComponents<GpuTerrainView>>();
         let culling_bind_groups = world.resource::<TerrainViewComponents<CullingBindGroup>>();
         let debug = world.get_resource::<DebugTerrain>();
 
@@ -243,34 +243,45 @@ impl render_graph::Node for TilingPrepassNode {
 
                 let culling_bind_group = culling_bind_groups.get(&(terrain, view)).unwrap();
                 let terrain_data = terrain_data.get(&terrain).unwrap();
-                let view_data = terrain_view_data.get(&(terrain, view)).unwrap();
+                let gpu_terrain_view = gpu_terrain_views.get(&(terrain, view)).unwrap();
 
                 compute_pass.set_bind_group(0, culling_bind_group, &[]);
                 compute_pass.set_bind_group(1, &terrain_data.terrain_bind_group, &[]);
-                compute_pass.set_bind_group(2, &view_data.refine_tiles_bind_group, &[]);
-                compute_pass.set_bind_group(3, &view_data.prepare_indirect_bind_group, &[]);
+                compute_pass.set_bind_group(2, &gpu_terrain_view.refine_tiles_bind_group, &[]);
+                compute_pass.set_bind_group(3, &gpu_terrain_view.prepare_indirect_bind_group, &[]);
 
                 compute_pass.set_pipeline(prepare_root_pipeline);
                 compute_pass.dispatch_workgroups(1, 1, 1);
 
-                for _ in 0..view_data.refinement_count() {
+                for _ in 0..gpu_terrain_view.refinement_count() {
                     compute_pass.set_pipeline(refine_tiles_pipeline);
-                    compute_pass.dispatch_workgroups_indirect(&view_data.indirect_buffer, 0);
+                    compute_pass.dispatch_workgroups_indirect(&gpu_terrain_view.indirect_buffer, 0);
 
                     compute_pass.set_pipeline(prepare_next_pipeline);
                     compute_pass.dispatch_workgroups(1, 1, 1);
                 }
 
                 compute_pass.set_pipeline(refine_tiles_pipeline);
-                compute_pass.dispatch_workgroups_indirect(&view_data.indirect_buffer, 0);
+                compute_pass.dispatch_workgroups_indirect(&gpu_terrain_view.indirect_buffer, 0);
 
                 compute_pass.set_pipeline(prepare_render_pipeline);
                 compute_pass.dispatch_workgroups(1, 1, 1);
             }
 
             drop(compute_pass);
+
             command_encoder.finish()
         });
+
+        // unfortunately, we can not provide our own command encoder to the buffer readback
+        // instead, it creates a new one and submits it to the queue
+        let device = world.resource::<RenderDevice>();
+        let queue = world.resource::<RenderQueue>();
+
+        for &(terrain, view) in prepass_items.keys() {
+            let gpu_terrain_view = gpu_terrain_views.get(&(terrain, view)).unwrap();
+            gpu_terrain_view.readback_view_height(&device, &queue);
+        }
 
         Ok(())
     }

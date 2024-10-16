@@ -52,7 +52,7 @@ fn setup(
     );
 
     // Configure all the important properties of the terrain, as well as its attachments.
-    let config = TerrainConfig {
+    let local_config = TerrainConfig {
         lod_count: LOD_COUNT,
         model: TerrainModel::ellipsoid(DVec3::ZERO, MAJOR_AXES, MINOR_AXES, MIN_HEIGHT, MAX_HEIGHT),
         // model: TerrainModel::ellipsoid(
@@ -72,27 +72,65 @@ fn setup(
         border_size: 2,
         mip_level_count: 1,
         format: AttachmentFormat::RF32,
+    })
+    .add_attachment(AttachmentConfig {
+        name: "albedo".to_string(),
+        texture_size: TEXTURE_SIZE,
+        border_size: 1,
+        mip_level_count: 1,
+        format: AttachmentFormat::RgbU8,
     });
-    // .add_attachment(AttachmentConfig {
-    //     name: "albedo".to_string(),
-    //     texture_size: TEXTURE_SIZE,
-    //     border_size: 0,
-    //     mip_level_count: 1,
-    //     format: AttachmentFormat::RgbU8,
-    // });
 
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
-    let view_config = TerrainViewConfig::default();
+    let local_view_config = TerrainViewConfig::default();
 
-    let tile_atlas = TileAtlas::new(&config);
-    let tile_tree = TileTree::new(&tile_atlas, &view_config);
+    let local_tile_atlas = TileAtlas::new(&local_config);
+    let local_tile_tree = TileTree::new(&local_tile_atlas, &local_view_config);
+
+    // Configure all the important properties of the terrain, as well as its attachments.
+    let global_config = TerrainConfig {
+        lod_count: LOD_COUNT,
+        model: TerrainModel::ellipsoid(DVec3::ZERO, MAJOR_AXES, MINOR_AXES, MIN_HEIGHT, MAX_HEIGHT),
+        // model: TerrainModel::ellipsoid(
+        //     DVec3::ZERO,
+        //     6378137.0,
+        //     6378137.0 * 0.5,
+        //     MIN_HEIGHT,
+        //     MAX_HEIGHT,
+        // ),
+        // model: TerrainModel::sphere(DVec3::ZERO, RADIUS),
+        path: "/Volumes/ExternalSSD/tiles/earth".to_string(),
+        ..default()
+    }
+    .add_attachment(AttachmentConfig {
+        name: "height".to_string(),
+        texture_size: TEXTURE_SIZE,
+        border_size: 2,
+        mip_level_count: 1,
+        format: AttachmentFormat::RF32,
+    });
+
+    // Configure the quality settings of the terrain view. Adapt the settings to your liking.
+    let global_view_config = TerrainViewConfig::default();
+
+    let global_tile_atlas = TileAtlas::new(&global_config);
+    let global_tile_tree = TileTree::new(&global_tile_atlas, &global_view_config);
 
     commands.spawn_big_space(ReferenceFrame::default(), |root| {
         let frame = root.frame().clone();
 
-        let terrain = root
+        let global_terrain = root
             .spawn_spatial((
-                TerrainBundle::new(tile_atlas, &frame),
+                TerrainBundle::new(global_tile_atlas, &frame),
+                materials.add(TerrainMaterial {
+                    gradient: gradient.clone(),
+                }),
+            ))
+            .id();
+
+        let local_terrain = root
+            .spawn_spatial((
+                TerrainBundle::new(local_tile_atlas, &frame),
                 materials.add(TerrainMaterial {
                     gradient: gradient.clone(),
                 }),
@@ -107,7 +145,8 @@ fn setup(
             ))
             .id();
 
-        tile_trees.insert((terrain, view), tile_tree);
+        tile_trees.insert((global_terrain, view), global_tile_tree);
+        tile_trees.insert((local_terrain, view), local_tile_tree);
 
         let sun_position = DVec3::new(-1.0, 1.0, -1.0) * RADIUS * 10.0;
         let (sun_cell, sun_translation) = frame.translation_to_grid(sun_position);

@@ -159,8 +159,7 @@ pub struct AtlasAttachment {
     offset: f32,
     pub(crate) mip_level_count: u32,
     pub(crate) format: AttachmentFormat,
-    pub(crate) data: Vec<AttachmentData>,
-
+    // pub(crate) data: Vec<AttachmentData>,
     pub(crate) saving_tiles: Vec<Task<AtlasTileAttachment>>,
     pub(crate) loading_tiles: Vec<Task<Result<AtlasTileAttachmentWithData>>>,
     pub(crate) uploading_tiles: Vec<AtlasTileAttachmentWithData>,
@@ -184,7 +183,7 @@ impl AtlasAttachment {
             offset: config.border_size as f32 / config.texture_size as f32,
             mip_level_count: config.mip_level_count,
             format: config.format,
-            data: vec![AttachmentData::None; tile_atlas_size as usize],
+            // data: vec![AttachmentData::None; tile_atlas_size as usize],
             saving_tiles: default(),
             loading_tiles: default(),
             uploading_tiles: default(),
@@ -197,8 +196,8 @@ impl AtlasAttachment {
             future::block_on(future::poll_once(tile)).map_or(true, |tile| {
                 if let Ok(tile) = tile {
                     atlas_state.loaded_tile_attachment(tile.tile);
-                    self.uploading_tiles.push(tile.clone());
-                    self.data[tile.tile.atlas_index as usize] = tile.data;
+                    self.uploading_tiles.push(tile);
+                    // self.data[tile.tile.atlas_index as usize] = tile.data;
                 } else {
                     atlas_state.load_slots += 1;
                 }
@@ -210,7 +209,7 @@ impl AtlasAttachment {
         self.downloading_tiles.retain_mut(|tile| {
             future::block_on(future::poll_once(tile)).map_or(true, |tile| {
                 atlas_state.downloaded_tile_attachment(tile.tile);
-                self.data[tile.tile.atlas_index as usize] = tile.data;
+                // self.data[tile.tile.atlas_index as usize] = tile.data;
                 false
             })
         });
@@ -239,22 +238,11 @@ impl AtlasAttachment {
         self.saving_tiles.push(
             AtlasTileAttachmentWithData {
                 tile,
-                data: self.data[tile.atlas_index as usize].clone(),
+                data: AttachmentData::None, //self.data[tile.atlas_index as usize].clone(),
                 texture_size: self.texture_size,
             }
             .start_saving(self.path.clone()),
         );
-    }
-
-    fn sample(&self, lookup: TileLookup) -> Vec4 {
-        if lookup.atlas_index == INVALID_ATLAS_INDEX {
-            return Vec4::splat(0.0); // Todo: Handle this better
-        }
-
-        let data = &self.data[lookup.atlas_index as usize];
-        let uv = lookup.atlas_uv * self.scale + self.offset;
-
-        data.sample(uv, self.texture_size)
     }
 }
 
@@ -564,10 +552,6 @@ impl TileAtlas {
 
     pub(crate) fn get_best_tile(&self, tile_coordinate: TileCoordinate) -> TileTreeEntry {
         self.state.get_best_tile(tile_coordinate)
-    }
-
-    pub(crate) fn sample_attachment(&self, tile_lookup: TileLookup, attachment_index: u32) -> Vec4 {
-        self.attachments[attachment_index as usize].sample(tile_lookup)
     }
 
     /// Updates the tile atlas according to all corresponding tile_trees.

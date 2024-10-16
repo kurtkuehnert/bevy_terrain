@@ -1,5 +1,7 @@
-#import bevy_terrain::types::TileCoordinate
-#import bevy_terrain::bindings::{terrain_view, temporary_tiles, parameters, indirect_buffer}
+#import bevy_terrain::types::{TileCoordinate, Blend}
+#import bevy_terrain::bindings::{terrain_view, approximate_height, temporary_tiles, parameters, indirect_buffer}
+#import bevy_terrain::functions::{compute_view_coordinate, lookup_tile}
+#import bevy_terrain::attachments::{sample_height, sample_attachment0_gather0}
 
 @compute @workgroup_size(1, 1, 1)
 fn prepare_root() {
@@ -20,6 +22,17 @@ fn prepare_root() {
 #endif
 
     indirect_buffer.workgroup_count = vec3<u32>(1u, 1u, 1u);
+
+    // compute approximate height
+    let coordinate = compute_view_coordinate(terrain_view.view_face, terrain_view.view_lod);
+    let blend      = Blend(coordinate.lod, 0.0);
+    let tile       = lookup_tile(coordinate, blend, 0u);
+    let raw_height = sample_attachment0_gather0(tile);
+    let mask       = bitcast<vec4<u32>>(raw_height) & vec4<u32>(1);
+
+    if (all(mask != vec4<u32>(0))) {
+        approximate_height = sample_height(tile);
+    }
 }
 
 @compute @workgroup_size(1, 1, 1)
