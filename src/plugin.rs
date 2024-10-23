@@ -1,6 +1,7 @@
+use crate::terrain_data::CachedExtractGpuTileAtlasSystemState;
 use crate::{
     render::{
-        queue_tiling_prepass, CullingBindGroup, GpuTerrainView, TerrainData, TilingPrepassItem,
+        queue_tiling_prepass, CullingBindGroup, GpuTerrainView, TilingPrepassItem,
         TilingPrepassLabel, TilingPrepassNode, TilingPrepassPipelines,
     },
     shaders::{load_terrain_shaders, InternalShaders},
@@ -8,6 +9,7 @@ use crate::{
     terrain_data::{GpuTileAtlas, GpuTileTree, TileAtlas, TileTree},
     terrain_view::TerrainViewComponents,
 };
+use bevy::render::extract_component::ExtractComponentPlugin;
 use bevy::{
     prelude::*,
     render::{
@@ -29,9 +31,13 @@ impl Plugin for TerrainPlugin {
 
         app.init_resource::<InternalShaders>()
             .init_resource::<TerrainViewComponents<TileTree>>()
+            .init_asset::<TileAtlas>()
+            .init_resource::<CachedExtractGpuTileAtlasSystemState>()
+            .add_plugins(ExtractComponentPlugin::<Handle<TileAtlas>>::default())
             .add_systems(
                 PostUpdate,
-                check_visibility::<With<TileAtlas>>.in_set(VisibilitySystems::CheckVisibility),
+                check_visibility::<With<Handle<TileAtlas>>>
+                    .in_set(VisibilitySystems::CheckVisibility),
             )
             .add_systems(
                 Last,
@@ -47,7 +53,6 @@ impl Plugin for TerrainPlugin {
 
         app.sub_app_mut(RenderApp)
             .init_resource::<TerrainComponents<GpuTileAtlas>>()
-            .init_resource::<TerrainComponents<TerrainData>>()
             .init_resource::<TerrainViewComponents<GpuTileTree>>()
             .init_resource::<TerrainViewComponents<GpuTerrainView>>()
             .init_resource::<TerrainViewComponents<CullingBindGroup>>()
@@ -55,12 +60,9 @@ impl Plugin for TerrainPlugin {
             .add_systems(
                 ExtractSchedule,
                 (
-                    GpuTileAtlas::initialize,
-                    GpuTileAtlas::extract.after(GpuTileAtlas::initialize),
+                    GpuTileAtlas::extract,
                     GpuTileTree::initialize,
                     GpuTileTree::extract.after(GpuTileTree::initialize),
-                    TerrainData::initialize.after(GpuTileAtlas::initialize),
-                    TerrainData::extract.after(TerrainData::initialize),
                     GpuTerrainView::initialize.after(GpuTileTree::initialize),
                     GpuTerrainView::extract.after(GpuTerrainView::initialize),
                 ),
@@ -71,7 +73,6 @@ impl Plugin for TerrainPlugin {
                     (
                         GpuTileTree::prepare,
                         GpuTileAtlas::prepare,
-                        TerrainData::prepare,
                         GpuTerrainView::prepare,
                         CullingBindGroup::prepare,
                     )

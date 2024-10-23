@@ -1,13 +1,16 @@
+use crate::prelude::TileAtlas;
 use crate::{
     debug::DebugTerrain,
     render::{
-        create_terrain_layout, create_terrain_view_layout, DrawTerrainCommand, SetTerrainBindGroup,
+        create_terrain_view_layout, DrawTerrainCommand, SetTerrainBindGroup,
         SetTerrainViewBindGroup,
     },
     shaders::{DEFAULT_FRAGMENT_SHADER, DEFAULT_VERTEX_SHADER},
     terrain::TerrainComponents,
-    terrain_data::GpuTileAtlas,
+    terrain_data::{create_terrain_layout, GpuTileAtlas},
 };
+use bevy::render::extract_instances::ExtractedInstances;
+use bevy::render::Extract;
 use bevy::{
     core_pipeline::core_3d::{Opaque3d, Opaque3dBinKey},
     pbr::{
@@ -383,6 +386,7 @@ pub(crate) fn queue_terrain<M: Material>(
     mut pipelines: ResMut<SpecializedRenderPipelines<TerrainRenderPipeline<M>>>,
     mut opaque_render_phases: ResMut<ViewBinnedRenderPhases<Opaque3d>>,
     gpu_tile_atlases: Res<TerrainComponents<GpuTileAtlas>>,
+    gpu_tile_atlas_instances: Res<ExtractedInstances<AssetId<TileAtlas>>>,
     render_material_instances: Res<RenderMaterialInstances<M>>,
 ) where
     M::Data: PartialEq + Eq + Hash + Clone,
@@ -391,7 +395,11 @@ pub(crate) fn queue_terrain<M: Material>(
         let draw_function = draw_functions.read().get_id::<DrawTerrain<M>>().unwrap();
 
         for (&terrain, &material_id) in render_material_instances.iter() {
-            let gpu_tile_atlas = gpu_tile_atlases.get(&terrain).unwrap();
+            // Todo: this is extremely akward, either implement custom terrain extraction
+            // or figure out a way to avoid querying for the tile atlas here
+            let atlas_handle = gpu_tile_atlas_instances.get(&terrain).unwrap();
+            let gpu_tile_atlas = gpu_tile_atlases.get(atlas_handle).unwrap();
+
             if let Some(material) = render_materials.get(material_id) {
                 let mut flags = TerrainPipelineFlags::from_msaa_samples(msaa.samples());
 
@@ -448,6 +456,7 @@ where
 {
     fn build(&self, app: &mut App) {
         app.init_asset::<M>().add_plugins((
+            ExtractInstancesPlugin::<AssetId<TileAtlas>>::extract_visible(),
             ExtractInstancesPlugin::<AssetId<M>>::extract_visible(),
             RenderAssetPlugin::<PreparedMaterial<M>, GpuImage>::default(),
         ));

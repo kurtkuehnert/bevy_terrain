@@ -1,10 +1,11 @@
 //! Types for configuring terrain views.
 
+use crate::prelude::TileAtlas;
 use bevy::{prelude::*, utils::HashMap};
 
 /// Resource that stores components that are associated to a terrain entity and a view entity.
 #[derive(Deref, DerefMut, Resource)]
-pub struct TerrainViewComponents<C>(HashMap<(Entity, Entity), C>);
+pub struct TerrainViewComponents<C>(HashMap<(AssetId<TileAtlas>, Entity), C>);
 
 impl<C> Default for TerrainViewComponents<C> {
     fn default() -> Self {

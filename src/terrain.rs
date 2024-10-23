@@ -3,16 +3,18 @@
 #[cfg(feature = "high_precision")]
 use crate::big_space::{GridCell, GridTransformOwned, ReferenceFrame};
 
+use crate::prelude::TileTree;
 use crate::{
     math::TerrainModel,
     terrain_data::{AttachmentConfig, TileAtlas},
 };
+use bevy::utils::HashMap;
 use bevy::{ecs::entity::EntityHashMap, prelude::*, render::view::NoFrustumCulling};
 
 /// Resource that stores components that are associated to a terrain entity.
 /// This is used to persist components in the render world.
 #[derive(Deref, DerefMut, Resource)]
-pub struct TerrainComponents<C>(EntityHashMap<C>);
+pub struct TerrainComponents<C>(HashMap<AssetId<TileAtlas>, C>);
 
 impl<C> Default for TerrainComponents<C> {
     fn default() -> Self {
@@ -40,7 +42,7 @@ impl Default for TerrainConfig {
     fn default() -> Self {
         Self {
             lod_count: 1,
-            model: TerrainModel::sphere(default(), 1.0, 0.0, 1.0),
+            model: TerrainModel::sphere(default(), 1.0, 0.0, 1.0, Entity::PLACEHOLDER),
             atlas_size: 1024,
             path: default(),
             attachments: default(),
@@ -58,41 +60,13 @@ impl TerrainConfig {
 /// The components of a terrain.
 ///
 /// Does not include loader(s) and a material.
-#[derive(Bundle)]
+#[derive(Bundle, Default)]
 pub struct TerrainBundle {
-    pub tile_atlas: TileAtlas,
+    pub tile_atlas: Handle<TileAtlas>,
     #[cfg(feature = "high_precision")]
     pub cell: GridCell,
     pub transform: Transform,
     pub global_transform: GlobalTransform,
     pub visibility_bundle: VisibilityBundle,
     pub no_frustum_culling: NoFrustumCulling,
-}
-
-impl TerrainBundle {
-    /// Creates a new terrain bundle from the config.
-
-    pub fn new(
-        tile_atlas: TileAtlas,
-        #[cfg(feature = "high_precision")] frame: &ReferenceFrame,
-    ) -> Self {
-        #[cfg(feature = "high_precision")]
-        let GridTransformOwned { transform, cell } = tile_atlas.model.grid_transform(frame);
-        #[cfg(not(feature = "high_precision"))]
-        let transform = tile_atlas.model.transform();
-
-        Self {
-            tile_atlas,
-            transform,
-            #[cfg(feature = "high_precision")]
-            cell,
-            global_transform: default(),
-            visibility_bundle: VisibilityBundle {
-                visibility: Visibility::Visible,
-                inherited_visibility: default(),
-                view_visibility: default(),
-            },
-            no_frustum_culling: NoFrustumCulling,
-        }
-    }
 }

@@ -6,6 +6,10 @@ use crate::{
     },
     util::StaticBuffer,
 };
+use bevy::ecs::system::{SystemParamItem, SystemState};
+use bevy::pbr::{MeshTransforms, MeshUniform};
+use bevy::render::render_asset::{PrepareAssetError, RenderAsset};
+use bevy::render::texture::FallbackImage;
 use bevy::{
     prelude::*,
     render::{
@@ -38,6 +42,78 @@ pub(crate) fn create_attachment_layout(device: &RenderDevice) -> BindGroupLayout
             ),
         ),
     )
+}
+
+pub(crate) fn create_terrain_layout(device: &RenderDevice) -> BindGroupLayout {
+    device.create_bind_group_layout(
+        None,
+        &BindGroupLayoutEntries::sequential(
+            ShaderStages::all(),
+            (
+                // storage_buffer_read_only::<MeshUniform>(false), // mesh
+                uniform_buffer::<TerrainConfigUniform>(false), // terrain
+                uniform_buffer::<AttachmentUniform>(false),    // attachments
+                sampler(SamplerBindingType::Filtering),        // terrain_sampler
+                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment_0
+                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment_1
+                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment_2
+                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment_3
+                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment_4
+                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment_5
+                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment_6
+                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment_7
+            ),
+        ),
+    )
+}
+
+#[derive(Default, ShaderType)]
+struct AttachmentConfig {
+    size: f32,
+    scale: f32,
+    offset: f32,
+    _padding: u32,
+}
+
+#[derive(Default, ShaderType)]
+struct AttachmentUniform {
+    data: [AttachmentConfig; 8],
+}
+
+impl AttachmentUniform {
+    fn new(attachments: &[GpuAtlasAttachment]) -> Self {
+        let mut uniform = Self::default();
+
+        for (config, attachment) in iter::zip(&mut uniform.data, attachments) {
+            config.size = attachment.buffer_info.center_size as f32;
+            config.scale = attachment.buffer_info.center_size as f32
+                / attachment.buffer_info.texture_size as f32;
+            config.offset = attachment.buffer_info.border_size as f32
+                / attachment.buffer_info.texture_size as f32;
+        }
+
+        uniform
+    }
+}
+
+/// The terrain config data that is available in shaders.
+#[derive(Default, ShaderType)]
+pub(crate) struct TerrainConfigUniform {
+    lod_count: u32,
+    min_height: f32,
+    max_height: f32,
+    scale: f32,
+}
+
+impl TerrainConfigUniform {
+    pub(crate) fn from_tile_atlas(tile_atlas: &TileAtlas) -> Self {
+        Self {
+            lod_count: tile_atlas.lod_count,
+            min_height: tile_atlas.model.min_height,
+            max_height: tile_atlas.model.max_height,
+            scale: tile_atlas.model.scale() as f32,
+        }
+    }
 }
 
 #[derive(Default, ShaderType)]
@@ -410,67 +486,168 @@ impl GpuAtlasAttachment {
     }
 }
 
+#[derive(Resource)]
+pub(crate) struct CachedExtractGpuTileAtlasSystemState {
+    state: SystemState<(
+        EventReader<'static, 'static, AssetEvent<TileAtlas>>,
+        ResMut<'static, Assets<TileAtlas>>,
+    )>,
+}
+
+impl FromWorld for CachedExtractGpuTileAtlasSystemState {
+    fn from_world(world: &mut World) -> Self {
+        Self {
+            state: SystemState::new(world),
+        }
+    }
+}
+
 /// Stores the GPU representation of the [`TileAtlas`] (array textures)
 /// alongside the data to update it.
 ///
 /// All attachments of newly loaded tiles are copied into their according atlas attachment.
 #[derive(Component)]
 pub struct GpuTileAtlas {
+    mesh_buffer: StaticBuffer<MeshUniform>,
     /// Stores the atlas attachments of the terrain.
     pub(crate) attachments: Vec<GpuAtlasAttachment>,
     pub(crate) is_spherical: bool,
+    pub(crate) terrain_bind_group: BindGroup,
 }
 
 impl GpuTileAtlas {
     /// Creates a new gpu tile atlas and initializes its attachment textures.
-    fn new(device: &RenderDevice, tile_atlas: &TileAtlas) -> Self {
+    fn new(device: &RenderDevice, tile_atlas: &TileAtlas, fallback_image: &FallbackImage) -> Self {
         let attachments = tile_atlas
             .attachments
             .iter()
             .map(|attachment| GpuAtlasAttachment::new(device, attachment, tile_atlas))
             .collect_vec();
 
+        let mesh_buffer = StaticBuffer::empty_sized(
+            None,
+            device,
+            MeshUniform::SHADER_SIZE.get(),
+            BufferUsages::STORAGE | BufferUsages::COPY_DST,
+        );
+
+        let terrain_config_buffer = StaticBuffer::create(
+            None,
+            device,
+            &TerrainConfigUniform::from_tile_atlas(tile_atlas),
+            BufferUsages::UNIFORM,
+        );
+
+        let attachment_buffer = StaticBuffer::create(
+            None,
+            device,
+            &AttachmentUniform::new(&attachments),
+            BufferUsages::UNIFORM,
+        );
+
+        let atlas_sampler = device.create_sampler(&SamplerDescriptor {
+            mag_filter: FilterMode::Linear,
+            min_filter: FilterMode::Linear,
+            mipmap_filter: FilterMode::Linear,
+            anisotropy_clamp: 16, // Todo: make this customisable
+            ..default()
+        });
+
+        let attachment_textures = (0..8)
+            .map(|i| {
+                attachments
+                    .get(i)
+                    .map_or(fallback_image.d2_array.texture_view.clone(), |attachment| {
+                        attachment.atlas_texture.create_view(&default())
+                    })
+            })
+            .collect_vec();
+
+        let terrain_bind_group = device.create_bind_group(
+            "terrain_bind_group",
+            &create_terrain_layout(device),
+            &BindGroupEntries::sequential((
+                // &mesh_buffer,
+                &terrain_config_buffer,
+                &attachment_buffer,
+                &atlas_sampler,
+                &attachment_textures[0],
+                &attachment_textures[1],
+                &attachment_textures[2],
+                &attachment_textures[3],
+                &attachment_textures[4],
+                &attachment_textures[5],
+                &attachment_textures[6],
+                &attachment_textures[7],
+            )),
+        );
+
         Self {
+            mesh_buffer,
             attachments,
+            terrain_bind_group,
             is_spherical: tile_atlas.model.is_spherical(),
         }
     }
 
-    /// Initializes the [`GpuTileAtlas`] of newly created terrains.
-    pub(crate) fn initialize(
-        device: Res<RenderDevice>,
-        mut gpu_tile_atlases: ResMut<TerrainComponents<GpuTileAtlas>>,
-        mut tile_atlases: Extract<Query<(Entity, &TileAtlas), Added<TileAtlas>>>,
-    ) {
-        for (terrain, tile_atlas) in tile_atlases.iter_mut() {
-            gpu_tile_atlases.insert(terrain, GpuTileAtlas::new(&device, tile_atlas));
-        }
-    }
-
-    /// Extracts the tiles that have finished loading from all [`TileAtlas`]es into the
-    /// corresponding [`GpuTileAtlas`]es.
     pub(crate) fn extract(
-        mut main_world: ResMut<MainWorld>,
+        device: Res<RenderDevice>,
+        fallback_image: Res<FallbackImage>,
         mut gpu_tile_atlases: ResMut<TerrainComponents<GpuTileAtlas>>,
+        mut main_world: ResMut<MainWorld>,
     ) {
-        let mut tile_atlases = main_world.query::<(Entity, &mut TileAtlas)>();
+        main_world.resource_scope(
+            |main_world, mut cached_state: Mut<CachedExtractGpuTileAtlasSystemState>| {
+                let (mut events, mut tile_atlases) = cached_state.state.get_mut(main_world);
 
-        for (terrain, mut tile_atlas) in tile_atlases.iter_mut(&mut main_world) {
-            let gpu_tile_atlas = gpu_tile_atlases.get_mut(&terrain).unwrap();
+                for event in events.read() {
+                    match event {
+                        AssetEvent::Added { id } => {
+                            let tile_atlas = tile_atlases.get(*id).unwrap();
 
-            for (attachment, gpu_attachment) in
-                iter::zip(&mut tile_atlas.attachments, &mut gpu_tile_atlas.attachments)
-            {
-                mem::swap(
-                    &mut attachment.uploading_tiles,
-                    &mut gpu_attachment.upload_tiles,
-                );
+                            gpu_tile_atlases.insert(
+                                *id,
+                                GpuTileAtlas::new(&device, tile_atlas, &fallback_image),
+                            );
+                        }
+                        AssetEvent::Modified { id } => {
+                            let tile_atlas = tile_atlases.get_mut(*id).unwrap();
+                            let gpu_tile_atlas = gpu_tile_atlases.get_mut(id).unwrap();
 
-                attachment
-                    .downloading_tiles
-                    .extend(mem::take(&mut gpu_attachment.download_tiles));
-            }
-        }
+                            let transform = GlobalTransform::IDENTITY;
+
+                            let mesh_uniform = MeshUniform::new(
+                                &MeshTransforms {
+                                    world_from_local: (&transform.affine()).into(),
+                                    flags: 0,
+                                    previous_world_from_local: (&transform.affine()).into(),
+                                },
+                                None,
+                            );
+                            gpu_tile_atlas.mesh_buffer.set_value(mesh_uniform);
+
+                            for (attachment, gpu_attachment) in iter::zip(
+                                &mut tile_atlas.attachments,
+                                &mut gpu_tile_atlas.attachments,
+                            ) {
+                                // mem::swap(
+                                //     &mut attachment.uploading_tiles,
+                                //     &mut gpu_attachment.upload_tiles,
+                                // );
+                                //
+                                // attachment
+                                //     .downloading_tiles
+                                //     .extend(mem::take(&mut gpu_attachment.download_tiles));
+                            }
+                        }
+                        AssetEvent::Removed { id } | AssetEvent::Unused { id } => {
+                            gpu_tile_atlases.remove(id);
+                        }
+                        AssetEvent::LoadedWithDependencies { .. } => {} // not applicable
+                    }
+                }
+            },
+        );
     }
 
     /// Queues the attachments of the tiles that have finished loading to be copied into the
@@ -481,6 +658,8 @@ impl GpuTileAtlas {
         mut gpu_tile_atlases: ResMut<TerrainComponents<GpuTileAtlas>>,
     ) {
         for gpu_tile_atlas in gpu_tile_atlases.values_mut() {
+            gpu_tile_atlas.mesh_buffer.update(&queue);
+
             for attachment in &mut gpu_tile_atlas.attachments {
                 attachment.create_download_buffers(&device);
                 attachment.upload_tiles(&queue);

@@ -1,9 +1,13 @@
+use crate::prelude::TileAtlas;
 use crate::{
     math::{TileCoordinate, ViewCoordinate},
     terrain_data::{GpuTileTree, TileTree},
     terrain_view::TerrainViewComponents,
     util::StaticBuffer,
 };
+use bevy::ecs::system::lifetimeless::Read;
+use bevy::math::Affine3A;
+use bevy::pbr::{MeshTransforms, MeshUniform, PreviousGlobalTransform};
 use bevy::{
     ecs::{
         query::ROQueryItem,
@@ -208,15 +212,15 @@ impl GpuTerrainView {
         gpu_tile_trees: Res<TerrainViewComponents<GpuTileTree>>,
         tile_trees: Extract<Res<TerrainViewComponents<TileTree>>>,
     ) {
-        for (&(terrain, view), tile_tree) in tile_trees.iter() {
-            if gpu_terrain_views.contains_key(&(terrain, view)) {
+        for (&(atlas_handle, view), tile_tree) in tile_trees.iter() {
+            if gpu_terrain_views.contains_key(&(atlas_handle, view)) {
                 return;
             }
 
-            let gpu_tile_tree = gpu_tile_trees.get(&(terrain, view)).unwrap();
+            let gpu_tile_tree = gpu_tile_trees.get(&(atlas_handle, view)).unwrap();
 
             gpu_terrain_views.insert(
-                (terrain, view),
+                (atlas_handle, view),
                 GpuTerrainView::new(&device, tile_tree, gpu_tile_tree),
             );
         }
@@ -226,8 +230,8 @@ impl GpuTerrainView {
         mut gpu_terrain_views: ResMut<TerrainViewComponents<GpuTerrainView>>,
         tile_trees: Extract<Res<TerrainViewComponents<TileTree>>>,
     ) {
-        for (&(terrain, view), tile_tree) in tile_trees.iter() {
-            let gpu_terrain_views = gpu_terrain_views.get_mut(&(terrain, view)).unwrap();
+        for (&(atlas_handle, view), tile_tree) in tile_trees.iter() {
+            let gpu_terrain_views = gpu_terrain_views.get_mut(&(atlas_handle, view)).unwrap();
 
             gpu_terrain_views
                 .terrain_view_buffer
@@ -239,8 +243,8 @@ impl GpuTerrainView {
         queue: Res<RenderQueue>,
         mut gpu_terrain_views: ResMut<TerrainViewComponents<GpuTerrainView>>,
     ) {
-        for data in &mut gpu_terrain_views.values_mut() {
-            data.terrain_view_buffer.update(&queue);
+        for gpu_terrain_view in &mut gpu_terrain_views.values_mut() {
+            gpu_terrain_view.terrain_view_buffer.update(&queue);
         }
     }
 
@@ -265,19 +269,19 @@ pub struct SetTerrainViewBindGroup<const I: usize>;
 impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetTerrainViewBindGroup<I> {
     type Param = SRes<TerrainViewComponents<GpuTerrainView>>;
     type ViewQuery = Entity;
-    type ItemQuery = ();
+    type ItemQuery = Read<Handle<TileAtlas>>;
 
     #[inline]
     fn render<'w>(
-        item: &P,
+        _: &P,
         view: ROQueryItem<'w, Self::ViewQuery>,
-        _: Option<ROQueryItem<'w, Self::ItemQuery>>,
+        atlas_handle: Option<ROQueryItem<'w, Self::ItemQuery>>,
         gpu_terrain_views: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
         let data = gpu_terrain_views
             .into_inner()
-            .get(&(item.entity(), view))
+            .get(&(atlas_handle.unwrap().id(), view))
             .unwrap();
 
         pass.set_bind_group(I, &data.terrain_view_bind_group, &[]);
@@ -290,19 +294,19 @@ pub(crate) struct DrawTerrainCommand;
 impl<P: PhaseItem> RenderCommand<P> for DrawTerrainCommand {
     type Param = SRes<TerrainViewComponents<GpuTerrainView>>;
     type ViewQuery = Entity;
-    type ItemQuery = ();
+    type ItemQuery = Read<Handle<TileAtlas>>;
 
     #[inline]
     fn render<'w>(
-        item: &P,
+        _: &P,
         view: ROQueryItem<'w, Self::ViewQuery>,
-        _: Option<ROQueryItem<'w, Self::ItemQuery>>,
+        atlas_handle: Option<ROQueryItem<'w, Self::ItemQuery>>,
         gpu_terrain_views: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
         let data = gpu_terrain_views
             .into_inner()
-            .get(&(item.entity(), view))
+            .get(&(atlas_handle.unwrap().id(), view))
             .unwrap();
 
         pass.draw_indirect(&data.indirect_buffer, 0);

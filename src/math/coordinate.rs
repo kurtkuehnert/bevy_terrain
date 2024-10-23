@@ -85,7 +85,9 @@ impl Coordinate {
 }
 
 /// The global coordinate and identifier of a tile.
-#[derive(Copy, Clone, Default, Debug, Hash, Eq, PartialEq, ShaderType, Serialize, Deserialize)]
+#[derive(
+    Copy, Clone, Default, Debug, Hash, Eq, PartialEq, Reflect, ShaderType, Serialize, Deserialize,
+)]
 pub struct TileCoordinate {
     /// The face of the cube sphere the tile is located on.
     pub face: u32,

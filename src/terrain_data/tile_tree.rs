@@ -302,19 +302,19 @@ impl TileTree {
     /// while selecting newly requested and released tiles.
     pub(crate) fn compute_requests(
         mut tile_trees: ResMut<TerrainViewComponents<TileTree>>,
-        tile_atlases: Query<&TileAtlas>,
+        tile_atlases: Res<Assets<TileAtlas>>,
         #[cfg(feature = "high_precision")] frames: crate::big_space::ReferenceFrames,
         #[cfg(feature = "high_precision")] view_transforms: Query<
             crate::big_space::GridTransformReadOnly,
         >,
         #[cfg(not(feature = "high_precision"))] view_transforms: Query<&Transform>,
     ) {
-        for (&(terrain, view), tile_tree) in tile_trees.iter_mut() {
-            let tile_atlas = tile_atlases.get(terrain).unwrap();
-            let view_transform = view_transforms.get(view).unwrap();
+        for ((atlas_id, view), mut tile_tree) in tile_trees.iter_mut() {
+            let tile_atlas = tile_atlases.get(*atlas_id).unwrap();
+            let view_transform = view_transforms.get(*view).unwrap();
 
             #[cfg(feature = "high_precision")]
-            let frame = frames.parent_frame(terrain).unwrap();
+            let frame = frames.get(tile_atlas.model.frame);
             #[cfg(feature = "high_precision")]
             let view_position = view_transform.position_double(frame);
             #[cfg(not(feature = "high_precision"))]
@@ -328,10 +328,10 @@ impl TileTree {
     /// by updating the entries with the best available tiles.
     pub(crate) fn adjust_to_tile_atlas(
         mut tile_trees: ResMut<TerrainViewComponents<TileTree>>,
-        tile_atlases: Query<&TileAtlas>,
+        tile_atlases: Res<Assets<TileAtlas>>,
     ) {
-        for (&(terrain, _view), tile_tree) in tile_trees.iter_mut() {
-            let tile_atlas = tile_atlases.get(terrain).unwrap();
+        for ((atlas_id, _view), mut tile_tree) in tile_trees.iter_mut() {
+            let tile_atlas = tile_atlases.get(*atlas_id).unwrap();
 
             for (tile, entry) in iter::zip(&tile_tree.tiles, &mut tile_tree.data) {
                 *entry = tile_atlas.get_best_tile(tile.coordinate);
@@ -342,10 +342,10 @@ impl TileTree {
     #[cfg(feature = "high_precision")]
     pub fn generate_surface_approximation(
         mut tile_trees: ResMut<TerrainViewComponents<TileTree>>,
-        tile_atlases: Query<&TileAtlas>,
+        tile_atlases: Res<Assets<TileAtlas>>,
     ) {
-        for (&(terrain, _view), tile_tree) in tile_trees.iter_mut() {
-            let tile_atlas = tile_atlases.get(terrain).unwrap();
+        for ((atlas_id, _view), mut tile_tree) in tile_trees.iter_mut() {
+            let tile_atlas = tile_atlases.get(*atlas_id).unwrap();
 
             tile_tree.surface_approximation = tile_tree.view_coordinates.map(|view_coordinate| {
                 crate::math::SurfaceApproximation::compute(

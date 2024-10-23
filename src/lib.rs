@@ -49,7 +49,6 @@ pub mod debug;
 pub mod formats;
 pub mod math;
 pub mod plugin;
-pub mod preprocess;
 pub mod render;
 pub mod shaders;
 pub mod terrain;
@@ -71,7 +70,6 @@ pub mod prelude {
         },
         math::TerrainModel,
         plugin::TerrainPlugin,
-        preprocess::{PreprocessDataset, Preprocessor, SphericalDataset, TerrainPreprocessPlugin},
         render::TerrainMaterialPlugin,
         terrain::{TerrainBundle, TerrainConfig},
         terrain_data::{

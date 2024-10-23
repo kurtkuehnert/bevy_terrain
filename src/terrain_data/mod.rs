@@ -26,21 +26,23 @@ mod gpu_tile_tree;
 mod tile_atlas;
 mod tile_tree;
 
-pub(crate) use crate::terrain_data::{
-    gpu_tile_atlas::create_attachment_layout,
-    tile_atlas::{AtlasAttachment, AtlasTile, AtlasTileAttachment, AtlasTileAttachmentWithData},
-    tile_tree::{TileLookup, TileTreeEntry},
-};
 pub use crate::terrain_data::{
     gpu_tile_atlas::GpuTileAtlas, gpu_tile_tree::GpuTileTree, tile_atlas::TileAtlas,
     tile_tree::TileTree,
+};
+pub(crate) use crate::terrain_data::{
+    gpu_tile_atlas::{
+        create_attachment_layout, create_terrain_layout, CachedExtractGpuTileAtlasSystemState,
+    },
+    tile_atlas::{AtlasAttachment, AtlasTile, AtlasTileAttachment, AtlasTileAttachmentWithData},
+    tile_tree::{TileLookup, TileTreeEntry},
 };
 
 pub const INVALID_ATLAS_INDEX: u32 = u32::MAX;
 pub const INVALID_LOD: u32 = u32::MAX;
 
 /// The data format of an attachment.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Reflect)]
 pub enum AttachmentFormat {
     /// Three channels  8 bit unsigned integer
     RgbU8,
@@ -123,7 +125,7 @@ impl Default for AttachmentConfig {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Reflect)]
 pub(crate) enum AttachmentData {
     None,
     /// Three channels  8 bit

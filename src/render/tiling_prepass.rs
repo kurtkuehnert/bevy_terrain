@@ -1,8 +1,9 @@
+use crate::terrain_data::create_terrain_layout;
 use crate::{
     debug::DebugTerrain,
     render::{
         create_culling_layout, create_prepare_indirect_layout, create_refine_tiles_layout,
-        create_terrain_layout, CullingBindGroup, GpuTerrainView, TerrainData,
+        CullingBindGroup, GpuTerrainView,
     },
     shaders::{PREPARE_PREPASS_SHADER, REFINE_TILES_SHADER},
     terrain::TerrainComponents,
@@ -215,7 +216,7 @@ impl render_graph::Node for TilingPrepassNode {
     ) -> Result<(), render_graph::NodeRunError> {
         let prepass_items = world.resource::<TerrainViewComponents<TilingPrepassItem>>();
         let pipeline_cache = world.resource::<PipelineCache>();
-        let terrain_data = world.resource::<TerrainComponents<TerrainData>>();
+        let gpu_tile_atlases = world.resource::<TerrainComponents<GpuTileAtlas>>();
         let gpu_terrain_views = world.resource::<TerrainViewComponents<GpuTerrainView>>();
         let culling_bind_groups = world.resource::<TerrainViewComponents<CullingBindGroup>>();
         let debug = world.get_resource::<DebugTerrain>();
@@ -230,7 +231,7 @@ impl render_graph::Node for TilingPrepassNode {
             let mut compute_pass =
                 command_encoder.begin_compute_pass(&ComputePassDescriptor::default());
 
-            for (&(terrain, view), prepass_item) in prepass_items.iter() {
+            for (&(atlas_handle, view), prepass_item) in prepass_items.iter() {
                 let Some((
                     refine_tiles_pipeline,
                     prepare_root_pipeline,
@@ -241,12 +242,12 @@ impl render_graph::Node for TilingPrepassNode {
                     continue;
                 };
 
-                let culling_bind_group = culling_bind_groups.get(&(terrain, view)).unwrap();
-                let terrain_data = terrain_data.get(&terrain).unwrap();
-                let gpu_terrain_view = gpu_terrain_views.get(&(terrain, view)).unwrap();
+                let culling_bind_group = culling_bind_groups.get(&(atlas_handle, view)).unwrap();
+                let gpu_tile_atlas = gpu_tile_atlases.get(&atlas_handle).unwrap();
+                let gpu_terrain_view = gpu_terrain_views.get(&(atlas_handle, view)).unwrap();
 
                 compute_pass.set_bind_group(0, culling_bind_group, &[]);
-                compute_pass.set_bind_group(1, &terrain_data.terrain_bind_group, &[]);
+                compute_pass.set_bind_group(1, &gpu_tile_atlas.terrain_bind_group, &[]);
                 compute_pass.set_bind_group(2, &gpu_terrain_view.refine_tiles_bind_group, &[]);
                 compute_pass.set_bind_group(3, &gpu_terrain_view.prepare_indirect_bind_group, &[]);
 

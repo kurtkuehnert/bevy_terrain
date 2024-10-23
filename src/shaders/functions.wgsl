@@ -18,14 +18,15 @@ fn normal_local_to_world(local_position: vec3<f32>) -> vec3<f32> {
     let local_normal = vec3<f32>(0.0, 1.0, 0.0);
 #endif
 
-    let world_from_local = mat2x4_f32_to_mat3x3_unpack(mesh[0].local_from_world_transpose_a,
-                                                       mesh[0].local_from_world_transpose_b);
-    return normalize(world_from_local * local_normal);
+//    let world_from_local = mat2x4_f32_to_mat3x3_unpack(mesh[0].local_from_world_transpose_a,
+//                                                       mesh[0].local_from_world_transpose_b);
+
+    return vec3<f32>(0.0); // normalize(world_from_local * local_normal);
 }
 
 fn position_local_to_world(local_position: vec3<f32>) -> vec3<f32> {
-    let world_from_local = affine3_to_square(mesh[0].world_from_local);
-    return (world_from_local * vec4<f32>(local_position, 1.0)).xyz;
+    // let world_from_local = affine3_to_square(mesh[0].world_from_local);
+    return vec3<f32>(0.0); // (world_from_local * vec4<f32>(local_position, 1.0)).xyz;
 }
 
 fn inverse_mix(a: f32, b: f32, value: f32) -> f32 {

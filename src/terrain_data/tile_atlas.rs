@@ -22,7 +22,7 @@ use itertools::Itertools;
 use std::{collections::VecDeque, fs::File, io::BufReader, mem, ops::DerefMut, path::PathBuf};
 use tiff::decoder::{Decoder, DecodingResult};
 
-#[derive(Copy, Clone, Debug, Default, ShaderType)]
+#[derive(Copy, Clone, Debug, Default, Reflect, ShaderType)]
 pub struct AtlasTile {
     pub(crate) coordinate: TileCoordinate,
     #[size(16)]
@@ -54,14 +54,14 @@ impl From<AtlasTileAttachment> for AtlasTile {
     }
 }
 
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Copy, Clone, Debug, Default, Reflect)]
 pub struct AtlasTileAttachment {
     pub(crate) coordinate: TileCoordinate,
     pub(crate) atlas_index: u32,
     pub(crate) attachment_index: u32,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Reflect)]
 pub(crate) struct AtlasTileAttachmentWithData {
     pub(crate) tile: AtlasTileAttachment,
     pub(crate) data: AttachmentData,
@@ -149,6 +149,7 @@ impl AtlasTileAttachmentWithData {
 }
 
 /// An attachment of a [`TileAtlas`].
+#[derive(Reflect)]
 pub struct AtlasAttachment {
     pub(crate) name: String,
     pub(crate) path: String,
@@ -160,10 +161,10 @@ pub struct AtlasAttachment {
     pub(crate) mip_level_count: u32,
     pub(crate) format: AttachmentFormat,
     // pub(crate) data: Vec<AttachmentData>,
-    pub(crate) saving_tiles: Vec<Task<AtlasTileAttachment>>,
-    pub(crate) loading_tiles: Vec<Task<Result<AtlasTileAttachmentWithData>>>,
-    pub(crate) uploading_tiles: Vec<AtlasTileAttachmentWithData>,
-    pub(crate) downloading_tiles: Vec<Task<AtlasTileAttachmentWithData>>,
+    // pub(crate) saving_tiles: Vec<Task<AtlasTileAttachment>>,
+    // pub(crate) loading_tiles: Vec<Task<Result<AtlasTileAttachmentWithData>>>,
+    // pub(crate) uploading_tiles: Vec<AtlasTileAttachmentWithData>,
+    // pub(crate) downloading_tiles: Vec<Task<AtlasTileAttachmentWithData>>,
 }
 
 impl AtlasAttachment {
@@ -184,72 +185,72 @@ impl AtlasAttachment {
             mip_level_count: config.mip_level_count,
             format: config.format,
             // data: vec![AttachmentData::None; tile_atlas_size as usize],
-            saving_tiles: default(),
-            loading_tiles: default(),
-            uploading_tiles: default(),
-            downloading_tiles: default(),
+            // saving_tiles: default(),
+            // loading_tiles: default(),
+            // uploading_tiles: default(),
+            // downloading_tiles: default(),
         }
     }
 
     fn update(&mut self, atlas_state: &mut TileAtlasState) {
-        self.loading_tiles.retain_mut(|tile| {
-            future::block_on(future::poll_once(tile)).map_or(true, |tile| {
-                if let Ok(tile) = tile {
-                    atlas_state.loaded_tile_attachment(tile.tile);
-                    self.uploading_tiles.push(tile);
-                    // self.data[tile.tile.atlas_index as usize] = tile.data;
-                } else {
-                    atlas_state.load_slots += 1;
-                }
-
-                false
-            })
-        });
-
-        self.downloading_tiles.retain_mut(|tile| {
-            future::block_on(future::poll_once(tile)).map_or(true, |tile| {
-                atlas_state.downloaded_tile_attachment(tile.tile);
-                // self.data[tile.tile.atlas_index as usize] = tile.data;
-                false
-            })
-        });
-
-        self.saving_tiles.retain_mut(|task| {
-            future::block_on(future::poll_once(task)).map_or(true, |tile| {
-                atlas_state.saved_tile_attachment(tile);
-                false
-            })
-        });
+        // self.loading_tiles.retain_mut(|tile| {
+        //     future::block_on(future::poll_once(tile)).map_or(true, |tile| {
+        //         if let Ok(tile) = tile {
+        //             atlas_state.loaded_tile_attachment(tile.tile);
+        //             self.uploading_tiles.push(tile);
+        //             // self.data[tile.tile.atlas_index as usize] = tile.data;
+        //         } else {
+        //             atlas_state.load_slots += 1;
+        //         }
+        //
+        //         false
+        //     })
+        // });
+        //
+        // self.downloading_tiles.retain_mut(|tile| {
+        //     future::block_on(future::poll_once(tile)).map_or(true, |tile| {
+        //         atlas_state.downloaded_tile_attachment(tile.tile);
+        //         // self.data[tile.tile.atlas_index as usize] = tile.data;
+        //         false
+        //     })
+        // });
+        //
+        // self.saving_tiles.retain_mut(|task| {
+        //     future::block_on(future::poll_once(task)).map_or(true, |tile| {
+        //         atlas_state.saved_tile_attachment(tile);
+        //         false
+        //     })
+        // });
     }
 
     fn load(&mut self, tile: AtlasTileAttachment) {
         // Todo: build customizable loader abstraction
-        self.loading_tiles
-            .push(AtlasTileAttachmentWithData::start_loading(
-                tile,
-                self.path.clone(),
-                self.texture_size,
-                self.format,
-                self.mip_level_count,
-            ));
+        // self.loading_tiles
+        //     .push(AtlasTileAttachmentWithData::start_loading(
+        //         tile,
+        //         self.path.clone(),
+        //         self.texture_size,
+        //         self.format,
+        //         self.mip_level_count,
+        //     ));
     }
 
     fn save(&mut self, tile: AtlasTileAttachment) {
-        self.saving_tiles.push(
-            AtlasTileAttachmentWithData {
-                tile,
-                data: AttachmentData::None, //self.data[tile.atlas_index as usize].clone(),
-                texture_size: self.texture_size,
-            }
-            .start_saving(self.path.clone()),
-        );
+        // self.saving_tiles.push(
+        //     AtlasTileAttachmentWithData {
+        //         tile,
+        //         data: AttachmentData::None, //self.data[tile.atlas_index as usize].clone(),
+        //         texture_size: self.texture_size,
+        //     }
+        //     .start_saving(self.path.clone()),
+        // );
     }
 }
 
 /// The current state of a tile of a [`TileAtlas`].
 ///
 /// This indicates, whether the tile is loading or loaded and ready to be used.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Reflect)]
 enum LoadingState {
     /// The tile is loading, but can not be used yet.
     Loading(u32),
@@ -258,6 +259,7 @@ enum LoadingState {
 }
 
 /// The internal representation of a present tile in a [`TileAtlas`].
+#[derive(Reflect)]
 struct TileState {
     /// Indicates whether or not the tile is loading or loaded.
     state: LoadingState,
@@ -267,6 +269,7 @@ struct TileState {
     requests: u32,
 }
 
+#[derive(Reflect)]
 pub(crate) struct TileAtlasState {
     tile_states: HashMap<TileCoordinate, TileState>,
     unused_tiles: VecDeque<AtlasTile>,
@@ -503,7 +506,7 @@ impl TileAtlasState {
 ///
 /// The [`u32`] can be used for accessing the attached data in systems by the CPU
 /// and in shaders by the GPU.
-#[derive(Component)]
+#[derive(Reflect, Asset)]
 pub struct TileAtlas {
     pub(crate) attachments: Vec<AtlasAttachment>,
     // stores the attachment data
@@ -511,7 +514,7 @@ pub struct TileAtlas {
     pub(crate) path: String,
     pub(crate) atlas_size: u32,
     pub(crate) lod_count: u32,
-    pub(crate) model: TerrainModel,
+    pub model: TerrainModel,
 }
 
 impl TileAtlas {
@@ -557,12 +560,12 @@ impl TileAtlas {
     /// Updates the tile atlas according to all corresponding tile_trees.
     pub(crate) fn update(
         mut tile_trees: ResMut<TerrainViewComponents<TileTree>>,
-        mut tile_atlases: Query<&mut TileAtlas>,
+        mut tile_atlases: ResMut<Assets<TileAtlas>>,
     ) {
-        for mut tile_atlas in tile_atlases.iter_mut() {
+        for (_, mut tile_atlas) in tile_atlases.iter_mut() {
             let TileAtlas {
                 state, attachments, ..
-            } = tile_atlas.deref_mut();
+            } = tile_atlas;
 
             state.update(attachments);
 
@@ -571,8 +574,8 @@ impl TileAtlas {
             }
         }
 
-        for (&(terrain, _view), tile_tree) in tile_trees.iter_mut() {
-            let mut tile_atlas = tile_atlases.get_mut(terrain).unwrap();
+        for ((atlas_id, _view), tile_tree) in tile_trees.iter_mut() {
+            let mut tile_atlas = tile_atlases.get_mut(*atlas_id).unwrap();
 
             for tile_coordinate in tile_tree.released_tiles.drain(..) {
                 tile_atlas.state.release_tile(tile_coordinate);

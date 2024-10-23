@@ -12,13 +12,12 @@ mod terrain_view_bind_group;
 mod tiling_prepass;
 
 pub use crate::render::{
-    terrain_bind_group::TerrainData, terrain_material::TerrainMaterialPlugin,
-    terrain_view_bind_group::GpuTerrainView,
+    terrain_material::TerrainMaterialPlugin, terrain_view_bind_group::GpuTerrainView,
 };
 
 pub(crate) use crate::render::{
     culling_bind_group::{create_culling_layout, CullingBindGroup},
-    terrain_bind_group::{create_terrain_layout, SetTerrainBindGroup},
+    terrain_bind_group::SetTerrainBindGroup,
     terrain_view_bind_group::{
         create_prepare_indirect_layout, create_refine_tiles_layout, create_terrain_view_layout,
         DrawTerrainCommand, SetTerrainViewBindGroup,

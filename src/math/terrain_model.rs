@@ -1,10 +1,12 @@
+use crate::big_space::GridPrecision;
 use crate::math::ellipsoid::project_point_ellipsoid;
 use bevy::{
     math::{DMat4, DQuat, DVec3},
     prelude::*,
 };
+use big_space::GridCell;
 
-#[derive(Clone)]
+#[derive(Reflect, Clone)]
 pub enum TerrainKind {
     PLANAR {
         side_length: f64,
@@ -21,7 +23,7 @@ pub enum TerrainKind {
 
 // Todo: keep in sync with terrain transform, make this authoritative?
 
-#[derive(Clone)]
+#[derive(Reflect, Clone)]
 pub struct TerrainModel {
     pub(crate) kind: TerrainKind,
     pub(crate) min_height: f32,
@@ -29,6 +31,7 @@ pub struct TerrainModel {
     pub world_from_local: DMat4,
     local_from_world: DMat4,
     translation: DVec3,
+    pub frame: Entity,
 }
 
 impl TerrainModel {
@@ -47,6 +50,7 @@ impl TerrainModel {
         min_height: f32,
         max_height: f32,
         kind: TerrainKind,
+        frame: Entity,
     ) -> Self {
         let world_from_local = DMat4::from_scale_rotation_translation(scale, rotation, translation);
         let local_from_world = world_from_local.inverse();
@@ -58,10 +62,17 @@ impl TerrainModel {
             translation,
             world_from_local,
             local_from_world,
+            frame,
         }
     }
 
-    pub fn planar(position: DVec3, side_length: f64, min_height: f32, max_height: f32) -> Self {
+    pub fn planar(
+        position: DVec3,
+        side_length: f64,
+        min_height: f32,
+        max_height: f32,
+        frame: Entity,
+    ) -> Self {
         Self::from_scale_rotation_translation(
             DVec3::splat(side_length), // y may not be zero, otherwise local_to_world is NaN
             DQuat::IDENTITY,
@@ -69,10 +80,17 @@ impl TerrainModel {
             min_height,
             max_height,
             TerrainKind::PLANAR { side_length },
+            frame,
         )
     }
 
-    pub fn sphere(position: DVec3, radius: f64, min_height: f32, max_height: f32) -> Self {
+    pub fn sphere(
+        position: DVec3,
+        radius: f64,
+        min_height: f32,
+        max_height: f32,
+        frame: Entity,
+    ) -> Self {
         Self::from_scale_rotation_translation(
             DVec3::splat(radius),
             DQuat::IDENTITY,
@@ -80,6 +98,7 @@ impl TerrainModel {
             min_height,
             max_height,
             TerrainKind::SPHERICAL { radius },
+            frame,
         )
     }
 
@@ -89,6 +108,7 @@ impl TerrainModel {
         minor_axis: f64,
         min_height: f32,
         max_height: f32,
+        frame: Entity,
     ) -> Self {
         let rotation = DQuat::IDENTITY; // ::from_rotation_x(45.0_f64.to_radians());
         let ellipsoid_from_world = DMat4::from_rotation_translation(rotation, position).inverse();
@@ -104,6 +124,7 @@ impl TerrainModel {
                 major_axis,
                 minor_axis,
             },
+            frame,
         )
     }
 
@@ -182,16 +203,10 @@ impl TerrainModel {
     }
 
     #[cfg(feature = "high_precision")]
-    pub(crate) fn grid_transform(
+    pub fn grid_transform(
         &self,
         frame: &crate::big_space::ReferenceFrame,
-    ) -> crate::big_space::GridTransformOwned {
-        let (cell, translation) = frame.translation_to_grid(self.translation);
-
-        crate::big_space::GridTransformOwned {
-            transform: Transform::from_matrix(self.world_from_local.as_mat4())
-                .with_translation(translation),
-            cell,
-        }
+    ) -> (GridCell<GridPrecision>, Vec3) {
+        frame.translation_to_grid(self.translation)
     }
 }

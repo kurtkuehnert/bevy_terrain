@@ -3,30 +3,40 @@
 #import bevy_terrain::types::{TerrainView, Terrain, TileTreeEntry, TileCoordinate, AttachmentConfig, TerrainModelApproximation, CullingData, IndirectBuffer, Parameters}
 #import bevy_pbr::mesh_types::Mesh
 
+// Ideally, we would have these four bindgroups:
+// 0 - custom view (bevy view, terrain_view, view_height, tile_tree)
+// 1 - terrain data (tile_atlas, attachments, etc.)
+// 2 - terrain mesh (tiles, mesh uniform)
+// 3 - terrain material (customizable by user)
+//
+// However, currently the bevy view is not extensible, so the per view data is bundled with the terrain mesh data.
+// Also, the mesh uniform has to be bound to group 1, binding 0 in order to be compatible with the PBR shader.
+
 // terrain bindings
+// @group(1) @binding(0)
+//var<storage> mesh: array<Mesh>;
+
 @group(1) @binding(0)
-var<storage> mesh: array<Mesh>;
-@group(1) @binding(1)
 var<uniform> terrain: Terrain;
-@group(1) @binding(2)
+@group(1) @binding(1)
 var<uniform> attachments: array<AttachmentConfig, 8u>;
-@group(1) @binding(3)
+@group(1) @binding(2)
 var terrain_sampler: sampler;
-@group(1) @binding(4)
+@group(1) @binding(3)
 var attachment0: texture_2d_array<f32>;
-@group(1) @binding(5)
+@group(1) @binding(4)
 var attachment1: texture_2d_array<f32>;
-@group(1) @binding(6)
+@group(1) @binding(5)
 var attachment2: texture_2d_array<f32>;
-@group(1) @binding(7)
+@group(1) @binding(6)
 var attachment3: texture_2d_array<f32>;
-@group(1) @binding(8)
+@group(1) @binding(7)
 var attachment4: texture_2d_array<f32>;
-@group(1) @binding(9)
+@group(1) @binding(8)
 var attachment5: texture_2d_array<f32>;
-@group(1) @binding(10)
+@group(1) @binding(9)
 var attachment6: texture_2d_array<f32>;
-@group(1) @binding(11)
+@group(1) @binding(10)
 var attachment7: texture_2d_array<f32>;
 
 // terrain view bindings
