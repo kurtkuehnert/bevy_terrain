@@ -1,4 +1,5 @@
 use crate::{
+    big_space::GridCell,
     math::{Coordinate, TerrainModel, TileCoordinate},
     terrain_data::{TileAtlas, INVALID_ATLAS_INDEX, INVALID_LOD},
     terrain_view::{TerrainViewComponents, TerrainViewConfig},
@@ -304,19 +305,41 @@ impl TileTree {
         mut tile_trees: ResMut<TerrainViewComponents<TileTree>>,
         tile_atlases: Query<&TileAtlas>,
         #[cfg(feature = "high_precision")] frames: crate::big_space::ReferenceFrames,
-        #[cfg(feature = "high_precision")] view_transforms: Query<
-            crate::big_space::GridTransformReadOnly,
-        >,
+        #[cfg(feature = "high_precision")] views: Query<(
+            Option<&Parent>,
+            &Transform,
+            Option<&GridCell>,
+        )>,
         #[cfg(not(feature = "high_precision"))] view_transforms: Query<&Transform>,
     ) {
         for (&(terrain, view), tile_tree) in tile_trees.iter_mut() {
             let tile_atlas = tile_atlases.get(terrain).unwrap();
-            let view_transform = view_transforms.get(view).unwrap();
 
             #[cfg(feature = "high_precision")]
-            let frame = frames.parent_frame(terrain).unwrap();
-            #[cfg(feature = "high_precision")]
-            let view_position = view_transform.position_double(frame);
+            let view_position = {
+                let mut entity = view;
+                let mut cell = None;
+                let mut transforms = Vec::new();
+                let (mut parent, mut transform);
+
+                while cell.is_none() {
+                    (parent, transform, cell) = views.get(entity).unwrap();
+
+                    transforms.push(transform.compute_matrix());
+
+                    entity = parent
+                        .map(|parent| parent.get())
+                        .unwrap_or(Entity::PLACEHOLDER);
+                }
+
+                let cell = cell.unwrap();
+                let transform = Transform::from_matrix(transforms.into_iter().rev().product());
+
+                let frame = frames.parent_frame(terrain).unwrap();
+                frame.grid_position_double(cell, &transform)
+            };
+
+            // Todo: work with global translations correctly
             #[cfg(not(feature = "high_precision"))]
             let view_position = view_transform.translation.as_dvec3();
 

@@ -137,16 +137,35 @@ fn setup(
             ))
             .id();
 
-        let view = root
-            .spawn_spatial(DebugCameraBundle::new(
-                -DVec3::X * RADIUS * 3.0,
-                RADIUS,
-                &frame,
-            ))
-            .id();
+        root.spawn_spatial(DebugCameraBundle::new(
+            -DVec3::X * RADIUS * 3.0,
+            RADIUS,
+            &frame,
+        ))
+        .with_children(|builder| {
+            let global_view = builder
+                .spawn((Camera3dBundle {
+                    camera: Camera {
+                        order: 0,
+                        ..default()
+                    },
+                    ..default()
+                },))
+                .id();
 
-        tile_trees.insert((global_terrain, view), global_tile_tree);
-        tile_trees.insert((local_terrain, view), local_tile_tree);
+            let local_view = builder
+                .spawn((Camera3dBundle {
+                    camera: Camera {
+                        order: 1,
+                        ..default()
+                    },
+                    ..default()
+                },))
+                .id();
+
+            tile_trees.insert((global_terrain, global_view), global_tile_tree);
+            tile_trees.insert((local_terrain, local_view), local_tile_tree);
+        });
 
         let sun_position = DVec3::new(-1.0, 1.0, -1.0) * RADIUS * 10.0;
         let (sun_cell, sun_translation) = frame.translation_to_grid(sun_position);

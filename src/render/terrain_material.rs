@@ -1,5 +1,6 @@
 use crate::{
     debug::DebugTerrain,
+    prelude::GpuTileTree,
     render::{
         create_terrain_layout, create_terrain_view_layout, DrawTerrainCommand, SetTerrainBindGroup,
         SetTerrainViewBindGroup,
@@ -7,6 +8,7 @@ use crate::{
     shaders::{DEFAULT_FRAGMENT_SHADER, DEFAULT_VERTEX_SHADER},
     terrain::TerrainComponents,
     terrain_data::GpuTileAtlas,
+    terrain_view::TerrainViewComponents,
 };
 use bevy::{
     core_pipeline::core_3d::{Opaque3d, Opaque3dBinKey},
@@ -383,18 +385,28 @@ pub(crate) fn queue_terrain<M: Material>(
     mut pipelines: ResMut<SpecializedRenderPipelines<TerrainRenderPipeline<M>>>,
     mut opaque_render_phases: ResMut<ViewBinnedRenderPhases<Opaque3d>>,
     gpu_tile_atlases: Res<TerrainComponents<GpuTileAtlas>>,
+    gpu_tile_trees: Res<TerrainViewComponents<GpuTileTree>>,
     render_material_instances: Res<RenderMaterialInstances<M>>,
+    mut views: Query<Entity>,
 ) where
     M::Data: PartialEq + Eq + Hash + Clone,
 {
-    for phase in opaque_render_phases.values_mut() {
-        let draw_function = draw_functions.read().get_id::<DrawTerrain<M>>().unwrap();
+    let draw_function = draw_functions.read().get_id::<DrawTerrain<M>>().unwrap();
+
+    for view in &mut views {
+        let Some(phase) = opaque_render_phases.get_mut(&view) else {
+            continue;
+        };
 
         for (&terrain, &material_id) in render_material_instances.iter() {
-            let gpu_tile_atlas = gpu_tile_atlases.get(&terrain).unwrap();
+            if !gpu_tile_trees.contains_key(&(terrain, view)) {
+                continue;
+            }
+
             if let Some(material) = render_materials.get(material_id) {
                 let mut flags = TerrainPipelineFlags::from_msaa_samples(msaa.samples());
 
+                let gpu_tile_atlas = gpu_tile_atlases.get(&terrain).unwrap();
                 if gpu_tile_atlas.is_spherical {
                     flags |= TerrainPipelineFlags::SPHERICAL;
                 }
