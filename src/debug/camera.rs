@@ -7,7 +7,8 @@ use bevy::{input::mouse::MouseMotion, math::DVec3, prelude::*};
 
 #[derive(Bundle)]
 pub struct DebugCameraBundle {
-    pub camera: Camera3dBundle,
+    pub transform: Transform,
+    pub global_transform: GlobalTransform,
     pub controller: DebugCameraController,
     #[cfg(feature = "high_precision")]
     pub cell: GridCell,
@@ -18,7 +19,8 @@ pub struct DebugCameraBundle {
 impl Default for DebugCameraBundle {
     fn default() -> Self {
         Self {
-            camera: default(),
+            transform: default(),
+            global_transform: default(),
             controller: default(),
             #[cfg(feature = "high_precision")]
             cell: default(),
@@ -34,15 +36,7 @@ impl DebugCameraBundle {
         let (cell, translation) = frame.translation_to_grid(position);
 
         Self {
-            camera: Camera3dBundle {
-                transform: Transform::from_translation(translation).looking_to(Vec3::X, Vec3::Y),
-                projection: PerspectiveProjection {
-                    near: 0.000001,
-                    ..default()
-                }
-                .into(),
-                ..default()
-            },
+            transform: Transform::from_translation(translation).looking_to(Vec3::X, Vec3::Y),
             cell,
             controller: DebugCameraController {
                 translation_speed: speed,
@@ -55,15 +49,7 @@ impl DebugCameraBundle {
     #[cfg(not(feature = "high_precision"))]
     pub fn new(position: Vec3, speed: f64) -> Self {
         Self {
-            camera: Camera3dBundle {
-                transform: Transform::from_translation(position).looking_to(Vec3::X, Vec3::Y),
-                projection: PerspectiveProjection {
-                    near: 0.000001,
-                    ..default()
-                }
-                .into(),
-                ..default()
-            },
+            transform: Transform::from_translation(position).looking_to(Vec3::X, Vec3::Y),
             controller: DebugCameraController {
                 translation_speed: speed,
                 ..default()
