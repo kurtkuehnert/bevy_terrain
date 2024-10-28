@@ -1,6 +1,6 @@
 #import bevy_terrain::types::{AtlasTile}
-#import bevy_terrain::bindings::terrain
-#import bevy_terrain::attachments::{sample_height, sample_normal, sample_attachment1 as sample_albedo, sample_attachment0_gather0, attachment_uv}
+#import bevy_terrain::bindings::{terrain, attachments, attachment0, terrain_sampler}
+#import bevy_terrain::attachments::{sample_height, sample_height_mask, compute_slope, sample_surface_gradient, sample_attachment1 as sample_albedo, sample_attachment0_gather0, attachment_uv}
 #import bevy_terrain::fragment::{FragmentInput, FragmentOutput, fragment_info, fragment_output, fragment_debug}
 #import bevy_terrain::functions::lookup_tile
 #import bevy_pbr::pbr_types::{PbrInput, pbr_input_new}
@@ -36,33 +36,34 @@ fn sample_color(tile: AtlasTile) -> vec4<f32> {
     return color;
 }
 
+fn slope_gradient(world_normal: vec3<f32>, surface_gradient: vec3<f32>) -> vec4<f32> {
+    let slope = compute_slope(world_normal, surface_gradient);
+    return textureSampleLevel(gradient, gradient_sampler, slope + 0.1, 0.0);
+}
+
 @fragment
 fn fragment(input: FragmentInput) -> FragmentOutput {
     var info = fragment_info(input);
 
-    let tile   = lookup_tile(info.coordinate, info.blend, 0u);
-    var color  = sample_color(tile);
-    var normal = sample_normal(tile, info.world_normal);
+    let tile             = lookup_tile(info.coordinate, info.blend, 0u);
+    let mask             = sample_height_mask(tile);
+    var color            = sample_color(tile);
+    var surface_gradient = sample_surface_gradient(tile, info.tangent_space);
 
-
-    let raw_height = sample_attachment0_gather0(tile);
-    let mask = bitcast<vec4<u32>>(raw_height) & vec4<u32>(1);
-
-    if (any(mask == vec4<u32>(0))) { discard; }
-
-    // color = vec4<f32>(mask) * 0.3 + 0.3;
+    if mask { discard; }
 
     if (info.blend.ratio > 0.0) {
-        let tile2 = lookup_tile(info.coordinate, info.blend, 1u);
-
-        color     = mix(color,  sample_color(tile2),                     info.blend.ratio);
-        normal    = mix(normal, sample_normal(tile2, info.world_normal), info.blend.ratio);
+        let tile2        = lookup_tile(info.coordinate, info.blend, 1u);
+        color            = mix(color,            sample_color(tile2),                                info.blend.ratio);
+        surface_gradient = mix(surface_gradient, sample_surface_gradient(tile2, info.tangent_space), info.blend.ratio);
     }
 
-    // color = vec4<f32>(0.3);
+    // color = vec4(vec3(0.3), 1.0);
+
+    // color = slope_gradient(info.world_normal, surface_gradient);
 
     var output: FragmentOutput;
-    fragment_output(&info, &output, color, normal);
-    fragment_debug(&info, &output, tile, normal);
+    fragment_output(&info, &output, color, surface_gradient);
+    fragment_debug(&info, &output, tile, surface_gradient);
     return output;
 }
