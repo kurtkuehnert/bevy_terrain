@@ -3,7 +3,7 @@ use crate::{
     math::{TerrainModel, TileCoordinate},
     terrain::TerrainConfig,
     terrain_data::{
-        AttachmentConfig, AttachmentData, AttachmentFormat, TileLookup, TileTree, TileTreeEntry,
+        AttachmentConfig, AttachmentData, AttachmentFormat, TileTree, TileTreeEntry,
         INVALID_ATLAS_INDEX, INVALID_LOD,
     },
     terrain_view::TerrainViewComponents,

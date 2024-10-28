@@ -2,8 +2,6 @@
 
 struct Terrain {
     lod_count: u32,
-    min_height: f32,
-    max_height: f32,
     scale: f32,
 }
 
@@ -27,6 +25,7 @@ struct TerrainView {
 #ifdef HIGH_PRECISION
     surface_approximation: array<SurfaceApproximation, 6>,
 #endif
+    height_scale: f32,
 }
 
 struct TileCoordinate {

@@ -24,8 +24,6 @@ pub enum TerrainKind {
 #[derive(Clone)]
 pub struct TerrainModel {
     pub(crate) kind: TerrainKind,
-    pub(crate) min_height: f32,
-    pub(crate) max_height: f32,
     pub world_from_local: DMat4,
     local_from_world: DMat4,
     translation: DVec3,
@@ -44,8 +42,6 @@ impl TerrainModel {
         scale: DVec3,
         rotation: DQuat,
         translation: DVec3,
-        min_height: f32,
-        max_height: f32,
         kind: TerrainKind,
     ) -> Self {
         let world_from_local = DMat4::from_scale_rotation_translation(scale, rotation, translation);
@@ -53,43 +49,31 @@ impl TerrainModel {
 
         Self {
             kind,
-            min_height,
-            max_height,
             translation,
             world_from_local,
             local_from_world,
         }
     }
 
-    pub fn planar(position: DVec3, side_length: f64, min_height: f32, max_height: f32) -> Self {
+    pub fn planar(position: DVec3, side_length: f64) -> Self {
         Self::from_scale_rotation_translation(
             DVec3::splat(side_length), // y may not be zero, otherwise local_to_world is NaN
             DQuat::IDENTITY,
             position,
-            min_height,
-            max_height,
             TerrainKind::PLANAR { side_length },
         )
     }
 
-    pub fn sphere(position: DVec3, radius: f64, min_height: f32, max_height: f32) -> Self {
+    pub fn sphere(position: DVec3, radius: f64) -> Self {
         Self::from_scale_rotation_translation(
             DVec3::splat(radius),
             DQuat::IDENTITY,
             position,
-            min_height,
-            max_height,
             TerrainKind::SPHERICAL { radius },
         )
     }
 
-    pub fn ellipsoid(
-        position: DVec3,
-        major_axis: f64,
-        minor_axis: f64,
-        min_height: f32,
-        max_height: f32,
-    ) -> Self {
+    pub fn ellipsoid(position: DVec3, major_axis: f64, minor_axis: f64) -> Self {
         let rotation = DQuat::IDENTITY; // ::from_rotation_x(45.0_f64.to_radians());
         let ellipsoid_from_world = DMat4::from_rotation_translation(rotation, position).inverse();
 
@@ -97,8 +81,6 @@ impl TerrainModel {
             DVec3::new(major_axis, minor_axis, major_axis),
             rotation,
             position,
-            min_height,
-            max_height,
             TerrainKind::ELLIPSOIDAL {
                 ellipsoid_from_world,
                 major_axis,
@@ -146,10 +128,6 @@ impl TerrainModel {
                     .normalize()
             }
         }
-    }
-
-    pub(crate) fn surface_position(&self, world_position: DVec3, height: f64) -> DVec3 {
-        self.position_local_to_world(self.position_world_to_local(world_position), height)
     }
 
     pub fn face_count(&self) -> u32 {

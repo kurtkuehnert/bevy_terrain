@@ -40,7 +40,7 @@ impl Default for TerrainConfig {
     fn default() -> Self {
         Self {
             lod_count: 1,
-            model: TerrainModel::sphere(default(), 1.0, 0.0, 1.0),
+            model: TerrainModel::sphere(default(), 1.0),
             atlas_size: 1024,
             path: default(),
             attachments: default(),
