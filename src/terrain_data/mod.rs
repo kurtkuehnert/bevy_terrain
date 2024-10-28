@@ -16,7 +16,7 @@
 //! which can be used to access the terrain data in shaders.
 
 use crate::util::CollectArray;
-use bevy::{math::DVec3, prelude::*, render::render_resource::*};
+use bevy::{prelude::*, render::render_resource::*};
 use bytemuck::cast_slice;
 use itertools::{iproduct, Itertools};
 use std::iter;
@@ -29,7 +29,7 @@ mod tile_tree;
 pub(crate) use crate::terrain_data::{
     gpu_tile_atlas::create_attachment_layout,
     tile_atlas::{AtlasAttachment, AtlasTile, AtlasTileAttachment, AtlasTileAttachmentWithData},
-    tile_tree::{TileLookup, TileTreeEntry},
+    tile_tree::TileTreeEntry,
 };
 pub use crate::terrain_data::{
     gpu_tile_atlas::GpuTileAtlas, gpu_tile_tree::GpuTileTree, tile_atlas::TileAtlas,

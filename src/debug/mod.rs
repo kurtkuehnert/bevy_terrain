@@ -14,6 +14,7 @@ use bevy::{
 mod camera;
 
 pub use crate::debug::camera::{DebugCameraBundle, DebugCameraController};
+use crate::prelude::TileAtlas;
 
 #[derive(Asset, AsBindGroup, TypePath, Clone, Default)]
 pub struct DebugTerrainMaterial {}
@@ -217,35 +218,45 @@ pub fn toggle_debug(input: Res<ButtonInput<KeyCode>>, mut debug: ResMut<DebugTer
 pub fn update_view_parameter(
     input: Res<ButtonInput<KeyCode>>,
     mut tile_trees: ResMut<TerrainViewComponents<TileTree>>,
+    tile_atlases: Query<&TileAtlas>,
 ) {
-    for tile_tree in &mut tile_trees.values_mut() {
+    for (&(terrain, _), tile_tree) in tile_trees.iter_mut() {
+        let tile_atlas = tile_atlases.get(terrain).unwrap();
+        let scale = tile_atlas.model.scale();
+
+        if input.pressed(KeyCode::ShiftLeft) && input.just_pressed(KeyCode::Equal) {
+            tile_tree.height_scale += 0.1;
+        }
+        if input.just_pressed(KeyCode::Minus) {
+            tile_tree.height_scale -= 0.1;
+        }
         if input.just_pressed(KeyCode::KeyN) {
-            tile_tree.blend_distance -= 0.25;
+            tile_tree.blend_distance -= 0.25 * scale;
             println!(
                 "Decreased the blend distance to {}.",
-                tile_tree.blend_distance
+                tile_tree.blend_distance / scale
             );
         }
         if input.just_pressed(KeyCode::KeyE) {
-            tile_tree.blend_distance += 0.25;
+            tile_tree.blend_distance += 0.25 * scale;
             println!(
                 "Increased the blend distance to {}.",
-                tile_tree.blend_distance
+                tile_tree.blend_distance / scale
             );
         }
 
         if input.just_pressed(KeyCode::KeyI) {
-            tile_tree.morph_distance -= 0.25;
+            tile_tree.morph_distance -= 0.25 * scale;
             println!(
                 "Decreased the morph distance to {}.",
-                tile_tree.morph_distance
+                tile_tree.morph_distance / scale
             );
         }
         if input.just_pressed(KeyCode::KeyO) {
-            tile_tree.morph_distance += 0.25;
+            tile_tree.morph_distance += 0.25 * scale;
             println!(
                 "Increased the morph distance to {}.",
-                tile_tree.morph_distance
+                tile_tree.morph_distance / scale
             );
         }
 

@@ -5,8 +5,6 @@ const PATH: &str = "/Volumes/ExternalSSD/tiles";
 const RADIUS: f64 = 6371000.0;
 const MAJOR_AXES: f64 = 6378137.0;
 const MINOR_AXES: f64 = 6356752.314245;
-const MIN_HEIGHT: f32 = 0.0; // -12000.0;
-const MAX_HEIGHT: f32 = 1.0; // 65000.0; // 9000.0;
 const TEXTURE_SIZE: u32 = 512;
 const LOD_COUNT: u32 = 16;
 
@@ -54,7 +52,7 @@ fn setup(
     // Configure all the important properties of the terrain, as well as its attachments.
     let local_config = TerrainConfig {
         lod_count: LOD_COUNT,
-        model: TerrainModel::ellipsoid(DVec3::ZERO, MAJOR_AXES, MINOR_AXES, MIN_HEIGHT, MAX_HEIGHT),
+        model: TerrainModel::ellipsoid(DVec3::ZERO, MAJOR_AXES, MINOR_AXES),
         // model: TerrainModel::ellipsoid(
         //     DVec3::ZERO,
         //     6378137.0,
@@ -90,7 +88,7 @@ fn setup(
     // Configure all the important properties of the terrain, as well as its attachments.
     let global_config = TerrainConfig {
         lod_count: LOD_COUNT,
-        model: TerrainModel::ellipsoid(DVec3::ZERO, MAJOR_AXES, MINOR_AXES, MIN_HEIGHT, MAX_HEIGHT),
+        model: TerrainModel::ellipsoid(DVec3::ZERO, MAJOR_AXES, MINOR_AXES),
         // model: TerrainModel::ellipsoid(
         //     DVec3::ZERO,
         //     6378137.0,

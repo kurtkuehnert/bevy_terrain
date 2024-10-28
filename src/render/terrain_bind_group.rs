@@ -77,8 +77,6 @@ impl AttachmentUniform {
 #[derive(Default, ShaderType)]
 struct TerrainConfigUniform {
     lod_count: u32,
-    min_height: f32,
-    max_height: f32,
     scale: f32,
 }
 
@@ -86,8 +84,6 @@ impl TerrainConfigUniform {
     fn from_tile_atlas(tile_atlas: &TileAtlas) -> Self {
         Self {
             lod_count: tile_atlas.lod_count,
-            min_height: tile_atlas.model.min_height,
-            max_height: tile_atlas.model.max_height,
             scale: tile_atlas.model.scale() as f32,
         }
     }

@@ -1,5 +1,5 @@
 #import bevy_terrain::types::{AtlasTile}
-#import bevy_terrain::bindings::{terrain, attachments, attachment0, terrain_sampler}
+#import bevy_terrain::bindings::{terrain, terrain_view, attachments, attachment0, terrain_sampler}
 #import bevy_terrain::attachments::{sample_height, sample_height_mask, compute_slope, sample_surface_gradient, sample_attachment1 as sample_albedo, sample_attachment0_gather0, attachment_uv}
 #import bevy_terrain::fragment::{FragmentInput, FragmentOutput, fragment_info, fragment_output, fragment_debug}
 #import bevy_terrain::functions::lookup_tile
@@ -16,7 +16,7 @@ const MIN_HEIGHT: f32 = -12000.0;
 const MAX_HEIGHT: f32 =  9000.0;
 
 fn sample_color(tile: AtlasTile) -> vec4<f32> {
-    let height = sample_height(tile);
+    let height = sample_height(tile) / terrain_view.height_scale;
 
     var color: vec4<f32>;
 

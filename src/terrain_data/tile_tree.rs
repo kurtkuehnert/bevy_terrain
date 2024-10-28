@@ -8,7 +8,6 @@ use bevy::{
     math::{DVec2, DVec3},
     prelude::*,
 };
-use big_space::precision::GridPrecision;
 use bytemuck::{Pod, Zeroable};
 use itertools::iproduct;
 use ndarray::Array4;
@@ -136,6 +135,7 @@ pub struct TileTree {
     pub(crate) surface_approximation: [crate::math::SurfaceApproximation; 6],
     pub(crate) approximate_height: f32,
     pub(crate) approximate_height_readback: Arc<Mutex<f32>>,
+    pub(crate) height_scale: f32,
 }
 
 impl TileTree {
@@ -181,6 +181,7 @@ impl TileTree {
             surface_approximation: default(),
             approximate_height: 0.0,
             approximate_height_readback: Arc::new(Mutex::new(0.0)),
+            height_scale: 1.0,
         }
     }
 
@@ -314,7 +315,7 @@ impl TileTree {
         #[cfg(not(feature = "high_precision"))] view_transforms: Query<&Transform>,
     ) {
         for (&(terrain, view), tile_tree) in tile_trees.iter_mut() {
-            let (tile_atlas) = tile_atlases.get(terrain).unwrap();
+            let tile_atlas = tile_atlases.get(terrain).unwrap();
 
             // Todo: unfortunately the origin does not return the proper translation yet,
             // but this can be used in the future, to replace the code below

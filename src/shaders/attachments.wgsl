@@ -1,7 +1,7 @@
 #define_import_path bevy_terrain::attachments
 
 #import bevy_terrain::types::{AtlasTile, TangentSpace}
-#import bevy_terrain::bindings::{terrain, terrain_sampler, attachments, attachment0, attachment1, attachment2}
+#import bevy_terrain::bindings::{terrain, terrain_view, terrain_sampler, attachments, attachment0, attachment1, attachment2}
 #import bevy_terrain::functions::tile_count
 
 fn attachment_uv(uv: vec2<f32>, attachment_index: u32) -> vec2<f32> {
@@ -43,9 +43,7 @@ fn sample_attachment0_gather0(tile: AtlasTile) -> vec4<f32> {
 }
 
 fn sample_height(tile: AtlasTile) -> f32 {
-    let height = sample_attachment0(tile).x;
-
-    return mix(terrain.min_height, terrain.max_height, height);
+    return terrain_view.height_scale * sample_attachment0(tile).x;
 }
 
 fn sample_height_mask(tile: AtlasTile) -> bool {
@@ -76,7 +74,7 @@ fn sample_surface_gradient(tile: AtlasTile, tangent_space: TangentSpace) -> vec3
     let uv_dx = tile.coordinate.uv_dx * attachment.scale;
     let uv_dy = tile.coordinate.uv_dy * attachment.scale;
 
-    let height   = textureSampleGrad(attachment0, terrain_sampler, uv, tile.index, uv_dx, uv_dy).x;
+    let height   = terrain_view.height_scale * textureSampleGrad(attachment0, terrain_sampler, uv, tile.index, uv_dx, uv_dy).x;
 
     var height_dx = 0.0;
     var height_dy = 0.0;
@@ -86,8 +84,8 @@ fn sample_surface_gradient(tile: AtlasTile, tangent_space: TangentSpace) -> vec3
 //        height_dy  = dpdy(height);
 //    }
 //    { // still imprecise, similar to solution above, but sampling using exclicite texture samples
-//        let height_x = textureSampleGrad(attachment0, terrain_sampler, uv + uv_dx, tile.index, uv_dx, uv_dy).x;
-//        let height_y = textureSampleGrad(attachment0, terrain_sampler, uv + uv_dy, tile.index, uv_dx, uv_dy).x;
+//        let height_x = terrain_view.height_scale * textureSampleGrad(attachment0, terrain_sampler, uv + uv_dx, tile.index, uv_dx, uv_dy).x;
+//        let height_y = terrain_view.height_scale * textureSampleGrad(attachment0, terrain_sampler, uv + uv_dy, tile.index, uv_dx, uv_dy).x;
 //
 //        height_dx = height_x - height;
 //        height_dy = height_y - height;
@@ -99,8 +97,8 @@ fn sample_surface_gradient(tile: AtlasTile, tangent_space: TangentSpace) -> vec3
         let uv_u = uv + vec2<f32>(e_lod / attachment.size, 0.0);
         let uv_v = uv + vec2<f32>(0.0, e_lod / attachment.size);
 
-        let height_u = textureSampleGrad(attachment0, terrain_sampler, uv_u, tile.index, uv_dx, uv_dy).x;
-        let height_v = textureSampleGrad(attachment0, terrain_sampler, uv_v, tile.index, uv_dx, uv_dy).x;
+        let height_u = terrain_view.height_scale * textureSampleGrad(attachment0, terrain_sampler, uv_u, tile.index, uv_dx, uv_dy).x;
+        let height_v = terrain_view.height_scale * textureSampleGrad(attachment0, terrain_sampler, uv_v, tile.index, uv_dx, uv_dy).x;
 
         var height_duv = vec2<f32>(height_u - height, height_v - height) * attachment.size / e_lod;
 
@@ -112,10 +110,10 @@ fn sample_surface_gradient(tile: AtlasTile, tangent_space: TangentSpace) -> vec3
             let coord = texture_size * uv - 0.5;
             let coord_floor = floor(coord);
             let center_uv = (coord_floor + 0.5) / texture_size;
-            let height_TL = textureGather(0, attachment0, terrain_sampler, center_uv, tile.index, vec2(-1, -1));
-            let height_TR = textureGather(0, attachment0, terrain_sampler, center_uv, tile.index, vec2( 1, -1));
-            let height_BL = textureGather(0, attachment0, terrain_sampler, center_uv, tile.index, vec2(-1,  1));
-            let height_BR = textureGather(0, attachment0, terrain_sampler, center_uv, tile.index, vec2( 1,  1));
+            let height_TL = terrain_view.height_scale * textureGather(0, attachment0, terrain_sampler, center_uv, tile.index, vec2(-1, -1));
+            let height_TR = terrain_view.height_scale * textureGather(0, attachment0, terrain_sampler, center_uv, tile.index, vec2( 1, -1));
+            let height_BL = terrain_view.height_scale * textureGather(0, attachment0, terrain_sampler, center_uv, tile.index, vec2(-1,  1));
+            let height_BR = terrain_view.height_scale * textureGather(0, attachment0, terrain_sampler, center_uv, tile.index, vec2( 1,  1));
 
             let height_matrix = mat4x4<f32>(height_TL.w, height_TL.z, height_TR.w, height_TR.z,
                                             height_TL.x, height_TL.y, height_TR.x, height_TR.y,
