@@ -8,6 +8,7 @@ use bevy::{
     math::{DVec2, DVec3},
     prelude::*,
 };
+use big_space::precision::GridPrecision;
 use bytemuck::{Pod, Zeroable};
 use itertools::iproduct;
 use ndarray::Array4;
@@ -313,19 +314,28 @@ impl TileTree {
         #[cfg(not(feature = "high_precision"))] view_transforms: Query<&Transform>,
     ) {
         for (&(terrain, view), tile_tree) in tile_trees.iter_mut() {
-            let tile_atlas = tile_atlases.get(terrain).unwrap();
+            let (tile_atlas) = tile_atlases.get(terrain).unwrap();
+
+            // Todo: unfortunately the origin does not return the proper translation yet,
+            // but this can be used in the future, to replace the code below
+            // let frame = frames.parent_frame(terrain).unwrap();
+            // let origin = frame.local_floating_origin();
+            // let view_position = frame.grid_position_double(
+            //     &origin.cell(),
+            //     &Transform::from_translation(origin.translation()),
+            // );
 
             #[cfg(feature = "high_precision")]
             let view_position = {
                 let mut entity = view;
+                let mut matrix = Mat4::IDENTITY;
                 let mut cell = None;
-                let mut transforms = Vec::new();
                 let (mut parent, mut transform);
 
                 while cell.is_none() {
                     (parent, transform, cell) = views.get(entity).unwrap();
 
-                    transforms.push(transform.compute_matrix());
+                    matrix = matrix * transform.compute_matrix();
 
                     entity = parent
                         .map(|parent| parent.get())
@@ -333,7 +343,7 @@ impl TileTree {
                 }
 
                 let cell = cell.unwrap();
-                let transform = Transform::from_matrix(transforms.into_iter().rev().product());
+                let transform = Transform::from_matrix(matrix);
 
                 let frame = frames.parent_frame(terrain).unwrap();
                 frame.grid_position_double(cell, &transform)

@@ -107,3 +107,9 @@ struct CullingData {
     view_proj: mat4x4<f32>,
     planes: array<vec4<f32>, 5>,
 }
+
+struct TangentSpace {
+    tangent_x: vec3<f32>,
+    tangent_y: vec3<f32>,
+    scale: f32,
+}
