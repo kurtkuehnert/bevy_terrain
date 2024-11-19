@@ -102,9 +102,8 @@ struct IndirectBuffer {
 }
 
 struct CullingData {
+    half_spaces: array<vec4<f32>, 6>,
     world_position: vec3<f32>,
-    view_proj: mat4x4<f32>,
-    planes: array<vec4<f32>, 5>,
 }
 
 struct TangentSpace {
