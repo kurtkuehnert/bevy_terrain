@@ -1,4 +1,5 @@
 use crate::{terrain_data::GpuTileTree, terrain_view::TerrainViewComponents, util::StaticBuffer};
+use bevy::render::primitives::Frustum;
 use bevy::{
     prelude::*,
     render::{
@@ -21,17 +22,19 @@ pub(crate) fn create_culling_layout(device: &RenderDevice) -> BindGroupLayout {
 
 #[derive(Default, ShaderType)]
 pub struct CullingUniform {
+    half_spaces: [Vec4; 6],
     world_position: Vec3,
-    view_proj: Mat4,
-    planes: [Vec4; 5],
 }
 
 impl From<&ExtractedView> for CullingUniform {
     fn from(view: &ExtractedView) -> Self {
+        let clip_from_world = view.clip_from_view * view.world_from_view.compute_matrix().inverse();
+
         Self {
+            half_spaces: Frustum::from_clip_from_world(&clip_from_world)
+                .half_spaces
+                .map(|space| space.normal_d()),
             world_position: view.world_from_view.translation(),
-            view_proj: view.world_from_view.compute_matrix().inverse(),
-            planes: default(),
         }
     }
 }
