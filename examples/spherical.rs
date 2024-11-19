@@ -3,8 +3,8 @@ use bevy_terrain::prelude::*;
 
 const PATH: &str = "/Volumes/ExternalSSD/tiles";
 const RADIUS: f64 = 6371000.0;
-const MAJOR_AXES: f64 = 6378137.0;
-const MINOR_AXES: f64 = 6356752.314245;
+const MAJOR_AXES: f64 = 6371000.0;
+const MINOR_AXES: f64 = 6371000.0;
 const TEXTURE_SIZE: u32 = 512;
 const LOD_COUNT: u32 = 16;
 
