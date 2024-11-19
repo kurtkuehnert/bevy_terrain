@@ -92,5 +92,14 @@ fn vertex(input: VertexInput) -> VertexOutput {
         height    = mix(height, sample_height(tile2), info.blend.ratio);
     }
 
+    if (distance(info.world_position, view.world_position) > 3000000.0) {
+        height = 9000.0;
+    }
+    else {
+        height = -12000.0;
+    }
+
+    height = height * 10.0;
+
     return vertex_output(&info, height);
 }
