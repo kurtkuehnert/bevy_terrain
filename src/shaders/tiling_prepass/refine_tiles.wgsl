@@ -30,8 +30,8 @@ fn subdivide(tile: TileCoordinate) {
     }
 }
 
-const min_height: f32 = 1.0 * -12000.0;
-const max_height: f32 = 1.0 * 9000.0;
+const min_height: f32 = 10.0 * -12000.0;
+const max_height: f32 = 10.0 * 9000.0;
 
 fn frustum_cull(tile: TileCoordinate) -> bool {
     let center_l = compute_local_position(Coordinate(tile.face, tile.lod, tile.xy, vec2<f32>(0.5)));
@@ -67,9 +67,13 @@ fn frustum_cull(tile: TileCoordinate) -> bool {
 }
 
 const MAJOR_AXES: f32 = 6371000.0;
-const MINOR_AXES: f32 = 6371000.0 / 2.0;
+const MINOR_AXES: f32 = 6371000.0;
 
 fn horizon_cull(tile: TileCoordinate) -> bool {
+    if (tile.lod < 3) { return false; }
+    // up to LOD 3, the closest point estimation is not reliable when projecting to adjacent sides
+    // to prevent issues with cut of corners, horizon culling is skipped for those cases
+    // this still leads to adeqate culling when close to the surface
 
     // min height should be set to the minimal height of the tile adjacent to the edge point
     // we assume a continuous surface, thus the minimum of adjacent tile should be similar to this tile
@@ -129,9 +133,7 @@ fn refine_tiles(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
 
     let tile = temporary_tiles[parent_index(invocation_id.x)];
 
-    if cull(tile) {
-        return;
-    }
+    if cull(tile) { return; }
 
     if (should_be_divided(tile)) {
         subdivide(tile);
