@@ -1,4 +1,6 @@
+use bevy::core_pipeline::core_3d::Camera3dDepthTextureUsage;
 use bevy::{math::DVec3, prelude::*, reflect::TypePath, render::render_resource::*};
+use bevy_terrain::picking::PickingPlugin;
 use bevy_terrain::prelude::*;
 
 const PATH: &str = "/Volumes/ExternalSSD/tiles";
@@ -28,7 +30,9 @@ fn main() {
             TerrainPlugin,
             TerrainMaterialPlugin::<TerrainMaterial>::default(),
             TerrainDebugPlugin, // enable debug settings and controls
+            PickingPlugin,
         ))
+        .insert_resource(Msaa::Off)
         // .insert_resource(ClearColor(Color::WHITE))
         .add_systems(Startup, setup)
         .run();
@@ -114,7 +118,7 @@ fn setup(
     let global_tile_atlas = TileAtlas::new(&global_config);
     let global_tile_tree = TileTree::new(&global_tile_atlas, &global_view_config);
 
-    commands.spawn_big_space(ReferenceFrame::default(), |root| {
+    commands.spawn_big_space(ReferenceFrame::new(10000000000000.0, 0.5), |root| {
         let frame = root.frame().clone();
 
         let global_terrain = root
@@ -145,6 +149,12 @@ fn setup(
                 .spawn((Camera3dBundle {
                     camera: Camera {
                         order: 0,
+                        ..default()
+                    },
+                    camera_3d: Camera3d {
+                        depth_texture_usages: (TextureUsages::RENDER_ATTACHMENT
+                            | TextureUsages::TEXTURE_BINDING)
+                            .into(),
                         ..default()
                     },
                     ..default()
