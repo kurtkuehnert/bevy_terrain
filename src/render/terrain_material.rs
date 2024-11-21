@@ -245,7 +245,6 @@ pub struct TerrainRenderPipeline<M: Material> {
 impl<M: Material> FromWorld for TerrainRenderPipeline<M> {
     fn from_world(world: &mut World) -> Self {
         let device = world.resource::<RenderDevice>();
-        let asset_server = world.resource::<AssetServer>();
         let mesh_pipeline = world.resource::<MeshPipeline>();
 
         let view_layout = mesh_pipeline
@@ -259,15 +258,15 @@ impl<M: Material> FromWorld for TerrainRenderPipeline<M> {
         let material_layout = M::bind_group_layout(device);
 
         let vertex_shader = match M::vertex_shader() {
-            ShaderRef::Default => asset_server.load(DEFAULT_VERTEX_SHADER),
+            ShaderRef::Default => world.load_asset(DEFAULT_VERTEX_SHADER),
             ShaderRef::Handle(handle) => handle,
-            ShaderRef::Path(path) => asset_server.load(path),
+            ShaderRef::Path(path) => world.load_asset(path),
         };
 
         let fragment_shader = match M::fragment_shader() {
-            ShaderRef::Default => asset_server.load(DEFAULT_FRAGMENT_SHADER),
+            ShaderRef::Default => world.load_asset(DEFAULT_FRAGMENT_SHADER),
             ShaderRef::Handle(handle) => handle,
-            ShaderRef::Path(path) => asset_server.load(path),
+            ShaderRef::Path(path) => world.load_asset(path),
         };
 
         Self {

@@ -11,6 +11,7 @@ pub(crate) const SPLIT_SHADER: &str = "embedded://bevy_terrain/shaders/preproces
 pub(crate) const STITCH_SHADER: &str = "embedded://bevy_terrain/shaders/preprocess/stitch.wgsl";
 pub(crate) const DOWNSAMPLE_SHADER: &str =
     "embedded://bevy_terrain/shaders/preprocess/downsample.wgsl";
+pub(crate) const PICKING_SHADER: &str = "embedded://bevy_terrain/shaders/picking.wgsl";
 
 #[derive(Default, Resource)]
 pub(crate) struct InternalShaders(Vec<Handle<Shader>>);
@@ -37,6 +38,7 @@ pub(crate) fn load_terrain_shaders(app: &mut App) {
     embedded_asset!(app, "render/fragment.wgsl");
     embedded_asset!(app, "tiling_prepass/prepare_prepass.wgsl");
     embedded_asset!(app, "tiling_prepass/refine_tiles.wgsl");
+    embedded_asset!(app, "picking.wgsl");
 
     InternalShaders::load(
         app,

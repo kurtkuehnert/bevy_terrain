@@ -122,15 +122,14 @@ pub struct TilingPrepassPipelines {
 impl FromWorld for TilingPrepassPipelines {
     fn from_world(world: &mut World) -> Self {
         let device = world.resource::<RenderDevice>();
-        let asset_server = world.resource::<AssetServer>();
 
         let prepare_indirect_layout = create_prepare_indirect_layout(device);
         let refine_tiles_layout = create_refine_tiles_layout(device);
         let culling_data_layout = create_culling_layout(device);
         let terrain_layout = create_terrain_layout(device);
 
-        let prepare_prepass_shader = asset_server.load(PREPARE_PREPASS_SHADER);
-        let refine_tiles_shader = asset_server.load(REFINE_TILES_SHADER);
+        let prepare_prepass_shader = world.load_asset(PREPARE_PREPASS_SHADER);
+        let refine_tiles_shader = world.load_asset(REFINE_TILES_SHADER);
 
         TilingPrepassPipelines {
             prepare_indirect_layout,
