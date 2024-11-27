@@ -1,6 +1,6 @@
 use bevy::core_pipeline::core_3d::Camera3dDepthTextureUsage;
 use bevy::{math::DVec3, prelude::*, reflect::TypePath, render::render_resource::*};
-use bevy_terrain::picking::PickingPlugin;
+use bevy_terrain::picking::{OrbitalCameraController, PickingPlugin};
 use bevy_terrain::prelude::*;
 
 const PATH: &str = "/Volumes/ExternalSSD/tiles";
@@ -139,10 +139,9 @@ fn setup(
         //     ))
         //     .id();
 
-        root.spawn_spatial(DebugCameraBundle::new(
-            -DVec3::X * RADIUS * 3.0,
-            RADIUS,
-            &frame,
+        root.spawn_spatial((
+            DebugCameraBundle::new(-DVec3::X * RADIUS * 3.0, RADIUS, &frame),
+            OrbitalCameraController::default(),
         ))
         .with_children(|builder| {
             let global_view = builder
