@@ -288,7 +288,7 @@ pub(crate) fn debug_lighting(mut commands: Commands) {
 
 pub fn debug_window(mut window: Query<&mut Window, With<PrimaryWindow>>) {
     let mut window = window.single_mut();
-    window.cursor.visible = false;
+    // window.cursor.visible = false;
 }
 
 #[derive(Resource, Default)]

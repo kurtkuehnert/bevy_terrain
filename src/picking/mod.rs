@@ -1,106 +1,102 @@
 use crate::big_space::{GridTransform, GridTransformItem, ReferenceFrames};
-use crate::debug::DebugCameraController;
-use crate::{render::TilingPrepassNode, shaders::PICKING_SHADER, util::StaticBuffer};
+use crate::{shaders::PICKING_SHADER, util::StaticBuffer};
 use bevy::color::palettes::basic;
 use bevy::core_pipeline::core_3d::graph::{Core3d, Node3d};
-use bevy::input::mouse::{MouseMotion, MouseScrollUnit, MouseWheel};
-use bevy::math::{DQuat, DVec2, DVec3};
-use bevy::render::graph::CameraDriverLabel;
-use bevy::render::render_graph::{RenderGraph, RenderGraphApp, RenderLabel, ViewNodeRunner};
-use bevy::render::render_resource::binding_types::{
-    storage_buffer, texture_2d_multisampled, texture_depth_2d,
-};
+use bevy::input::mouse::{MouseMotion, MouseWheel};
+use bevy::math::{DMat3, DQuat, DVec2, DVec3};
+use bevy::render::render_graph::{RenderGraphApp, RenderLabel, ViewNodeRunner};
+use bevy::render::render_resource::binding_types::{storage_buffer, texture_depth_2d};
 use bevy::render::view::ExtractedView;
 use bevy::render::RenderApp;
+use bevy::window::CursorGrabMode;
 use bevy::{
     ecs::query::QueryItem,
     prelude::*,
     render::{
-        camera::ExtractedCamera,
         render_graph::{self, NodeRunError, RenderGraphContext},
-        render_resource::{
-            binding_types::{sampler, storage_buffer_sized, texture_2d},
-            *,
-        },
+        render_resource::{binding_types::sampler, *},
         renderer::{RenderContext, RenderDevice, RenderQueue},
         view::ViewDepthTexture,
     },
     window::PrimaryWindow,
 };
-use std::ops::{Add, DerefMut, Sub};
+use std::ops::{Add, AddAssign, Deref};
+use std::ops::{DerefMut, Sub};
 use std::sync::{Arc, Mutex};
-use std::{num::NonZeroU64, ops::Deref};
 use wgpu::util::DownloadBuffer;
 
-pub fn get_mouse_position(window: Query<&Window, With<PrimaryWindow>>) {}
+fn ray_sphere_intersection(
+    ray_origin: DVec3,
+    ray_direction: DVec3,
+    sphere_origin: DVec3,
+    radius: f64,
+) -> Option<DVec3> {
+    let oc = ray_origin - sphere_origin;
+    let b = 2.0 * oc.dot(ray_direction);
+    let c = oc.dot(oc) - radius * radius;
+
+    let sqrt_discriminant = (b * b - 4.0 * c).sqrt();
+
+    if sqrt_discriminant.is_nan() {
+        return None; // No intersection
+    }
+
+    // Compute the roots of the quadratic equation
+    let t1 = (-b - sqrt_discriminant) / 2.0;
+    let t2 = (-b + sqrt_discriminant) / 2.0;
+
+    [t1, t2]
+        .into_iter()
+        .filter(|&t| t >= 0.0)
+        .min_by(|a, b| a.partial_cmp(b).unwrap())
+        .map(|t| ray_origin + ray_direction * t)
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct PanData {
-    anchor_position: DVec3,
-    camera_transform: Transform,
+    pan_coords: Vec2,
     world_from_clip: Mat4,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ZoomData {
+    target_zoom: f64,
+    zoom: f64,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct RotationData {
+    target_rotation: DVec2,
+    rotation: DVec2,
 }
 
 #[derive(Clone, Debug, Component)]
 pub struct OrbitalCameraController {
-    pub enabled: bool,
-    pub zoom: f64,
-    pub zoom_speed: f64,
-    pub rotation: DVec2,
-    pub pan_data: Option<PanData>,
-    pub rotation_speed: f64,
-    pub rotation_anchor: Option<DVec3>,
-    pub time_to_reach_target: f64,
+    enabled: bool,
+    cursor_coords: Vec2,
+    anchor_position: DVec3,
+    camera_position: DVec3,
+    camera_rotation: DQuat,
+    pan_data: Option<PanData>,
+    zoom_data: Option<ZoomData>,
+    rotation_data: Option<RotationData>,
+    time_to_reach_target: f32,
 }
 
 impl Default for OrbitalCameraController {
     fn default() -> Self {
         Self {
-            enabled: false,
-            zoom: 0.0,
-            zoom_speed: 0.01,
+            enabled: true,
+            zoom_data: None,
             pan_data: None,
-            rotation: DVec2::ZERO,
-            rotation_speed: 0.1,
-            rotation_anchor: None,
-            time_to_reach_target: 1.0,
+            rotation_data: None,
+            time_to_reach_target: 0.1,
+            cursor_coords: Vec2::ZERO,
+            anchor_position: Default::default(),
+            camera_position: Default::default(),
+            camera_rotation: Default::default(),
         }
     }
-}
-
-fn ray_ellipsoid_intersection(
-    camera_position: DVec3,
-    ray_direction: DVec3,
-    terrain_origin: DVec3,
-    major_axes: f64,
-    minor_axes: f64,
-) -> Option<DVec3> {
-    let a2 = major_axes * major_axes;
-    let b2 = minor_axes * minor_axes;
-
-    let cam = camera_position - terrain_origin;
-    let dir = ray_direction;
-    let a = (dir.x * dir.x / a2) + (dir.y * dir.y / b2) + (dir.z * dir.z / a2);
-    let b = 2.0 * ((cam.x * dir.x / a2) + (cam.y * dir.y / b2) + (cam.z * dir.z / a2));
-    let c = (cam.x * cam.x / a2) + (cam.y * cam.y / b2) + (cam.z * cam.z / a2) - 1.0;
-
-    let discriminant = b * b - 4.0 * a * c;
-
-    if discriminant < 0.0 {
-        return None; // No intersection
-    }
-
-    // Compute the roots of the quadratic equation
-    let sqrt_discriminant = discriminant.sqrt();
-    let t1 = (-b - sqrt_discriminant) / (2.0 * a);
-    let t2 = (-b + sqrt_discriminant) / (2.0 * a);
-
-    // Find the smallest positive root (t)
-    [t1, t2]
-        .into_iter()
-        .filter(|&t| t >= 0.0)
-        .min_by(|a, b| a.partial_cmp(b).unwrap())
-        .map(|t| camera_position + ray_direction * t)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -114,7 +110,7 @@ pub fn orbital_camera_controller(
     mut mouse_scroll: EventReader<MouseWheel>,
     mut camera: Query<(Entity, GridTransform, &mut OrbitalCameraController)>,
     readback: Res<PickingReadback>,
-    window: Query<&Window, With<PrimaryWindow>>,
+    mut window: Query<&mut Window, With<PrimaryWindow>>,
 ) {
     let (
         camera,
@@ -137,169 +133,243 @@ pub fn orbital_camera_controller(
 
     let readback_data = &readback.data;
 
-    let window_size = window.single().size().as_dvec2();
     let terrain_origin = DVec3::ZERO;
+    let camera_rotation = transform.rotation.as_dquat();
     let camera_position = frame.grid_position_double(&cell, &transform);
-    let cursor_position = readback_data.world_position.as_dvec3();
-    let cursor_coords = readback_data.cursor_coords.as_dvec2();
+    let cursor_position = readback_data
+        .world_position
+        .is_finite()
+        .then(|| readback_data.world_position.as_dvec3());
+    let cursor_coords = readback_data.cursor_coords;
 
-    controller.zoom = mouse_scroll
-        .read()
-        .map(|event| event.y as f64)
-        .fold(controller.zoom, f64::sub);
+    let smoothing = (time.delta_seconds() / controller.time_to_reach_target).min(1.0);
 
-    if mouse_buttons.pressed(MouseButton::Left) {
-        controller.pan_data = controller.pan_data.or(Some(PanData {
-            anchor_position: cursor_position,
-            camera_transform: *transform,
-            world_from_clip: readback_data.world_from_clip,
-        }));
+    let mut window = window.single_mut();
+
+    let mut update_cursor_coords = true;
+
+    if mouse_buttons.pressed(MouseButton::Left) && cursor_position.is_some() {
+        if controller.pan_data.is_none() {
+            controller.anchor_position = cursor_position.unwrap();
+            controller.camera_position = camera_position;
+            controller.camera_rotation = camera_rotation;
+            controller.pan_data = Some(PanData {
+                world_from_clip: readback_data.world_from_clip,
+                pan_coords: cursor_coords,
+            });
+        }
+
+        let pan_coords = &mut controller.pan_data.as_mut().unwrap().pan_coords;
+        *pan_coords = pan_coords.lerp(cursor_coords, smoothing);
     } else {
         controller.pan_data = None;
     }
 
     if mouse_buttons.pressed(MouseButton::Middle) {
-        controller.rotation_anchor = controller.rotation_anchor.or(Some(cursor_position));
+        if controller.rotation_data.is_none() && cursor_position.is_some() {
+            controller.anchor_position = cursor_position.unwrap();
+            controller.camera_position = camera_position;
+            controller.camera_rotation = camera_rotation;
+            controller.rotation_data = Some(RotationData {
+                target_rotation: DVec2::ZERO,
+                rotation: DVec2::ZERO,
+            });
+        } else {
+            update_cursor_coords = false;
+        }
 
-        controller.rotation = mouse_move
-            .read()
-            .map(|event| event.delta.as_dvec2())
-            .fold(controller.rotation, DVec2::sub);
+        let rotation_speed = 0.01;
+
+        if let Some(rotation_data) = controller.rotation_data.as_mut() {
+            rotation_data.target_rotation += mouse_move
+                .read()
+                .map(|event| -event.delta.as_dvec2() * rotation_speed)
+                .sum::<DVec2>();
+
+            rotation_data.rotation = rotation_data
+                .rotation
+                .lerp(rotation_data.target_rotation, smoothing as f64);
+        }
     } else {
-        controller.rotation_anchor = None;
+        controller.rotation_data = None;
     }
 
-    let delta = time.delta().as_secs_f64();
+    if mouse_buttons.pressed(MouseButton::Right) {
+        if controller.zoom_data.is_none() && cursor_position.is_some() {
+            controller.anchor_position = cursor_position.unwrap();
+            controller.camera_position = camera_position;
+            controller.camera_rotation = camera_rotation;
+
+            let zoom = (cursor_position.unwrap() - camera_position).length().log2();
+
+            controller.zoom_data = Some(ZoomData {
+                target_zoom: zoom,
+                zoom,
+            });
+        } else {
+            update_cursor_coords = false;
+        }
+
+        let zoom_speed = 0.01;
+
+        if let Some(zoom_data) = controller.zoom_data.as_mut() {
+            zoom_data.target_zoom += mouse_move
+                .read()
+                .map(|event| -event.delta.element_sum() as f64 * zoom_speed)
+                .sum::<f64>();
+
+            zoom_data.zoom = zoom_data.zoom.lerp(zoom_data.target_zoom, smoothing as f64);
+        }
+    } else {
+        controller.zoom_data = None;
+    }
+
+    // Todo: add support for scroll wheel zoom
+
+    if update_cursor_coords {
+        if window.cursor.grab_mode == CursorGrabMode::Locked {
+            window.cursor.grab_mode = CursorGrabMode::None;
+            let window_size = window.size();
+            window.set_cursor_position(Some(controller.cursor_coords * window_size));
+        }
+
+        controller.cursor_coords = cursor_coords;
+    } else {
+        window.cursor.grab_mode = CursorGrabMode::Locked;
+    }
+
+    let anchor_size = 200.0;
+
     let mut new_camera_position = camera_position;
+    let mut new_camera_rotation = camera_rotation;
 
     if let Some(pan_data) = controller.pan_data {
-        gizmos.sphere(
-            pan_data.anchor_position.as_vec3(),
-            default(),
-            10000.0,
-            basic::YELLOW,
-        );
+        // Invariants:
+        // The anchor world position remains at the screen space position of the cursor.
+        // The terrain is just rotated, but not translated relative to the camera.
 
-        let initial_camera_position = pan_data.camera_transform.translation.as_dvec3();
-        let initial_camera_rotation = pan_data.camera_transform.rotation;
-        let initial_terrain_camera = initial_camera_position - terrain_origin;
-
-        let coords = DVec2::new(cursor_coords.x, 1.0 - cursor_coords.y);
-        let ndc_coords = (coords * 2.0 - 1.0).extend(0.0001);
+        let new_cursor_coords =
+            Vec2::new(pan_data.pan_coords.x, 1.0 - pan_data.pan_coords.y).as_dvec2();
+        let ndc_coords = (new_cursor_coords * 2.0 - 1.0).extend(0.0001); // Todo: using f64 we should be able to set this to 1.0 for the near plane
 
         let camera_cursor_direction = (pan_data
             .world_from_clip
             .project_point3(ndc_coords.as_vec3())
             .as_dvec3()
-            - initial_camera_position)
+            - controller.camera_position)
             .normalize();
 
-        // let radius = (pan_data.anchor_position - terrain_origin).length();
+        let radius = (controller.anchor_position - terrain_origin).length();
 
-        // compute ray ellipsoid intersection
-        // Todo: actually it should be a ray sphere intersection with radius of length of initial cursor position
-        let Some(cursor_hit_position) = ray_ellipsoid_intersection(
-            initial_camera_position,
+        // compute ray sphere intersection, where the sphere has a radius of the length of the anchor position
+        // this way the anchor point should line up correctly with the cursor
+        let Some(new_cursor_position) = ray_sphere_intersection(
+            controller.camera_position,
             camera_cursor_direction,
             terrain_origin,
-            6371000.0,
-            6371000.0,
+            radius,
         ) else {
+            controller.pan_data = None;
             return;
         };
 
-        // based of the panning anchor position and the cursor hit position compute the new camera transform
+        // based of the anchor position and the cursor hit position compute the new camera transform
         // the world origin should stay at the center of the screen
-        let original_dir = (pan_data.anchor_position - terrain_origin).normalize();
-        let current_dir = (cursor_hit_position - terrain_origin).normalize();
+        let initial_direction = (controller.anchor_position - terrain_origin).normalize();
+        let new_direction = (new_cursor_position - terrain_origin).normalize();
 
-        // the world should be rotated by this amount, so that the panning anchor ends up under the cursor
-        let world_rotation = DQuat::from_rotation_arc(original_dir, current_dir);
+        // the camera should be rotated by this amount, so that the panning anchor ends up under the cursor
+        let rotation = DQuat::from_rotation_arc(new_direction, initial_direction);
 
-        let camera_rotation = world_rotation.inverse();
-
-        transform.translation =
-            (terrain_origin + camera_rotation * initial_terrain_camera).as_vec3();
-        transform.rotation = camera_rotation.as_quat() * initial_camera_rotation;
-
-        // transform.translation = transform.translation + Vec3::new(0.0, 100.0, 0.0);
+        new_camera_position =
+            terrain_origin + rotation * (controller.camera_position - terrain_origin);
+        new_camera_rotation = rotation * controller.camera_rotation;
     }
 
-    if let Some(rotation_anchor) = controller.rotation_anchor {
-        gizmos.sphere(rotation_anchor.as_vec3(), default(), 10000.0, basic::BLUE);
+    if let Some(rotation_data) = controller.rotation_data {
+        // Invariants:
+        // The cursor world position stays at the same screen-space location.
+        // The distance between anchor and camera remains constant.
 
-        let rotation_axis_x = (rotation_anchor - terrain_origin).normalize(); // terrain normal
-        let rotation_axis_y = transform.right().as_dvec3(); // camera right direction
+        let heading_axis = (controller.anchor_position - terrain_origin).normalize(); // terrain normal
+        let tilt_axis = controller.camera_rotation * DVec3::X; // camera right direction
 
-        let mut angle = delta * controller.rotation * controller.rotation_speed;
+        let initial_tilt = (controller.anchor_position - terrain_origin)
+            .angle_between(controller.camera_position - controller.anchor_position);
 
-        // Todo: fix this
-        let right = transform.right().as_dvec3();
-        let up = transform.up().as_dvec3();
-        let normal = rotation_axis_x.cross(right).normalize();
-        let current_angle = std::f64::consts::FRAC_PI_2 - up.angle_between(normal);
-        angle.y = (current_angle + angle.y).clamp(0.0, std::f64::consts::FRAC_PI_2) - current_angle;
+        let delta_heading = rotation_data.rotation.x;
+        let delta_tilt = rotation_data
+            .rotation
+            .y
+            .clamp(-initial_tilt, std::f64::consts::FRAC_PI_2 - initial_tilt);
 
-        let rotation_x = DQuat::from_axis_angle(rotation_axis_x, angle.x);
-        let rotation_y = DQuat::from_axis_angle(rotation_axis_y, angle.y);
-        let rotation = rotation_x * rotation_y;
+        // Todo: fix tilt clamping
 
-        let target_camera_position =
-            rotation_anchor + rotation * (camera_position - rotation_anchor);
+        let rotation_heading = DQuat::from_axis_angle(heading_axis, delta_heading);
+        let rotation_tilt = DQuat::from_axis_angle(tilt_axis, delta_tilt);
+        let rotation = rotation_heading * rotation_tilt;
 
-        controller.rotation = DVec2::ZERO;
-
-        new_camera_position = target_camera_position;
-        transform.rotation = rotation.as_quat() * transform.rotation;
+        new_camera_position = controller.anchor_position
+            + rotation * (controller.camera_position - controller.anchor_position);
+        new_camera_rotation = rotation * controller.camera_rotation;
     }
 
-    if controller.zoom.abs() > 0.0 && cursor_position.is_finite() {
-        let cursor_camera = camera_position - cursor_position;
-        let terrain_cursor = cursor_position - terrain_origin;
-        let terrain_camera = camera_position - terrain_origin;
+    if let Some(zoom_data) = controller.zoom_data {
+        // Invariants:
+        // The terrain origin stays at the screen center.
+        // The cursor world position stays at the same screen-space location.
 
-        let distance_to_cursor = cursor_camera.length();
-        let target_distance_to_cursor =
-            distance_to_cursor.powf(1.0 + controller.zoom * controller.zoom_speed);
-        let target_camera_position =
-            cursor_position + cursor_camera.normalize() * target_distance_to_cursor;
+        let anchor_terrain = controller.anchor_position - terrain_origin;
+        let camera_terrain = terrain_origin - controller.camera_position;
+        let camera_anchor = controller.anchor_position - controller.camera_position;
 
-        // we have to rotate the camera towards the normal at the cursor
-        // let angle = terrain_cursor.angle_between(terrain_camera);
-        // let target_angle = 0.0;
-        // let new_angle = angle - angle * delta / 1.0;
-        // let rotation_axis = terrain_cursor.cross(terrain_camera).normalize();
+        // compute the side lengths and the angles of the triangle anchor - terrain origin - new camera
+        let a = anchor_terrain.length();
+        let b = 2.0_f64.powf(zoom_data.zoom);
 
-        // new_camera_position = camera_position.lerp(
-        //     target_camera_position,
-        //     (delta / controller.time_to_reach_target).min(1.0),
-        // );
-        //
-        // // compute "used" amount of scroll
-        // let new_distance_to_cursor = (new_camera_position - cursor_position).length();
-        // let scroll_used =
-        //     (new_distance_to_cursor.log(distance_to_cursor) - 1.0) / controller.zoom_speed;
-        //
-        // controller.zoom -= scroll_used;
-        //
-        // transform.translation = new_camera_position.as_vec3();
+        let alpha = camera_terrain.angle_between(camera_anchor);
+        let beta = (b / a * alpha.sin()).asin();
+        let gamma = std::f64::consts::PI - alpha - beta;
 
-        transform.translation = target_camera_position.as_vec3();
-        controller.zoom = 0.0;
+        let c = f64::sqrt(a * a + b * b - 2.0 * a * b * gamma.cos());
 
-        // let target_rotation =
-        //     DQuat::from_rotation_arc(terrain_camera.normalize(), terrain_cursor.normalize());
-        //
-        // //dbg!(terrain_camera.angle_between(terrain_cursor));
-        //
-        // let rotation =
-        //     DQuat::IDENTITY.slerp(target_rotation, (10.0 * scroll_used.abs() * delta).min(1.0));
-        //
-        // // dbg!(rotation);
-        //
-        // transform.translation = (terrain_origin + rotation * (new_camera_position - terrain_origin)).as_vec3();
-        // transform.rotation = rotation.as_quat() * transform.rotation;
+        if beta.is_nan() {
+            controller.zoom_data = None;
+            return;
+        }
+
+        // rotation from the anchor direction towards the initial camera direction
+        let rotation =
+            DQuat::from_axis_angle(camera_terrain.cross(camera_anchor).normalize(), beta);
+
+        let camera_position = terrain_origin + rotation * (c * anchor_terrain.normalize());
+
+        let initial_direction = camera_terrain.normalize();
+        let new_direction = (terrain_origin - camera_position).normalize();
+
+        new_camera_position = camera_position;
+        new_camera_rotation =
+            DQuat::from_rotation_arc(initial_direction, new_direction) * controller.camera_rotation;
     }
+
+    let anchor_position = if controller.pan_data.is_none()
+        && controller.rotation_data.is_none()
+        && controller.zoom_data.is_none()
+    {
+        cursor_position.unwrap_or(DVec3::NAN)
+    } else {
+        controller.anchor_position
+    };
+
+    gizmos.sphere(
+        anchor_position.as_vec3(),
+        default(),
+        new_camera_position.distance(anchor_position) as f32 / anchor_size,
+        basic::GREEN,
+    );
+
+    transform.translation = new_camera_position.as_vec3();
+    transform.rotation = new_camera_rotation.as_quat();
 }
 
 pub fn test(
@@ -312,7 +382,7 @@ pub fn test(
     let mut picking_data = readback.lock().unwrap();
     *data = picking_data.clone();
 
-    gizmos.sphere(data.world_position, default(), 10000.0, basic::RED);
+    // gizmos.sphere(data.world_position, default(), 10000.0, basic::RED);
 
     let window = window.single();
 
@@ -503,11 +573,8 @@ impl Plugin for PickingPlugin {
     fn build(&self, app: &mut App) {
         let picking_readback = PickingReadback::default();
 
-        app.add_systems(
-            Update,
-            (get_mouse_position, test, orbital_camera_controller),
-        )
-        .insert_resource(picking_readback.clone());
+        app.add_systems(Update, (test, orbital_camera_controller))
+            .insert_resource(picking_readback.clone());
 
         app.sub_app_mut(RenderApp)
             .insert_resource(picking_readback)

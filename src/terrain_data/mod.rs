@@ -16,7 +16,7 @@
 //! which can be used to access the terrain data in shaders.
 
 use crate::util::CollectArray;
-use bevy::{prelude::*, render::render_resource::*};
+use bevy::render::render_resource::*;
 use bytemuck::cast_slice;
 use itertools::{iproduct, Itertools};
 use std::iter;
