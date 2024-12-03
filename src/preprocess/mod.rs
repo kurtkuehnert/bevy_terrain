@@ -49,7 +49,11 @@ impl TerrainPreprocessItem {
     fn pipelines<'a>(
         &'a self,
         pipeline_cache: &'a PipelineCache,
-    ) -> Option<(&ComputePipeline, &ComputePipeline, &ComputePipeline)> {
+    ) -> Option<(
+        &'a ComputePipeline,
+        &'a ComputePipeline,
+        &'a ComputePipeline,
+    )> {
         Some((
             pipeline_cache.get_compute_pipeline(self.split_pipeline)?,
             pipeline_cache.get_compute_pipeline(self.stitch_pipeline)?,

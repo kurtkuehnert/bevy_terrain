@@ -67,22 +67,6 @@ impl Default for TileTreeEntry {
     }
 }
 
-#[allow(dead_code)]
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct TileLookup {
-    pub(crate) atlas_index: u32,
-    pub(crate) atlas_lod: u32,
-    pub(crate) atlas_uv: Vec2,
-}
-
-impl TileLookup {
-    pub(crate) const INVALID: Self = Self {
-        atlas_index: INVALID_ATLAS_INDEX,
-        atlas_lod: INVALID_LOD,
-        atlas_uv: Vec2::ZERO,
-    };
-}
-
 /// A quadtree-like view of a terrain, that requests and releases tiles from the [`TileAtlas`]
 /// depending on the distance to the viewer.
 ///
@@ -113,8 +97,6 @@ pub struct TileTree {
     pub(crate) requested_tiles: Vec<TileCoordinate>,
     /// The internal tile states of the tile_tree.
     tiles: Array4<TileState>,
-    /// The count of level of detail layers.
-    lod_count: u32,
     /// The count of tiles in x and y direction per layer.
     pub(crate) tree_size: u32,
     pub(crate) geometry_tile_count: u32,
@@ -145,7 +127,6 @@ impl TileTree {
         let scale = model.scale();
 
         Self {
-            lod_count: tile_atlas.lod_count,
             tree_size: view_config.tree_size,
             geometry_tile_count: view_config.geometry_tile_count,
             refinement_count: view_config.refinement_count,

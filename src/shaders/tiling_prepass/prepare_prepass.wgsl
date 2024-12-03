@@ -1,6 +1,6 @@
 #import bevy_terrain::types::{TileCoordinate, Blend}
 #import bevy_terrain::bindings::{terrain_view, approximate_height, temporary_tiles, parameters, indirect_buffer}
-#import bevy_terrain::functions::{compute_view_coordinate, lookup_tile}
+#import bevy_terrain::functions::{compute_view_coordinate, lookup_tile, compute_local_position, position_local_to_world, normal_local_to_world}
 #import bevy_terrain::attachments::{sample_height, sample_attachment0_gather0}
 
 @compute @workgroup_size(1, 1, 1)
@@ -32,6 +32,18 @@ fn prepare_root() {
 
     if (all(mask != vec4<u32>(0))) {
         approximate_height = sample_height(tile);
+    }
+
+    let local_position = compute_local_position(coordinate);
+    let world_position = position_local_to_world(local_position);
+    let world_normal   = normal_local_to_world(local_position);
+    let approximate_position = world_position + world_normal * approximate_height;
+    let view_world_position = terrain_view.view_world_position;
+
+    let distance = dot(world_normal, view_world_position) - dot(world_normal, approximate_position);
+
+    if (distance < 1.0) {
+        parameters.tile_count = 0u;
     }
 }
 
