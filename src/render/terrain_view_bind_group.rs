@@ -99,6 +99,7 @@ struct TerrainView {
     #[cfg(feature = "high_precision")]
     surface_approximation: [crate::math::SurfaceApproximation; 6],
     height_scale: f32,
+    view_world_position: Vec3,
 }
 
 impl TerrainView {
@@ -125,6 +126,7 @@ impl TerrainView {
             #[cfg(feature = "high_precision")]
             surface_approximation: tile_tree.surface_approximation,
             height_scale: tile_tree.height_scale,
+            view_world_position: tile_tree.view_world_position.as_vec3(),
         }
     }
 }

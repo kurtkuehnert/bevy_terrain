@@ -1,6 +1,6 @@
-use bevy::core_pipeline::core_3d::Camera3dDepthTextureUsage;
 use bevy::{math::DVec3, prelude::*, reflect::TypePath, render::render_resource::*};
-use bevy_terrain::picking::{OrbitalCameraController, PickingPlugin};
+use bevy_terrain::debug::OrbitalCameraController;
+use bevy_terrain::picking::PickingPlugin;
 use bevy_terrain::prelude::*;
 
 const PATH: &str = "/Volumes/ExternalSSD/tiles";
@@ -32,7 +32,7 @@ fn main() {
             TerrainDebugPlugin, // enable debug settings and controls
             PickingPlugin,
         ))
-        .insert_resource(Msaa::Off)
+        // .insert_resource(Msaa::Off)
         // .insert_resource(ClearColor(Color::WHITE))
         .add_systems(Startup, setup)
         .run();
@@ -53,41 +53,41 @@ fn setup(
         TextureFormat::Rgba8UnormSrgb,
     );
 
-    // // Configure all the important properties of the terrain, as well as its attachments.
-    // let local_config = TerrainConfig {
-    //     lod_count: LOD_COUNT,
-    //     model: TerrainModel::ellipsoid(DVec3::ZERO, MAJOR_AXES, MINOR_AXES),
-    //     // model: TerrainModel::ellipsoid(
-    //     //     DVec3::ZERO,
-    //     //     6378137.0,
-    //     //     6378137.0 * 0.5,
-    //     //     MIN_HEIGHT,
-    //     //     MAX_HEIGHT,
-    //     // ),
-    //     // model: TerrainModel::sphere(DVec3::ZERO, RADIUS),
-    //     path: PATH.to_string(),
-    //     ..default()
-    // }
-    // .add_attachment(AttachmentConfig {
-    //     name: "height".to_string(),
-    //     texture_size: TEXTURE_SIZE,
-    //     border_size: 2,
-    //     mip_level_count: 1,
-    //     format: AttachmentFormat::RF32,
-    // })
-    // .add_attachment(AttachmentConfig {
-    //     name: "albedo".to_string(),
-    //     texture_size: TEXTURE_SIZE,
-    //     border_size: 1,
-    //     mip_level_count: 1,
-    //     format: AttachmentFormat::RgbU8,
-    // });
-    //
-    // // Configure the quality settings of the terrain view. Adapt the settings to your liking.
-    // let local_view_config = TerrainViewConfig::default();
-    //
-    // let local_tile_atlas = TileAtlas::new(&local_config);
-    // let local_tile_tree = TileTree::new(&local_tile_atlas, &local_view_config);
+    // Configure all the important properties of the terrain, as well as its attachments.
+    let local_config = TerrainConfig {
+        lod_count: LOD_COUNT,
+        model: TerrainModel::ellipsoid(DVec3::ZERO, MAJOR_AXES, MINOR_AXES),
+        // model: TerrainModel::ellipsoid(
+        //     DVec3::ZERO,
+        //     6378137.0,
+        //     6378137.0 * 0.5,
+        //     MIN_HEIGHT,
+        //     MAX_HEIGHT,
+        // ),
+        // model: TerrainModel::sphere(DVec3::ZERO, RADIUS),
+        path: PATH.to_string(),
+        ..default()
+    }
+    .add_attachment(AttachmentConfig {
+        name: "height".to_string(),
+        texture_size: TEXTURE_SIZE,
+        border_size: 2,
+        mip_level_count: 1,
+        format: AttachmentFormat::RF32,
+    })
+    .add_attachment(AttachmentConfig {
+        name: "albedo".to_string(),
+        texture_size: TEXTURE_SIZE,
+        border_size: 1,
+        mip_level_count: 1,
+        format: AttachmentFormat::RgbU8,
+    });
+
+    // Configure the quality settings of the terrain view. Adapt the settings to your liking.
+    let local_view_config = TerrainViewConfig::default();
+
+    let local_tile_atlas = TileAtlas::new(&local_config);
+    let local_tile_tree = TileTree::new(&local_tile_atlas, &local_view_config);
 
     // Configure all the important properties of the terrain, as well as its attachments.
     let global_config = TerrainConfig {
@@ -119,6 +119,7 @@ fn setup(
     let global_tile_tree = TileTree::new(&global_tile_atlas, &global_view_config);
 
     commands.spawn_big_space(ReferenceFrame::new(10000000000000.0, 0.5), |root| {
+        // commands.spawn_big_space(ReferenceFrame::default(), |root| {
         let frame = root.frame().clone();
 
         let global_terrain = root
@@ -130,14 +131,14 @@ fn setup(
             ))
             .id();
 
-        // let local_terrain = root
-        //     .spawn_spatial((
-        //         TerrainBundle::new(local_tile_atlas, &frame),
-        //         materials.add(TerrainMaterial {
-        //             gradient: gradient.clone(),
-        //         }),
-        //     ))
-        //     .id();
+        let local_terrain = root
+            .spawn_spatial((
+                TerrainBundle::new(local_tile_atlas, &frame),
+                materials.add(TerrainMaterial {
+                    gradient: gradient.clone(),
+                }),
+            ))
+            .id();
 
         root.spawn_spatial((
             DebugCameraBundle::new(-DVec3::X * RADIUS * 3.0, RADIUS, &frame),
@@ -160,18 +161,24 @@ fn setup(
                 },))
                 .id();
 
-            // let local_view = builder
-            //     .spawn((Camera3dBundle {
-            //         camera: Camera {
-            //             order: 1,
-            //             ..default()
-            //         },
-            //         ..default()
-            //     },))
-            //     .id();
+            let local_view = builder
+                .spawn((Camera3dBundle {
+                    camera: Camera {
+                        order: 1,
+                        ..default()
+                    },
+                    camera_3d: Camera3d {
+                        depth_texture_usages: (TextureUsages::RENDER_ATTACHMENT
+                            | TextureUsages::TEXTURE_BINDING)
+                            .into(),
+                        ..default()
+                    },
+                    ..default()
+                },))
+                .id();
 
             tile_trees.insert((global_terrain, global_view), global_tile_tree);
-            // tile_trees.insert((local_terrain, local_view), local_tile_tree);
+            tile_trees.insert((local_terrain, local_view), local_tile_tree);
         });
 
         let sun_position = DVec3::new(-1.0, 1.0, -1.0) * RADIUS * 10.0;

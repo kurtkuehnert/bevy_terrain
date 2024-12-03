@@ -1,7 +1,8 @@
 //! Contains a debug resource and systems controlling it to visualize different internal
 //! data of the plugin.
 use crate::{
-    debug::camera::camera_controller, terrain_data::TileTree, terrain_view::TerrainViewComponents,
+    debug::camera::camera_controller, prelude::TileAtlas, terrain_data::TileTree,
+    terrain_view::TerrainViewComponents,
 };
 use bevy::{
     asset::LoadState,
@@ -12,9 +13,12 @@ use bevy::{
 };
 
 mod camera;
+mod orbital_camera;
 
-pub use crate::debug::camera::{DebugCameraBundle, DebugCameraController};
-use crate::prelude::TileAtlas;
+pub use crate::debug::{
+    camera::{DebugCameraBundle, DebugCameraController},
+    orbital_camera::{orbital_camera_controller, OrbitalCameraController},
+};
 
 #[derive(Asset, AsBindGroup, TypePath, Clone, Default)]
 pub struct DebugTerrainMaterial {}
@@ -31,7 +35,12 @@ impl Plugin for TerrainDebugPlugin {
             .add_systems(Startup, (debug_lighting, debug_window))
             .add_systems(
                 Update,
-                (toggle_debug, update_view_parameter, finish_loading_images),
+                (
+                    toggle_debug,
+                    update_view_parameter,
+                    finish_loading_images,
+                    orbital_camera_controller,
+                ),
             )
             .add_systems(
                 PostUpdate,
@@ -288,7 +297,7 @@ pub(crate) fn debug_lighting(mut commands: Commands) {
 
 pub fn debug_window(mut window: Query<&mut Window, With<PrimaryWindow>>) {
     let mut window = window.single_mut();
-    // window.cursor.visible = false;
+    window.cursor.visible = true; // false;
 }
 
 #[derive(Resource, Default)]

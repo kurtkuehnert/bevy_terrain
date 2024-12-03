@@ -125,7 +125,7 @@ impl AtlasBufferInfo {
         texture: &'a Texture,
         index: u32,
         mip_level: u32,
-    ) -> ImageCopyTexture {
+    ) -> ImageCopyTexture<'a> {
         ImageCopyTexture {
             texture,
             mip_level,
@@ -137,7 +137,7 @@ impl AtlasBufferInfo {
         }
     }
 
-    fn image_copy_buffer<'a>(&'a self, buffer: &'a Buffer, index: u32) -> ImageCopyBuffer {
+    fn image_copy_buffer<'a>(&'a self, buffer: &'a Buffer, index: u32) -> ImageCopyBuffer<'a> {
         ImageCopyBuffer {
             buffer,
             layout: ImageDataLayout {

@@ -99,7 +99,7 @@ fn vertex(input: VertexInput) -> VertexOutput {
 //        height = -12000.0;
 //    }
 
-    height = height * 30.0;
+    // height = height * 30.0;
 
     return vertex_output(&info, height);
 }

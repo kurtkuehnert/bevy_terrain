@@ -155,8 +155,8 @@ pub struct AtlasAttachment {
     pub(crate) texture_size: u32,
     pub(crate) center_size: u32,
     pub(crate) border_size: u32,
-    scale: f32,
-    offset: f32,
+    _scale: f32,
+    _offset: f32,
     pub(crate) mip_level_count: u32,
     pub(crate) format: AttachmentFormat,
     // pub(crate) data: Vec<AttachmentData>,
@@ -167,7 +167,7 @@ pub struct AtlasAttachment {
 }
 
 impl AtlasAttachment {
-    fn new(config: &AttachmentConfig, tile_atlas_size: u32, path: &str) -> Self {
+    fn new(config: &AttachmentConfig, _tile_atlas_size: u32, path: &str) -> Self {
         let name = config.name.clone();
         let path = format!("{path}/{name}");
         // let path = format!("assets/{path}/data/{name}");
@@ -179,8 +179,8 @@ impl AtlasAttachment {
             texture_size: config.texture_size,
             center_size,
             border_size: config.border_size,
-            scale: center_size as f32 / config.texture_size as f32,
-            offset: config.border_size as f32 / config.texture_size as f32,
+            _scale: center_size as f32 / config.texture_size as f32,
+            _offset: config.border_size as f32 / config.texture_size as f32,
             mip_level_count: config.mip_level_count,
             format: config.format,
             // data: vec![AttachmentData::None; tile_atlas_size as usize],

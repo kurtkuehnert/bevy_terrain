@@ -26,6 +26,7 @@ struct TerrainView {
     surface_approximation: array<SurfaceApproximation, 6>,
 #endif
     height_scale: f32,
+    view_world_position: vec3<f32>,
 }
 
 struct TileCoordinate {
