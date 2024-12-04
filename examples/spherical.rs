@@ -1,6 +1,7 @@
+use bevy::core_pipeline::core_3d::Camera3dDepthLoadOp;
 use bevy::{math::DVec3, prelude::*, reflect::TypePath, render::render_resource::*};
 use bevy_terrain::debug::OrbitalCameraController;
-use bevy_terrain::picking::PickingPlugin;
+use bevy_terrain::picking::{PickingReadback, TerrainPickingPlugin};
 use bevy_terrain::prelude::*;
 use bevy_terrain::render::TerrainMaterial;
 
@@ -31,7 +32,7 @@ fn main() {
             TerrainPlugin,
             TerrainMaterialPlugin::<CustomMaterial>::default(),
             TerrainDebugPlugin, // enable debug settings and controls
-            PickingPlugin,
+            TerrainPickingPlugin,
         ))
         // .insert_resource(Msaa::Off)
         // .insert_resource(ClearColor(Color::WHITE))
@@ -45,6 +46,7 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<CustomMaterial>>,
     mut tile_trees: ResMut<TerrainViewComponents<TileTree>>,
+    mut picking_readbacks: ResMut<TerrainViewComponents<PickingReadback>>,
     asset_server: Res<AssetServer>,
 ) {
     let gradient = asset_server.load("textures/gradient.png");
@@ -119,11 +121,17 @@ fn setup(
     let global_tile_atlas = TileAtlas::new(&global_config);
     let global_tile_tree = TileTree::new(&global_tile_atlas, &global_view_config);
 
+    let (mut global_terrain, mut local_terrain, mut camera) = (
+        Entity::PLACEHOLDER,
+        Entity::PLACEHOLDER,
+        Entity::PLACEHOLDER,
+    );
+
     commands.spawn_big_space(ReferenceFrame::new(10000000000000.0, 0.5), |root| {
         // commands.spawn_big_space(ReferenceFrame::default(), |root| {
         let frame = root.frame().clone();
 
-        let global_terrain = root
+        global_terrain = root
             .spawn_spatial((
                 setup_terrain(global_tile_atlas, &frame),
                 TerrainMaterial(materials.add(CustomMaterial {
@@ -132,7 +140,7 @@ fn setup(
             ))
             .id();
 
-        let local_terrain = root
+        local_terrain = root
             .spawn_spatial((
                 setup_terrain(local_tile_atlas, &frame),
                 TerrainMaterial(materials.add(CustomMaterial {
@@ -141,58 +149,56 @@ fn setup(
             ))
             .id();
 
-        root.spawn_spatial((
-            DebugCameraBundle::new(-DVec3::X * RADIUS * 3.0, RADIUS, &frame),
-            OrbitalCameraController::default(),
-        ))
-        .with_children(|builder| {
-            let global_view = builder
-                .spawn((
-                    Camera {
-                        order: 0,
-                        ..default()
-                    },
-                    Camera3d {
-                        depth_texture_usages: (TextureUsages::RENDER_ATTACHMENT
-                            | TextureUsages::TEXTURE_BINDING)
-                            .into(),
-                        ..default()
-                    },
-                ))
-                .id();
-
-            let local_view = builder
-                .spawn((
-                    Camera {
-                        order: 1,
-                        ..default()
-                    },
-                    Camera3d {
-                        depth_texture_usages: (TextureUsages::RENDER_ATTACHMENT
-                            | TextureUsages::TEXTURE_BINDING)
-                            .into(),
-                        ..default()
-                    },
-                ))
-                .id();
-
-            tile_trees.insert((global_terrain, global_view), global_tile_tree);
-            tile_trees.insert((local_terrain, local_view), local_tile_tree);
-        });
-
-        let sun_position = DVec3::new(-1.0, 1.0, -1.0) * RADIUS * 10.0;
-        let (sun_cell, sun_translation) = frame.translation_to_grid(sun_position);
-
-        root.spawn_spatial((
-            Mesh3d(meshes.add(Sphere::new(RADIUS as f32 * 2.0).mesh().build())),
-            MeshMaterial3d::<StandardMaterial>::default(),
-            Transform::from_translation(sun_translation),
-            sun_cell,
-        ));
-
-        root.spawn_spatial((
-            Mesh3d(meshes.add(Cuboid::from_length(RADIUS as f32 * 0.1))),
-            MeshMaterial3d::<StandardMaterial>::default(),
-        ));
+        camera = root
+            .spawn_spatial((DebugCameraBundle::new(
+                -DVec3::X * RADIUS * 3.0,
+                RADIUS,
+                &frame,
+            ),))
+            .id();
     });
+
+    let global_view = commands
+        .spawn((
+            Camera {
+                order: 0,
+                ..default()
+            },
+            Camera3d {
+                depth_texture_usages: (TextureUsages::RENDER_ATTACHMENT
+                    | TextureUsages::TEXTURE_BINDING)
+                    .into(),
+                ..default()
+            },
+        ))
+        .id();
+
+    let local_view = commands
+        .spawn((
+            Camera {
+                order: 1,
+                ..default()
+            },
+            Camera3d {
+                depth_load_op: Camera3dDepthLoadOp::Load,
+                depth_texture_usages: (TextureUsages::RENDER_ATTACHMENT
+                    | TextureUsages::TEXTURE_BINDING)
+                    .into(),
+                ..default()
+            },
+        ))
+        .id();
+
+    commands
+        .entity(camera)
+        .insert(OrbitalCameraController::new([
+            (global_terrain, global_view),
+            (local_terrain, local_view),
+        ]))
+        .add_children(&[local_view, global_view]);
+
+    tile_trees.insert((global_terrain, global_view), global_tile_tree);
+    tile_trees.insert((local_terrain, local_view), local_tile_tree);
+    picking_readbacks.insert((global_terrain, global_view), PickingReadback::default());
+    picking_readbacks.insert((local_terrain, local_view), PickingReadback::default());
 }
