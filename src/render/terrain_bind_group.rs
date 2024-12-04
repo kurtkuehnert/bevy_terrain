@@ -174,11 +174,12 @@ impl TerrainData {
 
             terrain_data.insert(
                 terrain,
-                TerrainData::new(&device, &fallback_image, tile_atlas.into(), gpu_tile_atlas),
+                TerrainData::new(&device, &fallback_image, tile_atlas, gpu_tile_atlas),
             );
         }
     }
 
+    #[allow(clippy::type_complexity)]
     pub(crate) fn extract(
         mut terrain_data: ResMut<TerrainComponents<TerrainData>>,
         terrains: Extract<
@@ -194,7 +195,7 @@ impl TerrainData {
                     .unwrap_or(transform.affine()))
                     .into(),
             };
-            let mesh_uniform = MeshUniform::new(&mesh_transforms, None);
+            let mesh_uniform = MeshUniform::new(&mesh_transforms, 0, None);
 
             let terrain_data = terrain_data.get_mut(&terrain).unwrap();
             terrain_data.mesh_buffer.set_value(mesh_uniform);

@@ -12,7 +12,7 @@ use crate::{
 use anyhow::Result;
 use bevy::{
     prelude::*,
-    render::render_resource::*,
+    render::{render_resource::*, view::NoFrustumCulling},
     tasks::{futures_lite::future, AsyncComputeTaskPool, Task},
     utils::{HashMap, HashSet},
 };
@@ -21,6 +21,9 @@ use image::DynamicImage;
 use itertools::Itertools;
 use std::{collections::VecDeque, fs::File, io::BufReader, mem, ops::DerefMut, path::PathBuf};
 use tiff::decoder::{Decoder, DecodingResult};
+
+#[cfg(feature = "high_precision")]
+use crate::big_space::GridCell;
 
 #[derive(Copy, Clone, Debug, Default, ShaderType)]
 pub struct AtlasTile {
@@ -491,6 +494,8 @@ impl TileAtlasState {
     }
 }
 
+// Todo: rename to terrain?
+
 /// A sparse storage of all terrain attachments, which streams data in and out of memory
 /// depending on the decisions of the corresponding [`TileTree`]s.
 ///
@@ -504,6 +509,8 @@ impl TileAtlasState {
 /// The [`u32`] can be used for accessing the attached data in systems by the CPU
 /// and in shaders by the GPU.
 #[derive(Component)]
+#[require(Transform, Visibility, NoFrustumCulling)]
+#[cfg_attr(feature = "high_precision", require(GridCell))]
 pub struct TileAtlas {
     pub(crate) attachments: Vec<AtlasAttachment>,
     // stores the attachment data

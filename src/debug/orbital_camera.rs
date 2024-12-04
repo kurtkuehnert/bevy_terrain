@@ -1,11 +1,12 @@
 use crate::big_space::{GridTransform, GridTransformItem, ReferenceFrames};
 use crate::picking::PickingReadback;
-use bevy::color::palettes::basic;
-use bevy::input::mouse::MouseMotion;
-use bevy::input::ButtonInput;
-use bevy::math::{DQuat, DVec2, DVec3, Mat4, Vec2};
-use bevy::prelude::*;
-use bevy::window::{CursorGrabMode, PrimaryWindow};
+use bevy::{
+    color::palettes::basic,
+    input::{mouse::AccumulatedMouseMotion, ButtonInput},
+    math::{DQuat, DVec2, DVec3, Mat4, Vec2},
+    prelude::*,
+    window::{CursorGrabMode, PrimaryWindow},
+};
 
 fn ray_sphere_intersection(
     ray_origin: DVec3,
@@ -62,7 +63,7 @@ pub struct OrbitalCameraController {
     pan_data: Option<PanData>,
     zoom_data: Option<ZoomData>,
     rotation_data: Option<RotationData>,
-    time_to_reach_target: f32,
+    time_to_reach_target: f64,
 }
 
 impl Default for OrbitalCameraController {
@@ -88,7 +89,7 @@ pub fn orbital_camera_controller(
     time: Res<Time>,
     keyboard: Res<ButtonInput<KeyCode>>,
     mouse_buttons: Res<ButtonInput<MouseButton>>,
-    mut mouse_move: EventReader<MouseMotion>,
+    mouse_move: Res<AccumulatedMouseMotion>,
     // mut mouse_scroll: EventReader<MouseWheel>,
     mut camera: Query<(Entity, GridTransform, &mut OrbitalCameraController)>,
     readback: Res<PickingReadback>,
@@ -98,7 +99,7 @@ pub fn orbital_camera_controller(
         camera,
         GridTransformItem {
             mut transform,
-            mut cell,
+            cell,
         },
         mut controller,
     ) = camera.single_mut();
@@ -124,7 +125,7 @@ pub fn orbital_camera_controller(
         .then(|| readback_data.world_position.as_dvec3());
     let cursor_coords = readback_data.cursor_coords;
 
-    let smoothing = (time.delta_seconds() / controller.time_to_reach_target).min(1.0);
+    let smoothing = (time.delta_secs_f64() / controller.time_to_reach_target).min(1.0);
 
     let mut window = window.single_mut();
 
@@ -141,8 +142,9 @@ pub fn orbital_camera_controller(
             });
         }
 
-        let pan_coords = &mut controller.pan_data.as_mut().unwrap().pan_coords;
-        *pan_coords = pan_coords.lerp(cursor_coords, smoothing);
+        if let Some(data) = &mut controller.pan_data {
+            data.pan_coords = data.pan_coords.lerp(cursor_coords, smoothing as f32);
+        }
     } else {
         controller.pan_data = None;
     }
@@ -162,15 +164,9 @@ pub fn orbital_camera_controller(
 
         let rotation_speed = 0.01;
 
-        if let Some(rotation_data) = controller.rotation_data.as_mut() {
-            rotation_data.target_rotation += mouse_move
-                .read()
-                .map(|event| -event.delta.as_dvec2() * rotation_speed)
-                .sum::<DVec2>();
-
-            rotation_data.rotation = rotation_data
-                .rotation
-                .lerp(rotation_data.target_rotation, smoothing as f64);
+        if let Some(data) = controller.rotation_data.as_mut() {
+            data.target_rotation -= mouse_move.delta.as_dvec2() * rotation_speed;
+            data.rotation = data.rotation.lerp(data.target_rotation, smoothing);
         }
     } else {
         controller.rotation_data = None;
@@ -194,13 +190,9 @@ pub fn orbital_camera_controller(
 
         let zoom_speed = 0.01;
 
-        if let Some(zoom_data) = controller.zoom_data.as_mut() {
-            zoom_data.target_zoom += mouse_move
-                .read()
-                .map(|event| -event.delta.element_sum() as f64 * zoom_speed)
-                .sum::<f64>();
-
-            zoom_data.zoom = zoom_data.zoom.lerp(zoom_data.target_zoom, smoothing as f64);
+        if let Some(data) = controller.zoom_data.as_mut() {
+            data.target_zoom -= mouse_move.delta.element_sum() as f64 * zoom_speed;
+            data.zoom = data.zoom.lerp(data.target_zoom, smoothing);
         }
     } else {
         controller.zoom_data = None;
@@ -209,15 +201,15 @@ pub fn orbital_camera_controller(
     // Todo: add support for scroll wheel zoom
 
     if update_cursor_coords {
-        if window.cursor.grab_mode == CursorGrabMode::Locked {
-            window.cursor.grab_mode = CursorGrabMode::None;
+        if window.cursor_options.grab_mode == CursorGrabMode::Locked {
+            window.cursor_options.grab_mode = CursorGrabMode::None;
             let window_size = window.size();
             window.set_cursor_position(Some(controller.cursor_coords * window_size));
         }
 
         controller.cursor_coords = cursor_coords;
     } else {
-        window.cursor.grab_mode = CursorGrabMode::Locked;
+        window.cursor_options.grab_mode = CursorGrabMode::Locked;
     }
 
     let anchor_size = 200.0;
@@ -345,7 +337,6 @@ pub fn orbital_camera_controller(
 
     gizmos.sphere(
         anchor_position.as_vec3(),
-        default(),
         new_camera_position.distance(anchor_position) as f32 / anchor_size,
         basic::GREEN,
     );

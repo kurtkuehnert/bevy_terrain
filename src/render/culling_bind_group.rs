@@ -1,5 +1,7 @@
 use crate::{terrain_data::GpuTileTree, terrain_view::TerrainViewComponents, util::StaticBuffer};
 use bevy::render::primitives::Frustum;
+use bevy::render::sync_world::MainEntity;
+use bevy::utils::HashMap;
 use bevy::{
     prelude::*,
     render::{
@@ -72,11 +74,16 @@ impl CullingBindGroup {
     pub(crate) fn prepare(
         device: Res<RenderDevice>,
         gpu_tile_trees: Res<TerrainViewComponents<GpuTileTree>>,
-        extracted_views: Query<&ExtractedView>,
+        extracted_views: Query<(MainEntity, &ExtractedView)>,
         mut culling_bind_groups: ResMut<TerrainViewComponents<CullingBindGroup>>,
     ) {
+        // Todo: this is a hack
+        let extracted_views = extracted_views
+            .into_iter()
+            .collect::<HashMap<Entity, &ExtractedView>>();
+
         for &(terrain, view) in gpu_tile_trees.keys() {
-            let extracted_view = extracted_views.get(view).unwrap();
+            let extracted_view = *extracted_views.get(&view).unwrap();
 
             culling_bind_groups.insert(
                 (terrain, view),

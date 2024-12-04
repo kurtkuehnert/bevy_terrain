@@ -2,6 +2,7 @@ use bevy::{math::DVec3, prelude::*, reflect::TypePath, render::render_resource::
 use bevy_terrain::debug::OrbitalCameraController;
 use bevy_terrain::picking::PickingPlugin;
 use bevy_terrain::prelude::*;
+use bevy_terrain::render::TerrainMaterial;
 
 const PATH: &str = "/Volumes/ExternalSSD/tiles";
 const RADIUS: f64 = 6371000.0;
@@ -11,13 +12,13 @@ const TEXTURE_SIZE: u32 = 512;
 const LOD_COUNT: u32 = 16;
 
 #[derive(Asset, AsBindGroup, TypePath, Clone)]
-pub struct TerrainMaterial {
+pub struct CustomMaterial {
     #[texture(0, dimension = "1d")]
     #[sampler(1)]
     gradient: Handle<Image>,
 }
 
-impl Material for TerrainMaterial {
+impl Material for CustomMaterial {
     fn fragment_shader() -> ShaderRef {
         "shaders/spherical.wgsl".into()
     }
@@ -28,7 +29,7 @@ fn main() {
         .add_plugins((
             DefaultPlugins.build().disable::<TransformPlugin>(),
             TerrainPlugin,
-            TerrainMaterialPlugin::<TerrainMaterial>::default(),
+            TerrainMaterialPlugin::<CustomMaterial>::default(),
             TerrainDebugPlugin, // enable debug settings and controls
             PickingPlugin,
         ))
@@ -42,7 +43,7 @@ fn setup(
     mut commands: Commands,
     mut images: ResMut<LoadingImages>,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<TerrainMaterial>>,
+    mut materials: ResMut<Assets<CustomMaterial>>,
     mut tile_trees: ResMut<TerrainViewComponents<TileTree>>,
     asset_server: Res<AssetServer>,
 ) {
@@ -124,19 +125,19 @@ fn setup(
 
         let global_terrain = root
             .spawn_spatial((
-                TerrainBundle::new(global_tile_atlas, &frame),
-                materials.add(TerrainMaterial {
+                setup_terrain(global_tile_atlas, &frame),
+                TerrainMaterial(materials.add(CustomMaterial {
                     gradient: gradient.clone(),
-                }),
+                })),
             ))
             .id();
 
         let local_terrain = root
             .spawn_spatial((
-                TerrainBundle::new(local_tile_atlas, &frame),
-                materials.add(TerrainMaterial {
+                setup_terrain(local_tile_atlas, &frame),
+                TerrainMaterial(materials.add(CustomMaterial {
                     gradient: gradient.clone(),
-                }),
+                })),
             ))
             .id();
 
@@ -146,35 +147,33 @@ fn setup(
         ))
         .with_children(|builder| {
             let global_view = builder
-                .spawn((Camera3dBundle {
-                    camera: Camera {
+                .spawn((
+                    Camera {
                         order: 0,
                         ..default()
                     },
-                    camera_3d: Camera3d {
+                    Camera3d {
                         depth_texture_usages: (TextureUsages::RENDER_ATTACHMENT
                             | TextureUsages::TEXTURE_BINDING)
                             .into(),
                         ..default()
                     },
-                    ..default()
-                },))
+                ))
                 .id();
 
             let local_view = builder
-                .spawn((Camera3dBundle {
-                    camera: Camera {
+                .spawn((
+                    Camera {
                         order: 1,
                         ..default()
                     },
-                    camera_3d: Camera3d {
+                    Camera3d {
                         depth_texture_usages: (TextureUsages::RENDER_ATTACHMENT
                             | TextureUsages::TEXTURE_BINDING)
                             .into(),
                         ..default()
                     },
-                    ..default()
-                },))
+                ))
                 .id();
 
             tile_trees.insert((global_terrain, global_view), global_tile_tree);
@@ -185,17 +184,15 @@ fn setup(
         let (sun_cell, sun_translation) = frame.translation_to_grid(sun_position);
 
         root.spawn_spatial((
-            PbrBundle {
-                mesh: meshes.add(Sphere::new(RADIUS as f32 * 2.0).mesh().build()),
-                transform: Transform::from_translation(sun_translation),
-                ..default()
-            },
+            Mesh3d(meshes.add(Sphere::new(RADIUS as f32 * 2.0).mesh().build())),
+            MeshMaterial3d::<StandardMaterial>::default(),
+            Transform::from_translation(sun_translation),
             sun_cell,
         ));
 
-        root.spawn_spatial(PbrBundle {
-            mesh: meshes.add(Cuboid::from_length(RADIUS as f32 * 0.1)),
-            ..default()
-        });
+        root.spawn_spatial((
+            Mesh3d(meshes.add(Cuboid::from_length(RADIUS as f32 * 0.1))),
+            MeshMaterial3d::<StandardMaterial>::default(),
+        ));
     });
 }

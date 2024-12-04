@@ -5,7 +5,6 @@ use crate::{
     terrain_view::TerrainViewComponents,
 };
 use bevy::{
-    asset::LoadState,
     prelude::*,
     render::{render_resource::*, Extract, RenderApp},
     transform::TransformSystem,
@@ -281,14 +280,13 @@ pub fn update_view_parameter(
 }
 
 pub(crate) fn debug_lighting(mut commands: Commands) {
-    commands.spawn(DirectionalLightBundle {
-        directional_light: DirectionalLight {
+    commands.spawn((
+        DirectionalLight {
             illuminance: 5000.0,
             ..default()
         },
-        transform: Transform::from_xyz(-1.0, 1.0, -3.0).looking_at(Vec3::ZERO, Vec3::Y),
-        ..default()
-    });
+        Transform::from_xyz(-1.0, 1.0, -3.0).looking_at(Vec3::ZERO, Vec3::Y),
+    ));
     commands.insert_resource(AmbientLight {
         brightness: 100.0,
         ..default()
@@ -297,7 +295,7 @@ pub(crate) fn debug_lighting(mut commands: Commands) {
 
 pub fn debug_window(mut window: Query<&mut Window, With<PrimaryWindow>>) {
     let mut window = window.single_mut();
-    window.cursor.visible = true; // false;
+    window.cursor_options.visible = true; // false;
 }
 
 #[derive(Resource, Default)]
@@ -321,7 +319,7 @@ fn finish_loading_images(
     mut images: ResMut<Assets<Image>>,
 ) {
     loading_images.0.retain(|&(id, dimension, format)| {
-        if asset_server.load_state(id) == LoadState::Loaded {
+        if asset_server.load_state(id).is_loaded() {
             let image = images.get_mut(id).unwrap();
             image.texture_descriptor.dimension = dimension;
             image.texture_descriptor.format = format;
