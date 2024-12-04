@@ -20,7 +20,13 @@ pub enum TerrainKind {
 }
 
 // Todo: keep in sync with terrain transform, make this authoritative?
+// For this to work, we have to sync the tile_atlas.model with the transform and cell of the terrain
+// either we make one authoritative, or we can sync changes both ways
+// Todo: make Terrain Model a component?
 
+/// The components of a terrain.
+///
+/// Does not include loader(s) and a material.
 #[derive(Clone)]
 pub struct TerrainModel {
     pub(crate) kind: TerrainKind,

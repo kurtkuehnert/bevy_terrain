@@ -4,6 +4,7 @@ use crate::{
     terrain_view::TerrainViewComponents,
     util::StaticBuffer,
 };
+use bevy::render::sync_world::MainEntity;
 use bevy::{
     ecs::{
         query::ROQueryItem,
@@ -268,7 +269,7 @@ pub struct SetTerrainViewBindGroup<const I: usize>;
 
 impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetTerrainViewBindGroup<I> {
     type Param = SRes<TerrainViewComponents<GpuTerrainView>>;
-    type ViewQuery = Entity;
+    type ViewQuery = MainEntity;
     type ItemQuery = ();
 
     #[inline]
@@ -281,7 +282,7 @@ impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetTerrainViewBindGroup<
     ) -> RenderCommandResult {
         let data = gpu_terrain_views
             .into_inner()
-            .get(&(item.entity(), view))
+            .get(&(item.main_entity().id(), view))
             .unwrap();
 
         pass.set_bind_group(I, &data.terrain_view_bind_group, &[]);
@@ -293,7 +294,7 @@ pub(crate) struct DrawTerrainCommand;
 
 impl<P: PhaseItem> RenderCommand<P> for DrawTerrainCommand {
     type Param = SRes<TerrainViewComponents<GpuTerrainView>>;
-    type ViewQuery = Entity;
+    type ViewQuery = MainEntity;
     type ItemQuery = ();
 
     #[inline]
@@ -306,7 +307,7 @@ impl<P: PhaseItem> RenderCommand<P> for DrawTerrainCommand {
     ) -> RenderCommandResult {
         let data = gpu_terrain_views
             .into_inner()
-            .get(&(item.entity(), view))
+            .get(&(item.main_entity().id(), view))
             .unwrap();
 
         pass.draw_indirect(&data.indirect_buffer, 0);

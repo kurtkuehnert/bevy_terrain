@@ -7,7 +7,7 @@ use crate::{
     math::TerrainModel,
     terrain_data::{AttachmentConfig, TileAtlas},
 };
-use bevy::{ecs::entity::EntityHashMap, prelude::*, render::view::NoFrustumCulling};
+use bevy::{ecs::entity::EntityHashMap, prelude::*};
 
 /// Resource that stores components that are associated to a terrain entity.
 /// This is used to persist components in the render world.
@@ -55,44 +55,19 @@ impl TerrainConfig {
     }
 }
 
-/// The components of a terrain.
-///
-/// Does not include loader(s) and a material.
-#[derive(Bundle)]
-pub struct TerrainBundle {
-    pub tile_atlas: TileAtlas,
-    #[cfg(feature = "high_precision")]
-    pub cell: GridCell,
-    pub transform: Transform,
-    pub global_transform: GlobalTransform,
-    pub visibility_bundle: VisibilityBundle,
-    pub no_frustum_culling: NoFrustumCulling,
+#[cfg(feature = "high_precision")]
+pub fn setup_terrain(
+    tile_atlas: TileAtlas,
+    frame: &ReferenceFrame,
+) -> (TileAtlas, Transform, GridCell) {
+    let GridTransformOwned { transform, cell } = tile_atlas.model.grid_transform(frame);
+
+    (tile_atlas, transform, cell)
 }
 
-impl TerrainBundle {
-    /// Creates a new terrain bundle from the config.
+#[cfg(not(feature = "high_precision"))]
+pub fn setup_terrain(tile_atlas: TileAtlas) -> (TileAtlas, Transform) {
+    let transform = tile_atlas.model.transform();
 
-    pub fn new(
-        tile_atlas: TileAtlas,
-        #[cfg(feature = "high_precision")] frame: &ReferenceFrame,
-    ) -> Self {
-        #[cfg(feature = "high_precision")]
-        let GridTransformOwned { transform, cell } = tile_atlas.model.grid_transform(frame);
-        #[cfg(not(feature = "high_precision"))]
-        let transform = tile_atlas.model.transform();
-
-        Self {
-            tile_atlas,
-            transform,
-            #[cfg(feature = "high_precision")]
-            cell,
-            global_transform: default(),
-            visibility_bundle: VisibilityBundle {
-                visibility: Visibility::Visible,
-                inherited_visibility: default(),
-                view_visibility: default(),
-            },
-            no_frustum_culling: NoFrustumCulling,
-        }
-    }
+    (tile_atlas, transform)
 }

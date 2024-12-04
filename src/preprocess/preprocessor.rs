@@ -3,7 +3,8 @@ use crate::{
     terrain_data::{AtlasTile, AtlasTileAttachment, AttachmentFormat, TileAtlas},
     util::CollectArray,
 };
-use bevy::{prelude::*, render::texture::ImageSampler};
+use bevy::image::ImageSampler;
+use bevy::prelude::*;
 use itertools::{iproduct, Itertools};
 use std::{
     collections::VecDeque,

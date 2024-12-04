@@ -10,6 +10,8 @@ use crate::{
     terrain_data::GpuTileAtlas,
     terrain_view::TerrainViewComponents,
 };
+use bevy::render::sync_world::MainEntity;
+use bevy::render::Extract;
 use bevy::{
     core_pipeline::core_3d::{Opaque3d, Opaque3dBinKey},
     pbr::{
@@ -18,7 +20,6 @@ use bevy::{
     },
     prelude::*,
     render::{
-        extract_instances::ExtractInstancesPlugin,
         render_asset::{prepare_assets, RenderAssetPlugin, RenderAssets},
         render_phase::{
             AddRenderCommand, BinnedRenderPhaseType, DrawFunctions, SetItemPipeline,
@@ -26,11 +27,47 @@ use bevy::{
         },
         render_resource::*,
         renderer::RenderDevice,
-        texture::{BevyDefault, GpuImage},
+        texture::GpuImage,
         Render, RenderApp, RenderSet,
     },
 };
+use derive_more::derive::From;
 use std::{hash::Hash, marker::PhantomData};
+
+#[derive(Component, Clone, Debug, Deref, DerefMut, Reflect, PartialEq, Eq, From)]
+#[reflect(Component, Default)]
+pub struct TerrainMaterial<M: Material>(pub Handle<M>);
+
+impl<M: Material> Default for TerrainMaterial<M> {
+    fn default() -> Self {
+        Self(Handle::default())
+    }
+}
+
+impl<M: Material> From<TerrainMaterial<M>> for AssetId<M> {
+    fn from(material: TerrainMaterial<M>) -> Self {
+        material.id()
+    }
+}
+
+impl<M: Material> From<&TerrainMaterial<M>> for AssetId<M> {
+    fn from(material: &TerrainMaterial<M>) -> Self {
+        material.id()
+    }
+}
+
+fn extract_terrain_materials<M: Material>(
+    mut material_instances: ResMut<RenderMaterialInstances<M>>,
+    query: Extract<Query<(Entity, &ViewVisibility, &TerrainMaterial<M>)>>,
+) {
+    material_instances.clear();
+
+    for (entity, view_visibility, material) in &query {
+        if view_visibility.get() {
+            material_instances.insert(entity.into(), material.id());
+        }
+    }
+}
 
 pub struct TerrainPipelineKey<M: Material> {
     pub flags: TerrainPipelineFlags,
@@ -357,6 +394,7 @@ where
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },
+            zero_initialize_workgroup_memory: false,
         }
     }
 }
@@ -376,7 +414,6 @@ pub(crate) type DrawTerrain<M> = (
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn queue_terrain<M: Material>(
     draw_functions: Res<DrawFunctions<Opaque3d>>,
-    msaa: Res<Msaa>,
     debug: Option<Res<DebugTerrain>>,
     render_materials: Res<RenderAssets<PreparedMaterial<M>>>,
     pipeline_cache: Res<PipelineCache>,
@@ -386,26 +423,26 @@ pub(crate) fn queue_terrain<M: Material>(
     gpu_tile_atlases: Res<TerrainComponents<GpuTileAtlas>>,
     gpu_tile_trees: Res<TerrainViewComponents<GpuTileTree>>,
     render_material_instances: Res<RenderMaterialInstances<M>>,
-    mut views: Query<Entity>,
+    mut views: Query<(Entity, MainEntity, &Msaa)>,
 ) where
     M::Data: PartialEq + Eq + Hash + Clone,
 {
     let draw_function = draw_functions.read().get_id::<DrawTerrain<M>>().unwrap();
 
-    for view in &mut views {
-        let Some(phase) = opaque_render_phases.get_mut(&view) else {
+    for (render_view, view, msaa) in &mut views {
+        let Some(phase) = opaque_render_phases.get_mut(&render_view) else {
             continue;
         };
 
         for (&terrain, &material_id) in render_material_instances.iter() {
-            if !gpu_tile_trees.contains_key(&(terrain, view)) {
+            if !gpu_tile_trees.contains_key(&(terrain.id(), view)) {
                 continue;
             }
 
             if let Some(material) = render_materials.get(material_id) {
                 let mut flags = TerrainPipelineFlags::from_msaa_samples(msaa.samples());
 
-                let gpu_tile_atlas = gpu_tile_atlases.get(&terrain).unwrap();
+                let gpu_tile_atlas = gpu_tile_atlases.get(&terrain.id()).unwrap();
                 if gpu_tile_atlas.is_spherical {
                     flags |= TerrainPipelineFlags::SPHERICAL;
                 }
@@ -434,7 +471,7 @@ pub(crate) fn queue_terrain<M: Material>(
                         material_bind_group_id: None,
                         lightmap_image: None,
                     },
-                    terrain,
+                    (terrain.id(), terrain), // Todo: this is not correct terrain.id() is not a render world entity
                     BinnedRenderPhaseType::NonMesh,
                 );
             }
@@ -458,13 +495,14 @@ where
     M::Data: PartialEq + Eq + Hash + Clone,
 {
     fn build(&self, app: &mut App) {
-        app.init_asset::<M>().add_plugins((
-            ExtractInstancesPlugin::<AssetId<M>>::extract_visible(),
-            RenderAssetPlugin::<PreparedMaterial<M>, GpuImage>::default(),
-        ));
+        app.init_asset::<M>()
+            .register_type::<TerrainMaterial<M>>()
+            .add_plugins(RenderAssetPlugin::<PreparedMaterial<M>, GpuImage>::default());
 
         app.sub_app_mut(RenderApp)
+            .init_resource::<RenderMaterialInstances<M>>()
             .add_render_command::<Opaque3d, DrawTerrain<M>>()
+            .add_systems(ExtractSchedule, extract_terrain_materials::<M>)
             .add_systems(
                 Render,
                 queue_terrain::<M>

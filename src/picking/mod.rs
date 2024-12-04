@@ -9,7 +9,7 @@ use bevy::{
             self, NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel, ViewNodeRunner,
         },
         render_resource::{
-            binding_types::{sampler, storage_buffer, texture_depth_2d},
+            binding_types::{sampler, storage_buffer},
             *,
         },
         renderer::{RenderContext, RenderDevice, RenderQueue},
@@ -85,6 +85,7 @@ impl FromWorld for PickingPipeline {
             shader: world.load_asset(PICKING_SHADER),
             shader_defs: vec![],
             entry_point: "pick".into(),
+            zero_initialize_workgroup_memory: false,
         });
 
         Self { picking_layout, id }

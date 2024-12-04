@@ -153,7 +153,7 @@ pub fn camera_controller(
 
     translation_direction = transform.rotation.as_dquat() * translation_direction;
 
-    let dt = time.delta_seconds_f64();
+    let dt = time.delta_secs_f64();
     let lerp_translation = 1.0 - controller.translational_smoothness.clamp(0.0, 0.999);
     let lerp_rotation = 1.0 - controller.rotational_smoothness.clamp(0.0, 0.999);
 

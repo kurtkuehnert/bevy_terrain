@@ -15,7 +15,7 @@ repository = "https://github.com/kurtkuehnert/bevy_terrain"
 high_precision = ["dep:big_space"]
 
 [dependencies]
-bevy = "0.14.0" #{ git="https://github.com/bevyengine/bevy/", branch="main" }
+bevy = "0.15" #{ git="https://github.com/bevyengine/bevy/", branch="main" }
 ndarray = "0.15"
 itertools = "0.12"
 image = "0.25"
@@ -26,8 +26,9 @@ anyhow = "1.0"
 serde = "1.0.210"
 ron = "0.8.1"
 async-channel = "2.1"
-big_space = { version = "0.7", optional = true }
-wgpu = "0.20"
+big_space = { git = "https://github.com/Jondolf/big_space/", branch = "bevy-0.15", optional = true }
+wgpu = "23.0"
+derive_more = "1.0.0"
 
 [[example]]
 name = "preprocess_planar"

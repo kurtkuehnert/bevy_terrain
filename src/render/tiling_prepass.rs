@@ -17,6 +17,7 @@ use bevy::{
         renderer::{RenderContext, RenderDevice, RenderQueue},
     },
 };
+use std::ops::Deref;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
 pub struct TilingPrepassLabel;
@@ -199,6 +200,7 @@ impl SpecializedComputePipeline for TilingPrepassPipelines {
             shader,
             shader_defs,
             entry_point,
+            zero_initialize_workgroup_memory: false,
         }
     }
 }
@@ -244,7 +246,7 @@ impl render_graph::Node for TilingPrepassNode {
                 let terrain_data = terrain_data.get(&terrain).unwrap();
                 let gpu_terrain_view = gpu_terrain_views.get(&(terrain, view)).unwrap();
 
-                compute_pass.set_bind_group(0, culling_bind_group, &[]);
+                compute_pass.set_bind_group(0, culling_bind_group.deref(), &[]);
                 compute_pass.set_bind_group(1, &terrain_data.terrain_bind_group, &[]);
                 compute_pass.set_bind_group(2, &gpu_terrain_view.refine_tiles_bind_group, &[]);
                 compute_pass.set_bind_group(3, &gpu_terrain_view.prepare_indirect_bind_group, &[]);
