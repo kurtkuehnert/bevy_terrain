@@ -43,7 +43,6 @@ fn setup(
     mut images: ResMut<LoadingImages>,
     mut materials: ResMut<Assets<CustomMaterial>>,
     mut tile_trees: ResMut<TerrainViewComponents<TileTree>>,
-    mut picking_data: ResMut<TerrainViewComponents<PickingData>>,
     asset_server: Res<AssetServer>,
 ) {
     let gradient = asset_server.load("textures/gradient.png");
@@ -57,14 +56,6 @@ fn setup(
     let local_config = TerrainConfig {
         lod_count: LOD_COUNT,
         model: TerrainModel::ellipsoid(DVec3::ZERO, MAJOR_AXES, MINOR_AXES),
-        // model: TerrainModel::ellipsoid(
-        //     DVec3::ZERO,
-        //     6378137.0,
-        //     6378137.0 * 0.5,
-        //     MIN_HEIGHT,
-        //     MAX_HEIGHT,
-        // ),
-        // model: TerrainModel::sphere(DVec3::ZERO, RADIUS),
         path: PATH.to_string(),
         ..default()
     }
@@ -140,18 +131,13 @@ fn setup(
         let view = root
             .spawn_spatial((
                 DebugCameraBundle::new(-DVec3::X * RADIUS * 3.0, RADIUS, &frame),
-                Camera3d {
-                    depth_texture_usages: (TextureUsages::RENDER_ATTACHMENT
-                        | TextureUsages::TEXTURE_BINDING)
-                        .into(),
-                    ..default()
-                },
+                Camera3d::default(),
+                PickingData::default(),
+                OrbitalCameraController::default(),
             ))
             .id();
 
         tile_trees.insert((global_terrain, view), global_tile_tree);
         tile_trees.insert((local_terrain, view), local_tile_tree);
-
-        picking_data.insert((global_terrain, view), PickingData::default());
     });
 }

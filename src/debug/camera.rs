@@ -5,6 +5,7 @@ use crate::big_space::{
 
 use bevy::{input::mouse::MouseMotion, math::DVec3, prelude::*};
 
+// Todo: remove this bundle
 #[derive(Bundle)]
 pub struct DebugCameraBundle {
     pub transform: Transform,
