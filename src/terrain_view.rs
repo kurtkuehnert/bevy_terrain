@@ -42,6 +42,7 @@ pub struct TerrainViewConfig {
     pub load_tolerance: f64,
     pub precision_threshold_distance: f64,
     pub view_lod: u32,
+    pub order: u32,
 }
 
 impl Default for TerrainViewConfig {
@@ -59,6 +60,7 @@ impl Default for TerrainViewConfig {
             load_tolerance: 0.2,
             precision_threshold_distance: 0.001,
             view_lod: 10,
+            order: 0,
         }
     }
 }

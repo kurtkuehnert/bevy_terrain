@@ -136,6 +136,7 @@ pub struct GpuTerrainView {
     terrain_view_buffer: StaticBuffer<TerrainView>,
     approximate_height_buffer: StaticBuffer<f32>,
     approximate_height_readback: Arc<Mutex<f32>>,
+    pub(crate) order: u32,
     pub(crate) indirect_buffer: StaticBuffer<Indirect>,
     pub(crate) prepare_indirect_bind_group: BindGroup,
     pub(crate) refine_tiles_bind_group: BindGroup,
@@ -200,6 +201,7 @@ impl GpuTerrainView {
             prepare_indirect_bind_group,
             refine_tiles_bind_group,
             terrain_view_bind_group,
+            order: tile_tree.order,
         }
     }
 
@@ -305,12 +307,13 @@ impl<P: PhaseItem> RenderCommand<P> for DrawTerrainCommand {
         gpu_terrain_views: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let data = gpu_terrain_views
+        let gpu_terrain_view = gpu_terrain_views
             .into_inner()
             .get(&(item.main_entity().id(), view))
             .unwrap();
 
-        pass.draw_indirect(&data.indirect_buffer, 0);
+        pass.set_stencil_reference(gpu_terrain_view.order);
+        pass.draw_indirect(&gpu_terrain_view.indirect_buffer, 0);
 
         RenderCommandResult::Success
     }

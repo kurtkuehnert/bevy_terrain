@@ -1,7 +1,9 @@
 use crate::big_space::{GridCell, ReferenceFrames};
 use crate::prelude::TerrainViewComponents;
+use crate::render::terrain_pass::TerrainViewDepthTexture;
 use crate::{shaders::PICKING_SHADER, util::StaticBuffer};
 use bevy::color::palettes::basic;
+use bevy::render::render_resource::binding_types::texture_2d_multisampled;
 use bevy::render::sync_world::MainEntity;
 use bevy::render::Extract;
 use bevy::{
@@ -17,7 +19,7 @@ use bevy::{
             *,
         },
         renderer::{RenderContext, RenderDevice, RenderQueue},
-        view::{ExtractedView, ViewDepthTexture},
+        view::ExtractedView,
         RenderApp,
     },
     window::PrimaryWindow,
@@ -90,6 +92,7 @@ pub struct PickingResult {
 pub struct GpuPickingData {
     pub cursor_coords: Vec2,
     pub depth: f32,
+    pub stencil: u32,
 }
 
 #[derive(Resource)]
@@ -110,6 +113,7 @@ impl FromWorld for PickingPipeline {
                 (
                     storage_buffer::<GpuPickingData>(false),
                     texture_depth_2d_multisampled(),
+                    texture_2d_multisampled(TextureSampleType::Uint),
                 ),
             ),
         );
@@ -138,7 +142,7 @@ impl render_graph::ViewNode for PickingNode {
     type ViewQuery = (
         MainEntity,
         &'static ExtractedView,
-        &'static ViewDepthTexture,
+        &'static TerrainViewDepthTexture,
     );
 
     fn run(
@@ -172,6 +176,7 @@ impl render_graph::ViewNode for PickingNode {
             let mut gpu_picking_data = GpuPickingData {
                 cursor_coords: picking_input.cursor_coords,
                 depth: 0.0,
+                stencil: u8::MAX as u32,
             };
             let cell = picking_input.cell;
             let readback = picking_data.readback.clone();
@@ -183,12 +188,20 @@ impl render_graph::ViewNode for PickingNode {
                 BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
             );
 
-            let depth_view = depth.texture.create_view(&Default::default());
+            let depth_view = depth.texture.create_view(&TextureViewDescriptor {
+                aspect: TextureAspect::DepthOnly,
+                ..default()
+            });
+
+            let stencil_view = depth.texture.create_view(&TextureViewDescriptor {
+                aspect: TextureAspect::StencilOnly,
+                ..default()
+            });
 
             let bind_group = device.create_bind_group(
                 None,
                 &picking_pipeline.picking_layout,
-                &BindGroupEntries::sequential((&picking_buffer, &depth_view)),
+                &BindGroupEntries::sequential((&picking_buffer, &depth_view, &stencil_view)),
             );
 
             let mut command_encoder =

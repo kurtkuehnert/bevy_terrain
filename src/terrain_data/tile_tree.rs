@@ -118,6 +118,7 @@ pub struct TileTree {
     pub(crate) approximate_height: f32,
     pub(crate) approximate_height_readback: Arc<Mutex<f32>>,
     pub(crate) height_scale: f32,
+    pub(crate) order: u32,
 }
 
 impl TileTree {
@@ -163,6 +164,7 @@ impl TileTree {
             approximate_height: 0.0,
             approximate_height_readback: Arc::new(Mutex::new(0.0)),
             height_scale: 1.0,
+            order: view_config.order,
         }
     }
 

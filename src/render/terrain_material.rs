@@ -4,7 +4,6 @@ use crate::render::terrain_view_bind_group::{
 };
 use crate::{
     debug::DebugTerrain,
-    prelude::GpuTileTree,
     render::terrain_pass::TerrainItem,
     shaders::{DEFAULT_FRAGMENT_SHADER, DEFAULT_VERTEX_SHADER},
     terrain::TerrainComponents,
@@ -12,6 +11,7 @@ use crate::{
     terrain_view::TerrainViewComponents,
 };
 
+use crate::render::GpuTerrainView;
 use bevy::render::render_phase::{PhaseItemExtraIndex, ViewSortedRenderPhases};
 use bevy::render::sync_world::MainEntity;
 use bevy::render::Extract;
@@ -373,20 +373,21 @@ where
                 })],
             }),
             depth_stencil: Some(DepthStencilState {
-                format: TextureFormat::Depth32Float,
+                format: TextureFormat::Depth24PlusStencil8,
                 depth_write_enabled: true,
                 depth_compare: CompareFunction::Greater,
                 stencil: StencilState {
-                    front: StencilFaceState::IGNORE,
+                    front: StencilFaceState {
+                        compare: CompareFunction::LessEqual,
+                        fail_op: StencilOperation::Keep,
+                        depth_fail_op: StencilOperation::Keep,
+                        pass_op: StencilOperation::Replace,
+                    },
                     back: StencilFaceState::IGNORE,
-                    read_mask: 0,
-                    write_mask: 0,
+                    read_mask: !0,
+                    write_mask: !0,
                 },
-                bias: DepthBiasState {
-                    constant: 0,
-                    slope_scale: 0.0,
-                    clamp: 0.0,
-                },
+                bias: DepthBiasState::default(),
             }),
             multisample: MultisampleState {
                 count: key.flags.msaa_samples(),
@@ -420,7 +421,7 @@ pub(crate) fn queue_terrain<M: Material>(
     mut pipelines: ResMut<SpecializedRenderPipelines<TerrainRenderPipeline<M>>>,
     mut terrain_phases: ResMut<ViewSortedRenderPhases<TerrainItem>>,
     gpu_tile_atlases: Res<TerrainComponents<GpuTileAtlas>>,
-    gpu_tile_trees: Res<TerrainViewComponents<GpuTileTree>>,
+    gpu_terrain_views: Res<TerrainViewComponents<GpuTerrainView>>,
     render_material_instances: Res<RenderMaterialInstances<M>>,
     mut views: Query<(Entity, MainEntity, &Msaa)>,
 ) where
@@ -434,43 +435,45 @@ pub(crate) fn queue_terrain<M: Material>(
         };
 
         for (&terrain, &material_id) in render_material_instances.iter() {
-            if !gpu_tile_trees.contains_key(&(terrain.id(), view)) {
+            let Some(gpu_terrain_view) = gpu_terrain_views.get(&(terrain.id(), view)) else {
                 continue;
+            };
+
+            let Some(material) = render_materials.get(material_id) else {
+                continue;
+            };
+
+            let mut flags = TerrainPipelineFlags::from_msaa_samples(msaa.samples());
+
+            let gpu_tile_atlas = gpu_tile_atlases.get(&terrain.id()).unwrap();
+            if gpu_tile_atlas.is_spherical {
+                flags |= TerrainPipelineFlags::SPHERICAL;
             }
 
-            if let Some(material) = render_materials.get(material_id) {
-                let mut flags = TerrainPipelineFlags::from_msaa_samples(msaa.samples());
-
-                let gpu_tile_atlas = gpu_tile_atlases.get(&terrain.id()).unwrap();
-                if gpu_tile_atlas.is_spherical {
-                    flags |= TerrainPipelineFlags::SPHERICAL;
-                }
-
-                if let Some(debug) = &debug {
-                    flags |= TerrainPipelineFlags::from_debug(debug);
-                } else {
-                    flags |= TerrainPipelineFlags::LIGHTING
-                        | TerrainPipelineFlags::MORPH
-                        | TerrainPipelineFlags::BLEND
-                        | TerrainPipelineFlags::SAMPLE_GRAD;
-                }
-
-                let key = TerrainPipelineKey {
-                    flags,
-                    bind_group_data: material.key.clone(),
-                };
-
-                let pipeline = pipelines.specialize(&pipeline_cache, &terrain_pipeline, key);
-
-                terrain_phase.add(TerrainItem {
-                    representative_entity: (terrain.id(), terrain), // technically wrong
-                    draw_function,
-                    pipeline,
-                    batch_range: 0..1,
-                    extra_index: PhaseItemExtraIndex(0),
-                    priority: 0,
-                })
+            if let Some(debug) = &debug {
+                flags |= TerrainPipelineFlags::from_debug(debug);
+            } else {
+                flags |= TerrainPipelineFlags::LIGHTING
+                    | TerrainPipelineFlags::MORPH
+                    | TerrainPipelineFlags::BLEND
+                    | TerrainPipelineFlags::SAMPLE_GRAD;
             }
+
+            let key = TerrainPipelineKey {
+                flags,
+                bind_group_data: material.key.clone(),
+            };
+
+            let pipeline = pipelines.specialize(&pipeline_cache, &terrain_pipeline, key);
+
+            terrain_phase.add(TerrainItem {
+                representative_entity: (terrain.id(), terrain), // technically wrong
+                draw_function,
+                pipeline,
+                batch_range: 0..1,
+                extra_index: PhaseItemExtraIndex(0),
+                order: gpu_terrain_view.order,
+            })
         }
     }
 }
