@@ -1,3 +1,4 @@
+use crate::render::terrain_pass::prepare_terrain_depth_textures;
 use crate::{
     render::{
         culling_bind_group::CullingBindGroup,
@@ -85,6 +86,7 @@ impl Plugin for TerrainPlugin {
                         CullingBindGroup::prepare,
                     )
                         .in_set(RenderSet::Prepare),
+                    prepare_terrain_depth_textures.in_set(RenderSet::PrepareResources),
                     queue_tiling_prepass.in_set(RenderSet::Queue),
                     GpuTileAtlas::cleanup
                         .before(World::clear_entities)
@@ -101,7 +103,7 @@ impl Plugin for TerrainPlugin {
             .add_render_graph_node::<ViewNodeRunner<TerrainPassNode>>(Core3d, TerrainPass)
             .add_render_graph_edges(
                 Core3d,
-                (Node3d::MainOpaquePass, TerrainPass, Node3d::EndMainPass),
+                (Node3d::StartMainPass, TerrainPass, Node3d::MainOpaquePass),
             );
 
         let mut render_graph = app

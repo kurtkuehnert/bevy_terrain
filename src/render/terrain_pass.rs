@@ -1,3 +1,9 @@
+use bevy::core_pipeline::core_3d::Camera3dDepthLoadOp;
+use bevy::render::render_resource::{
+    Extent3d, Texture, TextureDimension, TextureFormat, TextureView,
+};
+use bevy::render::renderer::RenderDevice;
+use bevy::render::texture::{CachedTexture, DepthAttachment, TextureCache};
 use bevy::{
     ecs::{entity::EntityHashSet, query::QueryItem},
     prelude::*,
@@ -11,12 +17,15 @@ use bevy::{
         render_resource::CachedRenderPipelineId,
         renderer::RenderContext,
         sync_world::{MainEntity, RenderEntity},
-        view::{ViewDepthTexture, ViewTarget},
+        view::ViewTarget,
         Extract,
     },
 };
 use std::ops::Range;
-use wgpu::{CommandEncoderDescriptor, RenderPassDescriptor, StoreOp};
+use wgpu::{
+    CommandEncoderDescriptor, LoadOp, Operations, RenderPassDepthStencilAttachment,
+    RenderPassDescriptor, StoreOp, TextureDescriptor, TextureUsages,
+};
 
 // Todo: remove this
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderSubGraph)]
@@ -31,7 +40,7 @@ pub struct TerrainItem {
     pub pipeline: CachedRenderPipelineId,
     pub batch_range: Range<u32>,
     pub extra_index: PhaseItemExtraIndex,
-    pub priority: u8,
+    pub order: u32,
 }
 
 impl PhaseItem for TerrainItem {
@@ -71,10 +80,10 @@ impl PhaseItem for TerrainItem {
 }
 
 impl SortedPhaseItem for TerrainItem {
-    type SortKey = u8;
+    type SortKey = u32;
 
     fn sort_key(&self) -> Self::SortKey {
-        self.priority
+        self.order
     }
 }
 
@@ -103,6 +112,67 @@ pub fn extract_terrain_phases(
     terrain_phases.retain(|entity, _| live_entities.contains(entity));
 }
 
+#[derive(Component)]
+pub struct TerrainViewDepthTexture {
+    pub texture: Texture,
+    attachment: DepthAttachment,
+}
+
+impl TerrainViewDepthTexture {
+    pub fn new(texture: CachedTexture, clear_value: Option<f32>) -> Self {
+        Self {
+            texture: texture.texture,
+            attachment: DepthAttachment::new(texture.default_view, clear_value),
+        }
+    }
+
+    pub fn get_attachment(&self, store: StoreOp) -> RenderPassDepthStencilAttachment {
+        self.attachment.get_attachment(store)
+    }
+
+    pub fn view(&self) -> &TextureView {
+        &self.attachment.view
+    }
+}
+
+pub fn prepare_terrain_depth_textures(
+    mut commands: Commands,
+    mut texture_cache: ResMut<TextureCache>,
+    device: Res<RenderDevice>,
+    views_3d: Query<(Entity, &ExtractedCamera, &Camera3d, &Msaa)>,
+) {
+    for (view, camera, camera_3d, msaa) in &views_3d {
+        let Some(physical_target_size) = camera.physical_target_size else {
+            continue;
+        };
+
+        let descriptor = TextureDescriptor {
+            label: Some("view_depth_texture"),
+            size: Extent3d {
+                depth_or_array_layers: 1,
+                width: physical_target_size.x,
+                height: physical_target_size.y,
+            },
+            mip_level_count: 1,
+            sample_count: msaa.samples(),
+            dimension: TextureDimension::D2,
+            format: TextureFormat::Depth24PlusStencil8,
+            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        };
+
+        let cached_texture = texture_cache.get(&device, descriptor);
+
+        commands.entity(view).insert(TerrainViewDepthTexture::new(
+            cached_texture,
+            match camera_3d.depth_load_op {
+                Camera3dDepthLoadOp::Clear(v) => Some(v),
+                Camera3dDepthLoadOp::Load => None,
+            },
+        ));
+    }
+}
+
 #[derive(Default)]
 pub struct TerrainPassNode;
 impl ViewNode for TerrainPassNode {
@@ -110,7 +180,7 @@ impl ViewNode for TerrainPassNode {
         Entity,
         &'static ExtractedCamera,
         &'static ViewTarget,
-        &'static ViewDepthTexture,
+        &'static TerrainViewDepthTexture,
     );
 
     fn run<'w>(
@@ -134,7 +204,17 @@ impl ViewNode for TerrainPassNode {
         }
 
         let color_attachments = [Some(target.get_color_attachment())];
-        let depth_stencil_attachment = Some(depth.get_attachment(StoreOp::Store));
+        let depth_stencil_attachment = Some(RenderPassDepthStencilAttachment {
+            view: depth.view(),
+            depth_ops: Some(Operations {
+                load: LoadOp::Clear(0.0), // Clear depth to 1.0
+                store: StoreOp::Store,
+            }),
+            stencil_ops: Some(Operations {
+                load: LoadOp::Clear(255), // Initialize stencil to 255 (lowest priority)
+                store: StoreOp::Store,
+            }),
+        });
 
         let view_entity = graph.view_entity();
         render_context.add_command_buffer_generation_task(move |render_device| {
