@@ -27,6 +27,8 @@ use wgpu::{
     RenderPassDescriptor, StoreOp, TextureDescriptor, TextureUsages,
 };
 
+pub(crate) const TERRAIN_DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32FloatStencil8;
+
 // Todo: remove this
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderSubGraph)]
 pub struct TerrainGraph;
@@ -156,7 +158,7 @@ pub fn prepare_terrain_depth_textures(
             mip_level_count: 1,
             sample_count: msaa.samples(),
             dimension: TextureDimension::D2,
-            format: TextureFormat::Depth24PlusStencil8,
+            format: TERRAIN_DEPTH_FORMAT,
             usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         };

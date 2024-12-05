@@ -11,6 +11,7 @@ use crate::{
     terrain_view::TerrainViewComponents,
 };
 
+use crate::render::terrain_pass::TERRAIN_DEPTH_FORMAT;
 use crate::render::GpuTerrainView;
 use bevy::render::render_phase::{PhaseItemExtraIndex, ViewSortedRenderPhases};
 use bevy::render::sync_world::MainEntity;
@@ -373,7 +374,7 @@ where
                 })],
             }),
             depth_stencil: Some(DepthStencilState {
-                format: TextureFormat::Depth24PlusStencil8,
+                format: TERRAIN_DEPTH_FORMAT,
                 depth_write_enabled: true,
                 depth_compare: CompareFunction::Greater,
                 stencil: StencilState {
