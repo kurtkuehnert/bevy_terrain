@@ -1,6 +1,8 @@
-use crate::big_space::{GridTransform, GridTransformItem, ReferenceFrames};
-use crate::picking::PickingReadback;
-use crate::prelude::TerrainViewComponents;
+use crate::{
+    big_space::{GridCell, ReferenceFrames},
+    picking::PickingData,
+    prelude::TerrainViewComponents,
+};
 use bevy::{
     color::palettes::basic,
     input::{mouse::AccumulatedMouseMotion, ButtonInput},
@@ -62,6 +64,7 @@ pub struct OrbitalCameraController {
     picking_priority: Vec<(Entity, Entity)>,
     cursor_coords: Vec2,
     anchor_position: DVec3,
+    anchor_cell: GridCell,
     camera_position: DVec3,
     camera_rotation: DQuat,
     pan_data: Option<PanData>,
@@ -81,6 +84,7 @@ impl OrbitalCameraController {
             time_to_reach_target: 0.1,
             cursor_coords: Vec2::ZERO,
             anchor_position: Default::default(),
+            anchor_cell: Default::default(),
             camera_position: Default::default(),
             camera_rotation: Default::default(),
             picking_priority: picking_priority.into(),
@@ -96,18 +100,20 @@ pub fn orbital_camera_controller(
     keyboard: Res<ButtonInput<KeyCode>>,
     mouse_buttons: Res<ButtonInput<MouseButton>>,
     mouse_move: Res<AccumulatedMouseMotion>,
-    picking_readbacks: Res<TerrainViewComponents<PickingReadback>>,
-    mut camera: Query<(Entity, GridTransform, &mut OrbitalCameraController)>,
+    picking_data: Res<TerrainViewComponents<PickingData>>,
+    mut camera: Query<(
+        Entity,
+        &mut Transform,
+        &mut GridCell,
+        &mut OrbitalCameraController,
+    )>,
     mut window: Query<&mut Window, With<PrimaryWindow>>,
 ) {
-    let (
-        camera,
-        GridTransformItem {
-            mut transform,
-            cell,
-        },
-        mut controller,
-    ) = camera.single_mut();
+    let Ok((camera, mut camera_transform, mut camera_cell, mut controller)) =
+        camera.get_single_mut()
+    else {
+        return;
+    };
 
     keyboard
         .just_pressed(KeyCode::KeyR)
@@ -117,7 +123,15 @@ pub fn orbital_camera_controller(
         return;
     }
 
+    let smoothing = (time.delta_secs_f64() / controller.time_to_reach_target).min(1.0);
     let frame = frames.parent_frame(camera).unwrap();
+    let mut window = window.single_mut();
+
+    let terrain_origin = DVec3::ZERO;
+    let camera_position = frame.grid_position_double(&camera_cell, &camera_transform);
+    let camera_rotation = camera_transform.rotation.as_dquat();
+    let mut new_camera_position = camera_position;
+    let mut new_camera_rotation = camera_rotation;
 
     for (terrain, view) in controller.picking_priority.clone() {
         match controller.controlling_terrain {
@@ -125,20 +139,13 @@ pub fn orbital_camera_controller(
             _ => {}
         };
 
-        let readback_data = &picking_readbacks.get(&(terrain, view)).unwrap().data;
+        let picking_result = &picking_data.get(&(terrain, view)).unwrap().result;
 
-        let terrain_origin = DVec3::ZERO;
-        let camera_rotation = transform.rotation.as_dquat();
-        let camera_position = frame.grid_position_double(&cell, &transform);
-        let cursor_position = readback_data
-            .world_position
-            .is_finite()
-            .then(|| readback_data.world_position.as_dvec3());
-        let cursor_coords = readback_data.cursor_coords;
-
-        let smoothing = (time.delta_secs_f64() / controller.time_to_reach_target).min(1.0);
-
-        let mut window = window.single_mut();
+        let cursor_cell = picking_result.cell;
+        let cursor_position = picking_result.translation.map(|translation| {
+            frame.grid_position_double(&cursor_cell, &Transform::from_translation(translation))
+        });
+        let cursor_coords = picking_result.cursor_coords;
 
         let mut update_cursor_coords = true;
 
@@ -146,10 +153,11 @@ pub fn orbital_camera_controller(
             if controller.pan_data.is_none() && cursor_position.is_some() {
                 controller.controlling_terrain = Some(terrain);
                 controller.anchor_position = cursor_position.unwrap();
+                controller.anchor_cell = cursor_cell;
                 controller.camera_position = camera_position;
                 controller.camera_rotation = camera_rotation;
                 controller.pan_data = Some(PanData {
-                    world_from_clip: readback_data.world_from_clip,
+                    world_from_clip: picking_result.world_from_clip,
                     pan_coords: cursor_coords,
                 });
             }
@@ -158,7 +166,6 @@ pub fn orbital_camera_controller(
                 data.pan_coords = data.pan_coords.lerp(cursor_coords, smoothing as f32);
             }
         } else {
-            controller.controlling_terrain = None;
             controller.pan_data = None;
         }
 
@@ -166,6 +173,7 @@ pub fn orbital_camera_controller(
             if controller.rotation_data.is_none() && cursor_position.is_some() {
                 controller.controlling_terrain = Some(terrain);
                 controller.anchor_position = cursor_position.unwrap();
+                controller.anchor_cell = cursor_cell;
                 controller.camera_position = camera_position;
                 controller.camera_rotation = camera_rotation;
                 controller.rotation_data = Some(RotationData {
@@ -191,7 +199,6 @@ pub fn orbital_camera_controller(
                 data.rotation = data.rotation.lerp(data.target_rotation, smoothing);
             }
         } else {
-            controller.controlling_terrain = None;
             controller.rotation_data = None;
         }
 
@@ -199,6 +206,7 @@ pub fn orbital_camera_controller(
             if controller.zoom_data.is_none() && cursor_position.is_some() {
                 controller.controlling_terrain = Some(terrain);
                 controller.anchor_position = cursor_position.unwrap();
+                controller.anchor_cell = cursor_cell;
                 controller.camera_position = camera_position;
                 controller.camera_rotation = camera_rotation;
 
@@ -219,7 +227,6 @@ pub fn orbital_camera_controller(
                 data.zoom = data.zoom.lerp(data.target_zoom, smoothing);
             }
         } else {
-            controller.controlling_terrain = None;
             controller.zoom_data = None;
         }
 
@@ -229,7 +236,10 @@ pub fn orbital_camera_controller(
             if window.cursor_options.grab_mode == CursorGrabMode::Locked {
                 window.cursor_options.grab_mode = CursorGrabMode::None;
                 let window_size = window.size();
-                window.set_cursor_position(Some(controller.cursor_coords * window_size));
+                window.set_cursor_position(Some(
+                    Vec2::new(controller.cursor_coords.x, 1.0 - controller.cursor_coords.y)
+                        * window_size,
+                ));
             }
 
             controller.cursor_coords = cursor_coords;
@@ -237,26 +247,31 @@ pub fn orbital_camera_controller(
             window.cursor_options.grab_mode = CursorGrabMode::Locked;
         }
 
-        let anchor_size = 200.0;
-
-        let mut new_camera_position = camera_position;
-        let mut new_camera_rotation = camera_rotation;
+        if controller.pan_data.is_none()
+            && controller.rotation_data.is_none()
+            && controller.zoom_data.is_none()
+        {
+            controller.controlling_terrain = None;
+            controller.anchor_position = cursor_position.unwrap_or(DVec3::NAN);
+        }
 
         if let Some(pan_data) = controller.pan_data {
             // Invariants:
             // The anchor world position remains at the screen space position of the cursor.
             // The terrain is just rotated, but not translated relative to the camera.
 
-            let new_cursor_coords =
-                Vec2::new(pan_data.pan_coords.x, 1.0 - pan_data.pan_coords.y).as_dvec2();
-            let ndc_coords = (new_cursor_coords * 2.0 - 1.0).extend(0.0001); // Todo: using f64 we should be able to set this to 1.0 for the near plane
+            // Todo: calculate this without world_from_clip using the rule of three
+            // this should be possible to compute using
 
-            let camera_cursor_direction = (pan_data
-                .world_from_clip
-                .project_point3(ndc_coords.as_vec3())
-                .as_dvec3()
-                - controller.camera_position)
-                .normalize();
+            let ndc_coords = (pan_data.pan_coords * 2.0 - 1.0).extend(0.0001); // Todo: using f64 we should be able to set this to 1.0 for the near plane
+            let translation = pan_data.world_from_clip.project_point3(ndc_coords);
+            let new_cursor_position = frame.grid_position_double(
+                &controller.anchor_cell,
+                &Transform::from_translation(translation),
+            );
+
+            let camera_cursor_direction =
+                (new_cursor_position - controller.camera_position).normalize();
 
             let radius = (controller.anchor_position - terrain_origin).length();
 
@@ -339,23 +354,19 @@ pub fn orbital_camera_controller(
             new_camera_rotation = DQuat::from_rotation_arc(initial_direction, new_direction)
                 * controller.camera_rotation;
         }
-
-        let anchor_position = if controller.pan_data.is_none()
-            && controller.rotation_data.is_none()
-            && controller.zoom_data.is_none()
-        {
-            cursor_position.unwrap_or(DVec3::NAN)
-        } else {
-            controller.anchor_position
-        };
-
-        gizmos.sphere(
-            anchor_position.as_vec3(),
-            new_camera_position.distance(anchor_position) as f32 / anchor_size,
-            basic::GREEN,
-        );
-
-        transform.translation = new_camera_position.as_vec3();
-        transform.rotation = new_camera_rotation.as_quat();
     }
+
+    let (new_cell, new_translation) = frame.translation_to_grid(new_camera_position);
+
+    *camera_cell = new_cell;
+    camera_transform.translation = new_translation;
+    camera_transform.rotation = new_camera_rotation.as_quat();
+
+    let anchor_size = 200.0;
+
+    gizmos.sphere(
+        (controller.anchor_position - frame.grid_to_float(&new_cell)).as_vec3(),
+        new_camera_position.distance(controller.anchor_position) as f32 / anchor_size,
+        basic::GREEN,
+    );
 }

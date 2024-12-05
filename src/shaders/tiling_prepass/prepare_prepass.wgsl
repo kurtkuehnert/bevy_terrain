@@ -43,7 +43,7 @@ fn prepare_root() {
     let distance = dot(world_normal, view_world_position) - dot(world_normal, approximate_position);
 
     if (distance < 1.0) {
-        parameters.tile_count = 0u;
+       //  parameters.tile_count = 0u;
     }
 }
 

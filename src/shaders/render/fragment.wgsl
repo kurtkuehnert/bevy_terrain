@@ -121,6 +121,6 @@ fn fragment(input: FragmentInput) -> FragmentOutput {
     var output: FragmentOutput;
     fragment_output(&info, &output, color, surface_gradient);
     fragment_debug(&info, &output, tile, surface_gradient);
-    return output;
+    return FragmentOutput(vec4<f32>(output.color.xyz, 1.0));
 }
 
