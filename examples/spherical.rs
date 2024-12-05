@@ -1,7 +1,7 @@
 use bevy::core_pipeline::core_3d::Camera3dDepthLoadOp;
 use bevy::{math::DVec3, prelude::*, reflect::TypePath, render::render_resource::*};
 use bevy_terrain::debug::OrbitalCameraController;
-use bevy_terrain::picking::{PickingReadback, TerrainPickingPlugin};
+use bevy_terrain::picking::{PickingData, TerrainPickingPlugin};
 use bevy_terrain::prelude::*;
 use bevy_terrain::render::TerrainMaterial;
 
@@ -43,10 +43,9 @@ fn main() {
 fn setup(
     mut commands: Commands,
     mut images: ResMut<LoadingImages>,
-    mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<CustomMaterial>>,
     mut tile_trees: ResMut<TerrainViewComponents<TileTree>>,
-    mut picking_readbacks: ResMut<TerrainViewComponents<PickingReadback>>,
+    mut picking_data: ResMut<TerrainViewComponents<PickingData>>,
     asset_server: Res<AssetServer>,
 ) {
     let gradient = asset_server.load("textures/gradient.png");
@@ -127,8 +126,8 @@ fn setup(
         Entity::PLACEHOLDER,
     );
 
-    commands.spawn_big_space(ReferenceFrame::new(10000000000000.0, 0.5), |root| {
-        // commands.spawn_big_space(ReferenceFrame::default(), |root| {
+    // commands.spawn_big_space(ReferenceFrame::new(10000000000000.0, 0.5), |root| {
+    commands.spawn_big_space(ReferenceFrame::default(), |root| {
         let frame = root.frame().clone();
 
         global_terrain = root
@@ -199,6 +198,6 @@ fn setup(
 
     tile_trees.insert((global_terrain, global_view), global_tile_tree);
     tile_trees.insert((local_terrain, local_view), local_tile_tree);
-    picking_readbacks.insert((global_terrain, global_view), PickingReadback::default());
-    picking_readbacks.insert((local_terrain, local_view), PickingReadback::default());
+    picking_data.insert((global_terrain, global_view), PickingData::default());
+    picking_data.insert((local_terrain, local_view), PickingData::default());
 }

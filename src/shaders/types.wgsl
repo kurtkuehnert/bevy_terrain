@@ -22,11 +22,11 @@ struct TerrainView {
     view_face: u32,
     view_lod: u32,
     view_coordinates: array<ViewCoordinate, 6>,
-#ifdef HIGH_PRECISION
-    surface_approximation: array<SurfaceApproximation, 6>,
-#endif
     height_scale: f32,
     view_world_position: vec3<f32>,
+#ifdef HIGH_PRECISION
+    surface_approximation: array<SurfaceApproximation, 6>, // must be last field of this struct
+#endif
 }
 
 struct TileCoordinate {

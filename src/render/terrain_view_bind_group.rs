@@ -97,10 +97,10 @@ struct TerrainView {
     view_face: u32,
     view_lod: u32,
     view_coordinates: [ViewCoordinate; 6],
-    #[cfg(feature = "high_precision")]
-    surface_approximation: [crate::math::SurfaceApproximation; 6],
     height_scale: f32,
     view_world_position: Vec3,
+    #[cfg(feature = "high_precision")]
+    surface_approximation: [crate::math::SurfaceApproximation; 6],
 }
 
 impl TerrainView {

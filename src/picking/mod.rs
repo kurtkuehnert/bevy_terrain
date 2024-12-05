@@ -1,5 +1,7 @@
+use crate::big_space::{GridCell, ReferenceFrames};
 use crate::prelude::TerrainViewComponents;
 use crate::{shaders::PICKING_SHADER, util::StaticBuffer};
+use bevy::color::palettes::basic;
 use bevy::render::sync_world::MainEntity;
 use bevy::render::Extract;
 use bevy::{
@@ -11,7 +13,7 @@ use bevy::{
             self, NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel, ViewNodeRunner,
         },
         render_resource::{
-            binding_types::{sampler, storage_buffer, texture_depth_2d_multisampled},
+            binding_types::{storage_buffer, texture_depth_2d_multisampled},
             *,
         },
         renderer::{RenderContext, RenderDevice, RenderQueue},
@@ -20,7 +22,6 @@ use bevy::{
     },
     window::PrimaryWindow,
 };
-use ndarray::AssignElem;
 use std::{
     ops::Deref,
     sync::{Arc, Mutex},
@@ -28,47 +29,62 @@ use std::{
 use wgpu::util::DownloadBuffer;
 
 pub fn picking_system(
-    mut picking_readbacks: ResMut<TerrainViewComponents<PickingReadback>>,
+    frames: ReferenceFrames,
+    mut picking_data: ResMut<TerrainViewComponents<PickingData>>,
     window: Query<&Window, With<PrimaryWindow>>,
 ) {
-    for readback in picking_readbacks.values_mut() {
-        let data = if let Ok(mut new_data) = readback.readback.lock() {
-            let readback_data = new_data.clone();
+    let window = window.single();
+    let size = window.size();
 
-            let window = window.single();
+    for (&(terrain, _view), picking_data) in picking_data.iter_mut() {
+        let frame = frames.parent_frame(terrain).unwrap();
+        let origin = frame.local_floating_origin();
 
-            if let Some(position) = window.cursor_position() {
-                new_data.cursor_coords = position / window.size();
-            }
-
-            readback_data
+        if let Some(position) = window.cursor_position() {
+            picking_data.input = Some(PickingInput {
+                cursor_coords: Vec2::new(position.x, size.y - position.y) / window.size(),
+                cell: origin.cell(),
+            });
         } else {
-            return;
-        };
+            picking_data.input = None;
+        }
 
-        readback.data.assign_elem(data);
+        picking_data.result = picking_data.readback.lock().unwrap().clone();
     }
 }
 
 #[derive(Default, Clone)]
-pub struct PickingReadback {
-    pub data: PickingData,
-    readback: Arc<Mutex<PickingData>>,
+pub struct PickingData {
+    pub input: Option<PickingInput>,
+    pub result: PickingResult,
+    readback: Arc<Mutex<PickingResult>>,
 }
 
-fn extract_picking_readback(
-    picking_readbacks: Extract<Res<TerrainViewComponents<PickingReadback>>>,
-    mut gpu_picking_readbacks: ResMut<TerrainViewComponents<PickingReadback>>,
+fn extract_picking_data(
+    picking_data: Extract<Res<TerrainViewComponents<PickingData>>>,
+    mut gpu_picking_data: ResMut<TerrainViewComponents<PickingData>>,
 ) {
-    **gpu_picking_readbacks = picking_readbacks.clone();
+    **gpu_picking_data = picking_data.clone();
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct PickingInput {
+    pub cursor_coords: Vec2,
+    pub cell: GridCell,
+}
+
+#[derive(Default, Debug, Clone)]
+pub struct PickingResult {
+    pub cursor_coords: Vec2,
+    pub cell: GridCell,            // cell of floating origin (camera)
+    pub translation: Option<Vec3>, // relative to floating origin cell
+    pub world_from_clip: Mat4,
 }
 
 #[derive(Default, Debug, Clone, ShaderType)]
-pub struct PickingData {
+pub struct GpuPickingData {
     pub cursor_coords: Vec2,
     pub depth: f32,
-    pub world_position: Vec3,
-    pub world_from_clip: Mat4,
 }
 
 #[derive(Resource)]
@@ -87,9 +103,7 @@ impl FromWorld for PickingPipeline {
             &BindGroupLayoutEntries::sequential(
                 ShaderStages::COMPUTE,
                 (
-                    storage_buffer::<PickingData>(false),
-                    sampler(SamplerBindingType::Filtering),
-                    // texture_depth_2d(),
+                    storage_buffer::<GpuPickingData>(false),
                     texture_depth_2d_multisampled(),
                 ),
             ),
@@ -133,63 +147,57 @@ impl render_graph::ViewNode for PickingNode {
         let queue = world.resource::<RenderQueue>();
         let pipeline_cache = world.resource::<PipelineCache>();
         let picking_pipeline = world.resource::<PickingPipeline>();
-        let picking_readbacks = world.resource::<TerrainViewComponents<PickingReadback>>();
+        let picking_data = world.resource::<TerrainViewComponents<PickingData>>();
 
         let Some(pipeline) = pipeline_cache.get_compute_pipeline(picking_pipeline.id) else {
             return Ok(());
         };
 
-        for (&(_terrain, picking_view), picking_readback) in picking_readbacks.iter() {
+        for (&(_terrain, picking_view), picking_data) in picking_data.iter() {
             if view != picking_view {
                 continue;
             }
 
-            let picking_data = picking_readback.readback.lock().unwrap().clone();
+            let Some(picking_input) = &picking_data.input else {
+                continue;
+            };
 
-            let cursor_coords = Vec2::new(
-                picking_data.cursor_coords.x,
-                1.0 - picking_data.cursor_coords.y,
-            );
             let world_from_clip = extracted_view.world_from_view.compute_matrix()
                 * extracted_view.clip_from_view.inverse();
+            let mut gpu_picking_data = GpuPickingData {
+                cursor_coords: picking_input.cursor_coords,
+                depth: 0.0,
+            };
+            let cell = picking_input.cell;
+            let readback = picking_data.readback.clone();
 
-            let picking_buffer = StaticBuffer::<PickingData>::create(
+            let picking_buffer = StaticBuffer::<GpuPickingData>::create(
                 None,
                 device,
-                &picking_data,
+                &gpu_picking_data,
                 BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
             );
 
-            let sampler = device.create_sampler(&SamplerDescriptor {
-                mag_filter: FilterMode::Linear,
-                min_filter: FilterMode::Linear,
-                ..default()
-            });
             let depth_view = depth.texture.create_view(&Default::default());
 
             let bind_group = device.create_bind_group(
                 None,
                 &picking_pipeline.picking_layout,
-                &BindGroupEntries::sequential((&picking_buffer, &sampler, &depth_view)),
+                &BindGroupEntries::sequential((&picking_buffer, &depth_view)),
             );
 
             let mut command_encoder =
                 device.create_command_encoder(&CommandEncoderDescriptor::default());
 
-            let mut compute_pass =
-                command_encoder.begin_compute_pass(&ComputePassDescriptor::default());
+            {
+                let mut compute_pass =
+                    command_encoder.begin_compute_pass(&ComputePassDescriptor::default());
+                compute_pass.set_bind_group(0, &bind_group, &[]);
+                compute_pass.set_pipeline(pipeline);
+                compute_pass.dispatch_workgroups(1, 1, 1);
+            }
 
-            compute_pass.set_bind_group(0, &bind_group, &[]);
-            compute_pass.set_pipeline(pipeline);
-            compute_pass.dispatch_workgroups(1, 1, 1);
-
-            drop(compute_pass);
-
-            let command_buffer = command_encoder.finish();
-
-            queue.submit(Some(command_buffer));
-
-            let readback = picking_readback.readback.clone();
+            queue.submit(Some(command_encoder.finish()));
 
             DownloadBuffer::read_buffer(
                 device.wgpu_device(),
@@ -198,16 +206,21 @@ impl render_graph::ViewNode for PickingNode {
                 move |result| {
                     let buffer = result.expect("Reading buffer failed!");
                     let storage_buffer = encase::StorageBuffer::new(buffer.deref());
+                    storage_buffer.read(&mut gpu_picking_data).unwrap();
 
-                    let mut data = PickingData::default();
-                    storage_buffer.read(&mut data).unwrap();
+                    let translation = if gpu_picking_data.depth > 0.0 {
+                        let ndc_coords = (gpu_picking_data.cursor_coords * 2.0 - 1.0)
+                            .extend(gpu_picking_data.depth);
+                        Some(world_from_clip.project_point3(ndc_coords))
+                    } else {
+                        None
+                    };
 
-                    let ndc_coords = (cursor_coords * 2.0 - 1.0).extend(data.depth);
-
-                    data.world_position = world_from_clip.project_point3(ndc_coords);
-                    data.world_from_clip = world_from_clip;
-
-                    *readback.lock().unwrap() = data;
+                    let result = &mut readback.lock().unwrap();
+                    result.cursor_coords = gpu_picking_data.cursor_coords;
+                    result.cell = cell;
+                    result.translation = translation;
+                    result.world_from_clip = world_from_clip;
                 },
             );
         }
@@ -220,12 +233,12 @@ pub struct TerrainPickingPlugin;
 
 impl Plugin for TerrainPickingPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<TerrainViewComponents<PickingReadback>>()
+        app.init_resource::<TerrainViewComponents<PickingData>>()
             .add_systems(Update, picking_system);
 
         app.sub_app_mut(RenderApp)
-            .init_resource::<TerrainViewComponents<PickingReadback>>()
-            .add_systems(ExtractSchedule, extract_picking_readback)
+            .init_resource::<TerrainViewComponents<PickingData>>()
+            .add_systems(ExtractSchedule, extract_picking_data)
             .add_render_graph_node::<ViewNodeRunner<PickingNode>>(Core3d, PickingLabel)
             .add_render_graph_edge(Core3d, Node3d::EndMainPass, PickingLabel);
     }
