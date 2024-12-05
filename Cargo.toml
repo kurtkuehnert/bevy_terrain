@@ -16,18 +16,18 @@ high_precision = ["dep:big_space"]
 
 [dependencies]
 bevy = "0.15" #{ git="https://github.com/bevyengine/bevy/", branch="main" }
-ndarray = "0.15"
-itertools = "0.12"
-image = "0.25"
+big_space = { version = "0.8", optional = true }
 tiff = "0.9"
-bitflags = "2.4"
 bytemuck = "1.14"
+wgpu = "23.0"
+ndarray = "0.16.1"
+itertools = "0.13.0"
+image = "0.25"
+bitflags = "2.4"
 anyhow = "1.0"
 serde = "1.0.210"
 ron = "0.8.1"
 async-channel = "2.1"
-big_space = { git = "https://github.com/Jondolf/big_space/", branch = "bevy-0.15", optional = true }
-wgpu = "23.0"
 derive_more = "1.0.0"
 
 [[example]]

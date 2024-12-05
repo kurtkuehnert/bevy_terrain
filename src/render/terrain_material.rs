@@ -1,19 +1,21 @@
+use crate::render::terrain_bind_group::{create_terrain_layout, SetTerrainBindGroup};
+use crate::render::terrain_view_bind_group::{
+    create_terrain_view_layout, DrawTerrainCommand, SetTerrainViewBindGroup,
+};
 use crate::{
     debug::DebugTerrain,
     prelude::GpuTileTree,
-    render::{
-        create_terrain_layout, create_terrain_view_layout, DrawTerrainCommand, SetTerrainBindGroup,
-        SetTerrainViewBindGroup,
-    },
+    render::terrain_pass::TerrainItem,
     shaders::{DEFAULT_FRAGMENT_SHADER, DEFAULT_VERTEX_SHADER},
     terrain::TerrainComponents,
     terrain_data::GpuTileAtlas,
     terrain_view::TerrainViewComponents,
 };
+
+use bevy::render::render_phase::{PhaseItemExtraIndex, ViewSortedRenderPhases};
 use bevy::render::sync_world::MainEntity;
 use bevy::render::Extract;
 use bevy::{
-    core_pipeline::core_3d::{Opaque3d, Opaque3dBinKey},
     pbr::{
         MaterialPipeline, MeshPipeline, MeshPipelineViewLayoutKey, PreparedMaterial,
         RenderMaterialInstances, SetMaterialBindGroup, SetMeshViewBindGroup,
@@ -21,10 +23,7 @@ use bevy::{
     prelude::*,
     render::{
         render_asset::{prepare_assets, RenderAssetPlugin, RenderAssets},
-        render_phase::{
-            AddRenderCommand, BinnedRenderPhaseType, DrawFunctions, SetItemPipeline,
-            ViewBinnedRenderPhases,
-        },
+        render_phase::{AddRenderCommand, DrawFunctions, SetItemPipeline},
         render_resource::*,
         renderer::RenderDevice,
         texture::GpuImage,
@@ -413,13 +412,13 @@ pub(crate) type DrawTerrain<M> = (
 /// Queses all terrain entities for rendering via the terrain pipeline.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn queue_terrain<M: Material>(
-    draw_functions: Res<DrawFunctions<Opaque3d>>,
+    draw_functions: Res<DrawFunctions<TerrainItem>>,
     debug: Option<Res<DebugTerrain>>,
     render_materials: Res<RenderAssets<PreparedMaterial<M>>>,
     pipeline_cache: Res<PipelineCache>,
     terrain_pipeline: Res<TerrainRenderPipeline<M>>,
     mut pipelines: ResMut<SpecializedRenderPipelines<TerrainRenderPipeline<M>>>,
-    mut opaque_render_phases: ResMut<ViewBinnedRenderPhases<Opaque3d>>,
+    mut terrain_phases: ResMut<ViewSortedRenderPhases<TerrainItem>>,
     gpu_tile_atlases: Res<TerrainComponents<GpuTileAtlas>>,
     gpu_tile_trees: Res<TerrainViewComponents<GpuTileTree>>,
     render_material_instances: Res<RenderMaterialInstances<M>>,
@@ -430,7 +429,7 @@ pub(crate) fn queue_terrain<M: Material>(
     let draw_function = draw_functions.read().get_id::<DrawTerrain<M>>().unwrap();
 
     for (render_view, view, msaa) in &mut views {
-        let Some(phase) = opaque_render_phases.get_mut(&render_view) else {
+        let Some(terrain_phase) = terrain_phases.get_mut(&render_view) else {
             continue;
         };
 
@@ -463,17 +462,14 @@ pub(crate) fn queue_terrain<M: Material>(
 
                 let pipeline = pipelines.specialize(&pipeline_cache, &terrain_pipeline, key);
 
-                phase.add(
-                    Opaque3dBinKey {
-                        pipeline,
-                        draw_function,
-                        asset_id: material_id.untyped(),
-                        material_bind_group_id: None,
-                        lightmap_image: None,
-                    },
-                    (terrain.id(), terrain), // Todo: this is not correct terrain.id() is not a render world entity
-                    BinnedRenderPhaseType::NonMesh,
-                );
+                terrain_phase.add(TerrainItem {
+                    representative_entity: (terrain.id(), terrain), // technically wrong
+                    draw_function,
+                    pipeline,
+                    batch_range: 0..1,
+                    extra_index: PhaseItemExtraIndex(0),
+                    priority: 0,
+                })
             }
         }
     }
@@ -500,8 +496,9 @@ where
             .add_plugins(RenderAssetPlugin::<PreparedMaterial<M>, GpuImage>::default());
 
         app.sub_app_mut(RenderApp)
+            .add_render_command::<TerrainItem, DrawTerrain<M>>()
             .init_resource::<RenderMaterialInstances<M>>()
-            .add_render_command::<Opaque3d, DrawTerrain<M>>()
+            .init_resource::<SpecializedRenderPipelines<TerrainRenderPipeline<M>>>()
             .add_systems(ExtractSchedule, extract_terrain_materials::<M>)
             .add_systems(
                 Render,
@@ -514,7 +511,6 @@ where
     fn finish(&self, app: &mut App) {
         app.sub_app_mut(RenderApp)
             .init_resource::<TerrainRenderPipeline<M>>()
-            .init_resource::<SpecializedRenderPipelines<TerrainRenderPipeline<M>>>()
             .init_resource::<MaterialPipeline<M>>(); // prepare assets depends on this to access the material layout
     }
 }
