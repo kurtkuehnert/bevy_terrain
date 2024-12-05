@@ -112,6 +112,7 @@ pub struct TileTree {
     pub(crate) view_face: u32,
     pub(crate) view_lod: u32,
     pub(crate) view_world_position: DVec3,
+    pub(crate) relative_view_position: Vec3,
     pub(crate) view_coordinates: [Coordinate; 6],
     #[cfg(feature = "high_precision")]
     pub(crate) surface_approximation: [crate::math::SurfaceApproximation; 6],
@@ -165,6 +166,7 @@ impl TileTree {
             approximate_height_readback: Arc::new(Mutex::new(0.0)),
             height_scale: 1.0,
             order: view_config.order,
+            relative_view_position: Default::default(),
         }
     }
 
@@ -290,54 +292,22 @@ impl TileTree {
         mut tile_trees: ResMut<TerrainViewComponents<TileTree>>,
         tile_atlases: Query<&TileAtlas>,
         #[cfg(feature = "high_precision")] frames: crate::big_space::ReferenceFrames,
-        #[cfg(feature = "high_precision")] views: Query<(
-            Option<&Parent>,
-            &Transform,
-            Option<&GridCell>,
-        )>,
+        #[cfg(feature = "high_precision")] views: Query<(&Transform, &GridCell)>,
         #[cfg(not(feature = "high_precision"))] view_transforms: Query<&Transform>,
     ) {
         for (&(terrain, view), tile_tree) in tile_trees.iter_mut() {
             let tile_atlas = tile_atlases.get(terrain).unwrap();
 
-            // Todo: unfortunately the origin does not return the proper translation yet,
-            // but this can be used in the future, to replace the code below
-            // let frame = frames.parent_frame(terrain).unwrap();
-            // let origin = frame.local_floating_origin();
-            // let view_position = frame.grid_position_double(
-            //     &origin.cell(),
-            //     &Transform::from_translation(origin.translation()),
-            // );
-
-            #[cfg(feature = "high_precision")]
-            let view_position = {
-                let mut entity = view;
-                let mut matrix = Mat4::IDENTITY;
-                let mut cell = None;
-                let (mut parent, mut transform);
-
-                while cell.is_none() {
-                    (parent, transform, cell) = views.get(entity).unwrap();
-
-                    matrix = matrix * transform.compute_matrix();
-
-                    entity = parent
-                        .map(|parent| parent.get())
-                        .unwrap_or(Entity::PLACEHOLDER);
-                }
-
-                let cell = cell.unwrap();
-                let transform = Transform::from_matrix(matrix);
-
-                let frame = frames.parent_frame(terrain).unwrap();
-                frame.grid_position_double(cell, &transform)
-            };
+            let frame = frames.parent_frame(view).unwrap();
+            let (transform, cell) = views.get(view).unwrap();
+            let view_position = frame.grid_position_double(cell, transform);
 
             // Todo: work with global translations correctly
             #[cfg(not(feature = "high_precision"))]
             let view_position = view_transform.translation.as_dvec3();
 
             tile_tree.update(view_position, tile_atlas);
+            tile_tree.relative_view_position = transform.translation;
         }
     }
 
