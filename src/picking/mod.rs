@@ -29,6 +29,7 @@ use std::{
 use wgpu::util::DownloadBuffer;
 
 pub fn picking_system(
+    mut gizmos: Gizmos,
     frames: ReferenceFrames,
     mut picking_data: ResMut<TerrainViewComponents<PickingData>>,
     window: Query<&Window, With<PrimaryWindow>>,
@@ -50,6 +51,10 @@ pub fn picking_system(
         }
 
         picking_data.result = picking_data.readback.lock().unwrap().clone();
+
+        if let Some(position) = picking_data.result.translation {
+            gizmos.sphere(position, 10000.0, basic::RED);
+        }
     }
 }
 
@@ -124,7 +129,7 @@ impl FromWorld for PickingPipeline {
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
-pub struct PickingLabel;
+pub struct Picking;
 
 #[derive(Default)]
 pub struct PickingNode;
@@ -239,8 +244,8 @@ impl Plugin for TerrainPickingPlugin {
         app.sub_app_mut(RenderApp)
             .init_resource::<TerrainViewComponents<PickingData>>()
             .add_systems(ExtractSchedule, extract_picking_data)
-            .add_render_graph_node::<ViewNodeRunner<PickingNode>>(Core3d, PickingLabel)
-            .add_render_graph_edge(Core3d, Node3d::EndMainPass, PickingLabel);
+            .add_render_graph_node::<ViewNodeRunner<PickingNode>>(Core3d, Picking)
+            .add_render_graph_edge(Core3d, Node3d::EndMainPass, Picking);
     }
     fn finish(&self, app: &mut App) {
         app.sub_app_mut(RenderApp)

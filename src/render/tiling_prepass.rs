@@ -1,9 +1,11 @@
+use crate::render::culling_bind_group::{create_culling_layout, CullingBindGroup};
+use crate::render::terrain_bind_group::create_terrain_layout;
+use crate::render::terrain_view_bind_group::{
+    create_prepare_indirect_layout, create_refine_tiles_layout,
+};
 use crate::{
     debug::DebugTerrain,
-    render::{
-        create_culling_layout, create_prepare_indirect_layout, create_refine_tiles_layout,
-        create_terrain_layout, CullingBindGroup, GpuTerrainView, TerrainData,
-    },
+    render::{GpuTerrainView, TerrainData},
     shaders::{PREPARE_PREPASS_SHADER, REFINE_TILES_SHADER},
     terrain::TerrainComponents,
     terrain_data::{GpuTileAtlas, GpuTileTree},
