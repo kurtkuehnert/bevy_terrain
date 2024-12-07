@@ -264,13 +264,17 @@ impl ViewNode for TerrainPassNode {
             &BindGroupEntries::single(&terrain_depth_view),
         );
 
+        // call this here, otherwise the order between passes is incorrect
+        let color_attachments = [Some(target.get_color_attachment())];
+        let depth_stencil_attachment = Some(depth.get_attachment(StoreOp::Store));
+
         render_context.add_command_buffer_generation_task(move |device| {
             let mut command_encoder =
                 device.create_command_encoder(&CommandEncoderDescriptor::default());
 
             let render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("terrain_pass"),
-                color_attachments: &[Some(target.get_color_attachment())],
+                color_attachments: &color_attachments,
                 depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
                     view: terrain_depth.view(),
                     depth_ops: Some(Operations {
@@ -291,11 +295,10 @@ impl ViewNode for TerrainPassNode {
             }
 
             terrain_phase.render(&mut render_pass, world, view).unwrap();
-
             drop(render_pass);
 
             let mut render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
-                depth_stencil_attachment: Some(depth.get_attachment(StoreOp::Store)),
+                depth_stencil_attachment,
                 ..default()
             });
             render_pass.set_bind_group(0, &depth_copy_bind_group, &[]);

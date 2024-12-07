@@ -1,3 +1,4 @@
+use bevy::render::render_resource::encase::internal::ReadFrom;
 use bevy::render::{
     render_resource::{encase::internal::WriteInto, *},
     renderer::{RenderDevice, RenderQueue},
@@ -166,5 +167,30 @@ impl<'a, T> IntoBinding<'a> for &'a StaticBuffer<T> {
     #[inline]
     fn into_binding(self) -> BindingResource<'a> {
         self.buffer.as_entire_binding()
+    }
+}
+
+impl<T: ShaderType + Default + ReadFrom> StaticBuffer<T> {
+    /// Asynchronously read the contents of a buffer.
+    ///
+    /// This should only be called after all commands that update the buffer have been submitted.
+    pub fn download(self, callback: impl FnOnce(Result<T, BufferAsyncError>) + Send + 'static) {
+        let buffer = self.buffer;
+        buffer
+            .clone()
+            .slice(..)
+            .map_async(MapMode::Read, move |result| {
+                if let Err(e) = result {
+                    callback(Err(e));
+                    return;
+                }
+
+                let mut data = T::default();
+                let mapped_range = buffer.slice(..).get_mapped_range();
+                let storage_buffer = encase::StorageBuffer::new(mapped_range.deref());
+                storage_buffer.read(&mut data).unwrap();
+
+                callback(Ok(data));
+            });
     }
 }

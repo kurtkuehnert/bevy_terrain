@@ -25,11 +25,7 @@ use bevy::{
     },
     window::PrimaryWindow,
 };
-use std::{
-    ops::Deref,
-    sync::{Arc, Mutex},
-};
-use wgpu::util::DownloadBuffer;
+use std::sync::{Arc, Mutex};
 
 pub fn picking_system(
     window: Query<&Window, With<PrimaryWindow>>,
@@ -154,19 +150,18 @@ impl render_graph::ViewNode for PickingNode {
         // Todo: prepare this in a separate system
         let world_from_clip = extracted_view.world_from_view.compute_matrix()
             * extracted_view.clip_from_view.inverse();
-        let mut gpu_picking_data = GpuPickingData {
-            cursor_coords: picking_input.cursor_coords,
-            depth: 0.0,
-            stencil: u8::MAX as u32,
-        };
         let cell = picking_input.cell;
         let readback = picking_data.readback.clone();
 
         let picking_buffer = StaticBuffer::<GpuPickingData>::create(
             None,
             device,
-            &gpu_picking_data,
-            BufferUsages::STORAGE | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,
+            &GpuPickingData {
+                cursor_coords: picking_input.cursor_coords,
+                depth: 0.0,
+                stencil: 255,
+            },
+            BufferUsages::STORAGE | BufferUsages::MAP_READ,
         );
 
         let depth_view = depth.texture.create_view(&TextureViewDescriptor {
@@ -198,33 +193,27 @@ impl render_graph::ViewNode for PickingNode {
 
         queue.submit(Some(command_encoder.finish()));
 
-        DownloadBuffer::read_buffer(
-            device.wgpu_device(),
-            queue,
-            &picking_buffer.slice(..),
-            move |result| {
-                let buffer = result.expect("Reading buffer failed!");
-                let storage_buffer = encase::StorageBuffer::new(buffer.deref());
-                storage_buffer.read(&mut gpu_picking_data).unwrap();
+        // Todo: move this to the cleanup step
+        picking_buffer.download(move |result| {
+            let gpu_picking_data = result.expect("Reading buffer failed!");
 
-                let translation = if gpu_picking_data.depth > 0.0 {
-                    let ndc_coords =
-                        (gpu_picking_data.cursor_coords * 2.0 - 1.0).extend(gpu_picking_data.depth);
-                    Some(world_from_clip.project_point3(ndc_coords))
-                } else {
-                    None
-                };
+            let translation = if gpu_picking_data.depth > 0.0 {
+                let ndc_coords =
+                    (gpu_picking_data.cursor_coords * 2.0 - 1.0).extend(gpu_picking_data.depth);
+                Some(world_from_clip.project_point3(ndc_coords))
+            } else {
+                None
+            };
 
-                // dbg!(0.1 / gpu_picking_data.depth);
-                // dbg!(gpu_picking_data.stencil);
+            // dbg!(0.1 / gpu_picking_data.depth);
+            // dbg!(gpu_picking_data.stencil);
 
-                let result = &mut readback.lock().unwrap();
-                result.cursor_coords = gpu_picking_data.cursor_coords;
-                result.cell = cell;
-                result.translation = translation;
-                result.world_from_clip = world_from_clip;
-            },
-        );
+            let result = &mut readback.lock().unwrap();
+            result.cursor_coords = gpu_picking_data.cursor_coords;
+            result.cell = cell;
+            result.translation = translation;
+            result.world_from_clip = world_from_clip;
+        });
 
         Ok(())
     }
