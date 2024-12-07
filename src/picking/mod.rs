@@ -1,9 +1,11 @@
 use crate::{
-    big_space::GridCell, render::terrain_pass::TerrainViewDepthTexture, shaders::PICKING_SHADER,
+    big_space::GridCell,
+    render::terrain_pass::{TerrainPass, TerrainViewDepthTexture},
+    shaders::PICKING_SHADER,
     util::StaticBuffer,
 };
 use bevy::{
-    core_pipeline::core_3d::graph::{Core3d, Node3d},
+    core_pipeline::core_3d::graph::Core3d,
     ecs::query::QueryItem,
     prelude::*,
     render::{
@@ -149,6 +151,7 @@ impl render_graph::ViewNode for PickingNode {
             return Ok(());
         };
 
+        // Todo: prepare this in a separate system
         let world_from_clip = extracted_view.world_from_view.compute_matrix()
             * extracted_view.clip_from_view.inverse();
         let mut gpu_picking_data = GpuPickingData {
@@ -236,7 +239,7 @@ impl Plugin for TerrainPickingPlugin {
 
         app.sub_app_mut(RenderApp)
             .add_render_graph_node::<ViewNodeRunner<PickingNode>>(Core3d, Picking)
-            .add_render_graph_edge(Core3d, Node3d::EndMainPass, Picking);
+            .add_render_graph_edge(Core3d, TerrainPass, Picking);
     }
     fn finish(&self, app: &mut App) {
         app.sub_app_mut(RenderApp)

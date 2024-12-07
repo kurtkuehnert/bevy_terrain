@@ -1,37 +1,29 @@
-use bevy::core_pipeline::core_3d::Camera3dDepthLoadOp;
-use bevy::render::render_resource::{
-    Extent3d, Texture, TextureDimension, TextureFormat, TextureView,
-};
-use bevy::render::renderer::RenderDevice;
-use bevy::render::texture::{CachedTexture, DepthAttachment, TextureCache};
+use crate::shaders::DEPTH_COPY_SHADER;
 use bevy::{
+    core_pipeline::{
+        core_3d::{Camera3dDepthLoadOp, CORE_3D_DEPTH_FORMAT},
+        fullscreen_vertex_shader::fullscreen_shader_vertex_state,
+    },
     ecs::{entity::EntityHashSet, query::QueryItem},
     prelude::*,
     render::{
         camera::ExtractedCamera,
-        render_graph::{NodeRunError, RenderGraphContext, RenderLabel, RenderSubGraph, ViewNode},
+        render_graph::{NodeRunError, RenderGraphContext, RenderLabel, ViewNode},
         render_phase::{
             CachedRenderPipelinePhaseItem, DrawFunctionId, PhaseItem, PhaseItemExtraIndex,
             SortedPhaseItem, TrackedRenderPass, ViewSortedRenderPhases,
         },
-        render_resource::CachedRenderPipelineId,
-        renderer::RenderContext,
+        render_resource::{binding_types::texture_depth_2d_multisampled, *},
+        renderer::{RenderContext, RenderDevice},
         sync_world::{MainEntity, RenderEntity},
-        view::ViewTarget,
+        texture::{CachedTexture, DepthAttachment, TextureCache},
+        view::{ViewDepthTexture, ViewTarget},
         Extract,
     },
 };
 use std::ops::Range;
-use wgpu::{
-    CommandEncoderDescriptor, LoadOp, Operations, RenderPassDepthStencilAttachment,
-    RenderPassDescriptor, StoreOp, TextureDescriptor, TextureUsages,
-};
 
 pub(crate) const TERRAIN_DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32FloatStencil8;
-
-// Todo: remove this
-#[derive(Debug, Hash, PartialEq, Eq, Clone, RenderSubGraph)]
-pub struct TerrainGraph;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
 pub struct TerrainPass;
@@ -175,6 +167,55 @@ pub fn prepare_terrain_depth_textures(
     }
 }
 
+#[derive(Resource)]
+pub struct DepthCopyPipeline {
+    layout: BindGroupLayout,
+    id: CachedRenderPipelineId,
+}
+
+impl FromWorld for DepthCopyPipeline {
+    fn from_world(world: &mut World) -> Self {
+        let device = world.resource::<RenderDevice>();
+        let pipeline_cache = world.resource::<PipelineCache>();
+
+        let layout = device.create_bind_group_layout(
+            None,
+            &BindGroupLayoutEntries::sequential(
+                ShaderStages::FRAGMENT,
+                (texture_depth_2d_multisampled(),),
+            ),
+        );
+
+        let id = pipeline_cache.queue_render_pipeline(RenderPipelineDescriptor {
+            label: None,
+            layout: vec![layout.clone()],
+            push_constant_ranges: Vec::new(),
+            vertex: fullscreen_shader_vertex_state(),
+            fragment: Some(FragmentState {
+                shader: world.load_asset(DEPTH_COPY_SHADER),
+                shader_defs: vec![],
+                entry_point: "fragment".into(),
+                targets: vec![],
+            }),
+            primitive: Default::default(),
+            depth_stencil: Some(DepthStencilState {
+                format: CORE_3D_DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: CompareFunction::Always,
+                stencil: Default::default(),
+                bias: Default::default(),
+            }),
+            multisample: MultisampleState {
+                count: 4, // Todo: specialize per camera ...
+                ..Default::default()
+            },
+            zero_initialize_workgroup_memory: false,
+        });
+
+        Self { layout, id }
+    }
+}
+
 #[derive(Default)]
 pub struct TerrainPassNode;
 impl ViewNode for TerrainPassNode {
@@ -182,17 +223,24 @@ impl ViewNode for TerrainPassNode {
         Entity,
         &'static ExtractedCamera,
         &'static ViewTarget,
+        &'static ViewDepthTexture,
         &'static TerrainViewDepthTexture,
     );
 
     fn run<'w>(
         &self,
-        graph: &mut RenderGraphContext,
+        _graph: &mut RenderGraphContext,
         render_context: &mut RenderContext<'w>,
-        (view, camera, target, depth): QueryItem<'w, Self::ViewQuery>,
+        (view, camera, target, depth, terrain_depth): QueryItem<'w, Self::ViewQuery>,
         world: &'w World,
     ) -> Result<(), NodeRunError> {
-        // dbg!("Running terrain pass!");
+        let device = world.resource::<RenderDevice>();
+        let pipeline_cache = world.resource::<PipelineCache>();
+        let depth_copy_pipeline = world.resource::<DepthCopyPipeline>();
+
+        let Some(pipeline) = pipeline_cache.get_render_pipeline(depth_copy_pipeline.id) else {
+            return Ok(());
+        };
 
         let Some(terrain_phase) = world
             .get_resource::<ViewSortedRenderPhases<TerrainItem>>()
@@ -205,44 +253,56 @@ impl ViewNode for TerrainPassNode {
             return Ok(());
         }
 
-        let color_attachments = [Some(target.get_color_attachment())];
-        let depth_stencil_attachment = Some(RenderPassDepthStencilAttachment {
-            view: depth.view(),
-            depth_ops: Some(Operations {
-                load: LoadOp::Clear(0.0), // Clear depth to 1.0
-                store: StoreOp::Store,
-            }),
-            stencil_ops: Some(Operations {
-                load: LoadOp::Clear(255), // Initialize stencil to 255 (lowest priority)
-                store: StoreOp::Store,
-            }),
+        // Todo: prepare this in a separate system
+        let terrain_depth_view = terrain_depth.texture.create_view(&TextureViewDescriptor {
+            aspect: TextureAspect::DepthOnly,
+            ..default()
         });
+        let depth_copy_bind_group = device.create_bind_group(
+            None,
+            &depth_copy_pipeline.layout,
+            &BindGroupEntries::single(&terrain_depth_view),
+        );
 
-        let view_entity = graph.view_entity();
-        render_context.add_command_buffer_generation_task(move |render_device| {
-            // Command encoder setup
+        render_context.add_command_buffer_generation_task(move |device| {
             let mut command_encoder =
-                render_device.create_command_encoder(&CommandEncoderDescriptor::default());
+                device.create_command_encoder(&CommandEncoderDescriptor::default());
 
-            // Render pass setup
             let render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
                 label: Some("terrain_pass"),
-                color_attachments: &color_attachments,
-                depth_stencil_attachment,
-                timestamp_writes: None,
-                occlusion_query_set: None,
+                color_attachments: &[Some(target.get_color_attachment())],
+                depth_stencil_attachment: Some(RenderPassDepthStencilAttachment {
+                    view: terrain_depth.view(),
+                    depth_ops: Some(Operations {
+                        load: LoadOp::Clear(0.0), // Clear depth
+                        store: StoreOp::Store,
+                    }),
+                    stencil_ops: Some(Operations {
+                        load: LoadOp::Clear(255), // Initialize stencil to 255 (lowest priority)
+                        store: StoreOp::Store,
+                    }),
+                }),
+                ..default()
             });
-            let mut render_pass = TrackedRenderPass::new(&render_device, render_pass);
+            let mut render_pass = TrackedRenderPass::new(&device, render_pass);
 
             if let Some(viewport) = camera.viewport.as_ref() {
                 render_pass.set_camera_viewport(viewport);
             }
 
-            terrain_phase
-                .render(&mut render_pass, world, view_entity)
-                .unwrap();
+            terrain_phase.render(&mut render_pass, world, view).unwrap();
 
             drop(render_pass);
+
+            let mut render_pass = command_encoder.begin_render_pass(&RenderPassDescriptor {
+                depth_stencil_attachment: Some(depth.get_attachment(StoreOp::Store)),
+                ..default()
+            });
+            render_pass.set_bind_group(0, &depth_copy_bind_group, &[]);
+            render_pass.set_pipeline(pipeline);
+            render_pass.draw(0..3, 0..1);
+            drop(render_pass);
+
             command_encoder.finish()
         });
 
