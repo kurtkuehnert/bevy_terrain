@@ -1,8 +1,10 @@
-use crate::render::terrain_pass::prepare_terrain_depth_textures;
 use crate::{
     render::{
         culling_bind_group::CullingBindGroup,
-        terrain_pass::{extract_terrain_phases, TerrainItem, TerrainPass, TerrainPassNode},
+        terrain_pass::{
+            extract_terrain_phases, prepare_terrain_depth_textures, DepthCopyPipeline, TerrainItem,
+            TerrainPass, TerrainPassNode,
+        },
         tiling_prepass::{
             queue_tiling_prepass, TilingPrepassItem, TilingPrepassLabel, TilingPrepassNode,
             TilingPrepassPipelines,
@@ -118,6 +120,7 @@ impl Plugin for TerrainPlugin {
         load_terrain_shaders(app);
 
         app.sub_app_mut(RenderApp)
-            .init_resource::<TilingPrepassPipelines>();
+            .init_resource::<TilingPrepassPipelines>()
+            .init_resource::<DepthCopyPipeline>();
     }
 }
