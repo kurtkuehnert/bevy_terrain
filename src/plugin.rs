@@ -67,6 +67,7 @@ impl Plugin for TerrainPlugin {
             .add_systems(
                 ExtractSchedule,
                 (
+                    extract_terrain_phases,
                     GpuTileAtlas::initialize,
                     GpuTileAtlas::extract.after(GpuTileAtlas::initialize),
                     GpuTileTree::initialize,
@@ -88,6 +89,7 @@ impl Plugin for TerrainPlugin {
                         CullingBindGroup::prepare,
                     )
                         .in_set(RenderSet::Prepare),
+                    sort_phase_system::<TerrainItem>.in_set(RenderSet::PhaseSort),
                     prepare_terrain_depth_textures.in_set(RenderSet::PrepareResources),
                     queue_tiling_prepass.in_set(RenderSet::Queue),
                     GpuTileAtlas::cleanup
@@ -95,13 +97,6 @@ impl Plugin for TerrainPlugin {
                         .in_set(RenderSet::Cleanup),
                 ),
             )
-            .add_systems(ExtractSchedule, extract_terrain_phases)
-            .add_systems(
-                Render,
-                sort_phase_system::<TerrainItem>.in_set(RenderSet::PhaseSort),
-            );
-
-        app.sub_app_mut(RenderApp)
             .add_render_graph_node::<ViewNodeRunner<TerrainPassNode>>(Core3d, TerrainPass)
             .add_render_graph_edges(
                 Core3d,

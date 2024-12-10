@@ -2,7 +2,7 @@ use crate::{
     preprocess::{PreprocessTask, PreprocessTaskType, Preprocessor, TerrainPreprocessItem},
     terrain::TerrainComponents,
     terrain_data::{AtlasTile, GpuTileAtlas, TileAtlas},
-    util::StaticBuffer,
+    util::GpuBuffer,
 };
 use bevy::{
     prelude::*,
@@ -145,7 +145,7 @@ impl GpuPreprocessor {
                         } => {
                             let tile_data = images.get(tile_data).unwrap();
 
-                            let split_buffer = StaticBuffer::create(
+                            let split_buffer = GpuBuffer::create_labeled(
                                 format!("{}_split_buffer", attachment.name).as_str(),
                                 &device,
                                 &SplitData {
@@ -168,7 +168,7 @@ impl GpuPreprocessor {
                             ))
                         }
                         PreprocessTaskType::Stitch { neighbour_tiles } => {
-                            let stitch_buffer = StaticBuffer::create(
+                            let stitch_buffer = GpuBuffer::create_labeled(
                                 format!("{}_stitch_buffer", attachment.name).as_str(),
                                 &device,
                                 &StitchData {
@@ -186,7 +186,7 @@ impl GpuPreprocessor {
                             ))
                         }
                         PreprocessTaskType::Downsample { child_tiles } => {
-                            let downsample_buffer = StaticBuffer::create(
+                            let downsample_buffer = GpuBuffer::create_labeled(
                                 format!("{}_downsample_buffer", attachment.name).as_str(),
                                 &device,
                                 &DownsampleData {

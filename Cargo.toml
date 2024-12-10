@@ -29,6 +29,7 @@ serde = "1.0.210"
 ron = "0.8.1"
 async-channel = "2.1"
 derive_more = "1.0.0"
+smallvec = "2.0.0-alpha.7"
 
 [[example]]
 name = "preprocess_planar"

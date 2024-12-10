@@ -2,7 +2,7 @@ use crate::{
     math::{TileCoordinate, ViewCoordinate},
     terrain_data::{GpuTileTree, TileTree},
     terrain_view::TerrainViewComponents,
-    util::StaticBuffer,
+    util::GpuBuffer,
 };
 use bevy::render::sync_world::MainEntity;
 use bevy::{
@@ -37,12 +37,12 @@ pub(crate) fn create_refine_tiles_layout(device: &RenderDevice) -> BindGroupLayo
         &BindGroupLayoutEntries::sequential(
             ShaderStages::COMPUTE,
             (
-                storage_buffer_read_only::<TerrainView>(false), // terrain_view
-                storage_buffer_sized(false, None),              // approximate_height
-                storage_buffer_read_only_sized(false, None),    // tile_tree
-                storage_buffer_sized(false, None),              // final_tiles
-                storage_buffer_sized(false, None),              // temporary_tiles
-                storage_buffer::<Parameters>(false),            // parameters
+                uniform_buffer::<TerrainView>(false),        // terrain_view
+                storage_buffer_sized(false, None),           // approximate_height
+                storage_buffer_read_only_sized(false, None), // tile_tree
+                storage_buffer_sized(false, None),           // final_tiles
+                storage_buffer_sized(false, None),           // temporary_tiles
+                storage_buffer::<Parameters>(false),         // parameters
             ),
         ),
     )
@@ -54,10 +54,10 @@ pub(crate) fn create_terrain_view_layout(device: &RenderDevice) -> BindGroupLayo
         &BindGroupLayoutEntries::sequential(
             ShaderStages::VERTEX_FRAGMENT,
             (
-                storage_buffer_read_only::<TerrainView>(false), // terrain_view
-                storage_buffer_sized(false, None),              // approximate_height
-                storage_buffer_read_only_sized(false, None),    // tile_tree
-                storage_buffer_read_only_sized(false, None),    // geometry_tiles
+                uniform_buffer::<TerrainView>(false),        // terrain_view
+                storage_buffer_sized(false, None),           // approximate_height
+                storage_buffer_read_only_sized(false, None), // tile_tree
+                storage_buffer_read_only_sized(false, None), // geometry_tiles
             ),
         ),
     )
@@ -133,11 +133,11 @@ impl TerrainView {
 }
 
 pub struct GpuTerrainView {
-    terrain_view_buffer: StaticBuffer<TerrainView>,
-    approximate_height_buffer: StaticBuffer<f32>,
+    terrain_view_buffer: GpuBuffer<TerrainView>,
+    approximate_height_buffer: GpuBuffer<f32>,
     approximate_height_readback: Arc<Mutex<f32>>,
     pub(crate) order: u32,
-    pub(crate) indirect_buffer: StaticBuffer<Indirect>,
+    pub(crate) indirect_buffer: GpuBuffer<Indirect>,
     pub(crate) prepare_indirect_bind_group: BindGroup,
     pub(crate) refine_tiles_bind_group: BindGroup,
     pub(crate) terrain_view_bind_group: BindGroup,
@@ -150,20 +150,24 @@ impl GpuTerrainView {
             TileCoordinate::min_size().get() * tile_tree.geometry_tile_count as BufferAddress;
 
         let terrain_view_buffer =
-            StaticBuffer::empty(None, device, BufferUsages::STORAGE | BufferUsages::COPY_DST);
-        let approximate_height_buffer = StaticBuffer::<f32>::empty(
+            GpuBuffer::empty(device, BufferUsages::UNIFORM | BufferUsages::COPY_DST);
+        let approximate_height_buffer =
+            GpuBuffer::<f32>::empty(device, BufferUsages::STORAGE | BufferUsages::COPY_SRC);
+        let indirect_buffer =
+            GpuBuffer::empty(device, BufferUsages::STORAGE | BufferUsages::INDIRECT);
+        let parameter_buffer = GpuBuffer::<Parameters>::empty(device, BufferUsages::STORAGE);
+        let temporary_tile_buffer = GpuBuffer::<()>::empty_sized_labeled(
             None,
             device,
-            BufferUsages::STORAGE | BufferUsages::COPY_SRC,
+            tile_buffer_size,
+            BufferUsages::STORAGE,
         );
-        let indirect_buffer =
-            StaticBuffer::empty(None, device, BufferUsages::STORAGE | BufferUsages::INDIRECT);
-        let parameter_buffer =
-            StaticBuffer::<Parameters>::empty(None, device, BufferUsages::STORAGE);
-        let temporary_tile_buffer =
-            StaticBuffer::<()>::empty_sized(None, device, tile_buffer_size, BufferUsages::STORAGE);
-        let final_tile_buffer =
-            StaticBuffer::<()>::empty_sized(None, device, tile_buffer_size, BufferUsages::STORAGE);
+        let final_tile_buffer = GpuBuffer::<()>::empty_sized_labeled(
+            None,
+            device,
+            tile_buffer_size,
+            BufferUsages::STORAGE,
+        );
 
         let prepare_indirect_bind_group = device.create_bind_group(
             "prepare_indirect_bind_group",
