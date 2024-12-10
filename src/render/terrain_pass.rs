@@ -24,9 +24,6 @@ use std::ops::Range;
 
 pub(crate) const TERRAIN_DEPTH_FORMAT: TextureFormat = TextureFormat::Depth32FloatStencil8;
 
-#[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
-pub struct TerrainPass;
-
 pub struct TerrainItem {
     pub representative_entity: (Entity, MainEntity),
     pub draw_function: DrawFunctionId,
@@ -230,7 +227,7 @@ impl FromWorld for DepthCopyPipeline {
     }
 }
 
-#[derive(Default)]
+#[derive(Debug, Hash, Default, PartialEq, Eq, Clone, RenderLabel)]
 pub struct TerrainPassNode;
 impl ViewNode for TerrainPassNode {
     type ViewQuery = (

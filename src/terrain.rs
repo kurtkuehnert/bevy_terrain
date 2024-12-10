@@ -55,6 +55,8 @@ impl TerrainConfig {
     }
 }
 
+// Turn this into hooks
+
 #[cfg(feature = "high_precision")]
 pub fn setup_terrain(
     tile_atlas: TileAtlas,
