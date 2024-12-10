@@ -68,12 +68,13 @@ pub mod prelude {
     pub use crate::{
         debug::{
             DebugCameraBundle, DebugCameraController, DebugTerrainMaterial, LoadingImages,
-            TerrainDebugPlugin,
+            OrbitalCameraController, TerrainDebugPlugin,
         },
         math::TerrainModel,
+        picking::{PickingData, TerrainPickingPlugin},
         plugin::TerrainPlugin,
         preprocess::{PreprocessDataset, Preprocessor, SphericalDataset, TerrainPreprocessPlugin},
-        render::TerrainMaterialPlugin,
+        render::{TerrainMaterial, TerrainMaterialPlugin},
         terrain::{setup_terrain, TerrainConfig},
         terrain_data::{
             AttachmentConfig, AttachmentFormat, GpuTileAtlas, GpuTileTree, TileAtlas, TileTree,

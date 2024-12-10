@@ -1,8 +1,5 @@
 use bevy::{math::DVec3, prelude::*, reflect::TypePath, render::render_resource::*};
-use bevy_terrain::debug::OrbitalCameraController;
-use bevy_terrain::picking::{PickingData, TerrainPickingPlugin};
 use bevy_terrain::prelude::*;
-use bevy_terrain::render::TerrainMaterial;
 
 const PATH: &str = "/Volumes/ExternalSSD/tiles";
 const RADIUS: f64 = 6371000.0;
@@ -33,7 +30,6 @@ fn main() {
             TerrainDebugPlugin, // enable debug settings and controls
             TerrainPickingPlugin,
         ))
-        // .insert_resource(ClearColor(Color::WHITE))
         .add_systems(Startup, setup)
         .run();
 }

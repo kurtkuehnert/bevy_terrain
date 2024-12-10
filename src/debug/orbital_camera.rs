@@ -128,13 +128,11 @@ pub fn orbital_camera_controller(
     let mut new_camera_position = camera_position;
     let mut new_camera_rotation = camera_rotation;
 
-    let picking_result = &picking_data.result;
-
-    let cursor_cell = picking_result.cell;
-    let cursor_position = picking_result.translation.map(|translation| {
+    let cursor_cell = picking_data.cell;
+    let cursor_position = picking_data.translation.map(|translation| {
         frame.grid_position_double(&cursor_cell, &Transform::from_translation(translation))
     });
-    let cursor_coords = picking_result.cursor_coords;
+    let cursor_coords = picking_data.cursor_coords;
 
     let mut update_cursor_coords = true;
 
@@ -145,7 +143,7 @@ pub fn orbital_camera_controller(
             controller.camera_position = camera_position;
             controller.camera_rotation = camera_rotation;
             controller.pan_data = Some(PanData {
-                world_from_clip: picking_result.world_from_clip,
+                world_from_clip: picking_data.world_from_clip,
                 pan_coords: cursor_coords,
             });
         }

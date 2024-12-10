@@ -3,7 +3,7 @@ use crate::{
         culling_bind_group::CullingBindGroup,
         terrain_pass::{
             extract_terrain_phases, prepare_terrain_depth_textures, DepthCopyPipeline, TerrainItem,
-            TerrainPass, TerrainPassNode,
+            TerrainPassNode,
         },
         tiling_prepass::{
             queue_tiling_prepass, TilingPrepassItem, TilingPrepassLabel, TilingPrepassNode,
@@ -97,10 +97,14 @@ impl Plugin for TerrainPlugin {
                         .in_set(RenderSet::Cleanup),
                 ),
             )
-            .add_render_graph_node::<ViewNodeRunner<TerrainPassNode>>(Core3d, TerrainPass)
+            .add_render_graph_node::<ViewNodeRunner<TerrainPassNode>>(Core3d, TerrainPassNode)
             .add_render_graph_edges(
                 Core3d,
-                (Node3d::StartMainPass, TerrainPass, Node3d::MainOpaquePass),
+                (
+                    Node3d::StartMainPass,
+                    TerrainPassNode,
+                    Node3d::MainOpaquePass,
+                ),
             );
 
         let mut render_graph = app
