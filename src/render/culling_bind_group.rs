@@ -1,4 +1,4 @@
-use crate::{terrain_data::GpuTileTree, terrain_view::TerrainViewComponents, util::StaticBuffer};
+use crate::{terrain_data::GpuTileTree, terrain_view::TerrainViewComponents, util::GpuBuffer};
 use bevy::render::primitives::Frustum;
 use bevy::render::sync_world::MainEntity;
 use bevy::utils::HashMap;
@@ -55,12 +55,8 @@ impl Deref for CullingBindGroup {
 
 impl CullingBindGroup {
     fn new(device: &RenderDevice, culling_uniform: CullingUniform) -> Self {
-        let culling_buffer = StaticBuffer::<CullingUniform>::create(
-            None,
-            device,
-            &culling_uniform,
-            BufferUsages::UNIFORM,
-        );
+        let culling_buffer =
+            GpuBuffer::<CullingUniform>::create(device, &culling_uniform, BufferUsages::UNIFORM);
 
         let bind_group = device.create_bind_group(
             None,

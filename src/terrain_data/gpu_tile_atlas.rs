@@ -4,7 +4,7 @@ use crate::{
         AtlasAttachment, AtlasTileAttachment, AtlasTileAttachmentWithData, AttachmentData,
         AttachmentFormat, TileAtlas,
     },
-    util::StaticBuffer,
+    util::GpuBuffer,
 };
 use bevy::{
     prelude::*,
@@ -179,8 +179,8 @@ pub(crate) struct GpuAtlasAttachment {
     pub(crate) buffer_info: AtlasBufferInfo,
 
     pub(crate) atlas_texture: Texture,
-    pub(crate) atlas_write_section: StaticBuffer<()>,
-    pub(crate) download_buffers: Vec<StaticBuffer<()>>,
+    pub(crate) atlas_write_section: GpuBuffer<()>,
+    pub(crate) download_buffers: Vec<GpuBuffer<()>>,
     pub(crate) bind_group: BindGroup,
 
     pub(crate) max_atlas_write_slots: u32,
@@ -232,14 +232,14 @@ impl GpuAtlasAttachment {
             ..default()
         });
 
-        let atlas_write_section = StaticBuffer::empty_sized(
+        let atlas_write_section = GpuBuffer::empty_sized_labeled(
             format!("{name}_atlas_write_section").as_str(),
             device,
             buffer_info.buffer_size(max_atlas_write_slots) as BufferAddress,
             BufferUsages::COPY_DST | BufferUsages::COPY_SRC | BufferUsages::STORAGE,
         );
 
-        let attachment_meta_buffer = StaticBuffer::create(
+        let attachment_meta_buffer = GpuBuffer::create_labeled(
             format!("{name}_attachment_meta").as_str(),
             device,
             &buffer_info.attachment_meta(),
@@ -347,7 +347,7 @@ impl GpuAtlasAttachment {
     fn create_download_buffers(&mut self, device: &RenderDevice) {
         self.download_buffers = (0..self.atlas_write_slots.len())
             .map(|i| {
-                StaticBuffer::empty_sized(
+                GpuBuffer::empty_sized_labeled(
                     format!("{}_download_buffer_{i}", self.name).as_str(),
                     device,
                     self.buffer_info.aligned_tile_size as BufferAddress,

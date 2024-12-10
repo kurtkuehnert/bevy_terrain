@@ -1,7 +1,7 @@
 use crate::{
     terrain::TerrainComponents,
     terrain_data::{GpuTileAtlas, TileAtlas},
-    util::StaticBuffer,
+    util::GpuBuffer,
 };
 use bevy::{
     ecs::{
@@ -90,7 +90,7 @@ impl TerrainConfigUniform {
 }
 
 pub struct TerrainData {
-    mesh_buffer: StaticBuffer<MeshUniform>,
+    mesh_buffer: GpuBuffer<MeshUniform>,
     pub(crate) terrain_bind_group: BindGroup,
 }
 
@@ -101,14 +101,13 @@ impl TerrainData {
         tile_atlas: &TileAtlas,
         gpu_tile_atlas: &GpuTileAtlas,
     ) -> Self {
-        let mesh_buffer = StaticBuffer::empty_sized(
+        let mesh_buffer = GpuBuffer::empty_sized_labeled(
             None,
             device,
             MeshUniform::SHADER_SIZE.get(),
             BufferUsages::STORAGE | BufferUsages::COPY_DST,
         );
-        let terrain_config_buffer = StaticBuffer::create(
-            None,
+        let terrain_config_buffer = GpuBuffer::create(
             device,
             &TerrainConfigUniform::from_tile_atlas(tile_atlas),
             BufferUsages::UNIFORM,
@@ -135,7 +134,7 @@ impl TerrainData {
 
         let attachment_uniform = AttachmentUniform::new(gpu_tile_atlas);
         let attachment_buffer =
-            StaticBuffer::create(None, device, &attachment_uniform, BufferUsages::UNIFORM);
+            GpuBuffer::create(device, &attachment_uniform, BufferUsages::UNIFORM);
 
         let terrain_bind_group = device.create_bind_group(
             "terrain_bind_group",

@@ -1,7 +1,7 @@
 use crate::{
     terrain_data::{TileTree, TileTreeEntry},
     terrain_view::TerrainViewComponents,
-    util::StaticBuffer,
+    util::GpuBuffer,
 };
 use bevy::{
     prelude::*,
@@ -21,14 +21,14 @@ use std::mem;
 /// The data is synchronized each frame by copying it from the [`TileTree`] to the texture.
 #[derive(Component)]
 pub struct GpuTileTree {
-    pub(crate) tile_tree_buffer: StaticBuffer<()>,
+    pub(crate) tile_tree_buffer: GpuBuffer<()>,
     /// The current cpu tile_tree data. This is synced each frame with the tile_tree data.
     data: Array4<TileTreeEntry>,
 }
 
 impl GpuTileTree {
     fn new(device: &RenderDevice, tile_tree: &TileTree) -> Self {
-        let tile_tree_buffer = StaticBuffer::empty_sized(
+        let tile_tree_buffer = GpuBuffer::empty_sized_labeled(
             None,
             device,
             (tile_tree.data.len() * mem::size_of::<TileTreeEntry>()) as BufferAddress,

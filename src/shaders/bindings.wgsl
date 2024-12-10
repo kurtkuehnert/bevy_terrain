@@ -5,7 +5,7 @@
 
 // terrain bindings
 @group(1) @binding(0)
-var<storage> mesh: array<Mesh>;
+var<storage> mesh: array<Mesh>; // Todo: replace with custom Mesh uniform / include in terrain
 @group(1) @binding(1)
 var<uniform> terrain: Terrain;
 @group(1) @binding(2)
@@ -31,7 +31,7 @@ var attachment7: texture_2d_array<f32>;
 
 // terrain view bindings
 @group(2) @binding(0)
-var<storage> terrain_view: TerrainView;
+var<uniform> terrain_view: TerrainView;
 @group(2) @binding(1)
 var<storage, read_write> approximate_height: f32;
 @group(2) @binding(2)
