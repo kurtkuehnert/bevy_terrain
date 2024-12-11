@@ -3,13 +3,12 @@ use crate::{
     render::terrain_pass::{TerrainPassNode, TerrainViewDepthTexture},
     shaders::PICKING_SHADER,
 };
+use bevy::ecs::component::ComponentId;
+use bevy::ecs::world::DeferredWorld;
 use bevy::{
     asset::RenderAssetUsages,
     core_pipeline::core_3d::graph::Core3d,
-    ecs::{
-        component::{ComponentHooks, StorageType},
-        query::QueryItem,
-    },
+    ecs::query::QueryItem,
     prelude::*,
     render::{
         extract_component::{ExtractComponent, ExtractComponentPlugin},
@@ -36,7 +35,9 @@ pub fn picking_system(
     window: Query<&Window, With<PrimaryWindow>>,
     camera: Query<(&Camera, &GlobalTransform, &GridCell, &PickingData)>,
 ) {
-    let window = window.single();
+    let Ok(window) = window.get_single() else {
+        return;
+    };
     let Some(position) = window.cursor_position() else {
         return;
     };
@@ -79,38 +80,33 @@ pub fn picking_readback(
     // dbg!(stencil);
 }
 
-#[derive(Default, Clone)]
+pub fn picking_hook(mut world: DeferredWorld, entity: Entity, _id: ComponentId) {
+    let mut buffers = world.resource_mut::<Assets<ShaderStorageBuffer>>();
+    let mut buffer = ShaderStorageBuffer::with_size(
+        GpuPickingData::min_size().get() as usize,
+        RenderAssetUsages::default(),
+    );
+    buffer.buffer_description.usage |= BufferUsages::COPY_SRC;
+    let buffer = buffers.add(buffer);
+
+    world
+        .commands()
+        .entity(entity)
+        .insert(Readback::buffer(buffer.clone_weak()))
+        .observe(picking_readback);
+
+    let mut picking_data = world.get_mut::<PickingData>(entity).unwrap();
+    picking_data.buffer = buffer;
+}
+
+#[derive(Default, Clone, Component)]
+#[component(on_add = picking_hook)]
 pub struct PickingData {
     pub cursor_coords: Vec2,
     pub cell: GridCell,            // cell of floating origin (camera)
     pub translation: Option<Vec3>, // relative to floating origin cell
     pub world_from_clip: Mat4,
     buffer: Handle<ShaderStorageBuffer>,
-}
-
-impl Component for PickingData {
-    const STORAGE_TYPE: StorageType = StorageType::Table;
-
-    fn register_component_hooks(hooks: &mut ComponentHooks) {
-        hooks.on_add(|mut world, entity, _| {
-            let mut buffers = world.resource_mut::<Assets<ShaderStorageBuffer>>();
-            let mut buffer = ShaderStorageBuffer::with_size(
-                GpuPickingData::min_size().get() as usize,
-                RenderAssetUsages::default(),
-            );
-            buffer.buffer_description.usage |= BufferUsages::COPY_SRC;
-            let buffer = buffers.add(buffer);
-
-            world
-                .commands()
-                .entity(entity)
-                .insert(Readback::buffer(buffer.clone_weak()))
-                .observe(picking_readback);
-
-            let mut picking_data = world.get_mut::<PickingData>(entity).unwrap();
-            picking_data.buffer = buffer;
-        });
-    }
 }
 
 impl ExtractComponent for PickingData {

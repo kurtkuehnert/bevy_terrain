@@ -1,4 +1,8 @@
-use crate::math::ellipsoid::project_point_ellipsoid;
+use crate::{
+    big_space::{GridCell, GridTransformOwned, ReferenceFrames},
+    math::ellipsoid::project_point_ellipsoid,
+    terrain_data::TileAtlas,
+};
 use bevy::{
     math::{DMat4, DQuat, DVec3},
     prelude::*,
@@ -177,5 +181,21 @@ impl TerrainModel {
                 .with_translation(translation),
             cell,
         }
+    }
+}
+
+pub fn sync_terrain_position(
+    frames: ReferenceFrames,
+    mut terrains: Query<(Entity, &mut Transform, &mut GridCell, &TileAtlas)>,
+) {
+    for (terrain, mut transform, mut cell, tile_atlas) in &mut terrains {
+        let frame = frames.parent_frame(terrain).unwrap();
+        let GridTransformOwned {
+            transform: new_transform,
+            cell: new_cell,
+        } = tile_atlas.model.grid_transform(frame);
+
+        *transform = new_transform;
+        *cell = new_cell;
     }
 }

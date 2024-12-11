@@ -10,7 +10,7 @@ use bevy::math::{DMat3, DVec2, IVec2};
 pub use crate::math::surface_approximation::SurfaceApproximation;
 pub use crate::math::{
     coordinate::{Coordinate, TileCoordinate, ViewCoordinate},
-    terrain_model::TerrainModel,
+    terrain_model::{sync_terrain_position, TerrainModel},
 };
 
 /// The square of the parameter c of the algebraic sigmoid function, used to convert between uv and st coordinates.

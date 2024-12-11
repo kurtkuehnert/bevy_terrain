@@ -1,4 +1,5 @@
 use crate::{
+    math::sync_terrain_position,
     render::{
         culling_bind_group::CullingBindGroup,
         terrain_pass::{
@@ -41,7 +42,10 @@ impl Plugin for TerrainPlugin {
             .init_resource::<TerrainViewComponents<TileTree>>()
             .add_systems(
                 PostUpdate,
-                check_visibility::<With<TileAtlas>>.in_set(VisibilitySystems::CheckVisibility),
+                (
+                    sync_terrain_position,
+                    check_visibility::<With<TileAtlas>>.in_set(VisibilitySystems::CheckVisibility),
+                ),
             )
             .add_systems(
                 Last,

@@ -1,66 +1,10 @@
 #[cfg(feature = "high_precision")]
-use crate::big_space::{
-    FloatingOrigin, GridCell, GridTransform, GridTransformItem, ReferenceFrame, ReferenceFrames,
-};
+use crate::big_space::{FloatingOrigin, GridTransform, GridTransformItem, ReferenceFrames};
 
 use bevy::{input::mouse::MouseMotion, math::DVec3, prelude::*};
 
-// Todo: remove this bundle
-#[derive(Bundle)]
-pub struct DebugCameraBundle {
-    pub transform: Transform,
-    pub global_transform: GlobalTransform,
-    pub controller: DebugCameraController,
-    #[cfg(feature = "high_precision")]
-    pub cell: GridCell,
-    #[cfg(feature = "high_precision")]
-    pub origin: FloatingOrigin,
-}
-
-impl Default for DebugCameraBundle {
-    fn default() -> Self {
-        Self {
-            transform: default(),
-            global_transform: default(),
-            controller: default(),
-            #[cfg(feature = "high_precision")]
-            cell: default(),
-            #[cfg(feature = "high_precision")]
-            origin: FloatingOrigin,
-        }
-    }
-}
-
-impl DebugCameraBundle {
-    #[cfg(feature = "high_precision")]
-    pub fn new(position: DVec3, speed: f64, frame: &ReferenceFrame) -> Self {
-        let (cell, translation) = frame.translation_to_grid(position);
-
-        Self {
-            transform: Transform::from_translation(translation).looking_to(Vec3::X, Vec3::Y),
-            cell,
-            controller: DebugCameraController {
-                translation_speed: speed,
-                ..default()
-            },
-            ..default()
-        }
-    }
-
-    #[cfg(not(feature = "high_precision"))]
-    pub fn new(position: Vec3, speed: f64) -> Self {
-        Self {
-            transform: Transform::from_translation(position).looking_to(Vec3::X, Vec3::Y),
-            controller: DebugCameraController {
-                translation_speed: speed,
-                ..default()
-            },
-            ..default()
-        }
-    }
-}
-
 #[derive(Clone, Debug, Reflect, Component)]
+#[require(Camera3d, FloatingOrigin(|| FloatingOrigin))]
 pub struct DebugCameraController {
     pub enabled: bool,
     /// Smoothness of translation, from `0.0` to `1.0`.
@@ -89,7 +33,16 @@ impl Default for DebugCameraController {
     }
 }
 
-pub fn camera_controller(
+impl DebugCameraController {
+    pub fn new(speed: f64) -> Self {
+        Self {
+            translation_speed: speed,
+            ..default()
+        }
+    }
+}
+
+pub fn debug_camera_controller(
     #[cfg(feature = "high_precision")] frames: ReferenceFrames,
     time: Res<Time>,
     keyboard: Res<ButtonInput<KeyCode>>,
@@ -105,14 +58,17 @@ pub fn camera_controller(
     )>,
 ) {
     #[cfg(feature = "high_precision")]
-    let (
+    let Ok((
         camera,
         GridTransformItem {
             mut transform,
             mut cell,
         },
         mut controller,
-    ) = camera.single_mut();
+    )) = camera.get_single_mut()
+    else {
+        return;
+    };
     #[cfg(feature = "high_precision")]
     let frame = frames.parent_frame(camera).unwrap();
 
