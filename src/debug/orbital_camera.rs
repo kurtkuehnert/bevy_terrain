@@ -1,5 +1,5 @@
 use crate::{
-    big_space::{GridCell, ReferenceFrames},
+    big_space::{FloatingOrigin, GridCell, ReferenceFrames},
     picking::PickingData,
 };
 use bevy::{
@@ -57,6 +57,7 @@ pub struct RotationData {
 }
 
 #[derive(Clone, Debug, Component)]
+#[require(PickingData, Camera3d, FloatingOrigin(|| FloatingOrigin))]
 pub struct OrbitalCameraController {
     enabled: bool,
     cursor_coords: Vec2,

@@ -1,6 +1,7 @@
 use crate::{
     big_space::GridCell,
     math::{Coordinate, TerrainModel, TileCoordinate},
+    terrain::TerrainConfig,
     terrain_data::{TileAtlas, INVALID_ATLAS_INDEX, INVALID_LOD},
     terrain_view::{TerrainViewComponents, TerrainViewConfig},
 };
@@ -124,8 +125,8 @@ pub struct TileTree {
 
 impl TileTree {
     /// Creates a new tile_tree from a terrain and a terrain view config.
-    pub fn new(tile_atlas: &TileAtlas, view_config: &TerrainViewConfig) -> Self {
-        let model = &tile_atlas.model;
+    pub fn new(config: &TerrainConfig, view_config: &TerrainViewConfig) -> Self {
+        let model = &config.model;
         let scale = model.scale();
 
         Self {
@@ -147,13 +148,13 @@ impl TileTree {
             view_world_position: default(),
             data: Array4::default((
                 model.face_count() as usize,
-                tile_atlas.lod_count as usize,
+                config.lod_count as usize,
                 view_config.tree_size as usize,
                 view_config.tree_size as usize,
             )),
             tiles: Array4::default((
                 model.face_count() as usize,
-                tile_atlas.lod_count as usize,
+                config.lod_count as usize,
                 view_config.tree_size as usize,
                 view_config.tree_size as usize,
             )),

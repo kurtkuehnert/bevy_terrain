@@ -495,6 +495,7 @@ impl TileAtlasState {
 }
 
 // Todo: rename to terrain?
+// Todo: consider turning this into an asset
 
 /// A sparse storage of all terrain attachments, which streams data in and out of memory
 /// depending on the decisions of the corresponding [`TileTree`]s.
