@@ -5,6 +5,7 @@ use crate::{
     terrain_view::TerrainViewComponents,
 };
 
+use crate::terrain_data::tile_tree::TileTreeEntry;
 use bevy::{
     ecs::{
         query::ROQueryItem,
@@ -25,19 +26,13 @@ use bevy::{
 };
 
 #[derive(AsBindGroup)]
-pub struct TerrainCulling {
-    #[storage(0, visibility(compute), read_only, buffer)]
-    pub(crate) culling: Buffer,
-}
-
-#[derive(AsBindGroup)]
-pub struct PrepareIndirect {
+pub struct IndirectBindGroup {
     #[storage(0, visibility(compute), buffer)]
     pub(crate) indirect: Buffer,
 }
 
 #[derive(AsBindGroup)]
-pub struct RefineTiles {
+pub struct PrepassViewBindGroup {
     #[storage(0, visibility(compute), read_only)]
     pub(crate) terrain_view: Handle<ShaderStorageBuffer>,
     #[storage(1, visibility(compute))]
@@ -49,13 +44,14 @@ pub struct RefineTiles {
     #[storage(4, visibility(compute), buffer)]
     pub(crate) temporary_tiles: Buffer,
     #[storage(5, visibility(compute), buffer)]
-    pub(crate) parameters: Buffer,
+    pub(crate) state: Buffer,
+    #[storage(6, visibility(compute), read_only, buffer)]
+    pub(crate) culling: Buffer,
 }
 
 #[derive(AsBindGroup)]
-pub struct TerrainView {
+pub struct TerrainViewBindGroup {
     // Todo: replace with updatable uniform buffer
-    // #[uniform(0)]
     #[storage(0, visibility(vertex, fragment), read_only)]
     pub(crate) terrain_view: Handle<ShaderStorageBuffer>,
     #[storage(1, visibility(vertex, fragment), read_only)]
@@ -75,11 +71,17 @@ pub(crate) struct Indirect {
 }
 
 #[derive(ShaderType)]
-pub(crate) struct Parameters {
+pub(crate) struct PrepassState {
     tile_count: u32,
     counter: i32,
     child_index: i32,
     final_index: i32,
+}
+
+#[derive(Default, ShaderType)]
+pub struct TileTreeUniform {
+    #[size(runtime)]
+    pub(crate) entries: Vec<TileTreeEntry>,
 }
 
 #[derive(ShaderType)]
@@ -158,17 +160,15 @@ pub struct GpuTerrainView {
     pub(crate) order: u32,
     pub(crate) refinement_count: u32,
 
-    pub(crate) indirect: Buffer,
+    pub(crate) indirect_buffer: Buffer,
 
-    pub(crate) prepare_indirect: PrepareIndirect,
-    pub(crate) refine_tiles: RefineTiles,
-    pub(crate) terrain_view: TerrainView,
-    pub(crate) terrain_culling: TerrainCulling,
+    pub(crate) indirect: IndirectBindGroup,
+    pub(crate) prepass_view: PrepassViewBindGroup,
+    pub(crate) terrain_view: TerrainViewBindGroup,
 
-    pub(crate) prepare_indirect_bind_group: Option<BindGroup>,
-    pub(crate) refine_tiles_bind_group: Option<BindGroup>,
+    pub(crate) indirect_bind_group: Option<BindGroup>,
+    pub(crate) prepass_view_bind_group: Option<BindGroup>,
     pub(crate) terrain_view_bind_group: Option<BindGroup>,
-    pub(crate) terrain_culling_bind_group: Option<BindGroup>,
 }
 
 impl GpuTerrainView {
@@ -189,9 +189,9 @@ impl GpuTerrainView {
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
-        let parameters = device.create_buffer(&BufferDescriptor {
+        let state = device.create_buffer(&BufferDescriptor {
             label: None,
-            size: Parameters::min_size().get(),
+            size: PrepassState::min_size().get(),
             usage: BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
@@ -208,38 +208,35 @@ impl GpuTerrainView {
             mapped_at_creation: false,
         });
 
-        let prepare_indirect = PrepareIndirect {
+        let prepare_prepass = IndirectBindGroup {
             indirect: indirect.clone(),
         };
-        let refine_tiles = RefineTiles {
+        let refine_tiles = PrepassViewBindGroup {
             terrain_view: tile_tree.terrain_view.clone(),
             approximate_height: tile_tree.approximate_height_buffer.clone(),
             tile_tree: tile_tree.tile_tree.clone(),
             final_tiles: tiles.clone(),
             temporary_tiles,
-            parameters,
+            state,
+            culling,
         };
-        let terrain_view = TerrainView {
+        let terrain_view = TerrainViewBindGroup {
             terrain_view: tile_tree.terrain_view.clone(),
             approximate_height: tile_tree.approximate_height_buffer.clone(),
             tile_tree: tile_tree.tile_tree.clone(),
             geometry_tiles: tiles,
         };
 
-        let terrain_culling = TerrainCulling { culling };
-
         Self {
             order: tile_tree.order,
             refinement_count: tile_tree.refinement_count,
-            indirect,
-            prepare_indirect,
-            refine_tiles,
+            indirect_buffer: indirect,
+            indirect: prepare_prepass,
+            prepass_view: refine_tiles,
             terrain_view,
-            terrain_culling,
-            prepare_indirect_bind_group: None,
-            refine_tiles_bind_group: None,
+            indirect_bind_group: None,
+            prepass_view_bind_group: None,
             terrain_view_bind_group: None,
-            terrain_culling_bind_group: None,
         }
     }
 
@@ -261,7 +258,7 @@ impl GpuTerrainView {
         device: Res<RenderDevice>,
         prepass_pipeline: Res<TerrainTilingPrepassPipelines>,
         mut gpu_terrain_views: ResMut<TerrainViewComponents<GpuTerrainView>>,
-        mut param: StaticSystemParam<<TerrainView as AsBindGroup>::Param>,
+        mut param: StaticSystemParam<<TerrainViewBindGroup as AsBindGroup>::Param>,
     ) {
         for gpu_terrain_view in &mut gpu_terrain_views.values_mut() {
             // Todo: be smarter about bind group recreation
@@ -274,46 +271,31 @@ impl GpuTerrainView {
         }
     }
 
-    pub(crate) fn prepare_prepare_indirect(
+    pub(crate) fn prepare_indirect(
         device: Res<RenderDevice>,
         prepass_pipeline: Res<TerrainTilingPrepassPipelines>,
         mut gpu_terrain_views: ResMut<TerrainViewComponents<GpuTerrainView>>,
-        mut param: StaticSystemParam<<PrepareIndirect as AsBindGroup>::Param>,
+        mut param: StaticSystemParam<<IndirectBindGroup as AsBindGroup>::Param>,
     ) {
         for gpu_terrain_view in &mut gpu_terrain_views.values_mut() {
-            // Todo: be smarter about bind group recreation
-            let bind_group = gpu_terrain_view.prepare_indirect.as_bind_group(
-                &prepass_pipeline.prepare_indirect_layout,
-                &device,
-                &mut param,
-            );
-            gpu_terrain_view.prepare_indirect_bind_group = bind_group.ok().map(|b| b.bind_group);
+            let bind_group = &mut gpu_terrain_view.indirect_bind_group;
+
+            if bind_group.is_none() {
+                *bind_group = gpu_terrain_view
+                    .indirect
+                    .as_bind_group(&prepass_pipeline.indirect_layout, &device, &mut param)
+                    .ok()
+                    .map(|b| b.bind_group);
+            }
         }
     }
 
     pub(crate) fn prepare_refine_tiles(
         device: Res<RenderDevice>,
-        prepass_pipeline: Res<TerrainTilingPrepassPipelines>,
-        mut gpu_terrain_views: ResMut<TerrainViewComponents<GpuTerrainView>>,
-        mut param: StaticSystemParam<<RefineTiles as AsBindGroup>::Param>,
-    ) {
-        for gpu_terrain_view in &mut gpu_terrain_views.values_mut() {
-            // Todo: be smarter about bind group recreation
-            let bind_group = gpu_terrain_view.refine_tiles.as_bind_group(
-                &prepass_pipeline.refine_tiles_layout,
-                &device,
-                &mut param,
-            );
-            gpu_terrain_view.refine_tiles_bind_group = bind_group.ok().map(|b| b.bind_group);
-        }
-    }
-
-    pub(crate) fn prepare_culling(
-        device: Res<RenderDevice>,
         extracted_views: Query<(MainEntity, &ExtractedView)>,
         prepass_pipeline: Res<TerrainTilingPrepassPipelines>,
         mut gpu_terrain_views: ResMut<TerrainViewComponents<GpuTerrainView>>,
-        mut param: StaticSystemParam<<TerrainCulling as AsBindGroup>::Param>,
+        mut param: StaticSystemParam<<PrepassViewBindGroup as AsBindGroup>::Param>,
     ) {
         // Todo: this is a hack
         let extracted_views = extracted_views
@@ -327,7 +309,7 @@ impl GpuTerrainView {
                 .write(&value)
                 .unwrap();
 
-            gpu_terrain_view.terrain_culling.culling =
+            gpu_terrain_view.prepass_view.culling =
                 device.create_buffer_with_data(&BufferInitDescriptor {
                     label: None,
                     contents: &buffer,
@@ -335,12 +317,12 @@ impl GpuTerrainView {
                 });
 
             // Todo: be smarter about bind group recreation
-            let bind_group = gpu_terrain_view.terrain_culling.as_bind_group(
-                &prepass_pipeline.culling_layout,
+            let bind_group = gpu_terrain_view.prepass_view.as_bind_group(
+                &prepass_pipeline.prepass_view_layout,
                 &device,
                 &mut param,
             );
-            gpu_terrain_view.terrain_culling_bind_group = bind_group.ok().map(|b| b.bind_group);
+            gpu_terrain_view.prepass_view_bind_group = bind_group.ok().map(|b| b.bind_group);
         }
     }
 }
@@ -395,7 +377,7 @@ impl<P: PhaseItem> RenderCommand<P> for DrawTerrainCommand {
             .unwrap();
 
         pass.set_stencil_reference(gpu_terrain_view.order);
-        pass.draw_indirect(&gpu_terrain_view.indirect, 0);
+        pass.draw_indirect(&gpu_terrain_view.indirect_buffer, 0);
 
         RenderCommandResult::Success
     }

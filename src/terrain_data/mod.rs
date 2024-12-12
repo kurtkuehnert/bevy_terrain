@@ -26,8 +26,7 @@ pub(crate) mod tile_atlas;
 pub(crate) mod tile_tree;
 
 pub use crate::terrain_data::{
-    gpu_tile_atlas::GpuTileAtlas, tile_atlas::TileAtlas, tile_tree::setup_tile_tree,
-    tile_tree::TileTree,
+    gpu_tile_atlas::GpuTileAtlas, tile_atlas::TileAtlas, tile_tree::TileTree,
 };
 
 pub const INVALID_ATLAS_INDEX: u32 = u32::MAX;

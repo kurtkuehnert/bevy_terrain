@@ -12,8 +12,7 @@ pub(crate) mod terrain_view_bind_group;
 pub(crate) mod tiling_prepass;
 
 pub use crate::render::{
-    terrain_bind_group::TerrainData,
-    terrain_material::TerrainMaterial,
-    terrain_material::TerrainMaterialPlugin,
-    terrain_view_bind_group::{GpuTerrainView, TerrainView},
+    terrain_bind_group::GpuTerrain,
+    terrain_material::{TerrainMaterial, TerrainMaterialPlugin},
+    terrain_view_bind_group::{GpuTerrainView, TerrainViewBindGroup},
 };

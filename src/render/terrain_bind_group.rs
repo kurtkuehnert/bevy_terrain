@@ -3,7 +3,6 @@ use crate::{
     terrain_data::{GpuTileAtlas, TileAtlas},
     util::GpuBuffer,
 };
-use bevy::render::storage::ShaderStorageBuffer;
 use bevy::{
     ecs::{
         query::ROQueryItem,
@@ -45,19 +44,10 @@ pub(crate) fn create_terrain_layout(device: &RenderDevice) -> BindGroupLayout {
     )
 }
 
+// Todo: replace the TerrainBindGroup with this AsBindGroup derive
+// Try implementing manually for now?
 #[derive(AsBindGroup)]
-pub struct Terrain {
-    // Todo: replace with updatable uniform buffer
-    // #[uniform(0)]
-    #[storage(0, visibility(vertex, fragment), read_only)]
-    pub(crate) terrain_view: Handle<ShaderStorageBuffer>,
-    #[storage(1, visibility(vertex, fragment), read_only)]
-    pub(crate) approximate_height: Handle<ShaderStorageBuffer>,
-    #[storage(2, visibility(vertex, fragment), read_only)]
-    pub(crate) tile_tree: Handle<ShaderStorageBuffer>,
-    #[storage(3, visibility(vertex, fragment), read_only, buffer)]
-    pub(crate) geometry_tiles: Buffer,
-}
+pub struct Terrain {}
 
 #[derive(Default, ShaderType)]
 struct AttachmentConfig {
@@ -104,12 +94,14 @@ impl TerrainConfigUniform {
     }
 }
 
-pub struct TerrainData {
+// Todo: convert the mesh buffer to a ShaderStorageBuffer and merge with the terrain config buffer
+
+pub struct GpuTerrain {
     mesh_buffer: GpuBuffer<MeshUniform>,
     pub(crate) terrain_bind_group: BindGroup,
 }
 
-impl TerrainData {
+impl GpuTerrain {
     fn new(
         device: &RenderDevice,
         fallback_image: &FallbackImage,
@@ -179,23 +171,23 @@ impl TerrainData {
     pub(crate) fn initialize(
         device: Res<RenderDevice>,
         fallback_image: Res<FallbackImage>,
-        mut terrain_data: ResMut<TerrainComponents<TerrainData>>,
+        mut gpu_terrains: ResMut<TerrainComponents<GpuTerrain>>,
         gpu_tile_atlases: Res<TerrainComponents<GpuTileAtlas>>,
         tile_atlases: Extract<Query<(Entity, &TileAtlas), Added<TileAtlas>>>,
     ) {
         for (terrain, tile_atlas) in &tile_atlases {
             let gpu_tile_atlas = gpu_tile_atlases.get(&terrain).unwrap();
 
-            terrain_data.insert(
+            gpu_terrains.insert(
                 terrain,
-                TerrainData::new(&device, &fallback_image, tile_atlas, gpu_tile_atlas),
+                GpuTerrain::new(&device, &fallback_image, tile_atlas, gpu_tile_atlas),
             );
         }
     }
 
     #[allow(clippy::type_complexity)]
     pub(crate) fn extract(
-        mut terrain_data: ResMut<TerrainComponents<TerrainData>>,
+        mut gpu_terrains: ResMut<TerrainComponents<GpuTerrain>>,
         terrains: Extract<
             Query<(Entity, &GlobalTransform, Option<&PreviousGlobalTransform>), With<TileAtlas>>,
         >,
@@ -211,17 +203,17 @@ impl TerrainData {
             };
             let mesh_uniform = MeshUniform::new(&mesh_transforms, 0, None);
 
-            let terrain_data = terrain_data.get_mut(&terrain).unwrap();
-            terrain_data.mesh_buffer.set_value(mesh_uniform);
+            let gpu_terrain = gpu_terrains.get_mut(&terrain).unwrap();
+            gpu_terrain.mesh_buffer.set_value(mesh_uniform);
         }
     }
 
     pub(crate) fn prepare(
         queue: Res<RenderQueue>,
-        mut terrain_data: ResMut<TerrainComponents<TerrainData>>,
+        mut gpu_terrains: ResMut<TerrainComponents<GpuTerrain>>,
     ) {
-        for terrain_data in &mut terrain_data.values_mut() {
-            terrain_data.mesh_buffer.update(&queue);
+        for gpu_terrain in &mut gpu_terrains.values_mut() {
+            gpu_terrain.mesh_buffer.update(&queue);
         }
     }
 }
@@ -229,7 +221,7 @@ impl TerrainData {
 pub struct SetTerrainBindGroup<const I: usize>;
 
 impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetTerrainBindGroup<I> {
-    type Param = SRes<TerrainComponents<TerrainData>>;
+    type Param = SRes<TerrainComponents<GpuTerrain>>;
     type ViewQuery = ();
     type ItemQuery = ();
 
@@ -238,12 +230,12 @@ impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetTerrainBindGroup<I> {
         item: &P,
         _: ROQueryItem<'w, Self::ViewQuery>,
         _: Option<ROQueryItem<'w, Self::ItemQuery>>,
-        terrain_data: SystemParamItem<'w, '_, Self::Param>,
+        gpu_terrains: SystemParamItem<'w, '_, Self::Param>,
         pass: &mut TrackedRenderPass<'w>,
     ) -> RenderCommandResult {
-        let data = terrain_data.into_inner().get(&item.entity()).unwrap();
+        let gpu_terrain = gpu_terrains.into_inner().get(&item.entity()).unwrap();
 
-        pass.set_bind_group(I, &data.terrain_bind_group, &[]);
+        pass.set_bind_group(I, &gpu_terrain.terrain_bind_group, &[]);
         RenderCommandResult::Success
     }
 }

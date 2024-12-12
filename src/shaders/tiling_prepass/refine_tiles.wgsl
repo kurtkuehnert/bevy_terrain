@@ -1,17 +1,17 @@
 #import bevy_terrain::types::{TileCoordinate, Coordinate}
-#import bevy_terrain::bindings::{terrain, culling_view, terrain_view, final_tiles, approximate_height_write, temporary_tiles, parameters}
+#import bevy_terrain::bindings::{terrain, culling_view, terrain_view, final_tiles, approximate_height_write, temporary_tiles, state}
 #import bevy_terrain::functions::{approximate_view_distance, compute_local_position, compute_relative_position, position_local_to_world, normal_local_to_world, tile_count, compute_subdivision_coordinate}
 
 fn child_index() -> i32 {
-    return atomicAdd(&parameters.child_index, parameters.counter);
+    return atomicAdd(&state.child_index, state.counter);
 }
 
 fn parent_index(id: u32) -> i32 {
-    return i32(terrain_view.tile_count - 1u) * clamp(parameters.counter, 0, 1) - i32(id) * parameters.counter;
+    return i32(terrain_view.tile_count - 1u) * clamp(state.counter, 0, 1) - i32(id) * state.counter;
 }
 
 fn final_index() -> i32 {
-    return atomicAdd(&parameters.final_index, 1);
+    return atomicAdd(&state.final_index, 1);
 }
 
 fn should_be_divided(tile: TileCoordinate) -> bool {
@@ -129,7 +129,7 @@ fn cull(tile: TileCoordinate) -> bool {
 
 @compute @workgroup_size(64, 1, 1)
 fn refine_tiles(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
-    if (invocation_id.x >= parameters.tile_count) { return; }
+    if (invocation_id.x >= state.tile_count) { return; }
 
     let tile = temporary_tiles[parent_index(invocation_id.x)];
 

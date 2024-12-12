@@ -1,10 +1,9 @@
-use crate::render::terrain_view_bind_group::TerrainCulling;
 use crate::{
     debug::DebugTerrain,
     render::{
         terrain_bind_group::create_terrain_layout,
-        terrain_view_bind_group::{PrepareIndirect, RefineTiles, TerrainView},
-        GpuTerrainView, TerrainData,
+        terrain_view_bind_group::{IndirectBindGroup, PrepassViewBindGroup, TerrainViewBindGroup},
+        GpuTerrain, GpuTerrainView,
     },
     shaders::{PREPARE_PREPASS_SHADER, REFINE_TILES_SHADER},
     terrain::TerrainComponents,
@@ -61,6 +60,8 @@ impl TilingPrepassPipelineKey {
     pub fn shader_defs(&self) -> Vec<ShaderDefVal> {
         let mut shader_defs = Vec::new();
 
+        shader_defs.push("PREPASS".into());
+
         if self.contains(TilingPrepassPipelineKey::SPHERICAL) {
             shader_defs.push("SPHERICAL".into());
         }
@@ -112,9 +113,8 @@ impl TilingPrepassItem {
 pub struct TerrainTilingPrepassPipelines {
     pub(crate) terrain_layout: BindGroupLayout,
     pub(crate) terrain_view_layout: BindGroupLayout,
-    pub(crate) prepare_indirect_layout: BindGroupLayout,
-    pub(crate) refine_tiles_layout: BindGroupLayout,
-    pub(crate) culling_layout: BindGroupLayout,
+    pub(crate) indirect_layout: BindGroupLayout,
+    pub(crate) prepass_view_layout: BindGroupLayout,
     prepare_prepass_shader: Handle<Shader>,
     refine_tiles_shader: Handle<Shader>,
 }
@@ -124,19 +124,17 @@ impl FromWorld for TerrainTilingPrepassPipelines {
         let device = world.resource::<RenderDevice>();
 
         let terrain_layout = create_terrain_layout(device);
-        let terrain_view_layout = TerrainView::bind_group_layout(device);
-        let prepare_indirect_layout = PrepareIndirect::bind_group_layout(device);
-        let refine_tiles_layout = RefineTiles::bind_group_layout(device);
-        let culling_layout = TerrainCulling::bind_group_layout(device);
+        let terrain_view_layout = TerrainViewBindGroup::bind_group_layout(device);
+        let indirect_layout = IndirectBindGroup::bind_group_layout(device);
+        let prepass_view_layout = PrepassViewBindGroup::bind_group_layout(device);
 
         let prepare_prepass_shader = world.load_asset(PREPARE_PREPASS_SHADER);
         let refine_tiles_shader = world.load_asset(REFINE_TILES_SHADER);
 
         TerrainTilingPrepassPipelines {
             terrain_view_layout,
-            prepare_indirect_layout,
-            refine_tiles_layout,
-            culling_layout,
+            indirect_layout,
+            prepass_view_layout,
             terrain_layout,
             prepare_prepass_shader,
             refine_tiles_shader,
@@ -156,39 +154,35 @@ impl SpecializedComputePipeline for TerrainTilingPrepassPipelines {
 
         if key.contains(TilingPrepassPipelineKey::REFINE_TILES) {
             layout = vec![
-                self.culling_layout.clone(),
+                self.prepass_view_layout.clone(),
                 self.terrain_layout.clone(),
-                self.refine_tiles_layout.clone(),
             ];
             shader = self.refine_tiles_shader.clone();
             entry_point = "refine_tiles".into();
         }
         if key.contains(TilingPrepassPipelineKey::PREPARE_ROOT) {
             layout = vec![
-                self.culling_layout.clone(),
+                self.prepass_view_layout.clone(),
                 self.terrain_layout.clone(),
-                self.refine_tiles_layout.clone(),
-                self.prepare_indirect_layout.clone(),
+                self.indirect_layout.clone(),
             ];
             shader = self.prepare_prepass_shader.clone();
             entry_point = "prepare_root".into();
         }
         if key.contains(TilingPrepassPipelineKey::PREPARE_NEXT) {
             layout = vec![
-                self.culling_layout.clone(),
+                self.prepass_view_layout.clone(),
                 self.terrain_layout.clone(),
-                self.refine_tiles_layout.clone(),
-                self.prepare_indirect_layout.clone(),
+                self.indirect_layout.clone(),
             ];
             shader = self.prepare_prepass_shader.clone();
             entry_point = "prepare_next".into();
         }
         if key.contains(TilingPrepassPipelineKey::PREPARE_RENDER) {
             layout = vec![
-                self.culling_layout.clone(),
+                self.prepass_view_layout.clone(),
                 self.terrain_layout.clone(),
-                self.refine_tiles_layout.clone(),
-                self.prepare_indirect_layout.clone(),
+                self.indirect_layout.clone(),
             ];
             shader = self.prepare_prepass_shader.clone();
             entry_point = "prepare_render".into();
@@ -218,7 +212,7 @@ impl render_graph::Node for TilingPrepass {
     ) -> Result<(), render_graph::NodeRunError> {
         let prepass_items = world.resource::<TerrainViewComponents<TilingPrepassItem>>();
         let pipeline_cache = world.resource::<PipelineCache>();
-        let terrain_data = world.resource::<TerrainComponents<TerrainData>>();
+        let gpu_terrains = world.resource::<TerrainComponents<GpuTerrain>>();
         let gpu_terrain_views = world.resource::<TerrainViewComponents<GpuTerrainView>>();
         let debug = world.get_resource::<DebugTerrain>();
 
@@ -241,37 +235,35 @@ impl render_graph::Node for TilingPrepass {
                     continue;
                 };
 
-                let terrain_data = terrain_data.get(&terrain).unwrap();
+                let gpu_terrain = gpu_terrains.get(&terrain).unwrap();
                 let gpu_terrain_view = gpu_terrain_views.get(&(terrain, view)).unwrap();
 
-                let Some(refine_tiles) = &gpu_terrain_view.refine_tiles_bind_group else {
+                let terrain_bind_group = &gpu_terrain.terrain_bind_group;
+                let Some(prepass_view_bind_group) = &gpu_terrain_view.prepass_view_bind_group
+                else {
                     continue;
                 };
-                let Some(prepare_indirect) = &gpu_terrain_view.prepare_indirect_bind_group else {
-                    continue;
-                };
-                let Some(culling) = &gpu_terrain_view.terrain_culling_bind_group else {
+                let Some(indirect_bind_group) = &gpu_terrain_view.indirect_bind_group else {
                     continue;
                 };
 
-                pass.set_bind_group(0, culling, &[]);
-                pass.set_bind_group(1, &terrain_data.terrain_bind_group, &[]);
-                pass.set_bind_group(2, refine_tiles, &[]);
-                pass.set_bind_group(3, prepare_indirect, &[]);
+                pass.set_bind_group(0, prepass_view_bind_group, &[]);
+                pass.set_bind_group(1, terrain_bind_group, &[]);
+                pass.set_bind_group(2, indirect_bind_group, &[]);
 
                 pass.set_pipeline(prepare_root_pipeline);
                 pass.dispatch_workgroups(1, 1, 1);
 
                 for _ in 0..gpu_terrain_view.refinement_count {
                     pass.set_pipeline(refine_tiles_pipeline);
-                    pass.dispatch_workgroups_indirect(&gpu_terrain_view.indirect, 0);
+                    pass.dispatch_workgroups_indirect(&gpu_terrain_view.indirect_buffer, 0);
 
                     pass.set_pipeline(prepare_next_pipeline);
                     pass.dispatch_workgroups(1, 1, 1);
                 }
 
                 pass.set_pipeline(refine_tiles_pipeline);
-                pass.dispatch_workgroups_indirect(&gpu_terrain_view.indirect, 0);
+                pass.dispatch_workgroups_indirect(&gpu_terrain_view.indirect_buffer, 0);
 
                 pass.set_pipeline(prepare_render_pipeline);
                 pass.dispatch_workgroups(1, 1, 1);

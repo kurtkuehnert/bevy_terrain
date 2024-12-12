@@ -8,7 +8,7 @@ use crate::{
         tiling_prepass::{
             queue_tiling_prepass, TerrainTilingPrepassPipelines, TilingPrepass, TilingPrepassItem,
         },
-        GpuTerrainView, TerrainData,
+        GpuTerrain, GpuTerrainView,
     },
     shaders::{load_terrain_shaders, InternalShaders},
     terrain::TerrainComponents,
@@ -60,7 +60,7 @@ impl Plugin for TerrainPlugin {
         app.sub_app_mut(RenderApp)
             .init_resource::<SpecializedComputePipelines<TerrainTilingPrepassPipelines>>()
             .init_resource::<TerrainComponents<GpuTileAtlas>>()
-            .init_resource::<TerrainComponents<TerrainData>>()
+            .init_resource::<TerrainComponents<GpuTerrain>>()
             .init_resource::<TerrainViewComponents<GpuTerrainView>>()
             .init_resource::<TerrainViewComponents<TilingPrepassItem>>()
             .init_resource::<DrawFunctions<TerrainItem>>()
@@ -71,8 +71,8 @@ impl Plugin for TerrainPlugin {
                     extract_terrain_phases,
                     GpuTileAtlas::initialize,
                     GpuTileAtlas::extract.after(GpuTileAtlas::initialize),
-                    TerrainData::initialize.after(GpuTileAtlas::initialize),
-                    TerrainData::extract.after(TerrainData::initialize),
+                    GpuTerrain::initialize.after(GpuTileAtlas::initialize),
+                    GpuTerrain::extract.after(GpuTerrain::initialize),
                     GpuTerrainView::initialize,
                 ),
             )
@@ -81,11 +81,10 @@ impl Plugin for TerrainPlugin {
                 (
                     (
                         GpuTileAtlas::prepare,
-                        TerrainData::prepare,
+                        GpuTerrain::prepare,
                         GpuTerrainView::prepare_terrain_view,
-                        GpuTerrainView::prepare_prepare_indirect,
+                        GpuTerrainView::prepare_indirect,
                         GpuTerrainView::prepare_refine_tiles,
-                        GpuTerrainView::prepare_culling,
                     )
                         .in_set(RenderSet::Prepare),
                     sort_phase_system::<TerrainItem>.in_set(RenderSet::PhaseSort),
