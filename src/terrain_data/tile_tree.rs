@@ -1,17 +1,20 @@
 use crate::{
     big_space::GridCell,
     math::{Coordinate, TerrainModel, TileCoordinate},
+    render::terrain_view_bind_group::TerrainViewUniform,
     terrain::TerrainConfig,
     terrain_data::{TileAtlas, INVALID_ATLAS_INDEX, INVALID_LOD},
     terrain_view::{TerrainViewComponents, TerrainViewConfig},
 };
 use bevy::{
+    asset::RenderAssetUsages,
     math::{DVec2, DVec3},
     prelude::*,
+    render::{render_resource::ShaderType, storage::ShaderStorageBuffer},
 };
-use bytemuck::{Pod, Zeroable};
-use itertools::iproduct;
+use itertools::{iproduct, Itertools};
 use ndarray::Array4;
+use std::cmp::Ordering;
 use std::{
     iter,
     sync::{Arc, Mutex},
@@ -51,7 +54,7 @@ impl Default for TileState {
 /// These entries are synced each frame with their equivalent representations in the
 /// [`GpuTileTree`](super::gpu_tile_tree::GpuTileTree) for access on the GPU.
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Zeroable, Pod)]
+#[derive(Clone, Copy, Debug, ShaderType)]
 pub(crate) struct TileTreeEntry {
     /// The atlas index of the best entry.
     pub(crate) atlas_index: u32,
@@ -121,6 +124,10 @@ pub struct TileTree {
     pub(crate) approximate_height_readback: Arc<Mutex<f32>>,
     pub(crate) height_scale: f32,
     pub(crate) order: u32,
+
+    pub(crate) tile_tree: Handle<ShaderStorageBuffer>,
+    pub(crate) terrain_view: Handle<ShaderStorageBuffer>,
+    pub(crate) approximate_height_buffer: Handle<ShaderStorageBuffer>,
 }
 
 impl TileTree {
@@ -168,6 +175,9 @@ impl TileTree {
             height_scale: 1.0,
             order: view_config.order,
             relative_view_position: Default::default(),
+            tile_tree: Default::default(),
+            terrain_view: Default::default(),
+            approximate_height_buffer: Default::default(),
         }
     }
 
@@ -200,16 +210,17 @@ impl TileTree {
         let tile_offset = view_tile_xy.as_ivec2() - tile.xy;
         let mut offset = view_tile_xy % 1.0;
 
-        if tile_offset.x < 0 {
-            offset.x = 0.0;
-        } else if tile_offset.x > 0 {
-            offset.x = 1.0;
-        }
-        if tile_offset.y < 0 {
-            offset.y = 0.0;
-        } else if tile_offset.y > 0 {
-            offset.y = 1.0;
-        }
+        offset.x = match tile_offset.x.cmp(&0) {
+            Ordering::Less => 0.0,
+            Ordering::Greater => 1.0,
+            Ordering::Equal => offset.x,
+        };
+
+        offset.y = match tile_offset.y.cmp(&0) {
+            Ordering::Less => 0.0,
+            Ordering::Greater => 1.0,
+            Ordering::Equal => offset.y,
+        };
 
         let tile_world_position =
             Coordinate::new(tile.face, (tile.xy.as_dvec2() + offset) / tile_count)
@@ -344,4 +355,41 @@ impl TileTree {
             });
         }
     }
+
+    pub fn update_tile_tree_buffer(
+        tile_trees: Res<TerrainViewComponents<TileTree>>,
+        mut buffers: ResMut<Assets<ShaderStorageBuffer>>,
+    ) {
+        for tile_tree in tile_trees.values() {
+            let terrain_view = buffers.get_mut(&tile_tree.terrain_view).unwrap();
+            terrain_view.set_data(TerrainViewUniform::from(tile_tree));
+
+            let tile_tree_buffer = buffers.get_mut(&tile_tree.tile_tree).unwrap();
+            tile_tree_buffer.set_data(TileTreeUniform {
+                entries: tile_tree.data.clone().into_iter().collect_vec(),
+            });
+        }
+    }
+}
+
+// Convert to hook
+pub fn setup_tile_tree(tile_tree: &mut TileTree, buffers: &mut Assets<ShaderStorageBuffer>) {
+    tile_tree.terrain_view = buffers.add(ShaderStorageBuffer::with_size(
+        TerrainViewUniform::min_size().get() as usize,
+        RenderAssetUsages::all(),
+    ));
+    tile_tree.tile_tree = buffers.add(ShaderStorageBuffer::with_size(
+        tile_tree.data.len() * size_of::<TileTreeEntry>(),
+        RenderAssetUsages::all(),
+    ));
+    tile_tree.approximate_height_buffer = buffers.add(ShaderStorageBuffer::with_size(
+        size_of::<f32>(),
+        RenderAssetUsages::all(),
+    ));
+}
+
+#[derive(Default, ShaderType)]
+pub struct TileTreeUniform {
+    #[size(runtime)]
+    entries: Vec<TileTreeEntry>,
 }

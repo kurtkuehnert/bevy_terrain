@@ -1,20 +1,18 @@
 use crate::{
     math::sync_terrain_position,
     render::{
-        culling_bind_group::CullingBindGroup,
         terrain_pass::{
             extract_terrain_phases, prepare_terrain_depth_textures, DepthCopyPipeline, TerrainItem,
-            TerrainPassNode,
+            TerrainPass,
         },
         tiling_prepass::{
-            queue_tiling_prepass, TilingPrepassItem, TilingPrepassLabel, TilingPrepassNode,
-            TilingPrepassPipelines,
+            queue_tiling_prepass, TerrainTilingPrepassPipelines, TilingPrepass, TilingPrepassItem,
         },
         GpuTerrainView, TerrainData,
     },
     shaders::{load_terrain_shaders, InternalShaders},
     terrain::TerrainComponents,
-    terrain_data::{GpuTileAtlas, GpuTileTree, TileAtlas, TileTree},
+    terrain_data::{GpuTileAtlas, TileAtlas, TileTree},
     terrain_view::TerrainViewComponents,
 };
 use bevy::{
@@ -55,16 +53,15 @@ impl Plugin for TerrainPlugin {
                     TileTree::adjust_to_tile_atlas,
                     #[cfg(feature = "high_precision")]
                     TileTree::generate_surface_approximation,
+                    TileTree::update_tile_tree_buffer,
                 )
                     .chain(),
             );
         app.sub_app_mut(RenderApp)
-            .init_resource::<SpecializedComputePipelines<TilingPrepassPipelines>>()
+            .init_resource::<SpecializedComputePipelines<TerrainTilingPrepassPipelines>>()
             .init_resource::<TerrainComponents<GpuTileAtlas>>()
             .init_resource::<TerrainComponents<TerrainData>>()
-            .init_resource::<TerrainViewComponents<GpuTileTree>>()
             .init_resource::<TerrainViewComponents<GpuTerrainView>>()
-            .init_resource::<TerrainViewComponents<CullingBindGroup>>()
             .init_resource::<TerrainViewComponents<TilingPrepassItem>>()
             .init_resource::<DrawFunctions<TerrainItem>>()
             .init_resource::<ViewSortedRenderPhases<TerrainItem>>()
@@ -74,23 +71,21 @@ impl Plugin for TerrainPlugin {
                     extract_terrain_phases,
                     GpuTileAtlas::initialize,
                     GpuTileAtlas::extract.after(GpuTileAtlas::initialize),
-                    GpuTileTree::initialize,
-                    GpuTileTree::extract.after(GpuTileTree::initialize),
                     TerrainData::initialize.after(GpuTileAtlas::initialize),
                     TerrainData::extract.after(TerrainData::initialize),
-                    GpuTerrainView::initialize.after(GpuTileTree::initialize),
-                    GpuTerrainView::extract.after(GpuTerrainView::initialize),
+                    GpuTerrainView::initialize,
                 ),
             )
             .add_systems(
                 Render,
                 (
                     (
-                        GpuTileTree::prepare,
                         GpuTileAtlas::prepare,
                         TerrainData::prepare,
-                        GpuTerrainView::prepare,
-                        CullingBindGroup::prepare,
+                        GpuTerrainView::prepare_terrain_view,
+                        GpuTerrainView::prepare_prepare_indirect,
+                        GpuTerrainView::prepare_refine_tiles,
+                        GpuTerrainView::prepare_culling,
                     )
                         .in_set(RenderSet::Prepare),
                     sort_phase_system::<TerrainItem>.in_set(RenderSet::PhaseSort),
@@ -101,29 +96,25 @@ impl Plugin for TerrainPlugin {
                         .in_set(RenderSet::Cleanup),
                 ),
             )
-            .add_render_graph_node::<ViewNodeRunner<TerrainPassNode>>(Core3d, TerrainPassNode)
+            .add_render_graph_node::<ViewNodeRunner<TerrainPass>>(Core3d, TerrainPass)
             .add_render_graph_edges(
                 Core3d,
-                (
-                    Node3d::StartMainPass,
-                    TerrainPassNode,
-                    Node3d::MainOpaquePass,
-                ),
+                (Node3d::StartMainPass, TerrainPass, Node3d::MainOpaquePass),
             );
 
         let mut render_graph = app
             .sub_app_mut(RenderApp)
             .world_mut()
             .resource_mut::<RenderGraph>();
-        render_graph.add_node(TilingPrepassLabel, TilingPrepassNode);
-        render_graph.add_node_edge(TilingPrepassLabel, CameraDriverLabel);
+        render_graph.add_node(TilingPrepass, TilingPrepass);
+        render_graph.add_node_edge(TilingPrepass, CameraDriverLabel);
     }
 
     fn finish(&self, app: &mut App) {
         load_terrain_shaders(app);
 
         app.sub_app_mut(RenderApp)
-            .init_resource::<TilingPrepassPipelines>()
+            .init_resource::<TerrainTilingPrepassPipelines>()
             .init_resource::<DepthCopyPipeline>();
     }
 }

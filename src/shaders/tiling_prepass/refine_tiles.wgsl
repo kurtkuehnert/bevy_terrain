@@ -1,5 +1,5 @@
 #import bevy_terrain::types::{TileCoordinate, Coordinate}
-#import bevy_terrain::bindings::{terrain, culling_view, terrain_view, final_tiles, temporary_tiles, parameters}
+#import bevy_terrain::bindings::{terrain, culling_view, terrain_view, final_tiles, approximate_height_write, temporary_tiles, parameters}
 #import bevy_terrain::functions::{approximate_view_distance, compute_local_position, compute_relative_position, position_local_to_world, normal_local_to_world, tile_count, compute_subdivision_coordinate}
 
 fn child_index() -> i32 {
@@ -16,7 +16,7 @@ fn final_index() -> i32 {
 
 fn should_be_divided(tile: TileCoordinate) -> bool {
     let coordinate    = compute_subdivision_coordinate(Coordinate(tile.face, tile.lod, tile.xy, vec2<f32>(0.0)));
-    let view_distance = approximate_view_distance(coordinate, culling_view.world_position);
+    let view_distance = approximate_view_distance(coordinate, culling_view.world_position, approximate_height_write);
 
     return view_distance < terrain_view.subdivision_distance / tile_count(tile.lod);
 }

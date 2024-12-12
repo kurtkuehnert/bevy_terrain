@@ -1,6 +1,7 @@
+use crate::terrain_data::tile_atlas::{AtlasTile, AtlasTileAttachment};
 use crate::{
     math::TileCoordinate,
-    terrain_data::{AtlasTile, AtlasTileAttachment, AttachmentFormat, TileAtlas},
+    terrain_data::{AttachmentFormat, TileAtlas},
     util::CollectArray,
 };
 use bevy::image::ImageSampler;

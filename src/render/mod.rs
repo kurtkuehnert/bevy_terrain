@@ -5,7 +5,6 @@
 //! each view. Then they are drawn using a single draw indirect call and morphed together to form
 //! one continuous surface.
 
-pub(crate) mod culling_bind_group;
 pub(crate) mod terrain_bind_group;
 pub(crate) mod terrain_material;
 pub(crate) mod terrain_pass;
@@ -13,6 +12,8 @@ pub(crate) mod terrain_view_bind_group;
 pub(crate) mod tiling_prepass;
 
 pub use crate::render::{
-    terrain_bind_group::TerrainData, terrain_material::TerrainMaterial,
-    terrain_material::TerrainMaterialPlugin, terrain_view_bind_group::GpuTerrainView,
+    terrain_bind_group::TerrainData,
+    terrain_material::TerrainMaterial,
+    terrain_material::TerrainMaterialPlugin,
+    terrain_view_bind_group::{GpuTerrainView, TerrainView},
 };

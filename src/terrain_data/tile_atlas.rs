@@ -3,8 +3,8 @@ use crate::{
     math::{TerrainModel, TileCoordinate},
     terrain::TerrainConfig,
     terrain_data::{
-        AttachmentConfig, AttachmentData, AttachmentFormat, TileTree, TileTreeEntry,
-        INVALID_ATLAS_INDEX, INVALID_LOD,
+        AttachmentConfig, AttachmentData, AttachmentFormat, TileTree, INVALID_ATLAS_INDEX,
+        INVALID_LOD,
     },
     terrain_view::TerrainViewComponents,
     util::{R16Image, Rg16Image, Rgba8Image},
@@ -24,6 +24,7 @@ use tiff::decoder::{Decoder, DecodingResult};
 
 #[cfg(feature = "high_precision")]
 use crate::big_space::GridCell;
+use crate::terrain_data::tile_tree::TileTreeEntry;
 
 #[derive(Copy, Clone, Debug, Default, ShaderType)]
 pub struct AtlasTile {

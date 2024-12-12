@@ -1,7 +1,7 @@
 #define_import_path bevy_terrain::debug
 
 #import bevy_terrain::types::{Coordinate, AtlasTile, Blend}
-#import bevy_terrain::bindings::{terrain, tile_tree, terrain_view, geometry_tiles, attachments, origins}
+#import bevy_terrain::bindings::{terrain, tile_tree, terrain_view, approximate_height, geometry_tiles, attachments, origins}
 #import bevy_terrain::functions::{inverse_mix, compute_coordinate, lookup_best, approximate_view_distance, compute_blend, tree_lod, inside_square, tile_coordinate, coordinate_from_local_position, compute_subdivision_coordinate}
 #import bevy_pbr::mesh_view_bindings::view
 
@@ -54,7 +54,7 @@ fn show_data_lod(blend: Blend, tile: AtlasTile) -> vec4<f32> {
 }
 
 fn show_geometry_lod(coordinate: Coordinate) -> vec4<f32> {
-    let view_distance  = approximate_view_distance(coordinate, view.world_position);
+    let view_distance  = approximate_view_distance(coordinate, view.world_position, approximate_height);
     let target_lod     = log2(2.0 * terrain_view.morph_distance / view_distance);
 
 #ifdef MORPH
@@ -93,7 +93,7 @@ fn show_geometry_lod(coordinate: Coordinate) -> vec4<f32> {
     return color;
 }
 fn show_tile_tree(coordinate: Coordinate) -> vec4<f32> {
-    let view_distance  = approximate_view_distance(coordinate, view.world_position);
+    let view_distance  = approximate_view_distance(coordinate, view.world_position, approximate_height);
     let target_lod     = log2(terrain_view.load_distance / view_distance);
 
     let best_lookup = lookup_best(coordinate);

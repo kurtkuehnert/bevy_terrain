@@ -2,6 +2,8 @@ struct PickingData {
     cursor_coords: vec2<f32>,
     depth: f32,
     stencil: u32,
+    world_from_clip: mat4x4<f32>,
+    cell: vec3<i32>,
 }
 
 @group(0) @binding(0)
