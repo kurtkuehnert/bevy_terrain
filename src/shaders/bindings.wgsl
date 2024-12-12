@@ -1,6 +1,6 @@
 #define_import_path bevy_terrain::bindings
 
-#import bevy_terrain::types::{TerrainView, Terrain, TileTreeEntry, TileCoordinate, AttachmentConfig, TerrainModelApproximation, CullingData, IndirectBuffer, Parameters}
+#import bevy_terrain::types::{TerrainView, Terrain, TileTreeEntry, TileCoordinate, AttachmentConfig, TerrainModelApproximation, CullingData, IndirectBuffer, PrepassState}
 #import bevy_pbr::mesh_types::Mesh
 
 // terrain bindings
@@ -30,6 +30,7 @@ var attachment6: texture_2d_array<f32>;
 var attachment7: texture_2d_array<f32>;
 
 // terrain view bindings
+#ifndef PREPASS
 @group(2) @binding(0)
 var<storage> terrain_view: TerrainView;
 @group(2) @binding(1)
@@ -38,20 +39,25 @@ var<storage> approximate_height: f32;
 var<storage> tile_tree: array<TileTreeEntry>;
 @group(2) @binding(3)
 var<storage> geometry_tiles: array<TileCoordinate>;
+#endif PREPASS
 
-// refine geometry_tiles bindings
-@group(2) @binding(1)
-var<storage, read_write> approximate_height_write: f32;
-@group(2) @binding(3)
-var<storage, read_write> final_tiles: array<TileCoordinate>;
-@group(2) @binding(4)
-var<storage, read_write> temporary_tiles: array<TileCoordinate>;
-@group(2) @binding(5)
-var<storage, read_write> parameters: Parameters;
-
-@group(3) @binding(0)
-var<storage, read_write> indirect_buffer: IndirectBuffer;
-
-// culling bindings
+// refine tiles bindings
+#ifdef PREPASS
 @group(0) @binding(0)
+var<storage> terrain_view: TerrainView;
+@group(0) @binding(1)
+var<storage, read_write> approximate_height_write: f32; // Todo: consider using shaderdefs instead of rename for read/read_write
+@group(0) @binding(2)
+var<storage> tile_tree: array<TileTreeEntry>;
+@group(0) @binding(3)
+var<storage, read_write> final_tiles: array<TileCoordinate>;
+@group(0) @binding(4)
+var<storage, read_write> temporary_tiles: array<TileCoordinate>;
+@group(0) @binding(5)
+var<storage, read_write> state: PrepassState;
+@group(0) @binding(6)
 var<storage> culling_view: CullingData;
+
+@group(2) @binding(0)
+var<storage, read_write> indirect_buffer: IndirectBuffer;
+#endif

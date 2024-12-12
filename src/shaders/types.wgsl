@@ -51,7 +51,7 @@ struct ViewCoordinate {
     uv: vec2<f32>,
 }
 
-struct Parameters {
+struct PrepassState {
     tile_count: u32,
     counter: i32,
     child_index: atomic<i32>,

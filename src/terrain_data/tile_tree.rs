@@ -1,3 +1,4 @@
+use crate::render::terrain_view_bind_group::TileTreeUniform;
 use crate::{
     big_space::GridCell,
     math::{Coordinate, TerrainModel, TileCoordinate},
@@ -132,9 +133,33 @@ pub struct TileTree {
 
 impl TileTree {
     /// Creates a new tile_tree from a terrain and a terrain view config.
-    pub fn new(config: &TerrainConfig, view_config: &TerrainViewConfig) -> Self {
+    pub fn new(
+        config: &TerrainConfig,
+        view_config: &TerrainViewConfig,
+        buffers: &mut Assets<ShaderStorageBuffer>, // Todo: solve this dependency with a component hook in the future
+    ) -> Self {
         let model = &config.model;
         let scale = model.scale();
+
+        let data = Array4::default((
+            model.face_count() as usize,
+            config.lod_count as usize,
+            view_config.tree_size as usize,
+            view_config.tree_size as usize,
+        ));
+
+        let terrain_view = buffers.add(ShaderStorageBuffer::with_size(
+            TerrainViewUniform::min_size().get() as usize,
+            RenderAssetUsages::all(),
+        ));
+        let tile_tree = buffers.add(ShaderStorageBuffer::with_size(
+            data.len() * size_of::<TileTreeEntry>(),
+            RenderAssetUsages::all(),
+        ));
+        let approximate_height_buffer = buffers.add(ShaderStorageBuffer::with_size(
+            size_of::<f32>(),
+            RenderAssetUsages::all(),
+        ));
 
         Self {
             tree_size: view_config.tree_size,
@@ -153,12 +178,7 @@ impl TileTree {
             view_face: 0,
             view_lod: view_config.view_lod,
             view_world_position: default(),
-            data: Array4::default((
-                model.face_count() as usize,
-                config.lod_count as usize,
-                view_config.tree_size as usize,
-                view_config.tree_size as usize,
-            )),
+            data,
             tiles: Array4::default((
                 model.face_count() as usize,
                 config.lod_count as usize,
@@ -175,9 +195,9 @@ impl TileTree {
             height_scale: 1.0,
             order: view_config.order,
             relative_view_position: Default::default(),
-            tile_tree: Default::default(),
-            terrain_view: Default::default(),
-            approximate_height_buffer: Default::default(),
+            tile_tree,
+            terrain_view,
+            approximate_height_buffer,
         }
     }
 
@@ -370,26 +390,4 @@ impl TileTree {
             });
         }
     }
-}
-
-// Convert to hook
-pub fn setup_tile_tree(tile_tree: &mut TileTree, buffers: &mut Assets<ShaderStorageBuffer>) {
-    tile_tree.terrain_view = buffers.add(ShaderStorageBuffer::with_size(
-        TerrainViewUniform::min_size().get() as usize,
-        RenderAssetUsages::all(),
-    ));
-    tile_tree.tile_tree = buffers.add(ShaderStorageBuffer::with_size(
-        tile_tree.data.len() * size_of::<TileTreeEntry>(),
-        RenderAssetUsages::all(),
-    ));
-    tile_tree.approximate_height_buffer = buffers.add(ShaderStorageBuffer::with_size(
-        size_of::<f32>(),
-        RenderAssetUsages::all(),
-    ));
-}
-
-#[derive(Default, ShaderType)]
-pub struct TileTreeUniform {
-    #[size(runtime)]
-    entries: Vec<TileTreeEntry>,
 }

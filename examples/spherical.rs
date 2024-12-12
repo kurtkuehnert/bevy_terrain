@@ -1,7 +1,8 @@
-use bevy::render::storage::ShaderStorageBuffer;
-use bevy::{math::DVec3, prelude::*, reflect::TypePath, render::render_resource::*};
+use bevy::{
+    math::DVec3, prelude::*, reflect::TypePath, render::render_resource::*,
+    render::storage::ShaderStorageBuffer,
+};
 use bevy_terrain::prelude::*;
-use bevy_terrain::terrain_data::setup_tile_tree;
 
 const RADIUS: f64 = 6371000.0;
 const MAJOR_AXES: f64 = 6371000.0;
@@ -131,8 +132,7 @@ fn setup(
             ))
             .id();
 
-        let mut tile_tree = TileTree::new(&global_config, &global_view_config);
-        setup_tile_tree(&mut tile_tree, &mut buffers);
+        let tile_tree = TileTree::new(&global_config, &global_view_config, &mut buffers);
 
         tile_trees.insert((global_terrain, view), tile_tree);
         // tile_trees.insert(

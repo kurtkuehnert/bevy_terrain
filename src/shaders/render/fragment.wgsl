@@ -110,7 +110,7 @@ fn fragment(input: FragmentInput) -> FragmentOutput {
     var color            = sample_color(tile);
     var surface_gradient = sample_surface_gradient(tile, info.tangent_space);
 
-    // if mask { discard; }
+    if mask { discard; }
 
     if (info.blend.ratio > 0.0) {
         let tile2        = lookup_tile(info.coordinate, info.blend, 1u);
