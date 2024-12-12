@@ -3,7 +3,7 @@ use crate::{
     preprocess::{gpu_preprocessor::GpuPreprocessor, preprocessor::PreprocessTaskType},
     shaders::{load_preprocess_shaders, DOWNSAMPLE_SHADER, SPLIT_SHADER, STITCH_SHADER},
     terrain::TerrainComponents,
-    terrain_data::{create_attachment_layout, GpuTileAtlas},
+    terrain_data::GpuTileAtlas,
 };
 use bevy::{
     prelude::*,
@@ -24,6 +24,7 @@ pub(crate) use crate::preprocess::{
     gpu_preprocessor::{create_downsample_layout, create_split_layout, create_stitch_layout},
     preprocessor::{preprocessor_load_tile, select_ready_tasks, PreprocessTask},
 };
+use crate::terrain_data::gpu_tile_atlas::create_attachment_layout;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
 pub struct TerrainPreprocessLabel;

@@ -1,9 +1,9 @@
+use crate::terrain_data::tile_atlas::{
+    AtlasAttachment, AtlasTileAttachment, AtlasTileAttachmentWithData,
+};
 use crate::{
     terrain::TerrainComponents,
-    terrain_data::{
-        AtlasAttachment, AtlasTileAttachment, AtlasTileAttachmentWithData, AttachmentData,
-        AttachmentFormat, TileAtlas,
-    },
+    terrain_data::{AttachmentData, AttachmentFormat, TileAtlas},
     util::GpuBuffer,
 };
 use bevy::{

@@ -228,8 +228,9 @@ impl FromWorld for DepthCopyPipeline {
 }
 
 #[derive(Debug, Hash, Default, PartialEq, Eq, Clone, RenderLabel)]
-pub struct TerrainPassNode;
-impl ViewNode for TerrainPassNode {
+pub struct TerrainPass;
+
+impl ViewNode for TerrainPass {
     type ViewQuery = (
         Entity,
         &'static ExtractedCamera,

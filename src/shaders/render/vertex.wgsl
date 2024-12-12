@@ -1,6 +1,6 @@
 #define_import_path bevy_terrain::vertex
 
-#import bevy_terrain::types::{Blend, AtlasTile, Coordinate}
+#import bevy_terrain::types::{Blend, AtlasTile, Coordinate, TileCoordinate}
 #import bevy_terrain::bindings::{terrain, terrain_view, approximate_height, geometry_tiles}
 #import bevy_terrain::functions::{lookup_tile, compute_tile_uv, compute_local_position, compute_relative_position, compute_morph, compute_blend, normal_local_to_world, position_local_to_world}
 #import bevy_terrain::attachments::{sample_height, sample_attachment0_gather0}

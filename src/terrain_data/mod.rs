@@ -21,18 +21,12 @@ use bytemuck::cast_slice;
 use itertools::{iproduct, Itertools};
 use std::iter;
 
-mod gpu_tile_atlas;
-mod gpu_tile_tree;
-mod tile_atlas;
-mod tile_tree;
+pub(crate) mod gpu_tile_atlas;
+pub(crate) mod tile_atlas;
+pub(crate) mod tile_tree;
 
-pub(crate) use crate::terrain_data::{
-    gpu_tile_atlas::create_attachment_layout,
-    tile_atlas::{AtlasAttachment, AtlasTile, AtlasTileAttachment, AtlasTileAttachmentWithData},
-    tile_tree::TileTreeEntry,
-};
 pub use crate::terrain_data::{
-    gpu_tile_atlas::GpuTileAtlas, gpu_tile_tree::GpuTileTree, tile_atlas::TileAtlas,
+    gpu_tile_atlas::GpuTileAtlas, tile_atlas::TileAtlas, tile_tree::setup_tile_tree,
     tile_tree::TileTree,
 };
 

@@ -1,21 +1,18 @@
-use crate::render::terrain_bind_group::{create_terrain_layout, SetTerrainBindGroup};
-use crate::render::terrain_view_bind_group::{
-    create_terrain_view_layout, DrawTerrainCommand, SetTerrainViewBindGroup,
-};
 use crate::{
     debug::DebugTerrain,
-    render::terrain_pass::TerrainItem,
+    render::{
+        terrain_bind_group::SetTerrainBindGroup,
+        terrain_pass::{TerrainItem, TERRAIN_DEPTH_FORMAT},
+        terrain_view_bind_group::{DrawTerrainCommand, SetTerrainViewBindGroup},
+        tiling_prepass::TerrainTilingPrepassPipelines,
+        GpuTerrainView,
+    },
     shaders::{DEFAULT_FRAGMENT_SHADER, DEFAULT_VERTEX_SHADER},
     terrain::TerrainComponents,
     terrain_data::GpuTileAtlas,
     terrain_view::TerrainViewComponents,
 };
 
-use crate::render::terrain_pass::TERRAIN_DEPTH_FORMAT;
-use crate::render::GpuTerrainView;
-use bevy::render::render_phase::{PhaseItemExtraIndex, ViewSortedRenderPhases};
-use bevy::render::sync_world::MainEntity;
-use bevy::render::Extract;
 use bevy::{
     pbr::{
         MaterialPipeline, MeshPipeline, MeshPipelineViewLayoutKey, PreparedMaterial,
@@ -24,11 +21,15 @@ use bevy::{
     prelude::*,
     render::{
         render_asset::{prepare_assets, RenderAssetPlugin, RenderAssets},
-        render_phase::{AddRenderCommand, DrawFunctions, SetItemPipeline},
+        render_phase::{
+            AddRenderCommand, DrawFunctions, PhaseItemExtraIndex, SetItemPipeline,
+            ViewSortedRenderPhases,
+        },
         render_resource::*,
         renderer::RenderDevice,
+        sync_world::MainEntity,
         texture::GpuImage,
-        Render, RenderApp, RenderSet,
+        Extract, Render, RenderApp, RenderSet,
     },
 };
 use derive_more::derive::From;
@@ -41,18 +42,6 @@ pub struct TerrainMaterial<M: Material>(pub Handle<M>);
 impl<M: Material> Default for TerrainMaterial<M> {
     fn default() -> Self {
         Self(Handle::default())
-    }
-}
-
-impl<M: Material> From<TerrainMaterial<M>> for AssetId<M> {
-    fn from(material: TerrainMaterial<M>) -> Self {
-        material.id()
-    }
-}
-
-impl<M: Material> From<&TerrainMaterial<M>> for AssetId<M> {
-    fn from(material: &TerrainMaterial<M>) -> Self {
-        material.id()
     }
 }
 
@@ -269,13 +258,13 @@ impl TerrainPipelineFlags {
 /// The pipeline used to render the terrain entities.
 #[derive(Resource)]
 pub struct TerrainRenderPipeline<M: Material> {
-    pub(crate) view_layout: BindGroupLayout,
-    pub(crate) view_layout_multisampled: BindGroupLayout,
-    pub(crate) terrain_layout: BindGroupLayout,
-    pub(crate) terrain_view_layout: BindGroupLayout,
-    pub(crate) material_layout: BindGroupLayout,
-    pub vertex_shader: Handle<Shader>,
-    pub fragment_shader: Handle<Shader>,
+    view_layout: BindGroupLayout,
+    view_layout_multisampled: BindGroupLayout,
+    terrain_layout: BindGroupLayout,
+    terrain_view_layout: BindGroupLayout,
+    material_layout: BindGroupLayout,
+    vertex_shader: Handle<Shader>,
+    fragment_shader: Handle<Shader>,
     marker: PhantomData<M>,
 }
 
@@ -283,16 +272,7 @@ impl<M: Material> FromWorld for TerrainRenderPipeline<M> {
     fn from_world(world: &mut World) -> Self {
         let device = world.resource::<RenderDevice>();
         let mesh_pipeline = world.resource::<MeshPipeline>();
-
-        let view_layout = mesh_pipeline
-            .get_view_layout(MeshPipelineViewLayoutKey::empty())
-            .clone();
-        let view_layout_multisampled = mesh_pipeline
-            .get_view_layout(MeshPipelineViewLayoutKey::MULTISAMPLED)
-            .clone();
-        let terrain_layout = create_terrain_layout(device);
-        let terrain_view_layout = create_terrain_view_layout(device);
-        let material_layout = M::bind_group_layout(device);
+        let prepass_pipelines = world.resource::<TerrainTilingPrepassPipelines>();
 
         let vertex_shader = match M::vertex_shader() {
             ShaderRef::Default => world.load_asset(DEFAULT_VERTEX_SHADER),
@@ -307,11 +287,15 @@ impl<M: Material> FromWorld for TerrainRenderPipeline<M> {
         };
 
         Self {
-            view_layout,
-            view_layout_multisampled,
-            terrain_layout,
-            terrain_view_layout,
-            material_layout,
+            view_layout: mesh_pipeline
+                .get_view_layout(MeshPipelineViewLayoutKey::empty())
+                .clone(),
+            view_layout_multisampled: mesh_pipeline
+                .get_view_layout(MeshPipelineViewLayoutKey::MULTISAMPLED)
+                .clone(),
+            terrain_layout: prepass_pipelines.terrain_layout.clone(),
+            terrain_view_layout: prepass_pipelines.terrain_view_layout.clone(),
+            material_layout: M::bind_group_layout(device),
             vertex_shader,
             fragment_shader,
             marker: PhantomData,

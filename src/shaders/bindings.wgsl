@@ -31,15 +31,17 @@ var attachment7: texture_2d_array<f32>;
 
 // terrain view bindings
 @group(2) @binding(0)
-var<uniform> terrain_view: TerrainView;
+var<storage> terrain_view: TerrainView;
 @group(2) @binding(1)
-var<storage, read_write> approximate_height: f32;
+var<storage> approximate_height: f32;
 @group(2) @binding(2)
 var<storage> tile_tree: array<TileTreeEntry>;
 @group(2) @binding(3)
 var<storage> geometry_tiles: array<TileCoordinate>;
 
 // refine geometry_tiles bindings
+@group(2) @binding(1)
+var<storage, read_write> approximate_height_write: f32;
 @group(2) @binding(3)
 var<storage, read_write> final_tiles: array<TileCoordinate>;
 @group(2) @binding(4)
@@ -52,4 +54,4 @@ var<storage, read_write> indirect_buffer: IndirectBuffer;
 
 // culling bindings
 @group(0) @binding(0)
-var<uniform> culling_view: CullingData;
+var<storage> culling_view: CullingData;

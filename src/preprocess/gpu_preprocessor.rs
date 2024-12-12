@@ -1,7 +1,8 @@
+use crate::terrain_data::tile_atlas::AtlasTile;
 use crate::{
     preprocess::{PreprocessTask, PreprocessTaskType, Preprocessor, TerrainPreprocessItem},
     terrain::TerrainComponents,
-    terrain_data::{AtlasTile, GpuTileAtlas, TileAtlas},
+    terrain_data::{GpuTileAtlas, TileAtlas},
     util::GpuBuffer,
 };
 use bevy::{

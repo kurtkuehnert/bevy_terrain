@@ -1,14 +1,12 @@
 use crate::{
     big_space::GridCell,
-    render::terrain_pass::{TerrainPassNode, TerrainViewDepthTexture},
+    render::terrain_pass::{TerrainPass, TerrainViewDepthTexture},
     shaders::PICKING_SHADER,
 };
-use bevy::ecs::component::ComponentId;
-use bevy::ecs::world::DeferredWorld;
 use bevy::{
     asset::RenderAssetUsages,
     core_pipeline::core_3d::graph::Core3d,
-    ecs::query::QueryItem,
+    ecs::{component::ComponentId, query::QueryItem, world::DeferredWorld},
     prelude::*,
     render::{
         extract_component::{ExtractComponent, ExtractComponentPlugin},
@@ -169,9 +167,9 @@ impl FromWorld for PickingPipeline {
 }
 
 #[derive(Debug, Hash, Default, PartialEq, Eq, Clone, RenderLabel)]
-pub struct PickingNode;
+pub struct PickingPass;
 
-impl render_graph::ViewNode for PickingNode {
+impl render_graph::ViewNode for PickingPass {
     type ViewQuery = (&'static GpuPickingBuffer, &'static TerrainViewDepthTexture);
 
     fn run<'w>(
@@ -230,8 +228,8 @@ impl Plugin for TerrainPickingPlugin {
         .add_plugins(ExtractComponentPlugin::<PickingData>::default());
 
         app.sub_app_mut(RenderApp)
-            .add_render_graph_node::<ViewNodeRunner<PickingNode>>(Core3d, PickingNode)
-            .add_render_graph_edge(Core3d, TerrainPassNode, PickingNode);
+            .add_render_graph_node::<ViewNodeRunner<PickingPass>>(Core3d, PickingPass)
+            .add_render_graph_edge(Core3d, TerrainPass, PickingPass);
     }
     fn finish(&self, app: &mut App) {
         app.sub_app_mut(RenderApp)

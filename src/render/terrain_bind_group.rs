@@ -3,6 +3,7 @@ use crate::{
     terrain_data::{GpuTileAtlas, TileAtlas},
     util::GpuBuffer,
 };
+use bevy::render::storage::ShaderStorageBuffer;
 use bevy::{
     ecs::{
         query::ROQueryItem,
@@ -42,6 +43,20 @@ pub(crate) fn create_terrain_layout(device: &RenderDevice) -> BindGroupLayout {
             ),
         ),
     )
+}
+
+#[derive(AsBindGroup)]
+pub struct Terrain {
+    // Todo: replace with updatable uniform buffer
+    // #[uniform(0)]
+    #[storage(0, visibility(vertex, fragment), read_only)]
+    pub(crate) terrain_view: Handle<ShaderStorageBuffer>,
+    #[storage(1, visibility(vertex, fragment), read_only)]
+    pub(crate) approximate_height: Handle<ShaderStorageBuffer>,
+    #[storage(2, visibility(vertex, fragment), read_only)]
+    pub(crate) tile_tree: Handle<ShaderStorageBuffer>,
+    #[storage(3, visibility(vertex, fragment), read_only, buffer)]
+    pub(crate) geometry_tiles: Buffer,
 }
 
 #[derive(Default, ShaderType)]
