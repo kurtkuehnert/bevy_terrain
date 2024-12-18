@@ -1,14 +1,9 @@
 use bevy::render::{
-    render_resource::{
-        encase::internal::{ReadFrom, WriteInto},
-        *,
-    },
+    render_resource::{encase::internal::WriteInto, *},
     renderer::{RenderDevice, RenderQueue},
 };
 use image::{ImageBuffer, Luma, LumaA, Rgb, Rgba};
 use itertools::Itertools;
-use smallvec::SmallVec;
-use std::sync::{Arc, Mutex};
 use std::{fmt::Debug, ops::Deref};
 
 pub type Rgb8Image = ImageBuffer<Rgb<u8>, Vec<u8>>;
@@ -59,22 +54,6 @@ impl BufferType {
         self.write(value, &mut buffer);
         buffer
     }
-
-    fn read<T: ShaderType + ReadFrom>(self, value: &mut T, buffer: &impl AsRef<[u8]>) {
-        match self {
-            BufferType::None => {
-                unimplemented!("Can not read ShaderType from BufferType::None.");
-            }
-            BufferType::Uniform => {
-                unimplemented!("Uniform buffers can not be read.");
-            }
-            BufferType::Storage => {
-                encase::StorageBuffer::new(buffer.as_ref())
-                    .read(value)
-                    .unwrap();
-            }
-        }
-    }
 }
 
 impl From<BufferUsages> for BufferType {
@@ -89,23 +68,10 @@ impl From<BufferUsages> for BufferType {
     }
 }
 
-#[derive(Default)]
-struct Pool {
-    prepared: Option<Buffer>,
-    in_use: SmallVec<Buffer, 3>,
-    available: SmallVec<Buffer, 3>,
-}
-
-#[derive(Default)]
-struct Readback {
-    pool: Arc<Mutex<Pool>>,
-}
-
 pub struct GpuBuffer<T> {
     buffer: Buffer,
     pub value: Option<T>,
     buffer_type: BufferType,
-    readback: Option<Readback>,
 }
 
 impl<T> GpuBuffer<T> {
@@ -126,7 +92,6 @@ impl<T> GpuBuffer<T> {
             buffer,
             value: None,
             buffer_type: usage.into(),
-            readback: None,
         }
     }
 
@@ -156,7 +121,6 @@ impl<T: ShaderType + Default> GpuBuffer<T> {
             buffer,
             value: None,
             buffer_type: usage.into(),
-            readback: None,
         }
     }
 
@@ -185,7 +149,6 @@ impl<T: ShaderType + WriteInto> GpuBuffer<T> {
             buffer,
             value: None,
             buffer_type,
-            readback: None,
         }
     }
 
@@ -224,80 +187,5 @@ impl<'a, T> IntoBinding<'a> for &'a GpuBuffer<T> {
     #[inline]
     fn into_binding(self) -> BindingResource<'a> {
         self.buffer.as_entire_binding()
-    }
-}
-
-impl<T: ShaderType + ReadFrom + Default + Send> GpuBuffer<T> {
-    pub fn enable_readback(&mut self) {
-        self.readback = Some(Readback::default());
-    }
-
-    /// Copy the data to the readback buffer.
-    pub fn copy_to_readback(&self, device: &RenderDevice, encoder: &mut CommandEncoder) {
-        let Some(readback) = &self.readback else {
-            panic!()
-        };
-
-        let mut pool = readback.pool.lock().unwrap();
-
-        let size = T::min_size().get(); // Todo: this does not work for runtime sized arrays
-
-        let buffer = pool.available.pop().unwrap_or_else(|| {
-            device.create_buffer(&BufferDescriptor {
-                size,
-                usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
-                mapped_at_creation: false,
-                label: None,
-            })
-        });
-
-        encoder.copy_buffer_to_buffer(&self.buffer, 0, &buffer, 0, size);
-        pool.prepared = Some(buffer);
-    }
-
-    /// Asynchronously read the contents of the readback buffer.
-    ///
-    /// This should only be called after all commands that update the buffer have been submitted.
-    pub fn download_readback(
-        &mut self,
-        callback: impl FnOnce(Result<T, BufferAsyncError>) + Send + 'static,
-    ) {
-        let Some(readback) = &mut self.readback else {
-            panic!("The buffer does not have GPU readback enabled.")
-        };
-
-        let mut pool = readback.pool.lock().unwrap();
-
-        let Some(buffer) = pool.prepared.take() else {
-            return;
-        };
-
-        pool.in_use.push(buffer.clone());
-
-        let buffer_type = self.buffer_type;
-        let pool = readback.pool.clone();
-
-        // Todo: the downloading code should be move out of the closure, in order to avoid blocking the main thread
-        buffer
-            .clone()
-            .slice(..)
-            .map_async(MapMode::Read, move |result| {
-                if let Err(e) = result {
-                    callback(Err(e));
-                    return;
-                }
-
-                let mut value = T::default();
-                let buffer_view = buffer.slice(..).get_mapped_range();
-                buffer_type.read(&mut value, &buffer_view);
-                drop(buffer_view);
-                buffer.unmap();
-
-                let mut pool = pool.lock().unwrap();
-                pool.in_use.retain(|other| other.id() != buffer.id());
-                pool.available.push(buffer);
-
-                callback(Ok(value));
-            });
     }
 }

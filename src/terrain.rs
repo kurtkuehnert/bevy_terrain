@@ -1,12 +1,7 @@
 //! Types for configuring terrains.
 //!
-#[cfg(feature = "high_precision")]
-use crate::big_space::{GridCell, GridTransformOwned, ReferenceFrame};
 
-use crate::{
-    math::TerrainModel,
-    terrain_data::{AttachmentConfig, TileAtlas},
-};
+use crate::{math::TerrainModel, terrain_data::AttachmentConfig};
 use bevy::{ecs::entity::EntityHashMap, prelude::*};
 
 /// Resource that stores components that are associated to a terrain entity.
@@ -53,23 +48,4 @@ impl TerrainConfig {
         self.attachments.push(attachment_config);
         self
     }
-}
-
-// Turn this into hooks
-
-#[cfg(feature = "high_precision")]
-pub fn setup_terrain(
-    tile_atlas: TileAtlas,
-    frame: &ReferenceFrame,
-) -> (TileAtlas, Transform, GridCell) {
-    let GridTransformOwned { transform, cell } = tile_atlas.model.grid_transform(frame);
-
-    (tile_atlas, transform, cell)
-}
-
-#[cfg(not(feature = "high_precision"))]
-pub fn setup_terrain(tile_atlas: TileAtlas) -> (TileAtlas, Transform) {
-    let transform = tile_atlas.model.transform();
-
-    (tile_atlas, transform)
 }

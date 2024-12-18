@@ -1,17 +1,21 @@
 use crate::{
+    big_space::GridCell,
     formats::TC,
     math::{TerrainModel, TileCoordinate},
+    render::terrain_bind_group::TerrainUniform,
     terrain::TerrainConfig,
     terrain_data::{
-        AttachmentConfig, AttachmentData, AttachmentFormat, TileTree, INVALID_ATLAS_INDEX,
-        INVALID_LOD,
+        tile_tree::TileTreeEntry, AttachmentConfig, AttachmentData, AttachmentFormat, TileTree,
+        INVALID_ATLAS_INDEX, INVALID_LOD,
     },
     terrain_view::TerrainViewComponents,
     util::{R16Image, Rg16Image, Rgba8Image},
 };
 use anyhow::Result;
 use bevy::{
+    asset::RenderAssetUsages,
     prelude::*,
+    render::storage::ShaderStorageBuffer,
     render::{render_resource::*, view::NoFrustumCulling},
     tasks::{futures_lite::future, AsyncComputeTaskPool, Task},
     utils::{HashMap, HashSet},
@@ -21,10 +25,6 @@ use image::DynamicImage;
 use itertools::Itertools;
 use std::{collections::VecDeque, fs::File, io::BufReader, mem, ops::DerefMut, path::PathBuf};
 use tiff::decoder::{Decoder, DecodingResult};
-
-#[cfg(feature = "high_precision")]
-use crate::big_space::GridCell;
-use crate::terrain_data::tile_tree::TileTreeEntry;
 
 #[derive(Copy, Clone, Debug, Default, ShaderType)]
 pub struct AtlasTile {
@@ -521,11 +521,13 @@ pub struct TileAtlas {
     pub(crate) atlas_size: u32,
     pub(crate) lod_count: u32,
     pub(crate) model: TerrainModel,
+
+    pub(crate) terrain_buffer: Handle<ShaderStorageBuffer>,
 }
 
 impl TileAtlas {
     /// Creates a new tile_tree from a terrain config.
-    pub fn new(config: &TerrainConfig) -> Self {
+    pub fn new(config: &TerrainConfig, buffers: &mut Assets<ShaderStorageBuffer>) -> Self {
         let attachments = config
             .attachments
             .iter()
@@ -537,6 +539,11 @@ impl TileAtlas {
         let state =
             TileAtlasState::new(config.atlas_size, attachments.len() as u32, existing_tiles);
 
+        let terrain_buffer = buffers.add(ShaderStorageBuffer::with_size(
+            TerrainUniform::min_size().get() as usize,
+            RenderAssetUsages::all(),
+        ));
+
         Self {
             model: config.model.clone(),
             attachments,
@@ -544,6 +551,7 @@ impl TileAtlas {
             path: config.path.to_string(),
             atlas_size: config.atlas_size,
             lod_count: config.lod_count,
+            terrain_buffer,
         }
     }
 
@@ -590,6 +598,16 @@ impl TileAtlas {
             for tile_coordinate in tile_tree.requested_tiles.drain(..) {
                 tile_atlas.state.request_tile(tile_coordinate);
             }
+        }
+    }
+
+    pub fn update_terrain_buffer(
+        mut tile_atlases: Query<(&mut TileAtlas, &GlobalTransform)>,
+        mut buffers: ResMut<Assets<ShaderStorageBuffer>>,
+    ) {
+        for (tile_atlas, global_transform) in &mut tile_atlases {
+            let terrain_buffer = buffers.get_mut(&tile_atlas.terrain_buffer).unwrap();
+            terrain_buffer.set_data(TerrainUniform::new(&tile_atlas, global_transform));
         }
     }
 

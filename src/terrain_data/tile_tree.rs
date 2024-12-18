@@ -1,8 +1,7 @@
-use crate::render::terrain_view_bind_group::TileTreeUniform;
 use crate::{
     big_space::GridCell,
     math::{Coordinate, TerrainModel, TileCoordinate},
-    render::terrain_view_bind_group::TerrainViewUniform,
+    render::terrain_view_bind_group::{TerrainViewUniform, TileTreeUniform},
     terrain::TerrainConfig,
     terrain_data::{TileAtlas, INVALID_ATLAS_INDEX, INVALID_LOD},
     terrain_view::{TerrainViewComponents, TerrainViewConfig},
@@ -11,15 +10,15 @@ use bevy::{
     asset::RenderAssetUsages,
     math::{DVec2, DVec3},
     prelude::*,
-    render::{render_resource::ShaderType, storage::ShaderStorageBuffer},
+    render::{
+        gpu_readback::{Readback, ReadbackComplete},
+        render_resource::{BufferUsages, ShaderType},
+        storage::ShaderStorageBuffer,
+    },
 };
 use itertools::{iproduct, Itertools};
 use ndarray::Array4;
-use std::cmp::Ordering;
-use std::{
-    iter,
-    sync::{Arc, Mutex},
-};
+use std::{cmp::Ordering, iter};
 
 /// The current state of a tile of a [`TileTree`].
 ///
@@ -72,6 +71,9 @@ impl Default for TileTreeEntry {
     }
 }
 
+#[derive(Component)]
+pub struct TerrainViewKey((Entity, Entity));
+
 /// A quadtree-like view of a terrain, that requests and releases tiles from the [`TileAtlas`]
 /// depending on the distance to the viewer.
 ///
@@ -122,12 +124,11 @@ pub struct TileTree {
     #[cfg(feature = "high_precision")]
     pub(crate) surface_approximation: [crate::math::SurfaceApproximation; 6],
     pub(crate) approximate_height: f32,
-    pub(crate) approximate_height_readback: Arc<Mutex<f32>>,
     pub(crate) height_scale: f32,
     pub(crate) order: u32,
 
-    pub(crate) tile_tree: Handle<ShaderStorageBuffer>,
-    pub(crate) terrain_view: Handle<ShaderStorageBuffer>,
+    pub(crate) tile_tree_buffer: Handle<ShaderStorageBuffer>,
+    pub(crate) terrain_view_buffer: Handle<ShaderStorageBuffer>,
     pub(crate) approximate_height_buffer: Handle<ShaderStorageBuffer>,
 }
 
@@ -136,6 +137,8 @@ impl TileTree {
     pub fn new(
         config: &TerrainConfig,
         view_config: &TerrainViewConfig,
+        terrain_view: (Entity, Entity),
+        commands: &mut Commands,
         buffers: &mut Assets<ShaderStorageBuffer>, // Todo: solve this dependency with a component hook in the future
     ) -> Self {
         let model = &config.model;
@@ -148,18 +151,25 @@ impl TileTree {
             view_config.tree_size as usize,
         ));
 
-        let terrain_view = buffers.add(ShaderStorageBuffer::with_size(
+        let terrain_view_buffer = buffers.add(ShaderStorageBuffer::with_size(
             TerrainViewUniform::min_size().get() as usize,
             RenderAssetUsages::all(),
         ));
-        let tile_tree = buffers.add(ShaderStorageBuffer::with_size(
+        let tile_tree_buffer = buffers.add(ShaderStorageBuffer::with_size(
             data.len() * size_of::<TileTreeEntry>(),
             RenderAssetUsages::all(),
         ));
-        let approximate_height_buffer = buffers.add(ShaderStorageBuffer::with_size(
-            size_of::<f32>(),
-            RenderAssetUsages::all(),
-        ));
+
+        let mut approximate_height_buffer = ShaderStorageBuffer::from(0.0);
+        approximate_height_buffer.buffer_description.usage |= BufferUsages::COPY_SRC;
+        let approximate_height_buffer = buffers.add(approximate_height_buffer);
+
+        commands
+            .spawn((
+                TerrainViewKey(terrain_view),
+                Readback::buffer(approximate_height_buffer.clone_weak()),
+            ))
+            .observe(Self::approximate_height_readback);
 
         Self {
             tree_size: view_config.tree_size,
@@ -191,12 +201,11 @@ impl TileTree {
             #[cfg(feature = "high_precision")]
             surface_approximation: default(),
             approximate_height: 0.0,
-            approximate_height_readback: Arc::new(Mutex::new(0.0)),
             height_scale: 1.0,
             order: view_config.order,
             relative_view_position: Default::default(),
-            tile_tree,
-            terrain_view,
+            tile_tree_buffer,
+            terrain_view_buffer,
             approximate_height_buffer,
         }
     }
@@ -252,8 +261,6 @@ impl TileTree {
     fn update(&mut self, view_position: DVec3, tile_atlas: &TileAtlas) {
         let model = &tile_atlas.model;
         self.view_world_position = view_position;
-
-        self.approximate_height = *self.approximate_height_readback.lock().unwrap();
 
         let view_coordinate = Coordinate::from_world_position(self.view_world_position, model);
         self.view_face = view_coordinate.face;
@@ -376,18 +383,28 @@ impl TileTree {
         }
     }
 
-    pub fn update_tile_tree_buffer(
+    pub fn update_terrain_view_buffer(
         tile_trees: Res<TerrainViewComponents<TileTree>>,
         mut buffers: ResMut<Assets<ShaderStorageBuffer>>,
     ) {
         for tile_tree in tile_trees.values() {
-            let terrain_view = buffers.get_mut(&tile_tree.terrain_view).unwrap();
-            terrain_view.set_data(TerrainViewUniform::from(tile_tree));
+            let terrain_view_buffer = buffers.get_mut(&tile_tree.terrain_view_buffer).unwrap();
+            terrain_view_buffer.set_data(TerrainViewUniform::from(tile_tree));
 
-            let tile_tree_buffer = buffers.get_mut(&tile_tree.tile_tree).unwrap();
+            let tile_tree_buffer = buffers.get_mut(&tile_tree.tile_tree_buffer).unwrap();
             tile_tree_buffer.set_data(TileTreeUniform {
                 entries: tile_tree.data.clone().into_iter().collect_vec(),
             });
         }
+    }
+
+    pub fn approximate_height_readback(
+        trigger: Trigger<ReadbackComplete>,
+        terrain_view: Query<&TerrainViewKey>,
+        mut tile_trees: ResMut<TerrainViewComponents<TileTree>>,
+    ) {
+        let TerrainViewKey(terrain_view) = terrain_view.get(trigger.entity()).unwrap();
+        let tile_tree = tile_trees.get_mut(terrain_view).unwrap();
+        tile_tree.approximate_height = trigger.event().to_shader_type();
     }
 }

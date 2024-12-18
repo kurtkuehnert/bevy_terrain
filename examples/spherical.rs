@@ -52,32 +52,32 @@ fn setup(
     );
 
     // Configure all the important properties of the terrain, as well as its attachments.
-    // let local_config = TerrainConfig {
-    //     lod_count: LOD_COUNT,
-    //     model: TerrainModel::ellipsoid(DVec3::ZERO, MAJOR_AXES, MINOR_AXES),
-    //     path: "/Volumes/ExternalSSD/tiles".to_string(),
-    //     ..default()
-    // }
-    // .add_attachment(AttachmentConfig {
-    //     name: "height".to_string(),
-    //     texture_size: TEXTURE_SIZE,
-    //     border_size: 2,
-    //     mip_level_count: 1,
-    //     format: AttachmentFormat::RF32,
-    // })
-    // .add_attachment(AttachmentConfig {
-    //     name: "albedo".to_string(),
-    //     texture_size: TEXTURE_SIZE,
-    //     border_size: 1,
-    //     mip_level_count: 1,
-    //     format: AttachmentFormat::RgbU8,
-    // });
-    //
-    // // Configure the quality settings of the terrain view. Adapt the settings to your liking.
-    // let local_view_config = TerrainViewConfig {
-    //     order: 0,
-    //     ..default()
-    // };
+    let local_config = TerrainConfig {
+        lod_count: LOD_COUNT,
+        model: TerrainModel::ellipsoid(DVec3::ZERO, MAJOR_AXES, MINOR_AXES),
+        path: "/Volumes/ExternalSSD/tiles".to_string(),
+        ..default()
+    }
+    .add_attachment(AttachmentConfig {
+        name: "height".to_string(),
+        texture_size: TEXTURE_SIZE,
+        border_size: 2,
+        mip_level_count: 1,
+        format: AttachmentFormat::RF32,
+    })
+    .add_attachment(AttachmentConfig {
+        name: "albedo".to_string(),
+        texture_size: TEXTURE_SIZE,
+        border_size: 1,
+        mip_level_count: 1,
+        format: AttachmentFormat::RgbU8,
+    });
+
+    // Configure the quality settings of the terrain view. Adapt the settings to your liking.
+    let local_view_config = TerrainViewConfig {
+        order: 0,
+        ..default()
+    };
 
     // Configure all the important properties of the terrain, as well as its attachments.
     let global_config = TerrainConfig {
@@ -100,30 +100,36 @@ fn setup(
         ..default()
     };
 
+    let (mut global_terrain, mut local_terrain, mut view) = (
+        Entity::PLACEHOLDER,
+        Entity::PLACEHOLDER,
+        Entity::PLACEHOLDER,
+    );
+
     commands.spawn_big_space(ReferenceFrame::default(), |root| {
         let frame = root.frame().clone();
 
-        let global_terrain = root
+        global_terrain = root
             .spawn_spatial((
-                TileAtlas::new(&global_config),
+                TileAtlas::new(&global_config, &mut buffers),
                 TerrainMaterial(materials.add(CustomMaterial {
                     gradient: gradient.clone(),
                 })),
             ))
             .id();
 
-        // let local_terrain = root
-        //     .spawn_spatial((
-        //         TileAtlas::new(&local_config),
-        //         TerrainMaterial(materials.add(CustomMaterial {
-        //             gradient: gradient.clone(),
-        //         })),
-        //     ))
-        //     .id();
+        local_terrain = root
+            .spawn_spatial((
+                TileAtlas::new(&local_config, &mut buffers),
+                TerrainMaterial(materials.add(CustomMaterial {
+                    gradient: gradient.clone(),
+                })),
+            ))
+            .id();
 
         let (cell, translation) = frame.translation_to_grid(-DVec3::X * RADIUS * 3.0);
 
-        let view = root
+        view = root
             .spawn_spatial((
                 DebugCameraController::new(RADIUS),
                 OrbitalCameraController::default(),
@@ -131,13 +137,27 @@ fn setup(
                 cell,
             ))
             .id();
-
-        let tile_tree = TileTree::new(&global_config, &global_view_config, &mut buffers);
-
-        tile_trees.insert((global_terrain, view), tile_tree);
-        // tile_trees.insert(
-        //     (local_terrain, view),
-        //     TileTree::new(&local_config, &local_view_config),
-        // );
     });
+
+    tile_trees.insert(
+        (global_terrain, view),
+        TileTree::new(
+            &global_config,
+            &global_view_config,
+            (global_terrain, view),
+            &mut commands,
+            &mut buffers,
+        ),
+    );
+
+    tile_trees.insert(
+        (local_terrain, view),
+        TileTree::new(
+            &local_config,
+            &local_view_config,
+            (local_terrain, view),
+            &mut commands,
+            &mut buffers,
+        ),
+    );
 }
