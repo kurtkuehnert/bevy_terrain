@@ -1,19 +1,20 @@
 use crate::{
     terrain::TerrainComponents,
     terrain_data::{GpuTileAtlas, TileAtlas},
-    util::GpuBuffer,
 };
 use bevy::{
     ecs::{
         query::ROQueryItem,
         system::{lifetimeless::SRes, SystemParamItem},
     },
-    pbr::{MeshTransforms, MeshUniform, PreviousGlobalTransform},
+    math::Affine3,
     prelude::*,
     render::{
+        render_asset::RenderAssets,
         render_phase::{PhaseItem, RenderCommand, RenderCommandResult, TrackedRenderPass},
-        render_resource::{binding_types::*, *},
-        renderer::{RenderDevice, RenderQueue},
+        render_resource::*,
+        renderer::RenderDevice,
+        storage::{GpuShaderStorageBuffer, ShaderStorageBuffer},
         texture::FallbackImage,
         Extract,
     },
@@ -21,33 +22,31 @@ use bevy::{
 use itertools::Itertools;
 use std::iter;
 
-pub(crate) fn create_terrain_layout(device: &RenderDevice) -> BindGroupLayout {
-    device.create_bind_group_layout(
-        None,
-        &BindGroupLayoutEntries::sequential(
-            ShaderStages::all(),
-            (
-                storage_buffer_read_only::<MeshUniform>(false), // mesh
-                uniform_buffer::<TerrainConfigUniform>(false),  // terrain
-                uniform_buffer::<AttachmentUniform>(false),     // attachments
-                sampler(SamplerBindingType::Filtering),         // terrain_sampler
-                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment_0
-                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment_1
-                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment_2
-                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment_3
-                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment_4
-                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment_5
-                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment_6
-                texture_2d_array(TextureSampleType::Float { filterable: true }), // attachment_7
-            ),
-        ),
-    )
-}
-
-// Todo: replace the TerrainBindGroup with this AsBindGroup derive
-// Try implementing manually for now?
+// Todo: use this once texture views can be used directly
 #[derive(AsBindGroup)]
-pub struct Terrain {}
+pub struct TerrainBindGroup {
+    #[storage(0, visibility(all), read_only, buffer)]
+    terrain: Buffer,
+    #[uniform(1, visibility(all))]
+    attachments: AttachmentUniform,
+    #[sampler(2, visibility(all))]
+    #[texture(3, visibility(all), dimension = "2d_array")]
+    attachment0: Handle<Image>,
+    #[texture(4, visibility(all), dimension = "2d_array")]
+    attachment1: Handle<Image>,
+    #[texture(5, visibility(all), dimension = "2d_array")]
+    attachment2: Handle<Image>,
+    #[texture(6, visibility(all), dimension = "2d_array")]
+    attachment3: Handle<Image>,
+    #[texture(7, visibility(all), dimension = "2d_array")]
+    attachment4: Handle<Image>,
+    #[texture(8, visibility(all), dimension = "2d_array")]
+    attachment5: Handle<Image>,
+    #[texture(9, visibility(all), dimension = "2d_array")]
+    attachment6: Handle<Image>,
+    #[texture(10, visibility(all), dimension = "2d_array")]
+    attachment7: Handle<Image>,
+}
 
 #[derive(Default, ShaderType)]
 struct AttachmentConfig {
@@ -80,16 +79,27 @@ impl AttachmentUniform {
 
 /// The terrain config data that is available in shaders.
 #[derive(Default, ShaderType)]
-struct TerrainConfigUniform {
+pub struct TerrainUniform {
     lod_count: u32,
     scale: f32,
+    world_from_local: [Vec4; 3],
+    local_from_world_transpose_a: [Vec4; 2],
+    local_from_world_transpose_b: f32,
 }
 
-impl TerrainConfigUniform {
-    fn from_tile_atlas(tile_atlas: &TileAtlas) -> Self {
+impl TerrainUniform {
+    pub fn new(tile_atlas: &TileAtlas, global_transform: &GlobalTransform) -> Self {
+        let transform = Affine3::from(&global_transform.affine());
+        let world_from_local = transform.to_transpose();
+        let (local_from_world_transpose_a, local_from_world_transpose_b) =
+            transform.inverse_transpose_3x3();
+
         Self {
             lod_count: tile_atlas.lod_count,
             scale: tile_atlas.model.scale() as f32,
+            world_from_local,
+            local_from_world_transpose_a,
+            local_from_world_transpose_b,
         }
     }
 }
@@ -97,8 +107,12 @@ impl TerrainConfigUniform {
 // Todo: convert the mesh buffer to a ShaderStorageBuffer and merge with the terrain config buffer
 
 pub struct GpuTerrain {
-    mesh_buffer: GpuBuffer<MeshUniform>,
-    pub(crate) terrain_bind_group: BindGroup,
+    pub(crate) terrain_bind_group: Option<BindGroup>,
+
+    terrain_buffer: Handle<ShaderStorageBuffer>,
+    attachment_buffer: Buffer,
+    atlas_sampler: Sampler,
+    attachments: Vec<TextureView>,
 }
 
 impl GpuTerrain {
@@ -108,18 +122,6 @@ impl GpuTerrain {
         tile_atlas: &TileAtlas,
         gpu_tile_atlas: &GpuTileAtlas,
     ) -> Self {
-        let mesh_buffer = GpuBuffer::empty_sized_labeled(
-            None,
-            device,
-            MeshUniform::SHADER_SIZE.get(),
-            BufferUsages::STORAGE | BufferUsages::COPY_DST,
-        );
-        let terrain_config_buffer = GpuBuffer::create(
-            device,
-            &TerrainConfigUniform::from_tile_atlas(tile_atlas),
-            BufferUsages::UNIFORM,
-        );
-
         let atlas_sampler = device.create_sampler(&SamplerDescriptor {
             mag_filter: FilterMode::Linear,
             min_filter: FilterMode::Linear,
@@ -139,32 +141,24 @@ impl GpuTerrain {
             })
             .collect_vec();
 
-        let attachment_uniform = AttachmentUniform::new(gpu_tile_atlas);
-        let attachment_buffer =
-            GpuBuffer::create(device, &attachment_uniform, BufferUsages::UNIFORM);
+        let value = AttachmentUniform::new(gpu_tile_atlas);
+        let mut buffer = vec![0; value.size().get() as usize];
+        encase::UniformBuffer::new(&mut buffer)
+            .write(&value)
+            .unwrap();
 
-        let terrain_bind_group = device.create_bind_group(
-            "terrain_bind_group",
-            &create_terrain_layout(device),
-            &BindGroupEntries::sequential((
-                &mesh_buffer,
-                &terrain_config_buffer,
-                &attachment_buffer,
-                &atlas_sampler,
-                &attachments[0],
-                &attachments[1],
-                &attachments[2],
-                &attachments[3],
-                &attachments[4],
-                &attachments[5],
-                &attachments[6],
-                &attachments[7],
-            )),
-        );
+        let attachment_buffer = device.create_buffer_with_data(&BufferInitDescriptor {
+            label: None,
+            contents: &buffer,
+            usage: BufferUsages::UNIFORM,
+        });
 
         Self {
-            mesh_buffer,
-            terrain_bind_group,
+            terrain_buffer: tile_atlas.terrain_buffer.clone(),
+            attachment_buffer,
+            atlas_sampler,
+            attachments,
+            terrain_bind_group: None,
         }
     }
 
@@ -185,35 +179,32 @@ impl GpuTerrain {
         }
     }
 
-    #[allow(clippy::type_complexity)]
-    pub(crate) fn extract(
-        mut gpu_terrains: ResMut<TerrainComponents<GpuTerrain>>,
-        terrains: Extract<
-            Query<(Entity, &GlobalTransform, Option<&PreviousGlobalTransform>), With<TileAtlas>>,
-        >,
-    ) {
-        for (terrain, transform, previous_transform) in terrains.iter() {
-            let mesh_transforms = MeshTransforms {
-                world_from_local: (&transform.affine()).into(),
-                flags: 0,
-                previous_world_from_local: (&previous_transform
-                    .map(|t| t.0)
-                    .unwrap_or(transform.affine()))
-                    .into(),
-            };
-            let mesh_uniform = MeshUniform::new(&mesh_transforms, 0, None);
-
-            let gpu_terrain = gpu_terrains.get_mut(&terrain).unwrap();
-            gpu_terrain.mesh_buffer.set_value(mesh_uniform);
-        }
-    }
-
     pub(crate) fn prepare(
-        queue: Res<RenderQueue>,
+        device: Res<RenderDevice>,
+        buffers: Res<RenderAssets<GpuShaderStorageBuffer>>,
         mut gpu_terrains: ResMut<TerrainComponents<GpuTerrain>>,
     ) {
         for gpu_terrain in &mut gpu_terrains.values_mut() {
-            gpu_terrain.mesh_buffer.update(&queue);
+            let terrain_buffer = buffers.get(&gpu_terrain.terrain_buffer).unwrap();
+
+            // Todo: be smarter about bind group recreation
+            gpu_terrain.terrain_bind_group = Some(device.create_bind_group(
+                "terrain_bind_group",
+                &TerrainBindGroup::bind_group_layout(&device),
+                &BindGroupEntries::sequential((
+                    terrain_buffer.buffer.as_entire_binding(),
+                    gpu_terrain.attachment_buffer.as_entire_binding(),
+                    &gpu_terrain.atlas_sampler,
+                    &gpu_terrain.attachments[0],
+                    &gpu_terrain.attachments[1],
+                    &gpu_terrain.attachments[2],
+                    &gpu_terrain.attachments[3],
+                    &gpu_terrain.attachments[4],
+                    &gpu_terrain.attachments[5],
+                    &gpu_terrain.attachments[6],
+                    &gpu_terrain.attachments[7],
+                )),
+            ));
         }
     }
 }
@@ -235,7 +226,11 @@ impl<const I: usize, P: PhaseItem> RenderCommand<P> for SetTerrainBindGroup<I> {
     ) -> RenderCommandResult {
         let gpu_terrain = gpu_terrains.into_inner().get(&item.entity()).unwrap();
 
-        pass.set_bind_group(I, &gpu_terrain.terrain_bind_group, &[]);
-        RenderCommandResult::Success
+        if let Some(bind_group) = &gpu_terrain.terrain_bind_group {
+            pass.set_bind_group(I, bind_group, &[]);
+            RenderCommandResult::Success
+        } else {
+            RenderCommandResult::Skip
+        }
     }
 }

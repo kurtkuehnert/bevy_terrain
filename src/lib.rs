@@ -75,7 +75,7 @@ pub mod prelude {
         plugin::TerrainPlugin,
         preprocess::{PreprocessDataset, Preprocessor, SphericalDataset, TerrainPreprocessPlugin},
         render::{TerrainMaterial, TerrainMaterialPlugin},
-        terrain::{setup_terrain, TerrainConfig},
+        terrain::TerrainConfig,
         terrain_data::{AttachmentConfig, AttachmentFormat, GpuTileAtlas, TileAtlas, TileTree},
         terrain_view::{TerrainViewComponents, TerrainViewConfig},
     };

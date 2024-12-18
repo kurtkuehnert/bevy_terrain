@@ -53,7 +53,8 @@ impl Plugin for TerrainPlugin {
                     TileTree::adjust_to_tile_atlas,
                     #[cfg(feature = "high_precision")]
                     TileTree::generate_surface_approximation,
-                    TileTree::update_tile_tree_buffer,
+                    TileTree::update_terrain_view_buffer,
+                    TileAtlas::update_terrain_buffer,
                 )
                     .chain(),
             );
@@ -72,7 +73,6 @@ impl Plugin for TerrainPlugin {
                     GpuTileAtlas::initialize,
                     GpuTileAtlas::extract.after(GpuTileAtlas::initialize),
                     GpuTerrain::initialize.after(GpuTileAtlas::initialize),
-                    GpuTerrain::extract.after(GpuTerrain::initialize),
                     GpuTerrainView::initialize,
                 ),
             )

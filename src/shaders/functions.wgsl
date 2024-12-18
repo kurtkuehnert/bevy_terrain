@@ -1,6 +1,6 @@
 #define_import_path bevy_terrain::functions
 
-#import bevy_terrain::bindings::{mesh, terrain, origins, terrain_view, geometry_tiles, tile_tree}
+#import bevy_terrain::bindings::{terrain, origins, terrain_view, geometry_tiles, tile_tree}
 #import bevy_terrain::types::{TileCoordinate, TileTree, TileTreeEntry, AtlasTile, Blend, BestLookup, Coordinate, Morph}
 #import bevy_pbr::mesh_view_bindings::view
 #import bevy_render::maths::{affine3_to_square, mat2x4_f32_to_mat3x3_unpack}
@@ -18,13 +18,13 @@ fn normal_local_to_world(local_position: vec3<f32>) -> vec3<f32> {
     let local_normal = vec3<f32>(0.0, 1.0, 0.0);
 #endif
 
-    let world_from_local = mat2x4_f32_to_mat3x3_unpack(mesh[0].local_from_world_transpose_a,
-                                                       mesh[0].local_from_world_transpose_b);
+    let world_from_local = mat2x4_f32_to_mat3x3_unpack(terrain.local_from_world_transpose_a,
+                                                       terrain.local_from_world_transpose_b);
     return normalize(world_from_local * local_normal);
 }
 
 fn position_local_to_world(local_position: vec3<f32>) -> vec3<f32> {
-    let world_from_local = affine3_to_square(mesh[0].world_from_local);
+    let world_from_local = affine3_to_square(terrain.world_from_local);
     return (world_from_local * vec4<f32>(local_position, 1.0)).xyz;
 }
 

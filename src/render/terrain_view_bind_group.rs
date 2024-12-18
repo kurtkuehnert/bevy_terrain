@@ -159,16 +159,14 @@ impl From<&ExtractedView> for CullingUniform {
 pub struct GpuTerrainView {
     pub(crate) order: u32,
     pub(crate) refinement_count: u32,
-
     pub(crate) indirect_buffer: Buffer,
-
-    pub(crate) indirect: IndirectBindGroup,
-    pub(crate) prepass_view: PrepassViewBindGroup,
-    pub(crate) terrain_view: TerrainViewBindGroup,
-
     pub(crate) indirect_bind_group: Option<BindGroup>,
     pub(crate) prepass_view_bind_group: Option<BindGroup>,
     pub(crate) terrain_view_bind_group: Option<BindGroup>,
+
+    indirect: IndirectBindGroup,
+    prepass_view: PrepassViewBindGroup,
+    terrain_view: TerrainViewBindGroup,
 }
 
 impl GpuTerrainView {
@@ -212,18 +210,18 @@ impl GpuTerrainView {
             indirect: indirect.clone(),
         };
         let refine_tiles = PrepassViewBindGroup {
-            terrain_view: tile_tree.terrain_view.clone(),
+            terrain_view: tile_tree.terrain_view_buffer.clone(),
             approximate_height: tile_tree.approximate_height_buffer.clone(),
-            tile_tree: tile_tree.tile_tree.clone(),
+            tile_tree: tile_tree.tile_tree_buffer.clone(),
             final_tiles: tiles.clone(),
             temporary_tiles,
             state,
             culling,
         };
         let terrain_view = TerrainViewBindGroup {
-            terrain_view: tile_tree.terrain_view.clone(),
+            terrain_view: tile_tree.terrain_view_buffer.clone(),
             approximate_height: tile_tree.approximate_height_buffer.clone(),
-            tile_tree: tile_tree.tile_tree.clone(),
+            tile_tree: tile_tree.tile_tree_buffer.clone(),
             geometry_tiles: tiles,
         };
 

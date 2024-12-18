@@ -1,7 +1,7 @@
 use crate::{
     debug::DebugTerrain,
     render::{
-        terrain_bind_group::create_terrain_layout,
+        terrain_bind_group::TerrainBindGroup,
         terrain_view_bind_group::{IndirectBindGroup, PrepassViewBindGroup, TerrainViewBindGroup},
         GpuTerrain, GpuTerrainView,
     },
@@ -123,7 +123,7 @@ impl FromWorld for TerrainTilingPrepassPipelines {
     fn from_world(world: &mut World) -> Self {
         let device = world.resource::<RenderDevice>();
 
-        let terrain_layout = create_terrain_layout(device);
+        let terrain_layout = TerrainBindGroup::bind_group_layout(device);
         let terrain_view_layout = TerrainViewBindGroup::bind_group_layout(device);
         let indirect_layout = IndirectBindGroup::bind_group_layout(device);
         let prepass_view_layout = PrepassViewBindGroup::bind_group_layout(device);
@@ -238,7 +238,9 @@ impl render_graph::Node for TilingPrepass {
                 let gpu_terrain = gpu_terrains.get(&terrain).unwrap();
                 let gpu_terrain_view = gpu_terrain_views.get(&(terrain, view)).unwrap();
 
-                let terrain_bind_group = &gpu_terrain.terrain_bind_group;
+                let Some(terrain_bind_group) = &gpu_terrain.terrain_bind_group else {
+                    continue;
+                };
                 let Some(prepass_view_bind_group) = &gpu_terrain_view.prepass_view_bind_group
                 else {
                     continue;
