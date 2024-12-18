@@ -2,29 +2,39 @@
 #import bevy_terrain::bindings::{terrain, terrain_view, attachments, attachment0, terrain_sampler}
 #import bevy_terrain::attachments::{sample_height, sample_height_mask, compute_slope, sample_surface_gradient, sample_attachment1 as sample_albedo, sample_attachment0_gather0, attachment_uv}
 #import bevy_terrain::fragment::{FragmentInput, FragmentOutput, fragment_info, fragment_output, fragment_debug}
-#import bevy_terrain::functions::lookup_tile
+#import bevy_terrain::functions::{lookup_tile, inverse_mix}
 #import bevy_pbr::pbr_types::{PbrInput, pbr_input_new}
 #import bevy_pbr::pbr_functions::{calculate_view, apply_pbr_lighting}
+
+struct GradientInfo {
+    min: f32,
+    max: f32,
+    custom: u32,
+}
 
 
 @group(3) @binding(0)
 var gradient: texture_1d<f32>;
 @group(3) @binding(1)
 var gradient_sampler: sampler;
-
-const MIN_HEIGHT: f32 = -12000.0;
-const MAX_HEIGHT: f32 =  9000.0;
+@group(3) @binding(2)
+var<uniform> gradient_info: GradientInfo;
 
 fn sample_color(tile: AtlasTile) -> vec4<f32> {
     let height = sample_height(tile) / terrain_view.height_scale;
 
     var color: vec4<f32>;
 
-    if (height < 0.0) {
-        color = textureSampleLevel(gradient, gradient_sampler, mix(0.0, 0.075, pow(height / MIN_HEIGHT, 0.25)), 0.0);
+    if (gradient_info.custom == 1u) {
+        if (height < 0.0) {
+            color = textureSampleLevel(gradient, gradient_sampler, mix(0.0, 0.075, pow(height / gradient_info.min, 0.25)), 0.0);
+        }
+        else {
+            color = textureSampleLevel(gradient, gradient_sampler, mix(0.09, 1.0, pow(height / gradient_info.max * 2.0, 1.0)), 0.0);
+        }
     }
     else {
-        color = textureSampleLevel(gradient, gradient_sampler, mix(0.09, 1.0, pow(height / MAX_HEIGHT * 2.0, 1.0)), 0.0);
+        color = textureSampleLevel(gradient, gradient_sampler, inverse_mix(gradient_info.min, gradient_info.max, height), 0.0);
     }
 
     let albedo = sample_albedo(tile);
