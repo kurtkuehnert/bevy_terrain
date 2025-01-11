@@ -8,7 +8,7 @@ const RADIUS: f64 = 6371000.0;
 const MAJOR_AXES: f64 = 6371000.0;
 const MINOR_AXES: f64 = 6371000.0;
 const TEXTURE_SIZE: u32 = 512;
-const LOD_COUNT: u32 = 16;
+const LOD_COUNT: u32 = 15;
 
 #[derive(ShaderType, Clone)]
 struct GradientInfo {
@@ -35,7 +35,16 @@ impl Material for CustomMaterial {
 fn main() {
     App::new()
         .add_plugins((
-            DefaultPlugins.build().disable::<TransformPlugin>(),
+            DefaultPlugins
+                // .set(WindowPlugin {
+                //     primary_window: Some(Window {
+                //         mode: WindowMode::BorderlessFullscreen(MonitorSelection::Primary),
+                //         ..default()
+                //     }),
+                //     ..default()
+                // })
+                .build()
+                .disable::<TransformPlugin>(),
             TerrainPlugin,
             TerrainMaterialPlugin::<CustomMaterial>::default(),
             TerrainDebugPlugin, // enable debug settings and controls
@@ -93,14 +102,14 @@ fn setup(
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
     let local_view_config = TerrainViewConfig {
         order: 0,
-        tree_size: 12,
-        blend_distance: 4.0,
+        tree_size: 16,
+        blend_distance: 8.0,
         ..default()
     };
 
     // Configure all the important properties of the terrain, as well as its attachments.
     let global_config = TerrainConfig {
-        lod_count: LOD_COUNT,
+        lod_count: 8,
         model: TerrainModel::ellipsoid(DVec3::ZERO, MAJOR_AXES, MINOR_AXES),
         path: "/Volumes/ExternalSSD/tiles/earth".to_string(),
         atlas_size: 2048,
@@ -117,8 +126,8 @@ fn setup(
     // Configure the quality settings of the terrain view. Adapt the settings to your liking.
     let global_view_config = TerrainViewConfig {
         order: 1,
-        tree_size: 12,
-        blend_distance: 4.0,
+        tree_size: 16,
+        blend_distance: 8.0,
         ..default()
     };
 
@@ -141,7 +150,7 @@ fn setup(
     let scope_view_config = TerrainViewConfig {
         order: 0,
         tree_size: 12,
-        blend_distance: 4.0,
+        blend_distance: 8.0,
         ..default()
     };
 

@@ -345,6 +345,9 @@ impl TileTree {
             #[cfg(not(feature = "high_precision"))]
             let view_position = view_transform.translation.as_dvec3();
 
+            // dbg!(view_position);
+            // dbg!(transform.translation);
+
             tile_tree.update(view_position, tile_atlas);
             tile_tree.relative_view_position = transform.translation;
         }

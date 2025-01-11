@@ -39,8 +39,10 @@ fn compute_morph(coordinate: Coordinate, view_distance: f32) -> Coordinate {
     // slightly off as well, which results in a pop.
     let even_uv = vec2<f32>(vec2<u32>(coordinate.uv * terrain_view.grid_size) & vec2<u32>(~1u)) / terrain_view.grid_size;
 
-    let target_lod  = log2(2.0 * terrain_view.morph_distance / view_distance);
-    let ratio       = select(inverse_mix(f32(coordinate.lod) + terrain_view.morph_range, f32(coordinate.lod), target_lod), 0.0, coordinate.lod == 0);
+    let target_lod  = log2(terrain_view.morph_distance / view_distance);
+    let lod         = coordinate.lod;
+
+    let ratio       = select(saturate(1.0 - (target_lod - f32(lod)) / terrain_view.morph_range), 0.0, lod == 0);
 
     return Coordinate(coordinate.face, coordinate.lod, coordinate.xy, mix(coordinate.uv, even_uv, ratio));
 #else
@@ -53,7 +55,7 @@ fn compute_blend(view_distance: f32) -> Blend {
     let lod        = u32(target_lod);
 
 #ifdef BLEND
-    let ratio = select(inverse_mix(f32(lod) + terrain_view.blend_range, f32(lod), target_lod), 0.0, lod == 0u);
+    let ratio      = select(saturate(1.0 - (target_lod - f32(lod)) / terrain_view.blend_range), 0.0, lod == 0);
 
     return Blend(lod, ratio);
 #else
@@ -63,9 +65,8 @@ fn compute_blend(view_distance: f32) -> Blend {
 
 fn compute_tile_uv(vertex_index: u32) -> vec2<f32>{
     // use first and last indices of the rows twice, to form degenerate triangles
-    let grid_index   = vertex_index % terrain_view.vertices_per_tile;
-    let row_index    = clamp(grid_index % terrain_view.vertices_per_row, 1u, terrain_view.vertices_per_row - 2u) - 1u;
-    let column_index = grid_index / terrain_view.vertices_per_row;
+    let column_index = (vertex_index % terrain_view.vertices_per_tile) / terrain_view.vertices_per_row;
+    let row_index    = clamp(vertex_index % terrain_view.vertices_per_row, 1u, terrain_view.vertices_per_row - 2u) - 1u;
 
     return vec2<f32>(f32(column_index + (row_index & 1u)), f32(row_index >> 1u)) / terrain_view.grid_size;
 }

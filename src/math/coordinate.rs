@@ -1,6 +1,6 @@
 use crate::math::{
-    FaceProjection, FaceRotation, TerrainModel, BLOCK_SIZE, C_SQR, FACE_MATRICES,
-    INVERSE_FACE_MATRICES, NEIGHBOURING_FACES, NEIGHBOUR_OFFSETS,
+    FaceRotation, TerrainModel, BLOCK_SIZE, C_SQR, FACE_MATRICES, INVERSE_FACE_MATRICES,
+    NEIGHBOURING_FACES, NEIGHBOUR_OFFSETS,
 };
 use bevy::{
     math::{DVec2, DVec3},
@@ -79,7 +79,7 @@ impl Coordinate {
     pub fn project_to_face(self, face: u32) -> Self {
         Self {
             face,
-            uv: FaceProjection::project_to_face(self.face, face, self.uv),
+            uv: FaceRotation::new(self.face, face).project_uv(self),
         }
     }
 }
@@ -167,22 +167,20 @@ impl TileCoordinate {
                 let neighbour_face = NEIGHBOURING_FACES[self.face as usize][edge_index];
                 let neighbour_coordinate = edge_coordinate.project_to_face(neighbour_face);
                 let neighbour_xy = (neighbour_coordinate.uv * scale).as_ivec2();
-                let rotation = FaceRotation::face_rotation(self.face, neighbour_face);
+                let rotation = FaceRotation::new(self.face, neighbour_face);
 
                 (Self::new(neighbour_face, self.lod, neighbour_xy), rotation)
+            } else if edge_position.x < 0
+                || edge_position.y < 0
+                || edge_position.x >= tile_count
+                || edge_position.y >= tile_count
+            {
+                (Self::INVALID, FaceRotation::Identical)
             } else {
-                if edge_position.x < 0
-                    || edge_position.y < 0
-                    || edge_position.x >= tile_count
-                    || edge_position.y >= tile_count
-                {
-                    (Self::INVALID, FaceRotation::Identical)
-                } else {
-                    (
-                        Self::new(self.face, self.lod, edge_position),
-                        FaceRotation::Identical,
-                    )
-                }
+                (
+                    Self::new(self.face, self.lod, edge_position),
+                    FaceRotation::Identical,
+                )
             }
         })
     }

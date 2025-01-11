@@ -100,6 +100,8 @@ impl SurfaceApproximation {
             let p_duv = m.transform_vector3(DVec3::new(a_duv, b_duv, c_duv) / l.powi(3));
             let p_dvv = m.transform_vector3(DVec3::new(a_dvv, b_dvv, c_dvv) / l.powi(3));
 
+            // Todo: cleanup distinction between world space (origin center terrain) and world space (center floating origin)
+
             SurfaceApproximation {
                 c: (p - view_world_position).as_vec3(),
                 c_du: p_du.as_vec3(),
