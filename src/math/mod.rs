@@ -5,6 +5,7 @@ mod surface_approximation;
 mod terrain_model;
 
 use bevy::math::{DMat3, DVec2, IVec2};
+use std::mem;
 
 #[cfg(feature = "high_precision")]
 pub use crate::math::surface_approximation::SurfaceApproximation;
@@ -58,85 +59,41 @@ const NEIGHBOURING_FACES: [[u32; 5]; 6] = [
     [5, 0, 1, 3, 4],
 ];
 
-#[derive(Clone, Copy)]
+#[repr(u32)]
 pub enum FaceRotation {
-    Identical,
-    ClockWise,
-    CounterClockWise,
-    Backside,
+    Identical = 0, // i
+    ShiftU = 1,    // x
+    RotateCCW = 2, // l
+    Backside = 3,  // b
+    RotateCW = 4,  // r
+    ShiftV = 5,    // y
 }
 
 impl FaceRotation {
-    const EVEN_LIST: [FaceRotation; 6] = [
-        FaceRotation::Identical,
-        FaceRotation::Identical,
-        FaceRotation::CounterClockWise,
-        FaceRotation::Backside,
-        FaceRotation::ClockWise,
-        FaceRotation::Identical,
-    ];
+    fn project_uv(self, coordinate: Coordinate) -> DVec2 {
+        let DVec2 { x: u, y: v } = coordinate.uv;
+        let odd = (coordinate.face % 2) as f64;
 
-    const ODD_LIST: [FaceRotation; 6] = [
-        FaceRotation::Identical,
-        FaceRotation::Identical,
-        FaceRotation::ClockWise,
-        FaceRotation::Backside,
-        FaceRotation::CounterClockWise,
-        FaceRotation::Identical,
-    ];
-
-    fn face_rotation(face: u32, other_face: u32) -> Self {
-        let index = ((6 + other_face - face) % 6) as usize;
-
-        if face % 2 == 0 {
-            FaceRotation::EVEN_LIST[index]
-        } else {
-            FaceRotation::ODD_LIST[index]
+        match self {
+            FaceRotation::Identical => DVec2::new(u, v),
+            FaceRotation::ShiftU => DVec2::new(odd, v),
+            FaceRotation::RotateCCW => DVec2::new(odd, u),
+            FaceRotation::Backside => DVec2::new(v, u),
+            FaceRotation::RotateCW => DVec2::new(v, odd),
+            FaceRotation::ShiftV => DVec2::new(u, odd),
         }
     }
-}
 
-#[derive(Clone, Copy)]
-enum FaceProjection {
-    Fixed0,
-    Fixed1,
-    PositiveU,
-    PositiveV,
-}
-
-impl FaceProjection {
-    const EVEN_LIST: [[FaceProjection; 2]; 6] = [
-        [FaceProjection::PositiveU, FaceProjection::PositiveV],
-        [FaceProjection::Fixed0, FaceProjection::PositiveV],
-        [FaceProjection::Fixed0, FaceProjection::PositiveU],
-        [FaceProjection::PositiveV, FaceProjection::PositiveU],
-        [FaceProjection::PositiveV, FaceProjection::Fixed0],
-        [FaceProjection::PositiveU, FaceProjection::Fixed0],
-    ];
-    const ODD_LIST: [[FaceProjection; 2]; 6] = [
-        [FaceProjection::PositiveU, FaceProjection::PositiveV],
-        [FaceProjection::PositiveU, FaceProjection::Fixed1],
-        [FaceProjection::PositiveV, FaceProjection::Fixed1],
-        [FaceProjection::PositiveV, FaceProjection::PositiveU],
-        [FaceProjection::Fixed1, FaceProjection::PositiveU],
-        [FaceProjection::Fixed1, FaceProjection::PositiveV],
-    ];
-
-    fn project_to_face(face: u32, other_face: u32, uv: DVec2) -> DVec2 {
-        let index = ((6 + other_face - face) % 6) as usize;
-
-        let info = if face % 2 == 0 {
-            FaceProjection::EVEN_LIST[index]
+    fn new(face: u32, other_face: u32) -> Self {
+        let index = if (face % 2) == 0 {
+            (6 + other_face - face) % 6
         } else {
-            FaceProjection::ODD_LIST[index]
+            (6 + face - other_face) % 6
         };
 
-        info.map(|info| match info {
-            FaceProjection::Fixed0 => 0.0,
-            FaceProjection::Fixed1 => 1.0,
-            FaceProjection::PositiveU => uv.x,
-            FaceProjection::PositiveV => uv.y,
-        })
-        .into()
+        // Safety: safe because index is mod 6 and we have 6 enum variants
+        let face: FaceRotation = unsafe { mem::transmute(index) };
+
+        face
     }
 }

@@ -55,10 +55,11 @@ fn show_data_lod(blend: Blend, tile: AtlasTile) -> vec4<f32> {
 
 fn show_geometry_lod(coordinate: Coordinate) -> vec4<f32> {
     let view_distance  = approximate_view_distance(coordinate, view.world_position, approximate_height);
-    let target_lod     = log2(2.0 * terrain_view.morph_distance / view_distance);
+    let target_lod     = log2(terrain_view.morph_distance / view_distance);
+    let lod            = u32(coordinate.lod);
 
 #ifdef MORPH
-    let ratio = select(inverse_mix(f32(coordinate.lod) + terrain_view.morph_range, f32(coordinate.lod), target_lod), 0.0, coordinate.lod == 0);
+    let ratio = select(saturate(1.0 - (target_lod - f32(lod)) / terrain_view.morph_range), 0.0, lod == 0);
 #else
     let ratio = 0.0;
 #endif
