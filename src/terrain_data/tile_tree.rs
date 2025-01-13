@@ -377,6 +377,7 @@ impl TileTree {
                 crate::math::SurfaceApproximation::compute(
                     view_coordinate,
                     tile_tree.view_local_position,
+                    tile_tree.view_world_position,
                     &tile_atlas.model,
                 )
             });

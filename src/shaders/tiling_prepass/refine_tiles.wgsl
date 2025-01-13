@@ -1,6 +1,7 @@
 #import bevy_terrain::types::{TileCoordinate, Coordinate}
 #import bevy_terrain::bindings::{terrain, culling_view, terrain_view, final_tiles, approximate_height_write, temporary_tiles, state}
-#import bevy_terrain::functions::{approximate_view_distance, compute_unit_position, compute_relative_position, position_unit_to_world, normal_unit_to_world, tile_count, compute_subdivision_coordinate}
+#import bevy_terrain::functions::{compute_world_coordinate, compute_world_coordinate_precise, apply_height, tile_count, compute_subdivision_coordinate}
+#import bevy_render::maths::{affine3_to_square}
 
 fn child_index() -> i32 {
     return atomicAdd(&state.child_index, state.counter);
@@ -16,7 +17,16 @@ fn final_index() -> i32 {
 
 fn should_be_divided(tile: TileCoordinate) -> bool {
     let coordinate    = compute_subdivision_coordinate(Coordinate(tile.face, tile.lod, tile.xy, vec2<f32>(0.0)));
-    let view_distance = approximate_view_distance(coordinate, culling_view.world_position, approximate_height_write);
+
+    var world_coordinate = compute_world_coordinate(coordinate);
+    var view_distance    = distance(apply_height(world_coordinate, approximate_height_write), culling_view.world_position);
+
+#ifdef HIGH_PRECISION
+    if (view_distance < terrain_view.precision_threshold_distance) {
+        world_coordinate = compute_world_coordinate_precise(coordinate, world_coordinate.normal);
+        view_distance    = distance(apply_height(world_coordinate, approximate_height_write), culling_view.world_position);
+    }
+#endif
 
     return view_distance < terrain_view.subdivision_distance / tile_count(tile.lod + 1);
 }
@@ -34,31 +44,29 @@ const min_height: f32 = 10.0 * -12000.0;
 const max_height: f32 = 10.0 * 9000.0;
 
 fn frustum_cull(tile: TileCoordinate) -> bool {
-    let center_l = compute_unit_position(Coordinate(tile.face, tile.lod, tile.xy, vec2<f32>(0.5)));
-    let center = position_unit_to_world(center_l);
+    let center_coordinate = Coordinate(tile.face, tile.lod, tile.xy, vec2<f32>(0.5));
+    let center_position   = compute_world_coordinate(center_coordinate).position;
 
     // identify furthest corner from center
-
     var radius = 0.0;
 
     // we have to build a bounding sphere using the four courners to be conservative
     // using the closest edge does not suffice
     for (var i = 0u; i < 4; i = i + 1) {
         let corner_uv = vec2<f32>(f32(i & 1u), f32(i >> 1u & 1u));
-        let l = compute_unit_position(Coordinate(tile.face, tile.lod, tile.xy, corner_uv));
-        let w = position_unit_to_world(l);
-        let n = normal_unit_to_world(l);
-        let c_min = w + min_height * n;
-        let c_max = w + max_height * n;
+        let corner_coordinate = Coordinate(tile.face, tile.lod, tile.xy, corner_uv);
+        let corner_world_coordinate = compute_world_coordinate(corner_coordinate);
+        let corner_min = apply_height(corner_world_coordinate, min_height);
+        let corner_max = apply_height(corner_world_coordinate, max_height);
 
         // Consider both min and max height
-        radius = max(radius, max(distance(center, c_min), distance(center, c_max)));
+        radius = max(radius, max(distance(center_position, corner_min), distance(center_position, corner_max)));
     }
 
     for (var i = 0; i < 6; i = i + 1) {
         let half_space = culling_view.half_spaces[i];
 
-        if (dot(half_space, vec4<f32>(center, 1.0)) + radius < 0.0) {
+        if (dot(half_space, vec4<f32>(center_position, 1.0)) + radius < 0.0) {
             return true;
         }
     }
@@ -70,6 +78,7 @@ const MAJOR_AXES: f32 = 6371000.0;
 const MINOR_AXES: f32 = 6371000.0;
 
 fn horizon_cull(tile: TileCoordinate) -> bool {
+    // Todo: implement high precision supprot for culling
     if (tile.lod < 3) { return false; }
     // up to LOD 3, the closest point estimation is not reliable when projecting to adjacent sides
     // to prevent issues with cut of corners, horizon culling is skipped for those cases
@@ -94,15 +103,16 @@ fn horizon_cull(tile: TileCoordinate) -> bool {
     // view position
     let v = culling_view.world_position / ellipsoid_to_sphere;
 
+    // Todo: store world origin seperately
     // terrain origin
-    let o = position_unit_to_world(vec3<f32>(0.0)) / ellipsoid_to_sphere;
+    let o = (affine3_to_square(terrain.world_from_unit) * vec4<f32>(0.0, 0.0, 0.0, 1.0)).xyz / ellipsoid_to_sphere;
 
     // position on the edge of the tile closest to the viewer with maximum height applied
     // serves as a conservative ocluder proxy
     // if this point is not visible, no other point of the tile should be visible
-    let edge_c = compute_subdivision_coordinate(Coordinate(tile.face, tile.lod, tile.xy, vec2<f32>(0.0)));
-    let edge_u = compute_unit_position(edge_c);
-    let t = (position_unit_to_world(edge_u) + max_height * normal_unit_to_world(edge_u)) / ellipsoid_to_sphere;
+    let edge_coordinate = compute_subdivision_coordinate(Coordinate(tile.face, tile.lod, tile.xy, vec2<f32>(0.0)));
+    let edge_world = compute_world_coordinate(edge_coordinate);
+    let t = apply_height(edge_world, max_height) / ellipsoid_to_sphere;
 
     let vt = t - v;
     let vo = o - v;

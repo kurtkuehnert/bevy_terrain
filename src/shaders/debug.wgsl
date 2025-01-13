@@ -2,7 +2,7 @@
 
 #import bevy_terrain::types::{Coordinate, AtlasTile, Blend}
 #import bevy_terrain::bindings::{terrain, tile_tree, terrain_view, approximate_height, geometry_tiles, attachments, origins}
-#import bevy_terrain::functions::{inverse_mix, compute_coordinate, lookup_best, approximate_view_distance, compute_blend, tree_lod, inside_square, tile_coordinate, compute_subdivision_coordinate}
+#import bevy_terrain::functions::{lookup_best, compute_world_coordinate, compute_world_coordinate_precise, apply_height, tree_lod, compute_subdivision_coordinate}
 #import bevy_pbr::mesh_view_bindings::view
 
 fn index_color(index: u32) -> vec4<f32> {
@@ -20,8 +20,9 @@ fn index_color(index: u32) -> vec4<f32> {
 
 fn tile_tree_outlines(uv: vec2<f32>) -> f32 {
     let thickness = 0.015;
+    let inside = step(vec2<f32>(thickness), uv) * step(uv, vec2<f32>(1.0 - thickness));
 
-    return 1.0 - inside_square(uv, vec2<f32>(thickness), 1.0 - 2.0 * thickness);
+    return 1.0 - inside.x * inside.y;
 }
 
 fn checker_color(coordinate: Coordinate, ratio: f32) -> vec4<f32> {
@@ -54,7 +55,16 @@ fn show_data_lod(blend: Blend, tile: AtlasTile) -> vec4<f32> {
 }
 
 fn show_geometry_lod(coordinate: Coordinate) -> vec4<f32> {
-    let view_distance  = approximate_view_distance(coordinate, view.world_position, approximate_height);
+    var world_coordinate = compute_world_coordinate(coordinate);
+    var view_distance    = distance(apply_height(world_coordinate, approximate_height), view.world_position);
+
+#ifdef HIGH_PRECISION
+    if (view_distance < terrain_view.precision_threshold_distance) {
+        world_coordinate = compute_world_coordinate_precise(coordinate, world_coordinate.normal);
+        view_distance    = distance(apply_height(world_coordinate, approximate_height), view.world_position);
+    }
+#endif
+
     let target_lod     = log2(terrain_view.morph_distance / view_distance);
     let lod            = u32(coordinate.lod);
 
@@ -93,8 +103,7 @@ fn show_geometry_lod(coordinate: Coordinate) -> vec4<f32> {
 
     return color;
 }
-fn show_tile_tree(coordinate: Coordinate) -> vec4<f32> {
-    let view_distance  = approximate_view_distance(coordinate, view.world_position, approximate_height);
+fn show_tile_tree(coordinate: Coordinate, view_distance: f32) -> vec4<f32> {
     let target_lod     = log2(terrain_view.load_distance / view_distance);
 
     let best_lookup = lookup_best(coordinate);

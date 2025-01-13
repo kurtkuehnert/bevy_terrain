@@ -13,19 +13,19 @@ use bevy::{
 pub struct SurfaceApproximation {
     /// The constant coefficient of the series.
     /// Describes the offset between the location vertically under view and the view position.
-    pub c: Vec3,
+    pub p: Vec3,
     /// The linear coefficient of the series with respect to u.
-    pub c_du: Vec3,
+    pub p_du: Vec3,
     /// The linear coefficient of the series with respect to v.
-    pub c_dv: Vec3,
+    pub p_dv: Vec3,
     /// The quadratic coefficient of the series with respect to u and u.
     /// This value is pre-multiplied with 0.5.
-    pub c_duu: Vec3,
+    pub p_duu: Vec3,
     /// The quadratic coefficient of the series with respect to u and v.
-    pub c_duv: Vec3,
+    pub p_duv: Vec3,
     /// The quadratic coefficient of the series with respect to v and v.
     /// This value is pre-multiplied with 0.5.
-    pub c_dvv: Vec3,
+    pub p_dvv: Vec3,
 }
 
 impl SurfaceApproximation {
@@ -33,6 +33,7 @@ impl SurfaceApproximation {
     pub fn compute(
         view_coordinate: Coordinate,
         view_local_position: DVec3,
+        view_world_position: Vec3,
         model: &TerrainModel,
     ) -> SurfaceApproximation {
         // We want to approximate the position relative to the view using a second order Taylor series.
@@ -101,21 +102,22 @@ impl SurfaceApproximation {
             let p_dvv = m.transform_vector3(DVec3::new(a_dvv, b_dvv, c_dvv) / l.powi(3));
 
             SurfaceApproximation {
-                c: (p - view_local_position).as_vec3(),
-                c_du: p_du.as_vec3(),
-                c_dv: p_dv.as_vec3(),
-                c_duu: (0.5 * p_duu).as_vec3(),
-                c_duv: p_duv.as_vec3(),
-                c_dvv: (0.5 * p_dvv).as_vec3(),
+                p: (p - view_local_position).as_vec3() + view_world_position,
+                p_du: p_du.as_vec3(),
+                p_dv: p_dv.as_vec3(),
+                p_duu: (0.5 * p_duu).as_vec3(),
+                p_duv: p_duv.as_vec3(),
+                p_dvv: (0.5 * p_dvv).as_vec3(),
             }
         } else {
             SurfaceApproximation {
-                c: (view_coordinate.local_position(model, 0.0) - view_local_position).as_vec3(),
-                c_du: Vec3::X * model.scale() as f32 * 2.0,
-                c_dv: Vec3::Z * model.scale() as f32 * 2.0,
-                c_duu: Vec3::ZERO,
-                c_duv: Vec3::ZERO,
-                c_dvv: Vec3::ZERO,
+                p: (view_coordinate.local_position(model, 0.0) - view_local_position).as_vec3()
+                    + view_world_position,
+                p_du: Vec3::X * model.scale() as f32 * 2.0,
+                p_dv: Vec3::Z * model.scale() as f32 * 2.0,
+                p_duu: Vec3::ZERO,
+                p_duv: Vec3::ZERO,
+                p_dvv: Vec3::ZERO,
             }
         }
     }
