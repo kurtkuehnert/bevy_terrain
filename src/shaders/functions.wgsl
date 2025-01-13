@@ -1,8 +1,8 @@
 #define_import_path bevy_terrain::functions
 
 #import bevy_terrain::bindings::{terrain, origins, terrain_view, geometry_tiles, tile_tree}
-#import bevy_terrain::types::{TileCoordinate, TileTree, TileTreeEntry, AtlasTile, Blend, BestLookup, Coordinate, Morph}
-#import bevy_pbr::mesh_view_bindings::view
+#import bevy_terrain::types::{TileCoordinate, WorldCoordinate, TileTree, TileTreeEntry, AtlasTile, Blend, BestLookup, Coordinate, Morph}
+#import bevy_pbr::mesh_view_bindings::{view}
 #import bevy_render::maths::{affine3_to_square, mat2x4_f32_to_mat3x3_unpack}
 
 const F0 = 0u;
@@ -11,21 +11,87 @@ const PS = 2u;
 const PT = 3u;
 const C_SQR = 0.87 * 0.87;
 
-fn normal_unit_to_world(unit_position: vec3<f32>) -> vec3<f32> {
+#ifdef VERTEX
+fn compute_coordinate(vertex_index: u32) -> Coordinate {
+    let tile_index   = vertex_index / terrain_view.vertices_per_tile;
+    // use first and last indices of the rows twice, to form degenerate triangles
+    let column_index = (vertex_index % terrain_view.vertices_per_tile) / terrain_view.vertices_per_row;
+    let row_index    = clamp(vertex_index % terrain_view.vertices_per_row, 1u, terrain_view.vertices_per_row - 2u) - 1u;
+
+    let tile    = geometry_tiles[tile_index];
+    let tile_uv = vec2<f32>(f32(column_index + (row_index & 1u)), f32(row_index >> 1u)) / terrain_view.grid_size;
+
+    return Coordinate(tile.face, tile.lod, tile.xy, tile_uv);
+}
+#endif
+
+#ifdef FRAGMENT
+fn compute_coordinate(tile_index: u32, coordinate_uv: vec2<f32>) -> Coordinate {
+    let tile       = geometry_tiles[tile_index];
+    let uv         = coordinate_uv;
+
+    return Coordinate(tile.face, tile.lod, tile.xy, uv, dpdx(uv), dpdy(uv));
+}
+#endif
+
+fn compute_world_coordinate(coordinate: Coordinate) -> WorldCoordinate {
+    let uv = (vec2<f32>(coordinate.xy) + coordinate.uv) / tile_count(coordinate.lod);
+
 #ifdef SPHERICAL
+    let xy = (2.0 * uv - 1.0) / sqrt(1.0 - 4.0 * C_SQR * (uv - 1.0) * uv);
+
+    // this is faster than the CPU SIDE_MATRICES approach
+    var unit_position: vec3<f32>;
+    switch (coordinate.face) {
+        case 0u: { unit_position = vec3( -1.0, -xy.y,  xy.x); }
+        case 1u: { unit_position = vec3( xy.x, -xy.y,   1.0); }
+        case 2u: { unit_position = vec3( xy.x,   1.0,  xy.y); }
+        case 3u: { unit_position = vec3(  1.0, -xy.x,  xy.y); }
+        case 4u: { unit_position = vec3( xy.y, -xy.x,  -1.0); }
+        case 5u: { unit_position = vec3( xy.y,  -1.0,  xy.x); }
+        case default: {}
+    }
+
+    unit_position = normalize(unit_position);
     let unit_normal = unit_position;
 #else
+    let unit_position = vec3<f32>(uv.x - 0.5, 0.0, uv.y - 0.5);
     let unit_normal = vec3<f32>(0.0, 1.0, 0.0);
 #endif
 
-    let world_from_unit = mat2x4_f32_to_mat3x3_unpack(terrain.unit_from_world_transpose_a,
-                                                      terrain.unit_from_world_transpose_b);
-    return normalize(world_from_unit * unit_normal);
+    let position_world_from_unit = affine3_to_square(terrain.world_from_unit);
+    let world_position = (position_world_from_unit * vec4<f32>(unit_position, 1.0)).xyz;
+
+    let normal_world_from_unit = mat2x4_f32_to_mat3x3_unpack(terrain.unit_from_world_transpose_a, terrain.unit_from_world_transpose_b);
+    let world_normal = normalize(normal_world_from_unit * unit_normal);
+
+    return WorldCoordinate(world_position, world_normal);
 }
 
-fn position_unit_to_world(unit_position: vec3<f32>) -> vec3<f32> {
-    let world_from_unit = affine3_to_square(terrain.world_from_unit);
-    return (world_from_unit * vec4<f32>(unit_position, 1.0)).xyz;
+#ifdef HIGH_PRECISION
+fn compute_world_coordinate_precise(coordinate: Coordinate, normal: vec3<f32>) -> WorldCoordinate {
+    let view_coordinate = compute_view_coordinate(coordinate.face, coordinate.lod);
+
+    let relative_uv = (vec2<f32>(vec2<i32>(coordinate.xy) - vec2<i32>(view_coordinate.xy)) + coordinate.uv - view_coordinate.uv) / tile_count(coordinate.lod);
+    let u = relative_uv.x;
+    let v = relative_uv.y;
+
+    let approximation = terrain_view.surface_approximation[coordinate.face];
+    let p    = approximation.p;
+    let p_u  = approximation.p_u;
+    let p_v  = approximation.p_v;
+    let p_uu = approximation.p_uu;
+    let p_uv = approximation.p_uv;
+    let p_vv = approximation.p_vv;
+
+    let position = p + p_u * u + p_v * v + p_uu * u * u + p_uv * u * v + p_vv * v * v;
+
+    return WorldCoordinate(position, normal);
+}
+#endif
+
+fn apply_height(world: WorldCoordinate, height: f32) -> vec3<f32> {
+    return world.position + height * world.normal;
 }
 
 fn inverse_mix(a: f32, b: f32, value: f32) -> f32 {
@@ -63,72 +129,18 @@ fn compute_blend(view_distance: f32) -> Blend {
 #endif
 }
 
-fn compute_tile_uv(vertex_index: u32) -> vec2<f32>{
-    // use first and last indices of the rows twice, to form degenerate triangles
-    let column_index = (vertex_index % terrain_view.vertices_per_tile) / terrain_view.vertices_per_row;
-    let row_index    = clamp(vertex_index % terrain_view.vertices_per_row, 1u, terrain_view.vertices_per_row - 2u) - 1u;
+fn compute_view_coordinate(face: u32, lod: u32) -> Coordinate {
+    let coordinate = terrain_view.view_coordinates[face];
 
-    return vec2<f32>(f32(column_index + (row_index & 1u)), f32(row_index >> 1u)) / terrain_view.grid_size;
-}
-
-fn compute_unit_position(coordinate: Coordinate) -> vec3<f32> {
-    let uv = (vec2<f32>(coordinate.xy) + coordinate.uv) / tile_count(coordinate.lod);
-
-#ifdef SPHERICAL
-    let xy = (2.0 * uv - 1.0) / sqrt(1.0 - 4.0 * C_SQR * (uv - 1.0) * uv);
-
-    // this is faster than the CPU SIDE_MATRICES approach
-    var unit_position: vec3<f32>;
-    switch (coordinate.face) {
-        case 0u:      { unit_position = vec3( -1.0, -xy.y,  xy.x); }
-        case 1u:      { unit_position = vec3( xy.x, -xy.y,   1.0); }
-        case 2u:      { unit_position = vec3( xy.x,   1.0,  xy.y); }
-        case 3u:      { unit_position = vec3(  1.0, -xy.x,  xy.y); }
-        case 4u:      { unit_position = vec3( xy.y, -xy.x,  -1.0); }
-        case 5u:      { unit_position = vec3( xy.y,  -1.0,  xy.x); }
-        case default: {}
-    }
-
-    return normalize(unit_position);
+#ifdef FRAGMENT
+    var view_coordinate = Coordinate(face, terrain_view.view_lod, coordinate.xy, coordinate.uv, vec2<f32>(0.0), vec2<f32>(0.0));
 #else
-    return vec3<f32>(uv.x - 0.5, 0.0, uv.y - 0.5);
-#endif
-}
-
-#ifdef HIGH_PRECISION
-fn compute_relative_position(coordinate: Coordinate) -> vec3<f32> {
-    let view_coordinate = compute_view_coordinate(coordinate.face, coordinate.lod);
-
-    let relative_uv = (vec2<f32>(vec2<i32>(coordinate.xy) - vec2<i32>(view_coordinate.xy)) + coordinate.uv - view_coordinate.uv) / tile_count(coordinate.lod);
-    let u = relative_uv.x;
-    let v = relative_uv.y;
-
-    let approximation = terrain_view.surface_approximation[coordinate.face];
-    let c = approximation.c;
-    let c_u = approximation.c_u;
-    let c_v = approximation.c_v;
-    let c_uu = approximation.c_uu;
-    let c_uv = approximation.c_uv;
-    let c_vv = approximation.c_vv;
-
-    return c + c_u * u + c_v * v + c_uu * u * u + c_uv * u * v + c_vv * v * v;
-}
+    var view_coordinate = Coordinate(face, terrain_view.view_lod, coordinate.xy, coordinate.uv);
 #endif
 
-fn approximate_view_distance(coordinate: Coordinate, view_world_position: vec3<f32>, view_height: f32) -> f32 {
-    let unit_position = compute_unit_position(coordinate);
-    var world_position = position_unit_to_world(unit_position);
-    let world_normal   = normal_unit_to_world(unit_position);
-    var view_distance  = distance(world_position + view_height * world_normal, view_world_position);
+    coordinate_change_lod(&view_coordinate, lod);
 
-#ifdef HIGH_PRECISION
-    if (view_distance < terrain_view.precision_threshold_distance) {
-        let relative_position = compute_relative_position(coordinate);
-        view_distance         = length(relative_position + view_height * world_normal);
-    }
-#endif
-
-    return view_distance;
+    return view_coordinate;
 }
 
 fn compute_subdivision_coordinate(coordinate: Coordinate) -> Coordinate {
@@ -148,12 +160,6 @@ fn compute_subdivision_coordinate(coordinate: Coordinate) -> Coordinate {
 }
 
 fn tile_count(lod: u32) -> f32 { return f32(1u << lod); }
-
-fn inside_square(position: vec2<f32>, origin: vec2<f32>, size: f32) -> f32 {
-    let inside = step(origin, position) * step(position, origin + size);
-
-    return inside.x * inside.y;
-}
 
 fn coordinate_change_lod(coordinate: ptr<function, Coordinate>, new_lod: u32) {
     let lod_difference = i32(new_lod) - i32((*coordinate).lod);
@@ -181,27 +187,13 @@ fn coordinate_change_lod(coordinate: ptr<function, Coordinate>, new_lod: u32) {
 #endif
 }
 
-fn compute_view_coordinate(face: u32, lod: u32) -> Coordinate {
-    let coordinate = terrain_view.view_coordinates[face];
-
-#ifdef FRAGMENT
-    var view_coordinate = Coordinate(face, terrain_view.view_lod, coordinate.xy, coordinate.uv, vec2<f32>(0.0), vec2<f32>(0.0));
-#else
-    var view_coordinate = Coordinate(face, terrain_view.view_lod, coordinate.xy, coordinate.uv);
-#endif
-
-    coordinate_change_lod(&view_coordinate, lod);
-
-    return view_coordinate;
-}
-
 fn compute_tile_tree_uv(coordinate: Coordinate) -> vec2<f32> {
     let view_coordinate = compute_view_coordinate(coordinate.face, coordinate.lod);
 
     let tile_count = i32(tile_count(coordinate.lod));
     let tree_size  = min(i32(terrain_view.tree_size), tile_count);
     let tree_xy    = vec2<i32>(view_coordinate.xy) + vec2<i32>(round(view_coordinate.uv)) - vec2<i32>(terrain_view.tree_size / 2);
-    let view_xy  = clamp(tree_xy, vec2<i32>(0), vec2<i32>(tile_count - tree_size));
+    let view_xy    = clamp(tree_xy, vec2<i32>(0), vec2<i32>(tile_count - tree_size));
 
     return (vec2<f32>(vec2<i32>(coordinate.xy) - view_xy) + coordinate.uv) / f32(tree_size);
 }

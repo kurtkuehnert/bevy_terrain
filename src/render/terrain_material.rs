@@ -324,7 +324,8 @@ where
         bind_group_layout.push(self.terrain_view_layout.clone());
         bind_group_layout.push(self.material_layout.clone());
 
-        let vertex_shader_defs = shader_defs.clone();
+        let mut vertex_shader_defs = shader_defs.clone();
+        vertex_shader_defs.push("VERTEX".into());
         let mut fragment_shader_defs = shader_defs.clone();
         fragment_shader_defs.push("FRAGMENT".into());
 

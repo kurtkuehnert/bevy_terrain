@@ -49,6 +49,11 @@ struct Coordinate {
 #endif
 }
 
+struct WorldCoordinate {
+    position: vec3<f32>,
+    normal: vec3<f32>,
+}
+
 struct ViewCoordinate {
     xy: vec2<u32>,
     uv: vec2<f32>,
@@ -79,12 +84,12 @@ struct AtlasTile {
 
 #ifdef HIGH_PRECISION
 struct SurfaceApproximation {
-    c: vec3<f32>,
-    c_u: vec3<f32>,
-    c_v: vec3<f32>,
-    c_uu: vec3<f32>,
-    c_uv: vec3<f32>,
-    c_vv: vec3<f32>,
+    p: vec3<f32>,
+    p_u: vec3<f32>,
+    p_v: vec3<f32>,
+    p_uu: vec3<f32>,
+    p_uv: vec3<f32>,
+    p_vv: vec3<f32>,
 }
 #endif
 

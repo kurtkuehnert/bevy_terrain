@@ -2,7 +2,7 @@
 
 #import bevy_terrain::types::{Blend, AtlasTile, Coordinate, TangentSpace}
 #import bevy_terrain::bindings::{terrain, terrain_view, geometry_tiles}
-#import bevy_terrain::functions::{compute_blend, lookup_tile}
+#import bevy_terrain::functions::{compute_coordinate, compute_blend, lookup_tile}
 #import bevy_terrain::attachments::{compute_tangent_space, sample_height_mask, sample_surface_gradient, sample_color}
 #import bevy_terrain::debug::{show_data_lod, show_geometry_lod, show_tile_tree, show_pixels}
 #import bevy_pbr::mesh_view_bindings::view
@@ -34,14 +34,10 @@ struct FragmentInfo {
 }
 
 fn fragment_info(input: FragmentInput) -> FragmentInfo{
-    let tile          = geometry_tiles[input.tile_index];
-    let uv            = input.coordinate_uv;
-    let view_distance = distance(input.world_position.xyz, view.world_position);
-
     var info: FragmentInfo;
-    info.coordinate     = Coordinate(tile.face, tile.lod, tile.xy, uv, dpdx(uv), dpdy(uv));
-    info.view_distance  = view_distance;
-    info.blend          = compute_blend(view_distance);
+    info.coordinate     = compute_coordinate(input.tile_index, input.coordinate_uv);
+    info.view_distance  = distance(input.world_position.xyz, view.world_position);
+    info.blend          = compute_blend(info.view_distance);
     info.clip_position  = input.clip_position;
     info.world_normal   = normalize(input.world_normal);
     info.world_position = input.world_position;
@@ -80,7 +76,7 @@ fn fragment_debug(info: ptr<function, FragmentInfo>, output: ptr<function, Fragm
     (*output).color = show_geometry_lod((*info).coordinate);
 #endif
 #ifdef SHOW_TILE_TREE
-    (*output).color = show_tile_tree((*info).coordinate);
+    (*output).color = show_tile_tree((*info).coordinate, (*info).view_distance);
 #endif
 #ifdef SHOW_PIXELS
     (*output).color = mix((*output).color, show_pixels(tile), 0.5);

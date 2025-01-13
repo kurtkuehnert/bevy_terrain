@@ -8,6 +8,12 @@ struct SplitData {
     tile_index: u32,
 }
 
+fn inside_square(position: vec2<f32>, origin: vec2<f32>, size: f32) -> f32 {
+    let inside = step(origin, position) * step(position, origin + size);
+
+    return inside.x * inside.y;
+}
+
 @group(1) @binding(0)
 var<uniform> split_data: SplitData;
 @group(1) @binding(1)

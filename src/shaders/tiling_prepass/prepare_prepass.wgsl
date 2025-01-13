@@ -1,6 +1,6 @@
 #import bevy_terrain::types::{TileCoordinate, Blend}
 #import bevy_terrain::bindings::{terrain_view, approximate_height_write, temporary_tiles, state, indirect_buffer}
-#import bevy_terrain::functions::{compute_view_coordinate, lookup_tile, compute_unit_position, position_unit_to_world, normal_unit_to_world}
+#import bevy_terrain::functions::{compute_view_coordinate, lookup_tile, compute_world_coordinate, apply_height}
 #import bevy_terrain::attachments::{sample_height, sample_attachment0_gather0}
 
 @compute @workgroup_size(1, 1, 1)
@@ -12,6 +12,7 @@ fn prepare_root() {
 #ifdef SPHERICAL
     state.tile_count = 6u;
 
+    // Todo: consider culling the entire back face (opposite of viewer)
     for (var i: u32 = 0u; i < 6u; i = i + 1u) {
         temporary_tiles[i] = TileCoordinate(i, 0u, vec2<u32>(0u));
     }
@@ -25,8 +26,7 @@ fn prepare_root() {
 
     // compute approximate height
     let coordinate = compute_view_coordinate(terrain_view.view_face, terrain_view.view_lod);
-    let blend      = Blend(coordinate.lod, 0.0);
-    let tile       = lookup_tile(coordinate, blend, 0u);
+    let tile       = lookup_tile(coordinate, Blend(coordinate.lod, 0.0), 0u);
     let raw_height = sample_attachment0_gather0(tile);
     let mask       = bitcast<vec4<u32>>(raw_height) & vec4<u32>(1);
 
@@ -34,13 +34,10 @@ fn prepare_root() {
         approximate_height_write = sample_height(tile);
     }
 
-    let unit_position = compute_unit_position(coordinate);
-    let world_position = position_unit_to_world(unit_position);
-    let world_normal   = normal_unit_to_world(unit_position);
-    let approximate_position = world_position + world_normal * approximate_height_write;
-    let view_world_position = terrain_view.view_world_position;
-
-    let distance = dot(world_normal, view_world_position) - dot(world_normal, approximate_position);
+    // Todo: this should use high precision as well
+    let world_coordinate = compute_world_coordinate(coordinate);
+    let distance = dot(world_coordinate.normal, terrain_view.view_world_position) -
+                   dot(world_coordinate.normal, apply_height(world_coordinate, approximate_height_write));
 
     if (distance < 0.0) {
         state.tile_count = 0u;
