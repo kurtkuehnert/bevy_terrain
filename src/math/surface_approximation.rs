@@ -32,7 +32,7 @@ impl SurfaceApproximation {
     /// Computes the view parameters based on the it's world position.
     pub fn compute(
         view_coordinate: Coordinate,
-        view_world_position: DVec3,
+        view_local_position: DVec3,
         model: &TerrainModel,
     ) -> SurfaceApproximation {
         // We want to approximate the position relative to the view using a second order Taylor series.
@@ -92,7 +92,7 @@ impl SurfaceApproximation {
             // The model matrix is used to transform the local position and directions into the corresponding world position and directions.
             // p is transformed as a point, thus it takes the model position into account.
             // The other coefficients are transformed as vectors, so they discard the translation.
-            let m = model.world_from_local * DMat4::from_mat3(FACE_MATRICES[face]);
+            let m = model.local_from_unit * DMat4::from_mat3(FACE_MATRICES[face]);
             let p = m.transform_point3(DVec3::new(a, b, c) / l);
             let p_du = m.transform_vector3(DVec3::new(a_du, b_du, c_du) / l.powi(2));
             let p_dv = m.transform_vector3(DVec3::new(a_dv, b_dv, c_dv) / l.powi(2));
@@ -100,10 +100,8 @@ impl SurfaceApproximation {
             let p_duv = m.transform_vector3(DVec3::new(a_duv, b_duv, c_duv) / l.powi(3));
             let p_dvv = m.transform_vector3(DVec3::new(a_dvv, b_dvv, c_dvv) / l.powi(3));
 
-            // Todo: cleanup distinction between world space (origin center terrain) and world space (center floating origin)
-
             SurfaceApproximation {
-                c: (p - view_world_position).as_vec3(),
+                c: (p - view_local_position).as_vec3(),
                 c_du: p_du.as_vec3(),
                 c_dv: p_dv.as_vec3(),
                 c_duu: (0.5 * p_duu).as_vec3(),
@@ -112,7 +110,7 @@ impl SurfaceApproximation {
             }
         } else {
             SurfaceApproximation {
-                c: (view_coordinate.world_position(model, 0.0) - view_world_position).as_vec3(),
+                c: (view_coordinate.local_position(model, 0.0) - view_local_position).as_vec3(),
                 c_du: Vec3::X * model.scale() as f32 * 2.0,
                 c_dv: Vec3::Z * model.scale() as f32 * 2.0,
                 c_duu: Vec3::ZERO,

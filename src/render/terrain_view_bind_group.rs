@@ -132,7 +132,7 @@ impl From<&TileTree> for TerrainViewUniform {
             #[cfg(feature = "high_precision")]
             surface_approximation: tile_tree.surface_approximation,
             height_scale: tile_tree.height_scale,
-            view_world_position: tile_tree.relative_view_position,
+            view_world_position: tile_tree.view_world_position,
         }
     }
 }

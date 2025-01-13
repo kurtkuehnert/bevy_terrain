@@ -17,7 +17,7 @@ pub enum TerrainKind {
         radius: f64,
     },
     ELLIPSOIDAL {
-        ellipsoid_from_world: DMat4,
+        ellipsoid_from_local: DMat4,
         major_axis: f64,
         minor_axis: f64,
     },
@@ -34,8 +34,8 @@ pub enum TerrainKind {
 #[derive(Clone)]
 pub struct TerrainModel {
     pub(crate) kind: TerrainKind,
-    pub world_from_local: DMat4,
-    local_from_world: DMat4,
+    pub local_from_unit: DMat4,
+    unit_from_local: DMat4,
     translation: DVec3,
 }
 
@@ -51,17 +51,17 @@ impl TerrainModel {
     fn from_scale_rotation_translation(
         scale: DVec3,
         rotation: DQuat,
-        translation: DVec3,
+        translation: DVec3, // Todo: remove this ?
         kind: TerrainKind,
     ) -> Self {
-        let world_from_local = DMat4::from_scale_rotation_translation(scale, rotation, translation);
-        let local_from_world = world_from_local.inverse();
+        let local_from_unit = DMat4::from_scale_rotation_translation(scale, rotation, translation);
+        let unit_from_local = local_from_unit.inverse();
 
         Self {
             kind,
             translation,
-            world_from_local,
-            local_from_world,
+            local_from_unit,
+            unit_from_local,
         }
     }
 
@@ -85,55 +85,55 @@ impl TerrainModel {
 
     pub fn ellipsoid(position: DVec3, major_axis: f64, minor_axis: f64) -> Self {
         let rotation = DQuat::IDENTITY; // ::from_rotation_x(45.0_f64.to_radians());
-        let ellipsoid_from_world = DMat4::from_rotation_translation(rotation, position).inverse();
+        let ellipsoid_from_local = DMat4::from_rotation_translation(rotation, position).inverse();
 
         Self::from_scale_rotation_translation(
             DVec3::new(major_axis, minor_axis, major_axis),
             rotation,
             position,
             TerrainKind::ELLIPSOIDAL {
-                ellipsoid_from_world,
+                ellipsoid_from_local,
                 major_axis,
                 minor_axis,
             },
         )
     }
 
-    pub fn position_local_to_world(&self, local_position: DVec3, height: f64) -> DVec3 {
-        let world_position = self.world_from_local.transform_point3(local_position);
-        let world_normal = self
-            .world_from_local
+    pub fn position_unit_to_local(&self, unit_position: DVec3, height: f64) -> DVec3 {
+        let local_position = self.local_from_unit.transform_point3(unit_position);
+        let local_normal = self
+            .local_from_unit
             .transform_vector3(if self.is_spherical() {
-                local_position
+                unit_position
             } else {
                 DVec3::Y
             })
             .normalize();
 
-        world_position + height * world_normal
+        local_position + height * local_normal
     }
 
-    pub fn position_world_to_local(&self, world_position: DVec3) -> DVec3 {
+    pub fn position_local_to_unit(&self, local_position: DVec3) -> DVec3 {
         match self.kind {
             TerrainKind::PLANAR { .. } => {
-                DVec3::new(1.0, 0.0, 1.0) * self.local_from_world.transform_point3(world_position)
+                DVec3::new(1.0, 0.0, 1.0) * self.unit_from_local.transform_point3(local_position)
             }
 
             TerrainKind::SPHERICAL { .. } => self
-                .local_from_world
-                .transform_point3(world_position)
+                .unit_from_local
+                .transform_point3(local_position)
                 .normalize(),
             TerrainKind::ELLIPSOIDAL {
-                ellipsoid_from_world,
+                ellipsoid_from_local,
                 major_axis,
                 minor_axis,
             } => {
-                let ellipsoid_position = ellipsoid_from_world.transform_point3(world_position);
+                let ellipsoid_position = ellipsoid_from_local.transform_point3(local_position);
                 let surface_position = project_point_ellipsoid(
                     DVec3::new(major_axis, major_axis, minor_axis),
                     ellipsoid_position,
                 );
-                self.local_from_world
+                self.unit_from_local
                     .transform_point3(surface_position)
                     .normalize()
             }
@@ -166,7 +166,7 @@ impl TerrainModel {
 
     #[cfg(not(feature = "high_precision"))]
     pub(crate) fn transform(&self) -> Transform {
-        Transform::from_matrix(self.world_from_local.as_mat4())
+        Transform::from_matrix(self.local_from_unit.as_mat4())
     }
 
     #[cfg(feature = "high_precision")]
@@ -177,7 +177,7 @@ impl TerrainModel {
         let (cell, translation) = frame.translation_to_grid(self.translation);
 
         crate::big_space::GridTransformOwned {
-            transform: Transform::from_matrix(self.world_from_local.as_mat4())
+            transform: Transform::from_matrix(self.local_from_unit.as_mat4())
                 .with_translation(translation),
             cell,
         }

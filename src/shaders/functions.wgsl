@@ -11,21 +11,21 @@ const PS = 2u;
 const PT = 3u;
 const C_SQR = 0.87 * 0.87;
 
-fn normal_local_to_world(local_position: vec3<f32>) -> vec3<f32> {
+fn normal_unit_to_world(unit_position: vec3<f32>) -> vec3<f32> {
 #ifdef SPHERICAL
-    let local_normal = local_position;
+    let unit_normal = unit_position;
 #else
-    let local_normal = vec3<f32>(0.0, 1.0, 0.0);
+    let unit_normal = vec3<f32>(0.0, 1.0, 0.0);
 #endif
 
-    let world_from_local = mat2x4_f32_to_mat3x3_unpack(terrain.local_from_world_transpose_a,
-                                                       terrain.local_from_world_transpose_b);
-    return normalize(world_from_local * local_normal);
+    let world_from_unit = mat2x4_f32_to_mat3x3_unpack(terrain.unit_from_world_transpose_a,
+                                                      terrain.unit_from_world_transpose_b);
+    return normalize(world_from_unit * unit_normal);
 }
 
-fn position_local_to_world(local_position: vec3<f32>) -> vec3<f32> {
-    let world_from_local = affine3_to_square(terrain.world_from_local);
-    return (world_from_local * vec4<f32>(local_position, 1.0)).xyz;
+fn position_unit_to_world(unit_position: vec3<f32>) -> vec3<f32> {
+    let world_from_unit = affine3_to_square(terrain.world_from_unit);
+    return (world_from_unit * vec4<f32>(unit_position, 1.0)).xyz;
 }
 
 fn inverse_mix(a: f32, b: f32, value: f32) -> f32 {
@@ -71,25 +71,25 @@ fn compute_tile_uv(vertex_index: u32) -> vec2<f32>{
     return vec2<f32>(f32(column_index + (row_index & 1u)), f32(row_index >> 1u)) / terrain_view.grid_size;
 }
 
-fn compute_local_position(coordinate: Coordinate) -> vec3<f32> {
+fn compute_unit_position(coordinate: Coordinate) -> vec3<f32> {
     let uv = (vec2<f32>(coordinate.xy) + coordinate.uv) / tile_count(coordinate.lod);
 
 #ifdef SPHERICAL
     let xy = (2.0 * uv - 1.0) / sqrt(1.0 - 4.0 * C_SQR * (uv - 1.0) * uv);
 
     // this is faster than the CPU SIDE_MATRICES approach
-    var local_position: vec3<f32>;
+    var unit_position: vec3<f32>;
     switch (coordinate.face) {
-        case 0u:      { local_position = vec3( -1.0, -xy.y,  xy.x); }
-        case 1u:      { local_position = vec3( xy.x, -xy.y,   1.0); }
-        case 2u:      { local_position = vec3( xy.x,   1.0,  xy.y); }
-        case 3u:      { local_position = vec3(  1.0, -xy.x,  xy.y); }
-        case 4u:      { local_position = vec3( xy.y, -xy.x,  -1.0); }
-        case 5u:      { local_position = vec3( xy.y,  -1.0,  xy.x); }
+        case 0u:      { unit_position = vec3( -1.0, -xy.y,  xy.x); }
+        case 1u:      { unit_position = vec3( xy.x, -xy.y,   1.0); }
+        case 2u:      { unit_position = vec3( xy.x,   1.0,  xy.y); }
+        case 3u:      { unit_position = vec3(  1.0, -xy.x,  xy.y); }
+        case 4u:      { unit_position = vec3( xy.y, -xy.x,  -1.0); }
+        case 5u:      { unit_position = vec3( xy.y,  -1.0,  xy.x); }
         case default: {}
     }
 
-    return normalize(local_position);
+    return normalize(unit_position);
 #else
     return vec3<f32>(uv.x - 0.5, 0.0, uv.y - 0.5);
 #endif
@@ -116,9 +116,9 @@ fn compute_relative_position(coordinate: Coordinate) -> vec3<f32> {
 #endif
 
 fn approximate_view_distance(coordinate: Coordinate, view_world_position: vec3<f32>, view_height: f32) -> f32 {
-    let local_position = compute_local_position(coordinate);
-    var world_position = position_local_to_world(local_position);
-    let world_normal   = normal_local_to_world(local_position);
+    let unit_position = compute_unit_position(coordinate);
+    var world_position = position_unit_to_world(unit_position);
+    let world_normal   = normal_unit_to_world(unit_position);
     var view_distance  = distance(world_position + view_height * world_normal, view_world_position);
 
 #ifdef HIGH_PRECISION

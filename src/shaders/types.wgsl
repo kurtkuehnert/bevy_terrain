@@ -3,9 +3,9 @@
 struct Terrain {
     lod_count: u32,
     scale: f32,
-    world_from_local: mat3x4<f32>,
-    local_from_world_transpose_a: mat2x4<f32>,
-    local_from_world_transpose_b: f32,
+    world_from_unit: mat3x4<f32>,
+    unit_from_world_transpose_a: mat2x4<f32>,
+    unit_from_world_transpose_b: f32,
 }
 
 struct TerrainView {

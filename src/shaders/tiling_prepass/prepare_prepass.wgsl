@@ -1,6 +1,6 @@
 #import bevy_terrain::types::{TileCoordinate, Blend}
 #import bevy_terrain::bindings::{terrain_view, approximate_height_write, temporary_tiles, state, indirect_buffer}
-#import bevy_terrain::functions::{compute_view_coordinate, lookup_tile, compute_local_position, position_local_to_world, normal_local_to_world}
+#import bevy_terrain::functions::{compute_view_coordinate, lookup_tile, compute_unit_position, position_unit_to_world, normal_unit_to_world}
 #import bevy_terrain::attachments::{sample_height, sample_attachment0_gather0}
 
 @compute @workgroup_size(1, 1, 1)
@@ -34,9 +34,9 @@ fn prepare_root() {
         approximate_height_write = sample_height(tile);
     }
 
-    let local_position = compute_local_position(coordinate);
-    let world_position = position_local_to_world(local_position);
-    let world_normal   = normal_local_to_world(local_position);
+    let unit_position = compute_unit_position(coordinate);
+    let world_position = position_unit_to_world(unit_position);
+    let world_normal   = normal_unit_to_world(unit_position);
     let approximate_position = world_position + world_normal * approximate_height_write;
     let view_world_position = terrain_view.view_world_position;
 
