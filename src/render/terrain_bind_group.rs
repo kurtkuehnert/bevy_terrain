@@ -104,8 +104,6 @@ impl TerrainUniform {
     }
 }
 
-// Todo: convert the mesh buffer to a ShaderStorageBuffer and merge with the terrain config buffer
-
 pub struct GpuTerrain {
     pub(crate) terrain_bind_group: Option<BindGroup>,
 

@@ -118,8 +118,8 @@ pub struct TileTree {
     pub(crate) precision_threshold_distance: f64,
     pub(crate) view_face: u32,
     pub(crate) view_lod: u32,
-    pub(crate) view_world_position: DVec3,
-    pub(crate) relative_view_position: Vec3,
+    pub(crate) view_local_position: DVec3,
+    pub(crate) view_world_position: Vec3,
     pub(crate) view_coordinates: [Coordinate; 6],
     #[cfg(feature = "high_precision")]
     pub(crate) surface_approximation: [crate::math::SurfaceApproximation; 6],
@@ -187,7 +187,7 @@ impl TileTree {
             precision_threshold_distance: view_config.precision_threshold_distance * scale,
             view_face: 0,
             view_lod: view_config.view_lod,
-            view_world_position: default(),
+            view_local_position: default(),
             data,
             tiles: Array4::default((
                 model.face_count() as usize,
@@ -203,7 +203,7 @@ impl TileTree {
             approximate_height: 0.0,
             height_scale: 1.0,
             order: view_config.order,
-            relative_view_position: Default::default(),
+            view_world_position: Default::default(),
             tile_tree_buffer,
             terrain_view_buffer,
             approximate_height_buffer,
@@ -251,18 +251,18 @@ impl TileTree {
             Ordering::Equal => offset.y,
         };
 
-        let tile_world_position =
+        let tile_local_position =
             Coordinate::new(tile.face, (tile.xy.as_dvec2() + offset) / tile_count)
-                .world_position(model, self.approximate_height);
+                .local_position(model, self.approximate_height);
 
-        tile_world_position.distance(self.view_world_position)
+        tile_local_position.distance(self.view_local_position)
     }
 
-    fn update(&mut self, view_position: DVec3, tile_atlas: &TileAtlas) {
+    fn update(&mut self, view_grid_position: DVec3, tile_atlas: &TileAtlas) {
         let model = &tile_atlas.model;
-        self.view_world_position = view_position;
+        self.view_local_position = view_grid_position; // Todo: transform grid to local position
 
-        let view_coordinate = Coordinate::from_world_position(self.view_world_position, model);
+        let view_coordinate = Coordinate::from_local_position(self.view_local_position, model);
         self.view_face = view_coordinate.face;
 
         for face in 0..model.face_count() {
@@ -339,17 +339,14 @@ impl TileTree {
 
             let frame = frames.parent_frame(view).unwrap();
             let (transform, cell) = views.get(view).unwrap();
-            let view_position = frame.grid_position_double(cell, transform);
+            let view_grid_position = frame.grid_position_double(cell, transform);
 
             // Todo: work with global translations correctly
             #[cfg(not(feature = "high_precision"))]
-            let view_position = view_transform.translation.as_dvec3();
+            let view_grid_position = view_transform.translation.as_dvec3();
 
-            // dbg!(view_position);
-            // dbg!(transform.translation);
-
-            tile_tree.update(view_position, tile_atlas);
-            tile_tree.relative_view_position = transform.translation;
+            tile_tree.update(view_grid_position, tile_atlas);
+            tile_tree.view_world_position = transform.translation;
         }
     }
 
@@ -379,7 +376,7 @@ impl TileTree {
             tile_tree.surface_approximation = tile_tree.view_coordinates.map(|view_coordinate| {
                 crate::math::SurfaceApproximation::compute(
                     view_coordinate,
-                    tile_tree.view_world_position,
+                    tile_tree.view_local_position,
                     &tile_atlas.model,
                 )
             });

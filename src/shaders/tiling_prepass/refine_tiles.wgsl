@@ -1,6 +1,6 @@
 #import bevy_terrain::types::{TileCoordinate, Coordinate}
 #import bevy_terrain::bindings::{terrain, culling_view, terrain_view, final_tiles, approximate_height_write, temporary_tiles, state}
-#import bevy_terrain::functions::{approximate_view_distance, compute_local_position, compute_relative_position, position_local_to_world, normal_local_to_world, tile_count, compute_subdivision_coordinate}
+#import bevy_terrain::functions::{approximate_view_distance, compute_unit_position, compute_relative_position, position_unit_to_world, normal_unit_to_world, tile_count, compute_subdivision_coordinate}
 
 fn child_index() -> i32 {
     return atomicAdd(&state.child_index, state.counter);
@@ -34,8 +34,8 @@ const min_height: f32 = 10.0 * -12000.0;
 const max_height: f32 = 10.0 * 9000.0;
 
 fn frustum_cull(tile: TileCoordinate) -> bool {
-    let center_l = compute_local_position(Coordinate(tile.face, tile.lod, tile.xy, vec2<f32>(0.5)));
-    let center = position_local_to_world(center_l);
+    let center_l = compute_unit_position(Coordinate(tile.face, tile.lod, tile.xy, vec2<f32>(0.5)));
+    let center = position_unit_to_world(center_l);
 
     // identify furthest corner from center
 
@@ -45,9 +45,9 @@ fn frustum_cull(tile: TileCoordinate) -> bool {
     // using the closest edge does not suffice
     for (var i = 0u; i < 4; i = i + 1) {
         let corner_uv = vec2<f32>(f32(i & 1u), f32(i >> 1u & 1u));
-        let l = compute_local_position(Coordinate(tile.face, tile.lod, tile.xy, corner_uv));
-        let w = position_local_to_world(l);
-        let n = normal_local_to_world(l);
+        let l = compute_unit_position(Coordinate(tile.face, tile.lod, tile.xy, corner_uv));
+        let w = position_unit_to_world(l);
+        let n = normal_unit_to_world(l);
         let c_min = w + min_height * n;
         let c_max = w + max_height * n;
 
@@ -95,14 +95,14 @@ fn horizon_cull(tile: TileCoordinate) -> bool {
     let v = culling_view.world_position / ellipsoid_to_sphere;
 
     // terrain origin
-    let o = position_local_to_world(vec3<f32>(0.0)) / ellipsoid_to_sphere;
+    let o = position_unit_to_world(vec3<f32>(0.0)) / ellipsoid_to_sphere;
 
     // position on the edge of the tile closest to the viewer with maximum height applied
     // serves as a conservative ocluder proxy
     // if this point is not visible, no other point of the tile should be visible
     let edge_c = compute_subdivision_coordinate(Coordinate(tile.face, tile.lod, tile.xy, vec2<f32>(0.0)));
-    let edge_l = compute_local_position(edge_c);
-    let t = (position_local_to_world(edge_l) + max_height * normal_local_to_world(edge_l)) / ellipsoid_to_sphere;
+    let edge_u = compute_unit_position(edge_c);
+    let t = (position_unit_to_world(edge_u) + max_height * normal_unit_to_world(edge_u)) / ellipsoid_to_sphere;
 
     let vt = t - v;
     let vo = o - v;

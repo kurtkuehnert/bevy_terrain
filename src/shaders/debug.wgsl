@@ -2,7 +2,7 @@
 
 #import bevy_terrain::types::{Coordinate, AtlasTile, Blend}
 #import bevy_terrain::bindings::{terrain, tile_tree, terrain_view, approximate_height, geometry_tiles, attachments, origins}
-#import bevy_terrain::functions::{inverse_mix, compute_coordinate, lookup_best, approximate_view_distance, compute_blend, tree_lod, inside_square, tile_coordinate, coordinate_from_local_position, compute_subdivision_coordinate}
+#import bevy_terrain::functions::{inverse_mix, compute_coordinate, lookup_best, approximate_view_distance, compute_blend, tree_lod, inside_square, tile_coordinate, compute_subdivision_coordinate}
 #import bevy_pbr::mesh_view_bindings::view
 
 fn index_color(index: u32) -> vec4<f32> {

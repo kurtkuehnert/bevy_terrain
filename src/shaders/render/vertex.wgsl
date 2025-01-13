@@ -2,7 +2,7 @@
 
 #import bevy_terrain::types::{Blend, AtlasTile, Coordinate, TileCoordinate}
 #import bevy_terrain::bindings::{terrain, terrain_view, approximate_height, geometry_tiles}
-#import bevy_terrain::functions::{lookup_tile, compute_tile_uv, compute_local_position, compute_relative_position, compute_morph, compute_blend, normal_local_to_world, position_local_to_world}
+#import bevy_terrain::functions::{lookup_tile, compute_tile_uv, compute_unit_position, compute_relative_position, compute_morph, compute_blend, normal_unit_to_world, position_unit_to_world}
 #import bevy_terrain::attachments::{sample_height, sample_attachment0_gather0}
 #import bevy_pbr::mesh_view_bindings::view
 #import bevy_pbr::view_transformations::position_world_to_clip
@@ -32,9 +32,9 @@ fn vertex_info(input: VertexInput) -> VertexInfo {
     let tile                       = geometry_tiles[tile_index];
     let tile_uv                    = compute_tile_uv(input.vertex_index);
     let approximate_coordinate     = Coordinate(tile.face, tile.lod, tile.xy, tile_uv);
-    let approximate_local_position = compute_local_position(approximate_coordinate);
-    let approximate_world_position = position_local_to_world(approximate_local_position);
-    let approximate_world_normal   = normal_local_to_world(approximate_local_position);
+    let approximate_unit_position  = compute_unit_position(approximate_coordinate);
+    let approximate_world_position = position_unit_to_world(approximate_unit_position);
+    let approximate_world_normal   = normal_unit_to_world(approximate_unit_position);
     var approximate_view_distance  = distance(approximate_world_position + approximate_height * approximate_world_normal, view.world_position);
 
     var coordinate: Coordinate; var world_position: vec3<f32>; var world_normal: vec3<f32>;
@@ -51,9 +51,9 @@ fn vertex_info(input: VertexInput) -> VertexInfo {
     } else {
 #endif
         coordinate         = compute_morph(approximate_coordinate, approximate_view_distance);
-        let local_position = compute_local_position(coordinate);
-        world_position     = position_local_to_world(local_position);
-        world_normal       = normal_local_to_world(local_position);
+        let unit_position = compute_unit_position(coordinate);
+        world_position     = position_unit_to_world(unit_position);
+        world_normal       = normal_unit_to_world(unit_position);
 #ifdef HIGH_PRECISION
     }
 #endif
