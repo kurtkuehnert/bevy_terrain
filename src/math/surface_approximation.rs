@@ -77,7 +77,7 @@ impl SurfaceApproximation {
             let a_dvv = 2.0 * l_dv * l_dv - l * l_dvv;
 
             let b = x;
-            let b_du = -x * l_du + l * x_du;
+            let b_du = -x * l_du + x_du * l;
             let b_dv = -x * l_dv;
             let b_duu = 2.0 * x * l_du * l_du - l * (2.0 * x_du * l_du + x * l_duu) + x_duu * l * l;
             let b_duv = 2.0 * x * l_du * l_dv - l * (x_du * l_dv + x * l_duv);
@@ -85,7 +85,7 @@ impl SurfaceApproximation {
 
             let c = y;
             let c_du = -y * l_du;
-            let c_dv = -y * l_dv + l * y_dv;
+            let c_dv = -y * l_dv + y_dv * l;
             let c_duu = 2.0 * y * l_du * l_du - l * y * l_duu;
             let c_duv = 2.0 * y * l_du * l_dv - l * (y_dv * l_du + y * l_duv);
             let c_dvv = 2.0 * y * l_dv * l_dv - l * (2.0 * y_dv * l_dv + y * l_dvv) + y_dvv * l * l;

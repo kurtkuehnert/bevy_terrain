@@ -166,24 +166,17 @@ fn coordinate_change_lod(coordinate: ptr<function, Coordinate>, new_lod: u32) {
 
     if (lod_difference == 0) { return; }
 
-    let delta_count = 1u << u32(abs(lod_difference));
-    let delta_size  = pow(2.0, f32(lod_difference));
+    let scale = exp2(f32(lod_difference));
+    let xy = (*coordinate).xy;
+    let uv = (*coordinate).uv * scale;
 
     (*coordinate).lod = new_lod;
-
-    if (lod_difference > 0) {
-        let scaled_uv    = (*coordinate).uv * delta_size;
-        (*coordinate).xy = (*coordinate).xy * delta_count + vec2<u32>(scaled_uv);
-        (*coordinate).uv = scaled_uv % 1.0;
-    } else {
-        let xy = (*coordinate).xy;
-        (*coordinate).xy = xy / delta_count;
-        (*coordinate).uv = (vec2<f32>(xy % delta_count) + (*coordinate).uv) * delta_size;
-    }
+    (*coordinate).xy = vec2<u32>(vec2<f32>((*coordinate).xy) * scale) + vec2<u32>(uv);
+    (*coordinate).uv = uv % 1.0 + select(vec2<f32>(xy % u32(1 / scale)) * scale, vec2<f32>(0.0), lod_difference > 0);
 
 #ifdef FRAGMENT
-    (*coordinate).uv_dx *= delta_size;
-    (*coordinate).uv_dy *= delta_size;
+    (*coordinate).uv_dx *= scale;
+    (*coordinate).uv_dy *= scale;
 #endif
 }
 

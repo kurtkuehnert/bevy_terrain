@@ -29,12 +29,10 @@ pub fn project_point_ellipsoid(e: DVec3, y: DVec3) -> DVec3 {
             } else {
                 project_point_ellipse(e.yz(), y.yz()).extend(0.0).zxy()
             }
+        } else if y.x > 0.0 {
+            project_point_ellipse(e.xz(), y.xz()).extend(0.0).xzy()
         } else {
-            if y.x > 0.0 {
-                project_point_ellipse(e.xz(), y.xz()).extend(0.0).xzy()
-            } else {
-                DVec3::new(0.0, 0.0, e.z)
-            }
+            DVec3::new(0.0, 0.0, e.z)
         }
     } else {
         let denom0 = e.x * e.x - e.z * e.z;
