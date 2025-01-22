@@ -15,7 +15,6 @@
 //! Both the tile atlas and the tile_trees also have a corresponding GPU representation,
 //! which can be used to access the terrain data in shaders.
 
-use crate::util::CollectArray;
 use bevy::render::render_resource::*;
 use bytemuck::cast_slice;
 use itertools::{iproduct, Itertools};
@@ -178,7 +177,11 @@ impl AttachmentData {
                     iter::zip(&mut value, data[index]).for_each(|(value, v)| *value += v as u64);
                 }
 
-                let value = value.iter().map(|value| (value / 4) as u8).collect_array();
+                let value = value
+                    .iter()
+                    .map(|value| (value / 4) as u8)
+                    .collect_array()
+                    .unwrap();
 
                 data.push(value);
             }

@@ -162,8 +162,8 @@ fn setup(
 
     let mut scope_terrain = Entity::PLACEHOLDER;
 
-    commands.spawn_big_space(ReferenceFrame::default(), |root| {
-        let frame = root.frame().clone();
+    commands.spawn_big_space(Grid::default(), |root| {
+        let grid = root.grid().clone();
 
         global_terrain = root
             .spawn_spatial((
@@ -207,7 +207,7 @@ fn setup(
             ))
             .id();
 
-        let (cell, translation) = frame.translation_to_grid(-DVec3::X * RADIUS * 3.0);
+        let (cell, translation) = grid.translation_to_grid(-DVec3::X * RADIUS * 3.0);
 
         view = root
             .spawn_spatial((
