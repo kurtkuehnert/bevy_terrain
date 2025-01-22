@@ -109,7 +109,7 @@ fn setup(
 
     // Configure all the important properties of the terrain, as well as its attachments.
     let global_config = TerrainConfig {
-        lod_count: 8,
+        lod_count: LOD_COUNT,
         model: TerrainModel::ellipsoid(DVec3::ZERO, MAJOR_AXES, MINOR_AXES),
         path: "/Volumes/ExternalSSD/tiles/earth".to_string(),
         atlas_size: 2048,
