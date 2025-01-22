@@ -1,5 +1,5 @@
 #[cfg(feature = "high_precision")]
-use crate::big_space::{FloatingOrigin, GridTransform, GridTransformItem, ReferenceFrames};
+use crate::big_space::{FloatingOrigin, GridTransform, GridTransformItem, Grids};
 
 use bevy::{input::mouse::MouseMotion, math::DVec3, prelude::*};
 
@@ -43,7 +43,7 @@ impl DebugCameraController {
 }
 
 pub fn debug_camera_controller(
-    #[cfg(feature = "high_precision")] frames: ReferenceFrames,
+    #[cfg(feature = "high_precision")] grids: Grids,
     time: Res<Time>,
     keyboard: Res<ButtonInput<KeyCode>>,
     mut mouse_move: EventReader<MouseMotion>,
@@ -70,7 +70,7 @@ pub fn debug_camera_controller(
         return;
     };
     #[cfg(feature = "high_precision")]
-    let frame = frames.parent_frame(camera).unwrap();
+    let grid = grids.parent_grid(camera).unwrap();
 
     #[cfg(not(feature = "high_precision"))]
     let (mut transform, mut controller) = camera.single_mut();
@@ -133,7 +133,7 @@ pub fn debug_camera_controller(
     #[cfg(feature = "high_precision")]
     {
         let (cell_delta, translation_delta) =
-            frame.translation_to_grid(controller.translation_velocity);
+            grid.translation_to_grid(controller.translation_velocity);
 
         *cell += cell_delta;
         transform.translation += translation_delta;

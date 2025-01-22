@@ -1,5 +1,5 @@
 use crate::{
-    big_space::{FloatingOrigin, GridCell, ReferenceFrames},
+    big_space::{FloatingOrigin, GridCell, Grids},
     picking::PickingData,
 };
 use bevy::{
@@ -91,7 +91,7 @@ impl Default for OrbitalCameraController {
 #[allow(clippy::too_many_arguments)]
 pub fn orbital_camera_controller(
     mut gizmos: Gizmos,
-    frames: ReferenceFrames,
+    grids: Grids,
     time: Res<Time>,
     keyboard: Res<ButtonInput<KeyCode>>,
     mouse_buttons: Res<ButtonInput<MouseButton>>,
@@ -120,18 +120,18 @@ pub fn orbital_camera_controller(
     }
 
     let smoothing = (time.delta_secs_f64() / controller.time_to_reach_target).min(1.0);
-    let frame = frames.parent_frame(camera).unwrap();
+    let grid = grids.parent_grid(camera).unwrap();
     let mut window = window.single_mut();
 
     let terrain_origin = DVec3::ZERO;
-    let camera_position = frame.grid_position_double(&camera_cell, &camera_transform);
+    let camera_position = grid.grid_position_double(&camera_cell, &camera_transform);
     let camera_rotation = camera_transform.rotation.as_dquat();
     let mut new_camera_position = camera_position;
     let mut new_camera_rotation = camera_rotation;
 
     let cursor_cell = picking_data.cell;
     let cursor_position = picking_data.translation.map(|translation| {
-        frame.grid_position_double(&cursor_cell, &Transform::from_translation(translation))
+        grid.grid_position_double(&cursor_cell, &Transform::from_translation(translation))
     });
     let cursor_coords = picking_data.cursor_coords;
 
@@ -249,7 +249,7 @@ pub fn orbital_camera_controller(
 
         let ndc_coords = (pan_data.pan_coords * 2.0 - 1.0).extend(0.0001); // Todo: using f64 we should be able to set this to 1.0 for the near plane
         let translation = pan_data.world_from_clip.project_point3(ndc_coords);
-        let new_cursor_position = frame.grid_position_double(
+        let new_cursor_position = grid.grid_position_double(
             &controller.anchor_cell,
             &Transform::from_translation(translation),
         );
@@ -339,7 +339,7 @@ pub fn orbital_camera_controller(
             DQuat::from_rotation_arc(initial_direction, new_direction) * controller.camera_rotation;
     }
 
-    let (new_cell, new_translation) = frame.translation_to_grid(new_camera_position);
+    let (new_cell, new_translation) = grid.translation_to_grid(new_camera_position);
 
     *camera_cell = new_cell;
     camera_transform.translation = new_translation;
@@ -348,7 +348,7 @@ pub fn orbital_camera_controller(
     let anchor_size = 200.0;
 
     gizmos.sphere(
-        (controller.anchor_position - frame.grid_to_float(&new_cell)).as_vec3(),
+        (controller.anchor_position - grid.cell_to_float(&new_cell)).as_vec3(),
         new_camera_position.distance(controller.anchor_position) as f32 / anchor_size,
         basic::GREEN,
     );

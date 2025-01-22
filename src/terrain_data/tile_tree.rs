@@ -330,16 +330,16 @@ impl TileTree {
     pub(crate) fn compute_requests(
         mut tile_trees: ResMut<TerrainViewComponents<TileTree>>,
         tile_atlases: Query<&TileAtlas>,
-        #[cfg(feature = "high_precision")] frames: crate::big_space::ReferenceFrames,
+        #[cfg(feature = "high_precision")] grids: crate::big_space::Grids,
         #[cfg(feature = "high_precision")] views: Query<(&Transform, &GridCell)>,
         #[cfg(not(feature = "high_precision"))] view_transforms: Query<&Transform>,
     ) {
         for (&(terrain, view), tile_tree) in tile_trees.iter_mut() {
             let tile_atlas = tile_atlases.get(terrain).unwrap();
 
-            let frame = frames.parent_frame(view).unwrap();
+            let grid = grids.parent_grid(view).unwrap();
             let (transform, cell) = views.get(view).unwrap();
-            let view_grid_position = frame.grid_position_double(cell, transform);
+            let view_grid_position = grid.grid_position_double(cell, transform);
 
             // Todo: work with global translations correctly
             #[cfg(not(feature = "high_precision"))]

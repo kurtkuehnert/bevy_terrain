@@ -63,7 +63,7 @@ pub mod prelude {
     // #[doc(hidden)]
 
     #[cfg(feature = "high_precision")]
-    pub use crate::big_space::{BigSpaceCommands, ReferenceFrame};
+    pub use crate::big_space::{BigSpaceCommands, Grid};
 
     pub use crate::{
         debug::{

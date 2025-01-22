@@ -1,5 +1,5 @@
 use crate::{
-    big_space::{GridCell, GridTransformOwned, ReferenceFrames},
+    big_space::{GridCell, GridTransformOwned, Grids},
     math::ellipsoid::project_point_ellipsoid,
     terrain_data::TileAtlas,
 };
@@ -172,7 +172,7 @@ impl TerrainModel {
     #[cfg(feature = "high_precision")]
     pub(crate) fn grid_transform(
         &self,
-        frame: &crate::big_space::ReferenceFrame,
+        frame: &crate::big_space::Grid,
     ) -> crate::big_space::GridTransformOwned {
         let (cell, translation) = frame.translation_to_grid(self.translation);
 
@@ -185,15 +185,15 @@ impl TerrainModel {
 }
 
 pub fn sync_terrain_position(
-    frames: ReferenceFrames,
+    grids: Grids,
     mut terrains: Query<(Entity, &mut Transform, &mut GridCell, &TileAtlas)>,
 ) {
     for (terrain, mut transform, mut cell, tile_atlas) in &mut terrains {
-        let frame = frames.parent_frame(terrain).unwrap();
+        let grid = grids.parent_grid(terrain).unwrap();
         let GridTransformOwned {
             transform: new_transform,
             cell: new_cell,
-        } = tile_atlas.model.grid_transform(frame);
+        } = tile_atlas.model.grid_transform(grid);
 
         *transform = new_transform;
         *cell = new_cell;

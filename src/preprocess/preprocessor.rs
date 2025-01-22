@@ -1,11 +1,11 @@
-use crate::terrain_data::tile_atlas::{AtlasTile, AtlasTileAttachment};
 use crate::{
     math::TileCoordinate,
-    terrain_data::{AttachmentFormat, TileAtlas},
-    util::CollectArray,
+    terrain_data::{
+        tile_atlas::{AtlasTile, AtlasTileAttachment},
+        AttachmentFormat, TileAtlas,
+    },
 };
-use bevy::image::ImageSampler;
-use bevy::prelude::*;
+use bevy::{image::ImageSampler, prelude::*};
 use itertools::{iproduct, Itertools};
 use std::{
     collections::VecDeque,
@@ -179,7 +179,8 @@ impl PreprocessTask {
             .coordinate
             .neighbours(tile_atlas.model.is_spherical())
             .map(|(coordinate, _)| tile_atlas.get_tile(coordinate))
-            .collect_array();
+            .collect_array()
+            .unwrap();
 
         Self {
             tile,
@@ -200,7 +201,8 @@ impl PreprocessTask {
             .coordinate
             .children()
             .map(|coordinate| tile_atlas.get_tile(coordinate))
-            .collect_array();
+            .collect_array()
+            .unwrap();
 
         Self {
             tile,
