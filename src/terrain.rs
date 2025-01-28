@@ -29,8 +29,6 @@ pub struct TerrainConfig {
     pub shape: TerrainShape,
     /// The count of level of detail layers.
     pub lod_count: u32,
-    /// The amount of tiles the can be loaded simultaneously in the tile atlas.
-    pub atlas_size: u32,
     pub min_height: f32,
     pub max_height: f32,
     /// The path to the terrain folder inside the assets directory.
@@ -46,7 +44,6 @@ impl Default for TerrainConfig {
         Self {
             shape: TerrainShape::Plane { side_length: 1.0 },
             lod_count: 1,
-            atlas_size: 1024,
             min_height: 0.0,
             max_height: 1.0,
             path: default(),

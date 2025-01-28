@@ -10,18 +10,6 @@ pub type Rgba8Image = ImageBuffer<Rgba<u8>, Vec<u8>>;
 pub type R16Image = ImageBuffer<Luma<u16>, Vec<u16>>;
 pub type Rg16Image = ImageBuffer<LumaA<u16>, Vec<u16>>;
 
-// pub trait CollectArray: Iterator {
-//     fn collect_array<const T: usize>(self) -> [Self::Item; T]
-//     where
-//         Self: Sized,
-//         <Self as Iterator>::Item: Debug,
-//     {
-//         self.collect_vec().try_into().unwrap()
-//     }
-// }
-//
-// impl<T> CollectArray for T where T: Iterator + ?Sized {}
-
 #[derive(Copy, Clone)]
 enum BufferType {
     None,

@@ -21,7 +21,7 @@ pub(crate) mod tile_atlas;
 pub(crate) mod tile_tree;
 
 pub use crate::terrain_data::{
-    attachment::{AttachmentConfig, AttachmentFormat, AttachmentLabel, TerrainAttachments},
+    attachment::{AttachmentConfig, AttachmentFormat, AttachmentLabel},
     gpu_tile_atlas::GpuTileAtlas,
     tile_atlas::TileAtlas,
     tile_tree::TileTree,

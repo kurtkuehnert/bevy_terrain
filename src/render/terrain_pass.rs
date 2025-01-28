@@ -73,7 +73,7 @@ impl SortedPhaseItem for TerrainItem {
     type SortKey = u32;
 
     fn sort_key(&self) -> Self::SortKey {
-        self.order
+        u32::MAX - self.order
     }
 }
 
@@ -137,7 +137,7 @@ impl TerrainViewDepthTexture {
                 store: StoreOp::Store,
             }),
             stencil_ops: Some(Operations {
-                load: LoadOp::Clear(255), // Initialize stencil to 255 (lowest priority)
+                load: LoadOp::Clear(0), // Initialize stencil to 0 (lowest priority)
                 store: StoreOp::Store,
             }),
         }
