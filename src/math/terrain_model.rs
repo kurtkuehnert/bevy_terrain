@@ -51,7 +51,7 @@ impl TerrainModel {
     fn from_scale_rotation_translation(
         scale: DVec3,
         rotation: DQuat,
-        translation: DVec3, // Todo: remove this ?
+        translation: DVec3, // Todo: remove this!
         kind: TerrainKind,
     ) -> Self {
         let local_from_unit = DMat4::from_scale_rotation_translation(scale, rotation, translation);

@@ -1,14 +1,13 @@
 use bevy::{
-    math::DVec3, prelude::*, reflect::TypePath, render::render_resource::*,
-    render::storage::ShaderStorageBuffer,
+    math::DVec3,
+    prelude::*,
+    reflect::TypePath,
+    render::{render_resource::*, storage::ShaderStorageBuffer},
+    utils::HashSet,
 };
 use bevy_terrain::prelude::*;
 
 const RADIUS: f64 = 6371000.0;
-const MAJOR_AXES: f64 = 6371000.0;
-const MINOR_AXES: f64 = 6371000.0;
-const TEXTURE_SIZE: u32 = 512;
-const LOD_COUNT: u32 = 15;
 
 #[derive(ShaderType, Clone)]
 struct GradientInfo {
@@ -45,23 +44,71 @@ fn main() {
                 // })
                 .build()
                 .disable::<TransformPlugin>(),
-            TerrainPlugin,
+            TerrainPlugin::new(vec!["albedo"]),
             TerrainMaterialPlugin::<CustomMaterial>::default(),
             TerrainDebugPlugin, // enable debug settings and controls
             TerrainPickingPlugin,
         ))
-        .add_systems(Startup, setup)
+        .init_resource::<TerrainConfigs>()
+        .add_systems(Startup, setup_terrain_configs)
+        .add_systems(Update, (load_terrain_config, spawn_terrains))
         .run();
 }
 
-fn setup(
+#[derive(Resource, Default)]
+struct TerrainConfigs {
+    handles: HashSet<Handle<TerrainConfig>>,
+    to_load: u32,
+}
+
+impl TerrainConfigs {
+    fn add(&mut self, handle: Handle<TerrainConfig>) {
+        self.handles.insert(handle);
+        self.to_load += 1;
+    }
+
+    fn all_loaded(&self) -> bool {
+        self.to_load == 0
+    }
+}
+
+fn setup_terrain_configs(
+    asset_server: Res<AssetServer>,
+    mut terrain_configs: ResMut<TerrainConfigs>,
+) {
+    terrain_configs.add(asset_server.load("/Volumes/ExternalSSD/tiles/earth/config.tc.ron"));
+    // Todo: loop over directory with datasets
+}
+
+fn load_terrain_config(
+    mut handles: ResMut<TerrainConfigs>,
+    mut events: EventReader<AssetEvent<TerrainConfig>>,
+) {
+    for &event in events.read() {
+        if let AssetEvent::Added { .. } = event {
+            handles.to_load -= 1;
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn spawn_terrains(
     mut commands: Commands,
     mut images: ResMut<LoadingImages>,
     mut materials: ResMut<Assets<CustomMaterial>>,
     mut tile_trees: ResMut<TerrainViewComponents<TileTree>>,
     asset_server: Res<AssetServer>,
     mut buffers: ResMut<Assets<ShaderStorageBuffer>>,
+    mut handles: ResMut<TerrainConfigs>,
+    mut terrain_configs: ResMut<Assets<TerrainConfig>>,
+    terrain_attachments: Res<TerrainAttachments>,
 ) {
+    if !handles.all_loaded() {
+        return;
+    }
+
+    handles.to_load = 1; // only spawn once
+
     let gradient = asset_server.load("textures/gradient.png");
     images.load_image(
         &gradient,
@@ -76,136 +123,34 @@ fn setup(
         TextureFormat::Rgba8UnormSrgb,
     );
 
-    // Configure all the important properties of the terrain, as well as its attachments.
-    let local_config = TerrainConfig {
-        lod_count: LOD_COUNT,
-        model: TerrainModel::ellipsoid(DVec3::ZERO, MAJOR_AXES, MINOR_AXES),
-        path: "/Volumes/ExternalSSD/tiles/local".to_string(),
-        atlas_size: 2048,
-        ..default()
-    }
-    .add_attachment(AttachmentConfig {
-        name: "height".to_string(),
-        texture_size: TEXTURE_SIZE,
-        border_size: 2,
-        mip_level_count: 1,
-        format: AttachmentFormat::RF32,
-    })
-    .add_attachment(AttachmentConfig {
-        name: "albedo".to_string(),
-        texture_size: TEXTURE_SIZE,
-        border_size: 1,
-        mip_level_count: 1,
-        format: AttachmentFormat::RgbU8,
-    });
+    let config = terrain_configs
+        .get_mut(
+            asset_server
+                .load("/Volumes/ExternalSSD/tiles/earth/config.tc.ron")
+                .id(),
+        )
+        .unwrap();
 
-    // Configure the quality settings of the terrain view. Adapt the settings to your liking.
-    let local_view_config = TerrainViewConfig {
-        order: 0,
-        tree_size: 16,
-        blend_distance: 8.0,
-        ..default()
-    };
-
-    // Configure all the important properties of the terrain, as well as its attachments.
-    let global_config = TerrainConfig {
-        lod_count: LOD_COUNT,
-        model: TerrainModel::ellipsoid(DVec3::ZERO, MAJOR_AXES, MINOR_AXES),
-        path: "/Volumes/ExternalSSD/tiles/earth".to_string(),
-        atlas_size: 2048,
-        ..default()
-    }
-    .add_attachment(AttachmentConfig {
-        name: "height".to_string(),
-        texture_size: TEXTURE_SIZE,
-        border_size: 2,
-        mip_level_count: 1,
-        format: AttachmentFormat::RF32,
-    });
-
-    // Configure the quality settings of the terrain view. Adapt the settings to your liking.
-    let global_view_config = TerrainViewConfig {
+    let view_config = TerrainViewConfig {
         order: 1,
         tree_size: 16,
         blend_distance: 8.0,
         ..default()
     };
 
-    let scope_config = TerrainConfig {
-        lod_count: LOD_COUNT,
-        model: TerrainModel::ellipsoid(DVec3::ZERO, MAJOR_AXES, MINOR_AXES),
-        path: "/Volumes/ExternalSSD/tiles/scope".to_string(),
-        atlas_size: 2048,
-        ..default()
-    }
-    .add_attachment(AttachmentConfig {
-        name: "height".to_string(),
-        texture_size: TEXTURE_SIZE,
-        border_size: 2,
-        mip_level_count: 1,
-        format: AttachmentFormat::RF32,
-    });
-
-    // Configure the quality settings of the terrain view. Adapt the settings to your liking.
-    let scope_view_config = TerrainViewConfig {
-        order: 0,
-        tree_size: 12,
-        blend_distance: 8.0,
-        ..default()
+    let material = CustomMaterial {
+        gradient: gradient.clone(),
+        gradient_info: GradientInfo {
+            min: -12000.0,
+            max: 9000.0,
+            custom: 1,
+        },
     };
 
-    let (mut global_terrain, mut local_terrain, mut view) = (
-        Entity::PLACEHOLDER,
-        Entity::PLACEHOLDER,
-        Entity::PLACEHOLDER,
-    );
-
-    let mut scope_terrain = Entity::PLACEHOLDER;
+    let (mut terrain, mut view) = (Entity::PLACEHOLDER, Entity::PLACEHOLDER);
 
     commands.spawn_big_space(Grid::default(), |root| {
         let grid = root.grid().clone();
-
-        global_terrain = root
-            .spawn_spatial((
-                TileAtlas::new(&global_config, &mut buffers),
-                TerrainMaterial(materials.add(CustomMaterial {
-                    gradient: gradient.clone(),
-                    gradient_info: GradientInfo {
-                        min: -12000.0,
-                        max: 9000.0,
-                        custom: 1,
-                    },
-                })),
-            ))
-            .id();
-
-        local_terrain = root
-            .spawn_spatial((
-                TileAtlas::new(&local_config, &mut buffers),
-                TerrainMaterial(materials.add(CustomMaterial {
-                    gradient: gradient.clone(),
-                    gradient_info: GradientInfo {
-                        min: -12000.0,
-                        max: 9000.0,
-                        custom: 1,
-                    },
-                })),
-            ))
-            .id();
-
-        scope_terrain = root
-            .spawn_spatial((
-                TileAtlas::new(&scope_config, &mut buffers),
-                TerrainMaterial(materials.add(CustomMaterial {
-                    gradient: gradient2.clone(),
-                    gradient_info: GradientInfo {
-                        min: -3806.439,
-                        max: -197.742,
-                        custom: 0,
-                    },
-                })),
-            ))
-            .id();
 
         let (cell, translation) = grid.translation_to_grid(-DVec3::X * RADIUS * 3.0);
 
@@ -217,38 +162,23 @@ fn setup(
                 cell,
             ))
             .id();
+
+        terrain = root
+            .spawn_spatial((
+                TileAtlas::new(config, &mut buffers, &terrain_attachments),
+                TerrainMaterial(materials.add(material)),
+            ))
+            .id();
+
+        tile_trees.insert(
+            (terrain, view),
+            TileTree::new(
+                config,
+                &view_config,
+                (terrain, view),
+                root.commands(),
+                &mut buffers,
+            ),
+        );
     });
-
-    tile_trees.insert(
-        (global_terrain, view),
-        TileTree::new(
-            &global_config,
-            &global_view_config,
-            (global_terrain, view),
-            &mut commands,
-            &mut buffers,
-        ),
-    );
-
-    tile_trees.insert(
-        (local_terrain, view),
-        TileTree::new(
-            &local_config,
-            &local_view_config,
-            (local_terrain, view),
-            &mut commands,
-            &mut buffers,
-        ),
-    );
-
-    tile_trees.insert(
-        (scope_terrain, view),
-        TileTree::new(
-            &scope_config,
-            &scope_view_config,
-            (scope_terrain, view),
-            &mut commands,
-            &mut buffers,
-        ),
-    );
 }

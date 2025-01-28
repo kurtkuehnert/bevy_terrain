@@ -10,8 +10,7 @@ struct Terrain {
 
 struct TerrainView {
     tree_size: u32,
-    tile_count: u32,
-    refinement_count: u32,
+    geometry_tile_count: u32,
     grid_size: f32,
     vertices_per_row: u32,
     vertices_per_tile: u32,
@@ -22,11 +21,11 @@ struct TerrainView {
     morph_range: f32,
     blend_range: f32,
     precision_threshold_distance: f32,
-    view_face: u32,
-    view_lod: u32,
-    view_coordinates: array<ViewCoordinate, 6>,
+    face: u32,
+    lod: u32,
+    coordinates: array<ViewCoordinate, 6>,
     height_scale: f32,
-    view_world_position: vec3<f32>,
+    world_position: vec3<f32>,
 #ifdef HIGH_PRECISION
     surface_approximation: array<SurfaceApproximation, 6>, // must be last field of this struct
 #endif
@@ -52,6 +51,7 @@ struct Coordinate {
 struct WorldCoordinate {
     position: vec3<f32>,
     normal: vec3<f32>,
+    view_distance: f32,
 }
 
 struct ViewCoordinate {
@@ -99,10 +99,10 @@ struct BestLookup {
 }
 
 struct AttachmentConfig {
-    size: f32,
+    texture_size: f32,
+    center_size: f32,
     scale: f32,
     offset: f32,
-    _padding: u32,
 }
 
 

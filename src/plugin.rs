@@ -1,3 +1,4 @@
+use crate::prelude::TerrainConfig;
 use crate::{
     math::sync_terrain_position,
     render::{
@@ -12,7 +13,10 @@ use crate::{
     },
     shaders::{load_terrain_shaders, InternalShaders},
     terrain::TerrainComponents,
-    terrain_data::{GpuTileAtlas, TileAtlas, TileTree},
+    terrain_data::{
+        attachment::{AttachmentLabel, TerrainAttachments},
+        GpuTileAtlas, TileAtlas, TileTree,
+    },
     terrain_view::TerrainViewComponents,
 };
 use bevy::{
@@ -27,17 +31,38 @@ use bevy::{
         Render, RenderApp, RenderSet,
     },
 };
+use bevy_common_assets::ron::RonAssetPlugin;
 
 /// The plugin for the terrain renderer.
-pub struct TerrainPlugin;
+pub struct TerrainPlugin {
+    pub attachments: Vec<AttachmentLabel>,
+}
+
+impl TerrainPlugin {
+    pub fn new(custom_attachments: Vec<&str>) -> Self {
+        let mut attachments = vec![AttachmentLabel::Height];
+        attachments.extend(
+            custom_attachments
+                .into_iter()
+                .map(|name| AttachmentLabel::Custom(name.to_string())),
+        );
+
+        Self { attachments }
+    }
+}
 
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
         #[cfg(feature = "high_precision")]
         app.add_plugins(crate::big_space::BigSpacePlugin::default());
 
-        app.init_resource::<InternalShaders>()
+        app.add_plugins(RonAssetPlugin::<TerrainConfig>::new(&["tc.ron"]))
+            .init_asset::<TerrainConfig>()
+            .init_resource::<InternalShaders>()
             .init_resource::<TerrainViewComponents<TileTree>>()
+            .insert_resource(TerrainAttachments {
+                attachments: self.attachments.clone(),
+            })
             .add_systems(
                 PostUpdate,
                 (
@@ -110,7 +135,7 @@ impl Plugin for TerrainPlugin {
     }
 
     fn finish(&self, app: &mut App) {
-        load_terrain_shaders(app);
+        load_terrain_shaders(app, &self.attachments);
 
         app.sub_app_mut(RenderApp)
             .init_resource::<TerrainTilingPrepassPipelines>()

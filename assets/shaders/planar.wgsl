@@ -1,5 +1,5 @@
 #import bevy_terrain::types::AtlasTile
-#import bevy_terrain::attachments::{sample_attachment0 as sample_height, sample_normal, sample_attachment1 as sample_albedo}
+#import bevy_terrain::attachments::{sample_height_attachment as sample_height, sample_normal, sample_attachment_1 as sample_albedo}
 #import bevy_terrain::fragment::{FragmentInput, FragmentOutput, fragment_info, fragment_output, fragment_debug}
 #import bevy_terrain::functions::lookup_tile
 #import bevy_pbr::pbr_types::{PbrInput, pbr_input_new}

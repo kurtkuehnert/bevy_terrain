@@ -16,6 +16,7 @@ high_precision = ["dep:big_space"]
 
 [dependencies]
 bevy = "0.15" #{ git="https://github.com/bevyengine/bevy/", branch="main" }
+bevy_common_assets = { version = "0.12.0", features = ["ron"] }
 big_space = { version = "0.9", optional = true }
 tiff = "0.9"
 bytemuck = "1.14"
