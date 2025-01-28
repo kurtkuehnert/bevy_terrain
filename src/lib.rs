@@ -70,13 +70,16 @@ pub mod prelude {
             DebugCameraController, DebugTerrainMaterial, LoadingImages, OrbitalCameraController,
             TerrainDebugPlugin,
         },
-        math::TerrainModel,
+        math::{TerrainModel, TileCoordinate},
         picking::{PickingData, TerrainPickingPlugin},
         plugin::TerrainPlugin,
-        preprocess::{PreprocessDataset, Preprocessor, SphericalDataset, TerrainPreprocessPlugin},
+        // preprocess::{PreprocessDataset, Preprocessor, SphericalDataset, TerrainPreprocessPlugin},
         render::{TerrainMaterial, TerrainMaterialPlugin},
-        terrain::TerrainConfig,
-        terrain_data::{AttachmentConfig, AttachmentFormat, GpuTileAtlas, TileAtlas, TileTree},
+        terrain::{TerrainConfig, TerrainShape},
+        terrain_data::{
+            AttachmentConfig, AttachmentFormat, AttachmentLabel, GpuTileAtlas, TerrainAttachments,
+            TileAtlas, TileTree,
+        },
         terrain_view::{TerrainViewComponents, TerrainViewConfig},
     };
 }

@@ -1,11 +1,13 @@
 use crate::{
     big_space::GridCell,
-    formats::TC,
     math::{TerrainModel, TileCoordinate},
     render::terrain_bind_group::TerrainUniform,
     terrain::TerrainConfig,
     terrain_data::{
-        tile_tree::TileTreeEntry, AttachmentConfig, AttachmentData, AttachmentFormat, TileTree,
+        attachment::{
+            AttachmentConfig, AttachmentData, AttachmentFormat, AttachmentLabel, TerrainAttachments,
+        },
+        tile_tree::{TileTree, TileTreeEntry},
         INVALID_ATLAS_INDEX, INVALID_LOD,
     },
     terrain_view::TerrainViewComponents,
@@ -15,15 +17,16 @@ use anyhow::Result;
 use bevy::{
     asset::RenderAssetUsages,
     prelude::*,
-    render::storage::ShaderStorageBuffer,
-    render::{render_resource::*, view::NoFrustumCulling},
+    render::{render_resource::*, storage::ShaderStorageBuffer, view::NoFrustumCulling},
     tasks::{futures_lite::future, AsyncComputeTaskPool, Task},
     utils::{HashMap, HashSet},
 };
 use bytemuck::cast_slice;
 use image::DynamicImage;
 use itertools::Itertools;
-use std::{collections::VecDeque, fs::File, io::BufReader, mem, ops::DerefMut, path::PathBuf};
+use std::{
+    array, collections::VecDeque, fs::File, io::BufReader, mem, ops::DerefMut, path::PathBuf,
+};
 use tiff::decoder::{Decoder, DecodingResult};
 
 #[derive(Copy, Clone, Debug, Default, ShaderType)]
@@ -159,8 +162,6 @@ pub struct AtlasAttachment {
     pub(crate) texture_size: u32,
     pub(crate) center_size: u32,
     pub(crate) border_size: u32,
-    _scale: f32,
-    _offset: f32,
     pub(crate) mip_level_count: u32,
     pub(crate) format: AttachmentFormat,
     // pub(crate) data: Vec<AttachmentData>,
@@ -171,20 +172,17 @@ pub struct AtlasAttachment {
 }
 
 impl AtlasAttachment {
-    fn new(config: &AttachmentConfig, _tile_atlas_size: u32, path: &str) -> Self {
-        let name = config.name.clone();
+    fn new(label: &AttachmentLabel, config: &AttachmentConfig, path: &str) -> Self {
+        let name = String::from(label);
         let path = format!("{path}/{name}");
         // let path = format!("assets/{path}/data/{name}");
-        let center_size = config.texture_size - 2 * config.border_size;
 
         Self {
             name,
             path,
             texture_size: config.texture_size,
-            center_size,
+            center_size: config.center_size(),
             border_size: config.border_size,
-            _scale: center_size as f32 / config.texture_size as f32,
-            _offset: config.border_size as f32 / config.texture_size as f32,
             mip_level_count: config.mip_level_count,
             format: config.format,
             // data: vec![AttachmentData::None; tile_atlas_size as usize],
@@ -282,10 +280,10 @@ pub(crate) struct TileAtlasState {
     load_slots: u32,
     to_save: VecDeque<AtlasTileAttachment>,
     pub(crate) save_slots: u32,
-    pub(crate) max_save_slots: u32,
+    pub(crate) _max_save_slots: u32,
 
     pub(crate) download_slots: u32,
-    pub(crate) max_download_slots: u32,
+    pub(crate) _max_download_slots: u32,
 
     pub(crate) max_atlas_write_slots: u32,
 }
@@ -308,18 +306,21 @@ impl TileAtlasState {
             to_save: default(),
             to_load: default(),
             save_slots: 64,
-            max_save_slots: 64,
+            _max_save_slots: 64,
             load_slots: 64,
             download_slots: 128,
-            max_download_slots: 128,
+            _max_download_slots: 128,
             max_atlas_write_slots: 32,
         }
     }
 
-    fn update(&mut self, attachments: &mut [AtlasAttachment]) {
+    fn update(&mut self, attachments: &mut [Option<AtlasAttachment>]) {
         while self.save_slots > 0 {
             if let Some(tile) = self.to_save.pop_front() {
-                attachments[tile.attachment_index as usize].save(tile);
+                attachments[tile.attachment_index as usize]
+                    .as_mut()
+                    .unwrap()
+                    .save(tile);
                 self.save_slots -= 1;
             } else {
                 break;
@@ -328,7 +329,10 @@ impl TileAtlasState {
 
         while self.load_slots > 0 {
             if let Some(tile) = self.to_load.pop_front() {
-                attachments[tile.attachment_index as usize].load(tile);
+                attachments[tile.attachment_index as usize]
+                    .as_mut()
+                    .unwrap()
+                    .load(tile);
                 self.load_slots -= 1;
             } else {
                 break;
@@ -514,10 +518,10 @@ impl TileAtlasState {
 #[require(Transform, Visibility, NoFrustumCulling)]
 #[cfg_attr(feature = "high_precision", require(GridCell))]
 pub struct TileAtlas {
-    pub(crate) attachments: Vec<AtlasAttachment>,
+    pub(crate) attachments: [Option<AtlasAttachment>; 8],
     // stores the attachment data
     pub(crate) state: TileAtlasState,
-    pub(crate) path: String,
+    pub(crate) _path: String,
     pub(crate) atlas_size: u32,
     pub(crate) lod_count: u32,
     pub(crate) model: TerrainModel,
@@ -527,17 +531,25 @@ pub struct TileAtlas {
 
 impl TileAtlas {
     /// Creates a new tile_tree from a terrain config.
-    pub fn new(config: &TerrainConfig, buffers: &mut Assets<ShaderStorageBuffer>) -> Self {
-        let attachments = config
-            .attachments
-            .iter()
-            .map(|attachment| AtlasAttachment::new(attachment, config.atlas_size, &config.path))
-            .collect_vec();
+    pub fn new(
+        config: &TerrainConfig,
+        buffers: &mut Assets<ShaderStorageBuffer>,
+        terrain_attachments: &TerrainAttachments,
+    ) -> Self {
+        let mut attachments = array::from_fn(|_| None);
 
-        let existing_tiles = Self::load_tile_config(&config.path);
+        for (label, attachment) in &config.attachments {
+            let index = terrain_attachments
+                .attachments
+                .iter()
+                .position(|l| l == label)
+                .unwrap();
 
-        let state =
-            TileAtlasState::new(config.atlas_size, attachments.len() as u32, existing_tiles);
+            attachments[index] = Some(AtlasAttachment::new(label, attachment, &config.path));
+        }
+
+        let existing_tiles = config.tiles.clone().into_iter().collect();
+        let state = TileAtlasState::new(config.atlas_size, 1, existing_tiles);
 
         let terrain_buffer = buffers.add(ShaderStorageBuffer::with_size(
             TerrainUniform::min_size().get() as usize,
@@ -545,10 +557,10 @@ impl TileAtlas {
         ));
 
         Self {
-            model: config.model.clone(),
+            model: config.terrain_shape.model(),
             attachments,
             state,
-            path: config.path.to_string(),
+            _path: config.path.to_string(),
             atlas_size: config.atlas_size,
             lod_count: config.lod_count,
             terrain_buffer,
@@ -583,7 +595,7 @@ impl TileAtlas {
 
             state.update(attachments);
 
-            for attachment in attachments {
+            for attachment in attachments.iter_mut().flatten() {
                 attachment.update(state);
             }
         }
@@ -608,27 +620,6 @@ impl TileAtlas {
         for (tile_atlas, global_transform) in &mut tile_atlases {
             let terrain_buffer = buffers.get_mut(&tile_atlas.terrain_buffer).unwrap();
             terrain_buffer.set_data(TerrainUniform::new(&tile_atlas, global_transform));
-        }
-    }
-
-    /// Saves the tile configuration of the terrain, which stores the [`TileCoordinate`]s of all the tiles
-    /// of the terrain.
-    pub(crate) fn save_tile_config(&self) {
-        let tc = TC {
-            tiles: self.state.existing_tiles.iter().copied().collect_vec(),
-        };
-
-        tc.save_file(format!("{}/config.ron", &self.path)).unwrap();
-    }
-
-    /// Loads the tile configuration of the terrain, which stores the [`TileCoordinate`]s of all the tiles
-    /// of the terrain.
-    pub(crate) fn load_tile_config(path: &str) -> HashSet<TileCoordinate> {
-        if let Ok(tc) = TC::load_file(format!("{}/config.ron", path)) {
-            tc.tiles.into_iter().collect()
-        } else {
-            println!("Tile config not found.");
-            HashSet::default()
         }
     }
 }

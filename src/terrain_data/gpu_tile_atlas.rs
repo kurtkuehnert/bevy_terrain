@@ -1,9 +1,11 @@
-use crate::terrain_data::tile_atlas::{
-    AtlasAttachment, AtlasTileAttachment, AtlasTileAttachmentWithData,
-};
 use crate::{
     terrain::TerrainComponents,
-    terrain_data::{AttachmentData, AttachmentFormat, TileAtlas},
+    terrain_data::{
+        attachment::{AttachmentData, AttachmentFormat},
+        tile_atlas::{
+            AtlasAttachment, AtlasTileAttachment, AtlasTileAttachmentWithData, TileAtlas,
+        },
+    },
     util::GpuBuffer,
 };
 use bevy::{
@@ -16,7 +18,7 @@ use bevy::{
     tasks::{AsyncComputeTaskPool, Task},
 };
 use itertools::Itertools;
-use std::{iter, mem};
+use std::{array, iter, mem};
 
 const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
 
@@ -71,7 +73,7 @@ pub(crate) struct AtlasBufferInfo {
     actual_tile_size: u32,
     aligned_tile_size: u32,
 
-    pub(crate) workgroup_count: UVec3,
+    pub(crate) _workgroup_count: UVec3,
 }
 
 impl AtlasBufferInfo {
@@ -116,7 +118,7 @@ impl AtlasBufferInfo {
             actual_tile_size,
             aligned_tile_size,
             format,
-            workgroup_count,
+            _workgroup_count: workgroup_count,
         }
     }
 
@@ -137,7 +139,7 @@ impl AtlasBufferInfo {
         }
     }
 
-    fn image_copy_buffer<'a>(&'a self, buffer: &'a Buffer, index: u32) -> ImageCopyBuffer<'a> {
+    fn _image_copy_buffer<'a>(&'a self, buffer: &'a Buffer, index: u32) -> ImageCopyBuffer<'a> {
         ImageCopyBuffer {
             buffer,
             layout: ImageDataLayout {
@@ -175,15 +177,14 @@ impl AtlasBufferInfo {
 }
 
 pub(crate) struct GpuAtlasAttachment {
-    pub(crate) name: String,
     pub(crate) buffer_info: AtlasBufferInfo,
 
     pub(crate) atlas_texture: Texture,
-    pub(crate) atlas_write_section: GpuBuffer<()>,
+    pub(crate) _atlas_write_section: GpuBuffer<()>,
     pub(crate) download_buffers: Vec<GpuBuffer<()>>,
-    pub(crate) bind_group: BindGroup,
+    pub(crate) _bind_group: BindGroup,
 
-    pub(crate) max_atlas_write_slots: u32,
+    pub(crate) _max_atlas_write_slots: u32,
     pub(crate) atlas_write_slots: Vec<AtlasTileAttachment>,
     pub(crate) upload_tiles: Vec<AtlasTileAttachmentWithData>,
     pub(crate) download_tiles: Vec<Task<AtlasTileAttachmentWithData>>,
@@ -247,7 +248,7 @@ impl GpuAtlasAttachment {
         );
 
         let bind_group = device.create_bind_group(
-            format!("{name}attachment_bind_group").as_str(),
+            format!("{name}_attachment_bind_group").as_str(),
             &create_attachment_layout(device),
             &BindGroupEntries::sequential((
                 &atlas_write_section,
@@ -258,21 +259,20 @@ impl GpuAtlasAttachment {
         );
 
         Self {
-            name,
             buffer_info,
             atlas_texture,
-            atlas_write_section,
+            _atlas_write_section: atlas_write_section,
             download_buffers: default(),
-            bind_group,
-            max_atlas_write_slots,
+            _bind_group: bind_group,
+            _max_atlas_write_slots: max_atlas_write_slots,
             atlas_write_slots,
             upload_tiles: default(),
             download_tiles: default(),
         }
     }
 
-    pub(crate) fn reserve_write_slot(&mut self, tile: AtlasTileAttachment) -> Option<u32> {
-        if self.atlas_write_slots.len() < self.max_atlas_write_slots as usize {
+    pub(crate) fn _reserve_write_slot(&mut self, tile: AtlasTileAttachment) -> Option<u32> {
+        if self.atlas_write_slots.len() < self._max_atlas_write_slots as usize {
             self.atlas_write_slots.push(tile);
             Some(self.atlas_write_slots.len() as u32 - 1)
         } else {
@@ -280,23 +280,23 @@ impl GpuAtlasAttachment {
         }
     }
 
-    pub(crate) fn copy_tiles_to_write_section(&self, command_encoder: &mut CommandEncoder) {
+    pub(crate) fn _copy_tiles_to_write_section(&self, command_encoder: &mut CommandEncoder) {
         for (section_index, tile) in self.atlas_write_slots.iter().enumerate() {
             command_encoder.copy_texture_to_buffer(
                 self.buffer_info
                     .image_copy_texture(&self.atlas_texture, tile.atlas_index, 0),
                 self.buffer_info
-                    .image_copy_buffer(&self.atlas_write_section, section_index as u32),
+                    ._image_copy_buffer(&self._atlas_write_section, section_index as u32),
                 self.buffer_info.image_copy_size(0),
             );
         }
     }
 
-    pub(crate) fn copy_tiles_from_write_section(&self, command_encoder: &mut CommandEncoder) {
+    pub(crate) fn _copy_tiles_from_write_section(&self, command_encoder: &mut CommandEncoder) {
         for (section_index, tile) in self.atlas_write_slots.iter().enumerate() {
             command_encoder.copy_buffer_to_texture(
                 self.buffer_info
-                    .image_copy_buffer(&self.atlas_write_section, section_index as u32),
+                    ._image_copy_buffer(&self._atlas_write_section, section_index as u32),
                 self.buffer_info
                     .image_copy_texture(&self.atlas_texture, tile.atlas_index, 0),
                 self.buffer_info.image_copy_size(0),
@@ -333,12 +333,12 @@ impl GpuAtlasAttachment {
         }
     }
 
-    pub(crate) fn download_tiles(&self, command_encoder: &mut CommandEncoder) {
+    pub(crate) fn _download_tiles(&self, command_encoder: &mut CommandEncoder) {
         for (tile, download_buffer) in iter::zip(&self.atlas_write_slots, &self.download_buffers) {
             command_encoder.copy_texture_to_buffer(
                 self.buffer_info
                     .image_copy_texture(&self.atlas_texture, tile.atlas_index, 0),
-                self.buffer_info.image_copy_buffer(download_buffer, 0),
+                self.buffer_info._image_copy_buffer(download_buffer, 0),
                 self.buffer_info.image_copy_size(0),
             );
         }
@@ -346,9 +346,9 @@ impl GpuAtlasAttachment {
 
     fn create_download_buffers(&mut self, device: &RenderDevice) {
         self.download_buffers = (0..self.atlas_write_slots.len())
-            .map(|i| {
+            .map(|_| {
                 GpuBuffer::empty_sized_labeled(
-                    format!("{}_download_buffer_{i}", self.name).as_str(),
+                    None,
                     device,
                     self.buffer_info.aligned_tile_size as BufferAddress,
                     BufferUsages::COPY_DST | BufferUsages::MAP_READ,
@@ -417,18 +417,20 @@ impl GpuAtlasAttachment {
 #[derive(Component)]
 pub struct GpuTileAtlas {
     /// Stores the atlas attachments of the terrain.
-    pub(crate) attachments: Vec<GpuAtlasAttachment>,
+    pub(crate) attachments: [Option<GpuAtlasAttachment>; 8],
     pub(crate) is_spherical: bool,
 }
 
 impl GpuTileAtlas {
     /// Creates a new gpu tile atlas and initializes its attachment textures.
     fn new(device: &RenderDevice, tile_atlas: &TileAtlas) -> Self {
-        let attachments = tile_atlas
-            .attachments
-            .iter()
-            .map(|attachment| GpuAtlasAttachment::new(device, attachment, tile_atlas))
-            .collect_vec();
+        let mut attachments = array::from_fn(|_| None);
+
+        for (index, attachment) in tile_atlas.attachments.iter().enumerate() {
+            if let Some(attachment) = attachment {
+                attachments[index] = Some(GpuAtlasAttachment::new(device, attachment, tile_atlas));
+            }
+        }
 
         Self {
             attachments,
@@ -458,9 +460,10 @@ impl GpuTileAtlas {
         for (terrain, mut tile_atlas) in tile_atlases.iter_mut(&mut main_world) {
             let gpu_tile_atlas = gpu_tile_atlases.get_mut(&terrain).unwrap();
 
-            for (attachment, gpu_attachment) in
-                iter::zip(&mut tile_atlas.attachments, &mut gpu_tile_atlas.attachments)
-            {
+            for (attachment, gpu_attachment) in iter::zip(
+                tile_atlas.attachments.iter_mut().flatten(),
+                gpu_tile_atlas.attachments.iter_mut().flatten(),
+            ) {
                 mem::swap(
                     &mut attachment.uploading_tiles,
                     &mut gpu_attachment.upload_tiles,
@@ -481,7 +484,7 @@ impl GpuTileAtlas {
         mut gpu_tile_atlases: ResMut<TerrainComponents<GpuTileAtlas>>,
     ) {
         for gpu_tile_atlas in gpu_tile_atlases.values_mut() {
-            for attachment in &mut gpu_tile_atlas.attachments {
+            for attachment in gpu_tile_atlas.attachments.iter_mut().flatten() {
                 attachment.create_download_buffers(&device);
                 attachment.upload_tiles(&queue);
             }
@@ -490,7 +493,7 @@ impl GpuTileAtlas {
 
     pub(crate) fn cleanup(mut gpu_tile_atlases: ResMut<TerrainComponents<GpuTileAtlas>>) {
         for gpu_tile_atlas in gpu_tile_atlases.values_mut() {
-            for attachment in &mut gpu_tile_atlas.attachments {
+            for attachment in gpu_tile_atlas.attachments.iter_mut().flatten() {
                 attachment.start_downloading_tiles();
             }
         }

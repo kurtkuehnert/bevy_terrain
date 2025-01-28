@@ -228,7 +228,10 @@ pub fn update_view_parameter(
     tile_atlases: Query<&TileAtlas>,
 ) {
     for (&(terrain, _), tile_tree) in tile_trees.iter_mut() {
-        let tile_atlas = tile_atlases.get(terrain).unwrap();
+        let Ok(tile_atlas) = tile_atlases.get(terrain) else {
+            return;
+        };
+
         let scale = tile_atlas.model.scale();
 
         if input.pressed(KeyCode::ShiftLeft) && input.just_pressed(KeyCode::Equal) {

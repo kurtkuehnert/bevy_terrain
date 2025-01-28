@@ -141,7 +141,7 @@ impl TileTree {
         commands: &mut Commands,
         buffers: &mut Assets<ShaderStorageBuffer>, // Todo: solve this dependency with a component hook in the future
     ) -> Self {
-        let model = &config.model;
+        let model = &config.terrain_shape.model();
         let scale = model.scale();
 
         let data = Array4::default((

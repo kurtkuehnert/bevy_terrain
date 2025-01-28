@@ -1,53 +1,50 @@
 #define_import_path bevy_terrain::fragment
 
-#import bevy_terrain::types::{Blend, AtlasTile, Coordinate, TangentSpace}
-#import bevy_terrain::bindings::{terrain, terrain_view, geometry_tiles}
-#import bevy_terrain::functions::{compute_coordinate, compute_blend, lookup_tile}
-#import bevy_terrain::attachments::{compute_tangent_space, sample_height_mask, sample_surface_gradient, sample_color}
+#import bevy_terrain::types::{Coordinate, WorldCoordinate, Blend, AtlasTile, TangentSpace}
+#import bevy_terrain::bindings::{terrain, terrain_view, geometry_tiles, approximate_height}
+#import bevy_terrain::functions::{compute_coordinate, compute_blend, lookup_tile, compute_tangent_space, apply_height, compute_world_coordinate, high_precision}
+#import bevy_terrain::attachments::{sample_height_mask, sample_surface_gradient}
 #import bevy_terrain::debug::{show_data_lod, show_geometry_lod, show_tile_tree, show_pixels}
 #import bevy_pbr::mesh_view_bindings::view
 #import bevy_pbr::pbr_types::{PbrInput, pbr_input_new}
 #import bevy_pbr::pbr_functions::{calculate_view, apply_pbr_lighting}
 
 struct FragmentInput {
-    @builtin(position)     clip_position: vec4<f32>,
-    @location(0)           tile_index: u32,
-    @location(1)           coordinate_uv: vec2<f32>,
-    @location(2)           world_position: vec4<f32>,
-    @location(3)           world_normal: vec3<f32>,
+    @builtin(position) clip_position: vec4<f32>,
+    @location(0)       tile_index: u32,
+    @location(1)       coordinate_uv: vec2<f32>,
+    @location(2)       height: f32,
 }
 
 struct FragmentOutput {
-    @location(0)             color: vec4<f32>
+    @location(0) color: vec4<f32>
 }
 
 struct FragmentInfo {
-    coordinate: Coordinate,
-    view_distance: f32,
-    blend: Blend,
     clip_position: vec4<f32>,
-    world_normal: vec3<f32>,
-    world_position: vec4<f32>,
+    height: f32,
+    coordinate: Coordinate,
+    world_coordinate: WorldCoordinate,
+    tangent_space: TangentSpace,
+    blend: Blend,
     color: vec4<f32>,
     normal: vec3<f32>,
-    tangent_space: TangentSpace,
 }
 
 fn fragment_info(input: FragmentInput) -> FragmentInfo{
     var info: FragmentInfo;
-    info.coordinate     = compute_coordinate(input.tile_index, input.coordinate_uv);
-    info.view_distance  = distance(input.world_position.xyz, view.world_position);
-    info.blend          = compute_blend(info.view_distance);
-    info.clip_position  = input.clip_position;
-    info.world_normal   = normalize(input.world_normal);
-    info.world_position = input.world_position;
-    info.tangent_space  = compute_tangent_space(input.world_position, input.world_normal);
+    info.clip_position    = input.clip_position;
+    info.height           = input.height;
+    info.coordinate       = compute_coordinate(input.tile_index, input.coordinate_uv);
+    info.world_coordinate = compute_world_coordinate(info.coordinate, input.height);
+    info.tangent_space    = compute_tangent_space(info.world_coordinate);
+    info.blend            = compute_blend(info.world_coordinate.view_distance);
 
     return info;
 }
 
 fn fragment_output(info: ptr<function, FragmentInfo>, output: ptr<function, FragmentOutput>, color: vec4<f32>, surface_gradient: vec3<f32>) {
-    let normal = normalize((*info).world_normal - surface_gradient);
+    let world_position = vec4<f32>(apply_height((*info).world_coordinate, (*info).height), 1.0);
 
 #ifdef LIGHTING
     var pbr_input: PbrInput                 = pbr_input_new();
@@ -55,10 +52,10 @@ fn fragment_output(info: ptr<function, FragmentInfo>, output: ptr<function, Frag
     pbr_input.material.perceptual_roughness = 1.0;
     pbr_input.material.reflectance          = 0.0;
     pbr_input.frag_coord                    = (*info).clip_position;
-    pbr_input.world_position                = (*info).world_position;
-    pbr_input.world_normal                  = (*info).world_normal;
-    pbr_input.N                             = normal;
-    pbr_input.V                             = calculate_view((*info).world_position, pbr_input.is_orthographic);
+    pbr_input.world_position                = world_position;
+    pbr_input.world_normal                  = (*info).world_coordinate.normal;
+    pbr_input.N                             = normalize((*info).world_coordinate.normal - surface_gradient);
+    pbr_input.V                             = calculate_view(world_position, pbr_input.is_orthographic);
 
     (*output).color = apply_pbr_lighting(pbr_input);
 #else
@@ -67,7 +64,7 @@ fn fragment_output(info: ptr<function, FragmentInfo>, output: ptr<function, Frag
 }
 
 fn fragment_debug(info: ptr<function, FragmentInfo>, output: ptr<function, FragmentOutput>, tile: AtlasTile, surface_gradient: vec3<f32>) {
-    let normal = normalize((*info).world_normal - surface_gradient);
+    let normal = normalize((*info).world_coordinate.normal - surface_gradient);
 
 #ifdef SHOW_DATA_LOD
     (*output).color = show_data_lod((*info).blend, tile);
@@ -76,7 +73,7 @@ fn fragment_debug(info: ptr<function, FragmentInfo>, output: ptr<function, Fragm
     (*output).color = show_geometry_lod((*info).coordinate);
 #endif
 #ifdef SHOW_TILE_TREE
-    (*output).color = show_tile_tree((*info).coordinate, (*info).view_distance);
+    (*output).color = show_tile_tree((*info).coordinate, (*info).world_coordinate);
 #endif
 #ifdef SHOW_PIXELS
     (*output).color = mix((*output).color, show_pixels(tile), 0.5);
@@ -103,14 +100,13 @@ fn fragment(input: FragmentInput) -> FragmentOutput {
 
     let tile             = lookup_tile(info.coordinate, info.blend, 0u);
     let mask             = sample_height_mask(tile);
-    var color            = sample_color(tile);
+    var color            = vec4<f32>(0.5);
     var surface_gradient = sample_surface_gradient(tile, info.tangent_space);
 
     if mask { discard; }
 
     if (info.blend.ratio > 0.0) {
         let tile2        = lookup_tile(info.coordinate, info.blend, 1u);
-        color            = mix(color,            sample_color(tile2),                                info.blend.ratio);
         surface_gradient = mix(surface_gradient, sample_surface_gradient(tile2, info.tangent_space), info.blend.ratio);
     }
 
@@ -119,4 +115,3 @@ fn fragment(input: FragmentInput) -> FragmentOutput {
     fragment_debug(&info, &output, tile, surface_gradient);
     return FragmentOutput(vec4<f32>(output.color.xyz, 1.0));
 }
-

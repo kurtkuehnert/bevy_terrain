@@ -1,8 +1,14 @@
 //! Types for configuring terrains.
 //!
 
-use crate::{math::TerrainModel, terrain_data::AttachmentConfig};
-use bevy::{ecs::entity::EntityHashMap, prelude::*};
+use crate::{
+    math::{TerrainModel, TileCoordinate},
+    terrain_data::{AttachmentConfig, AttachmentLabel},
+};
+use bevy::{ecs::entity::EntityHashMap, math::DVec3, prelude::*, utils::HashMap};
+use ron::error::SpannedResult;
+use serde::{Deserialize, Serialize};
+use std::{fs, path::Path};
 
 /// Resource that stores components that are associated to a terrain entity.
 /// This is used to persist components in the render world.
@@ -15,37 +21,70 @@ impl<C> Default for TerrainComponents<C> {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+pub enum TerrainShape {
+    Plane { side_length: f64 },
+    WGS84,
+}
+
+impl TerrainShape {
+    pub fn model(self) -> TerrainModel {
+        match self {
+            TerrainShape::Plane { side_length } => TerrainModel::planar(DVec3::ZERO, side_length),
+            TerrainShape::WGS84 => TerrainModel::ellipsoid(DVec3::ZERO, 6378137.0, 6356752.314245),
+        }
+    }
+}
+
 /// The configuration of a terrain.
 ///
 /// Here you can define all fundamental parameters of the terrain.
-#[derive(Clone)]
+#[derive(Serialize, Deserialize, Asset, TypePath, Debug, Clone)]
 pub struct TerrainConfig {
+    pub terrain_shape: TerrainShape,
     /// The count of level of detail layers.
     pub lod_count: u32,
-    pub model: TerrainModel,
     /// The amount of tiles the can be loaded simultaneously in the tile atlas.
     pub atlas_size: u32,
     /// The path to the terrain folder inside the assets directory.
     pub path: String,
+    /// The tiles of the terrain.
+    pub tiles: Vec<TileCoordinate>,
     /// The attachments of the terrain.
-    pub attachments: Vec<AttachmentConfig>,
+    pub attachments: HashMap<AttachmentLabel, AttachmentConfig>,
 }
 
 impl Default for TerrainConfig {
     fn default() -> Self {
         Self {
+            terrain_shape: TerrainShape::Plane { side_length: 1.0 },
             lod_count: 1,
-            model: TerrainModel::sphere(default(), 1.0),
             atlas_size: 1024,
             path: default(),
+            tiles: default(),
             attachments: default(),
         }
     }
 }
 
 impl TerrainConfig {
-    pub fn add_attachment(mut self, attachment_config: AttachmentConfig) -> Self {
-        self.attachments.push(attachment_config);
+    pub fn add_attachment(
+        &mut self,
+        label: AttachmentLabel,
+        attachment: AttachmentConfig,
+    ) -> &mut Self {
+        self.attachments.insert(label, attachment);
         self
+    }
+
+    pub fn load_file<P: AsRef<Path>>(path: P) -> SpannedResult<Self> {
+        let encoded = fs::read_to_string(path)?;
+        ron::from_str(&encoded)
+    }
+
+    pub fn save_file<P: AsRef<Path>>(&self, path: P) -> anyhow::Result<()> {
+        let encoded = ron::to_string(self)?;
+        fs::write(path, encoded)?;
+        Ok(())
     }
 }

@@ -1,6 +1,7 @@
 use crate::{
     terrain::TerrainComponents,
-    terrain_data::{GpuTileAtlas, TileAtlas},
+    terrain_data::{gpu_tile_atlas::GpuAtlasAttachment, GpuTileAtlas, TileAtlas},
+    util::GpuBuffer,
 };
 use bevy::{
     ecs::{
@@ -19,8 +20,7 @@ use bevy::{
         Extract,
     },
 };
-use itertools::Itertools;
-use std::iter;
+use std::array;
 
 // Todo: use this once texture views can be used directly
 #[derive(AsBindGroup)]
@@ -50,30 +50,41 @@ pub struct TerrainBindGroup {
 
 #[derive(Default, ShaderType)]
 struct AttachmentConfig {
-    size: f32,
+    texture_size: f32,
+    center_size: f32,
     scale: f32,
     offset: f32,
-    _padding: u32,
+}
+
+impl AttachmentConfig {
+    fn new(attachment: &GpuAtlasAttachment) -> Self {
+        Self {
+            center_size: attachment.buffer_info.center_size as f32,
+            texture_size: attachment.buffer_info.texture_size as f32,
+            scale: attachment.buffer_info.center_size as f32
+                / attachment.buffer_info.texture_size as f32,
+            offset: attachment.buffer_info.border_size as f32
+                / attachment.buffer_info.texture_size as f32,
+        }
+    }
 }
 
 #[derive(Default, ShaderType)]
 struct AttachmentUniform {
-    data: [AttachmentConfig; 8],
+    attachments: [AttachmentConfig; 8],
 }
 
 impl AttachmentUniform {
     fn new(tile_atlas: &GpuTileAtlas) -> Self {
-        let mut uniform = Self::default();
-
-        for (config, attachment) in iter::zip(&mut uniform.data, &tile_atlas.attachments) {
-            config.size = attachment.buffer_info.center_size as f32;
-            config.scale = attachment.buffer_info.center_size as f32
-                / attachment.buffer_info.texture_size as f32;
-            config.offset = attachment.buffer_info.border_size as f32
-                / attachment.buffer_info.texture_size as f32;
+        Self {
+            attachments: array::from_fn(|i| {
+                tile_atlas.attachments[i]
+                    .as_ref()
+                    .map_or(AttachmentConfig::default(), |attachment| {
+                        AttachmentConfig::new(attachment)
+                    })
+            }),
         }
-
-        uniform
     }
 }
 
@@ -108,9 +119,9 @@ pub struct GpuTerrain {
     pub(crate) terrain_bind_group: Option<BindGroup>,
 
     terrain_buffer: Handle<ShaderStorageBuffer>,
-    attachment_buffer: Buffer,
     atlas_sampler: Sampler,
-    attachments: Vec<TextureView>,
+    attachment_textures: [TextureView; 8],
+    attachment_buffer: GpuBuffer<AttachmentUniform>,
 }
 
 impl GpuTerrain {
@@ -128,34 +139,25 @@ impl GpuTerrain {
             ..default()
         });
 
-        let attachments = (0..8)
-            .map(|i| {
-                gpu_tile_atlas
-                    .attachments
-                    .get(i)
-                    .map_or(fallback_image.d2_array.texture_view.clone(), |attachment| {
-                        attachment.atlas_texture.create_view(&default())
-                    })
-            })
-            .collect_vec();
-
-        let value = AttachmentUniform::new(gpu_tile_atlas);
-        let mut buffer = vec![0; value.size().get() as usize];
-        encase::UniformBuffer::new(&mut buffer)
-            .write(&value)
-            .unwrap();
-
-        let attachment_buffer = device.create_buffer_with_data(&BufferInitDescriptor {
-            label: None,
-            contents: &buffer,
-            usage: BufferUsages::UNIFORM,
+        let attachment_textures = array::from_fn(|i| {
+            gpu_tile_atlas.attachments[i]
+                .as_ref()
+                .map_or(fallback_image.d2_array.texture_view.clone(), |attachment| {
+                    attachment.atlas_texture.create_view(&default())
+                })
         });
+
+        let attachment_buffer = GpuBuffer::create(
+            device,
+            &AttachmentUniform::new(gpu_tile_atlas),
+            BufferUsages::UNIFORM,
+        );
 
         Self {
             terrain_buffer: tile_atlas.terrain_buffer.clone(),
             attachment_buffer,
             atlas_sampler,
-            attachments,
+            attachment_textures,
             terrain_bind_group: None,
         }
     }
@@ -191,16 +193,16 @@ impl GpuTerrain {
                 &TerrainBindGroup::bind_group_layout(&device),
                 &BindGroupEntries::sequential((
                     terrain_buffer.buffer.as_entire_binding(),
-                    gpu_terrain.attachment_buffer.as_entire_binding(),
+                    &gpu_terrain.attachment_buffer,
                     &gpu_terrain.atlas_sampler,
-                    &gpu_terrain.attachments[0],
-                    &gpu_terrain.attachments[1],
-                    &gpu_terrain.attachments[2],
-                    &gpu_terrain.attachments[3],
-                    &gpu_terrain.attachments[4],
-                    &gpu_terrain.attachments[5],
-                    &gpu_terrain.attachments[6],
-                    &gpu_terrain.attachments[7],
+                    &gpu_terrain.attachment_textures[0],
+                    &gpu_terrain.attachment_textures[1],
+                    &gpu_terrain.attachment_textures[2],
+                    &gpu_terrain.attachment_textures[3],
+                    &gpu_terrain.attachment_textures[4],
+                    &gpu_terrain.attachment_textures[5],
+                    &gpu_terrain.attachment_textures[6],
+                    &gpu_terrain.attachment_textures[7],
                 )),
             ));
         }

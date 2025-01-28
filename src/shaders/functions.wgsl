@@ -1,9 +1,9 @@
 #define_import_path bevy_terrain::functions
 
-#import bevy_terrain::bindings::{terrain, origins, terrain_view, geometry_tiles, tile_tree}
-#import bevy_terrain::types::{TileCoordinate, WorldCoordinate, TileTree, TileTreeEntry, AtlasTile, Blend, BestLookup, Coordinate, Morph}
-#import bevy_pbr::mesh_view_bindings::{view}
+#import bevy_terrain::bindings::{terrain, origins, terrain_view, geometry_tiles, tile_tree, view}
+#import bevy_terrain::types::{TileCoordinate, WorldCoordinate, TileTree, TileTreeEntry, AtlasTile, Blend, BestLookup, Coordinate, Morph, TangentSpace}
 #import bevy_render::maths::{affine3_to_square, mat2x4_f32_to_mat3x3_unpack}
+
 
 const F0 = 0u;
 const F1 = 1u;
@@ -11,9 +11,18 @@ const PS = 2u;
 const PT = 3u;
 const C_SQR = 0.87 * 0.87;
 
+fn high_precision(view_distance: f32) -> bool {
+#ifdef HIGH_PRECISION
+    return view_distance < terrain_view.precision_threshold_distance;
+#else
+    return false;
+#endif
+}
+
 #ifdef VERTEX
 fn compute_coordinate(vertex_index: u32) -> Coordinate {
-    let tile_index   = vertex_index / terrain_view.vertices_per_tile;
+    let tile_index = vertex_index / terrain_view.vertices_per_tile;
+
     // use first and last indices of the rows twice, to form degenerate triangles
     let column_index = (vertex_index % terrain_view.vertices_per_tile) / terrain_view.vertices_per_row;
     let row_index    = clamp(vertex_index % terrain_view.vertices_per_row, 1u, terrain_view.vertices_per_row - 2u) - 1u;
@@ -27,14 +36,24 @@ fn compute_coordinate(vertex_index: u32) -> Coordinate {
 
 #ifdef FRAGMENT
 fn compute_coordinate(tile_index: u32, coordinate_uv: vec2<f32>) -> Coordinate {
-    let tile       = geometry_tiles[tile_index];
-    let uv         = coordinate_uv;
+    let tile = geometry_tiles[tile_index];
+    let uv   = coordinate_uv;
 
     return Coordinate(tile.face, tile.lod, tile.xy, uv, dpdx(uv), dpdy(uv));
 }
 #endif
 
-fn compute_world_coordinate(coordinate: Coordinate) -> WorldCoordinate {
+fn compute_world_coordinate(coordinate: Coordinate, height: f32) -> WorldCoordinate {
+    var world_coordinate = compute_world_coordinate_imprecise(coordinate, height);
+
+    if (high_precision(world_coordinate.view_distance)) {
+        world_coordinate = compute_world_coordinate_precise(coordinate, height);
+    }
+
+    return world_coordinate;
+}
+
+fn compute_world_coordinate_imprecise(coordinate: Coordinate, height: f32) -> WorldCoordinate {
     let uv = (vec2<f32>(coordinate.xy) + coordinate.uv) / tile_count(coordinate.lod);
 
 #ifdef SPHERICAL
@@ -52,24 +71,26 @@ fn compute_world_coordinate(coordinate: Coordinate) -> WorldCoordinate {
         case default: {}
     }
 
-    unit_position = normalize(unit_position);
+    unit_position   = normalize(unit_position);
     let unit_normal = unit_position;
 #else
     let unit_position = vec3<f32>(uv.x - 0.5, 0.0, uv.y - 0.5);
-    let unit_normal = vec3<f32>(0.0, 1.0, 0.0);
+    let unit_normal   = vec3<f32>(0.0, 1.0, 0.0);
 #endif
 
     let position_world_from_unit = affine3_to_square(terrain.world_from_unit);
-    let world_position = (position_world_from_unit * vec4<f32>(unit_position, 1.0)).xyz;
+    let world_position           = (position_world_from_unit * vec4<f32>(unit_position, 1.0)).xyz;
 
     let normal_world_from_unit = mat2x4_f32_to_mat3x3_unpack(terrain.unit_from_world_transpose_a, terrain.unit_from_world_transpose_b);
-    let world_normal = normalize(normal_world_from_unit * unit_normal);
+    let world_normal           = normalize(normal_world_from_unit * unit_normal);
 
-    return WorldCoordinate(world_position, world_normal);
+    let view_distance = distance(world_position + height * world_normal, terrain_view.world_position);
+
+    return WorldCoordinate(world_position, world_normal, view_distance);
 }
 
 #ifdef HIGH_PRECISION
-fn compute_world_coordinate_precise(coordinate: Coordinate, normal: vec3<f32>) -> WorldCoordinate {
+fn compute_world_coordinate_precise(coordinate: Coordinate, height: f32) -> WorldCoordinate {
     let view_coordinate = compute_view_coordinate(coordinate.face, coordinate.lod);
 
     let relative_uv = (vec2<f32>(vec2<i32>(coordinate.xy) - vec2<i32>(view_coordinate.xy)) + coordinate.uv - view_coordinate.uv) / tile_count(coordinate.lod);
@@ -84,11 +105,27 @@ fn compute_world_coordinate_precise(coordinate: Coordinate, normal: vec3<f32>) -
     let p_uv = approximation.p_uv;
     let p_vv = approximation.p_vv;
 
-    let position = p + p_u * u + p_v * v + p_uu * u * u + p_uv * u * v + p_vv * v * v;
+    let world_position = p + p_u * u + p_v * v + p_uu * u * u + p_uv * u * v + p_vv * v * v;
+    let world_normal = normalize(cross(p_v, p_u)); // normal at viewer coordinate good enough?
 
-    return WorldCoordinate(position, normal);
+    let view_distance = distance(world_position + height * world_normal, terrain_view.world_position);
+
+    return WorldCoordinate(world_position, world_normal, view_distance);
 }
+#else
+fn compute_world_coordinate_precise(coordinate: Coordinate, height: f32) -> WorldCoordinate { return WorldCoordinate(vec3<f32>(0.0), vec3<f32>(0.0), 0.0); }
 #endif
+
+fn compute_tangent_space(world_coordinate: WorldCoordinate) -> TangentSpace {
+    let position_dx = dpdx(world_coordinate.position);
+    let position_dy = dpdy(world_coordinate.position);
+
+    let tangent_x = cross(position_dy, world_coordinate.normal);
+    let tangent_y = cross(world_coordinate.normal, position_dx);
+    let scale     = 1.0 / dot(position_dx, tangent_x);
+
+    return TangentSpace(tangent_x, tangent_y, scale);
+}
 
 fn apply_height(world: WorldCoordinate, height: f32) -> vec3<f32> {
     return world.position + height * world.normal;
@@ -98,7 +135,7 @@ fn inverse_mix(a: f32, b: f32, value: f32) -> f32 {
     return saturate((value - a) / (b - a));
 }
 
-fn compute_morph(coordinate: Coordinate, view_distance: f32) -> Coordinate {
+fn morph_coordinate(coordinate: Coordinate, view_distance: f32) -> Coordinate {
 #ifdef MORPH
     // Morphing more than one layer at once is not possible, since the approximate view distance for vertices that
     // should be placed on the same position will be slightly different, so the target lod and thus the ratio will be
@@ -130,12 +167,12 @@ fn compute_blend(view_distance: f32) -> Blend {
 }
 
 fn compute_view_coordinate(face: u32, lod: u32) -> Coordinate {
-    let coordinate = terrain_view.view_coordinates[face];
+    let coordinate = terrain_view.coordinates[face];
 
 #ifdef FRAGMENT
-    var view_coordinate = Coordinate(face, terrain_view.view_lod, coordinate.xy, coordinate.uv, vec2<f32>(0.0), vec2<f32>(0.0));
+    var view_coordinate = Coordinate(face, terrain_view.lod, coordinate.xy, coordinate.uv, vec2<f32>(0.0), vec2<f32>(0.0));
 #else
-    var view_coordinate = Coordinate(face, terrain_view.view_lod, coordinate.xy, coordinate.uv);
+    var view_coordinate = Coordinate(face, terrain_view.lod, coordinate.xy, coordinate.uv);
 #endif
 
     coordinate_change_lod(&view_coordinate, lod);

@@ -88,7 +88,6 @@ pub struct TileTreeUniform {
 pub(crate) struct TerrainViewUniform {
     tree_size: u32,
     geometry_tile_count: u32,
-    refinement_count: u32,
     grid_size: f32,
     vertices_per_row: u32,
     vertices_per_tile: u32,
@@ -99,11 +98,11 @@ pub(crate) struct TerrainViewUniform {
     morph_range: f32,
     blend_range: f32,
     precision_threshold_distance: f32,
-    view_face: u32,
-    view_lod: u32,
-    view_coordinates: [ViewCoordinate; 6],
+    face: u32,
+    lod: u32,
+    coordinates: [ViewCoordinate; 6],
     height_scale: f32,
-    view_world_position: Vec3,
+    world_position: Vec3,
     #[cfg(feature = "high_precision")]
     surface_approximation: [crate::math::SurfaceApproximation; 6],
 }
@@ -113,7 +112,6 @@ impl From<&TileTree> for TerrainViewUniform {
         TerrainViewUniform {
             tree_size: tile_tree.tree_size,
             geometry_tile_count: tile_tree.geometry_tile_count,
-            refinement_count: tile_tree.refinement_count,
             grid_size: tile_tree.grid_size as f32,
             vertices_per_row: 2 * (tile_tree.grid_size + 2),
             vertices_per_tile: 2 * tile_tree.grid_size * (tile_tree.grid_size + 2),
@@ -124,15 +122,15 @@ impl From<&TileTree> for TerrainViewUniform {
             precision_threshold_distance: tile_tree.precision_threshold_distance as f32,
             morph_range: tile_tree.morph_range,
             blend_range: tile_tree.blend_range,
-            view_face: tile_tree.view_face,
-            view_lod: tile_tree.view_lod,
-            view_coordinates: tile_tree
+            face: tile_tree.view_face,
+            lod: tile_tree.view_lod,
+            coordinates: tile_tree
                 .view_coordinates
                 .map(|view_coordinate| ViewCoordinate::new(view_coordinate, tile_tree.view_lod)),
+            height_scale: tile_tree.height_scale,
+            world_position: tile_tree.view_world_position,
             #[cfg(feature = "high_precision")]
             surface_approximation: tile_tree.surface_approximation,
-            height_scale: tile_tree.height_scale,
-            view_world_position: tile_tree.view_world_position,
         }
     }
 }
