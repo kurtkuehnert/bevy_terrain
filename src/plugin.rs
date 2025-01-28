@@ -12,10 +12,7 @@ use crate::{
     },
     shaders::{load_terrain_shaders, InternalShaders},
     terrain::TerrainComponents,
-    terrain_data::{
-        attachment::{AttachmentLabel, TerrainAttachments},
-        GpuTileAtlas, TileAtlas, TileTree,
-    },
+    terrain_data::{attachment::AttachmentLabel, GpuTileAtlas, TileAtlas, TileTree},
     terrain_view::TerrainViewComponents,
 };
 use bevy::{
@@ -32,12 +29,22 @@ use bevy::{
 };
 use bevy_common_assets::ron::RonAssetPlugin;
 
-/// The plugin for the terrain renderer.
-pub struct TerrainPlugin {
+#[derive(Resource)]
+pub struct TerrainSettings {
     pub attachments: Vec<AttachmentLabel>,
+    pub atlas_size: u32,
 }
 
-impl TerrainPlugin {
+impl Default for TerrainSettings {
+    fn default() -> Self {
+        Self {
+            attachments: vec![AttachmentLabel::Height],
+            atlas_size: 1028,
+        }
+    }
+}
+
+impl TerrainSettings {
     pub fn new(custom_attachments: Vec<&str>) -> Self {
         let mut attachments = vec![AttachmentLabel::Height];
         attachments.extend(
@@ -46,9 +53,15 @@ impl TerrainPlugin {
                 .map(|name| AttachmentLabel::Custom(name.to_string())),
         );
 
-        Self { attachments }
+        Self {
+            attachments,
+            atlas_size: 1028,
+        }
     }
 }
+
+/// The plugin for the terrain renderer.
+pub struct TerrainPlugin;
 
 impl Plugin for TerrainPlugin {
     fn build(&self, app: &mut App) {
@@ -59,9 +72,7 @@ impl Plugin for TerrainPlugin {
             .init_asset::<TerrainConfig>()
             .init_resource::<InternalShaders>()
             .init_resource::<TerrainViewComponents<TileTree>>()
-            .insert_resource(TerrainAttachments {
-                attachments: self.attachments.clone(),
-            })
+            .init_resource::<TerrainSettings>()
             .add_systems(
                 PostUpdate,
                 check_visibility::<With<TileAtlas>>.in_set(VisibilitySystems::CheckVisibility),
@@ -131,7 +142,13 @@ impl Plugin for TerrainPlugin {
     }
 
     fn finish(&self, app: &mut App) {
-        load_terrain_shaders(app, &self.attachments);
+        let attachments = app
+            .world()
+            .resource::<TerrainSettings>()
+            .attachments
+            .clone();
+
+        load_terrain_shaders(app, &attachments);
 
         app.sub_app_mut(RenderApp)
             .init_resource::<TerrainTilingPrepassPipelines>()

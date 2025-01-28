@@ -53,6 +53,7 @@ pub mod plugin;
 pub mod preprocess;
 pub mod render;
 pub mod shaders;
+pub mod spawn;
 pub mod terrain;
 pub mod terrain_data;
 pub mod terrain_view;
@@ -72,13 +73,13 @@ pub mod prelude {
         },
         math::{TerrainShape, TileCoordinate},
         picking::{PickingData, TerrainPickingPlugin},
-        plugin::TerrainPlugin,
+        plugin::{TerrainPlugin, TerrainSettings},
         // preprocess::{PreprocessDataset, Preprocessor, SphericalDataset, TerrainPreprocessPlugin},
         render::{TerrainMaterial, TerrainMaterialPlugin},
+        spawn::SpawnTerrainCommandsExt,
         terrain::TerrainConfig,
         terrain_data::{
-            AttachmentConfig, AttachmentFormat, AttachmentLabel, GpuTileAtlas, TerrainAttachments,
-            TileAtlas, TileTree,
+            AttachmentConfig, AttachmentFormat, AttachmentLabel, GpuTileAtlas, TileAtlas, TileTree,
         },
         terrain_view::{TerrainViewComponents, TerrainViewConfig},
     };

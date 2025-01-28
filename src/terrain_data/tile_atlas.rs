@@ -1,12 +1,11 @@
 use crate::{
     big_space::GridCell,
     math::{TerrainShape, TileCoordinate},
+    plugin::TerrainSettings,
     render::terrain_bind_group::TerrainUniform,
     terrain::TerrainConfig,
     terrain_data::{
-        attachment::{
-            AttachmentConfig, AttachmentData, AttachmentFormat, AttachmentLabel, TerrainAttachments,
-        },
+        attachment::{AttachmentConfig, AttachmentData, AttachmentFormat, AttachmentLabel},
         tile_tree::{TileTree, TileTreeEntry},
         INVALID_ATLAS_INDEX, INVALID_LOD,
     },
@@ -537,12 +536,12 @@ impl TileAtlas {
     pub fn new(
         config: &TerrainConfig,
         buffers: &mut Assets<ShaderStorageBuffer>,
-        terrain_attachments: &TerrainAttachments,
+        settings: &TerrainSettings,
     ) -> Self {
         let mut attachments = array::from_fn(|_| None);
 
         for (label, attachment) in &config.attachments {
-            let index = terrain_attachments
+            let index = settings
                 .attachments
                 .iter()
                 .position(|l| l == label)
@@ -552,7 +551,7 @@ impl TileAtlas {
         }
 
         let existing_tiles = config.tiles.clone().into_iter().collect();
-        let state = TileAtlasState::new(config.atlas_size, 1, existing_tiles);
+        let state = TileAtlasState::new(settings.atlas_size, 1, existing_tiles);
 
         let terrain_buffer = buffers.add(ShaderStorageBuffer::with_size(
             TerrainUniform::min_size().get() as usize,
@@ -564,7 +563,7 @@ impl TileAtlas {
             attachments,
             state,
             _path: config.path.to_string(),
-            atlas_size: config.atlas_size,
+            atlas_size: settings.atlas_size,
             lod_count: config.lod_count,
             min_height: config.min_height,
             max_height: config.max_height,

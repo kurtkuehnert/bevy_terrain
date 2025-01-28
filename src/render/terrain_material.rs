@@ -8,6 +8,7 @@ use crate::{
         GpuTerrainView,
     },
     shaders::{DEFAULT_FRAGMENT_SHADER, DEFAULT_VERTEX_SHADER},
+    spawn::{spawn_terrains, TerrainsToSpawn},
     terrain::TerrainComponents,
     terrain_data::GpuTileAtlas,
     terrain_view::TerrainViewComponents,
@@ -364,7 +365,7 @@ where
                 depth_compare: CompareFunction::Greater,
                 stencil: StencilState {
                     front: StencilFaceState {
-                        compare: CompareFunction::LessEqual,
+                        compare: CompareFunction::GreaterEqual,
                         fail_op: StencilOperation::Keep,
                         depth_fail_op: StencilOperation::Keep,
                         pass_op: StencilOperation::Replace,
@@ -475,14 +476,16 @@ impl<M: Material> Default for TerrainMaterialPlugin<M> {
     }
 }
 
-impl<M: Material> Plugin for TerrainMaterialPlugin<M>
+impl<M: Material + Clone> Plugin for TerrainMaterialPlugin<M>
 where
     M::Data: PartialEq + Eq + Hash + Clone,
 {
     fn build(&self, app: &mut App) {
         app.init_asset::<M>()
             .register_type::<TerrainMaterial<M>>()
-            .add_plugins(RenderAssetPlugin::<PreparedMaterial<M>, GpuImage>::default());
+            .add_plugins(RenderAssetPlugin::<PreparedMaterial<M>, GpuImage>::default())
+            .insert_resource(TerrainsToSpawn::<M>(vec![]))
+            .add_systems(PostUpdate, spawn_terrains::<M>);
 
         app.sub_app_mut(RenderApp)
             .add_render_command::<TerrainItem, DrawTerrain<M>>()
