@@ -2,9 +2,7 @@ use bevy::{prelude::Resource, render::render_resource::TextureFormat};
 use bytemuck::cast_slice;
 use itertools::{iproduct, Itertools};
 use serde::{Deserialize, Serialize};
-use std::fmt::Error;
-use std::iter;
-use std::str::FromStr;
+use std::{fmt::Error, iter, str::FromStr};
 
 #[derive(Resource)]
 pub struct TerrainAttachments {

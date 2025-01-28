@@ -93,6 +93,9 @@ impl AttachmentUniform {
 pub struct TerrainUniform {
     lod_count: u32,
     scale: f32,
+    min_height: f32,
+    max_height: f32,
+    height_scale: f32,
     world_from_local: [Vec4; 3],
     local_from_world_transpose_a: [Vec4; 2],
     local_from_world_transpose_b: f32,
@@ -107,7 +110,10 @@ impl TerrainUniform {
 
         Self {
             lod_count: tile_atlas.lod_count,
-            scale: tile_atlas.model.scale() as f32,
+            scale: tile_atlas.shape.scale() as f32,
+            min_height: tile_atlas.min_height,
+            max_height: tile_atlas.max_height,
+            height_scale: tile_atlas.height_scale,
             world_from_local,
             local_from_world_transpose_a,
             local_from_world_transpose_b,

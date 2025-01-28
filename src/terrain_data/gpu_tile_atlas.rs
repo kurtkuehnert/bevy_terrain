@@ -434,7 +434,7 @@ impl GpuTileAtlas {
 
         Self {
             attachments,
-            is_spherical: tile_atlas.model.is_spherical(),
+            is_spherical: tile_atlas.shape.is_spherical(),
         }
     }
 

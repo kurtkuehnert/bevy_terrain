@@ -2,10 +2,10 @@
 //!
 
 use crate::{
-    math::{TerrainModel, TileCoordinate},
+    math::{TerrainShape, TileCoordinate},
     terrain_data::{AttachmentConfig, AttachmentLabel},
 };
-use bevy::{ecs::entity::EntityHashMap, math::DVec3, prelude::*, utils::HashMap};
+use bevy::{ecs::entity::EntityHashMap, prelude::*, utils::HashMap};
 use ron::error::SpannedResult;
 use serde::{Deserialize, Serialize};
 use std::{fs, path::Path};
@@ -21,31 +21,18 @@ impl<C> Default for TerrainComponents<C> {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
-pub enum TerrainShape {
-    Plane { side_length: f64 },
-    WGS84,
-}
-
-impl TerrainShape {
-    pub fn model(self) -> TerrainModel {
-        match self {
-            TerrainShape::Plane { side_length } => TerrainModel::planar(DVec3::ZERO, side_length),
-            TerrainShape::WGS84 => TerrainModel::ellipsoid(DVec3::ZERO, 6378137.0, 6356752.314245),
-        }
-    }
-}
-
 /// The configuration of a terrain.
 ///
 /// Here you can define all fundamental parameters of the terrain.
 #[derive(Serialize, Deserialize, Asset, TypePath, Debug, Clone)]
 pub struct TerrainConfig {
-    pub terrain_shape: TerrainShape,
+    pub shape: TerrainShape,
     /// The count of level of detail layers.
     pub lod_count: u32,
     /// The amount of tiles the can be loaded simultaneously in the tile atlas.
     pub atlas_size: u32,
+    pub min_height: f32,
+    pub max_height: f32,
     /// The path to the terrain folder inside the assets directory.
     pub path: String,
     /// The tiles of the terrain.
@@ -57,9 +44,11 @@ pub struct TerrainConfig {
 impl Default for TerrainConfig {
     fn default() -> Self {
         Self {
-            terrain_shape: TerrainShape::Plane { side_length: 1.0 },
+            shape: TerrainShape::Plane { side_length: 1.0 },
             lod_count: 1,
             atlas_size: 1024,
+            min_height: 0.0,
+            max_height: 1.0,
             path: default(),
             tiles: default(),
             attachments: default(),

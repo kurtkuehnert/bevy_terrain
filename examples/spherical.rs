@@ -11,9 +11,7 @@ const RADIUS: f64 = 6371000.0;
 
 #[derive(ShaderType, Clone)]
 struct GradientInfo {
-    min: f32,
-    max: f32,
-    custom: u32,
+    mode: u32,
 }
 
 #[derive(Asset, AsBindGroup, TypePath, Clone)]
@@ -131,20 +129,11 @@ fn spawn_terrains(
         )
         .unwrap();
 
-    let view_config = TerrainViewConfig {
-        order: 1,
-        tree_size: 16,
-        blend_distance: 8.0,
-        ..default()
-    };
+    let view_config = TerrainViewConfig::default();
 
     let material = CustomMaterial {
         gradient: gradient.clone(),
-        gradient_info: GradientInfo {
-            min: -12000.0,
-            max: 9000.0,
-            custom: 1,
-        },
+        gradient_info: GradientInfo { mode: 1 },
     };
 
     let (mut terrain, mut view) = (Entity::PLACEHOLDER, Entity::PLACEHOLDER);
@@ -165,6 +154,7 @@ fn spawn_terrains(
 
         terrain = root
             .spawn_spatial((
+                config.shape.transform(),
                 TileAtlas::new(config, &mut buffers, &terrain_attachments),
                 TerrainMaterial(materials.add(material)),
             ))

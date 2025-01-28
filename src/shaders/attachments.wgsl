@@ -18,7 +18,7 @@ fn sample_height(tile: AtlasTile) -> f32 {
     let height = textureSampleLevel(height_attachment, terrain_sampler, uv, tile.index, 0.0).x;
 #endif
 
-    return terrain_view.height_scale * height;
+    return terrain.height_scale * height;
 }
 
 fn sample_height_mask(tile: AtlasTile) -> bool {
@@ -82,7 +82,7 @@ fn sample_surface_gradient(tile: AtlasTile, tangent_space: TangentSpace) -> vec3
     let height_dx = dot(height_duv, uv_dx);
     let height_dy = dot(height_duv, uv_dy);
 
-    return terrain_view.height_scale * tangent_space.scale * (height_dx * tangent_space.tangent_x + height_dy * tangent_space.tangent_y);
+    return terrain.height_scale * tangent_space.scale * (height_dx * tangent_space.tangent_x + height_dy * tangent_space.tangent_y);
 }
 #endif
 
