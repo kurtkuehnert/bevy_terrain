@@ -1,6 +1,6 @@
 use crate::{
     big_space::GridCell,
-    math::{TerrainModel, TileCoordinate},
+    math::{TerrainShape, TileCoordinate},
     render::terrain_bind_group::TerrainUniform,
     terrain::TerrainConfig,
     terrain_data::{
@@ -524,7 +524,10 @@ pub struct TileAtlas {
     pub(crate) _path: String,
     pub(crate) atlas_size: u32,
     pub(crate) lod_count: u32,
-    pub(crate) model: TerrainModel,
+    pub(crate) min_height: f32,
+    pub(crate) max_height: f32,
+    pub(crate) height_scale: f32,
+    pub(crate) shape: TerrainShape,
 
     pub(crate) terrain_buffer: Handle<ShaderStorageBuffer>,
 }
@@ -557,12 +560,15 @@ impl TileAtlas {
         ));
 
         Self {
-            model: config.terrain_shape.model(),
+            shape: config.shape,
             attachments,
             state,
             _path: config.path.to_string(),
             atlas_size: config.atlas_size,
             lod_count: config.lod_count,
+            min_height: config.min_height,
+            max_height: config.max_height,
+            height_scale: 1.0,
             terrain_buffer,
         }
     }

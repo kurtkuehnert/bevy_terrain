@@ -1,6 +1,5 @@
-use crate::prelude::TerrainConfig;
 use crate::{
-    math::sync_terrain_position,
+    prelude::TerrainConfig,
     render::{
         terrain_pass::{
             extract_terrain_phases, prepare_terrain_depth_textures, DepthCopyPipeline, TerrainItem,
@@ -65,10 +64,7 @@ impl Plugin for TerrainPlugin {
             })
             .add_systems(
                 PostUpdate,
-                (
-                    sync_terrain_position,
-                    check_visibility::<With<TileAtlas>>.in_set(VisibilitySystems::CheckVisibility),
-                ),
+                check_visibility::<With<TileAtlas>>.in_set(VisibilitySystems::CheckVisibility),
             )
             .add_systems(
                 Last,

@@ -3,6 +3,9 @@
 struct Terrain {
     lod_count: u32,
     scale: f32,
+    min_height: f32,
+    max_height: f32,
+    height_scale: f32,
     world_from_unit: mat3x4<f32>,
     unit_from_world_transpose_a: mat2x4<f32>,
     unit_from_world_transpose_b: f32,

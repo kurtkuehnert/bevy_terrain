@@ -1,5 +1,5 @@
 use crate::math::{
-    FaceRotation, TerrainModel, BLOCK_SIZE, C_SQR, FACE_MATRICES, INVERSE_FACE_MATRICES,
+    FaceRotation, TerrainShape, BLOCK_SIZE, C_SQR, FACE_MATRICES, INVERSE_FACE_MATRICES,
     NEIGHBOURING_FACES, NEIGHBOUR_OFFSETS,
 };
 use bevy::{
@@ -12,6 +12,10 @@ use std::{
     fmt,
     path::{Path, PathBuf},
 };
+
+// Todo: get rid of is_spherical check
+// we still would like to support spherical and planar terrains in the same project, however they should use different coordinates
+// For example we could make all terrain types generic with Type TerrainType, etc.
 
 /// Describes a location on the unit cube sphere.
 /// The face index refers to one of the six cube faces and the uv coordinate describes the location within this face.
@@ -63,15 +67,15 @@ impl Coordinate {
     }
 
     /// Calculates the coordinate for for the unit position on the unit cube sphere.
-    pub fn from_local_position(world_position: DVec3, model: &TerrainModel) -> Self {
-        let unit_position = model.position_local_to_unit(world_position);
+    pub fn from_local_position(world_position: DVec3, shape: TerrainShape) -> Self {
+        let unit_position = shape.position_local_to_unit(world_position);
 
-        Self::from_unit_position(unit_position, model.is_spherical())
+        Self::from_unit_position(unit_position, shape.is_spherical())
     }
 
-    pub fn local_position(self, model: &TerrainModel, height: f32) -> DVec3 {
-        let unit_position = self.unit_position(model.is_spherical());
-        model.position_unit_to_local(unit_position, height as f64)
+    pub fn local_position(self, shape: TerrainShape, height: f32) -> DVec3 {
+        let unit_position = self.unit_position(shape.is_spherical());
+        shape.position_unit_to_local(unit_position, height as f64)
     }
 
     /// Projects the coordinate onto one of the six cube faces.

@@ -1,6 +1,6 @@
 use crate::{
     big_space::GridCell,
-    math::{Coordinate, TerrainModel, TileCoordinate},
+    math::{Coordinate, TerrainShape, TileCoordinate},
     render::terrain_view_bind_group::{TerrainViewUniform, TileTreeUniform},
     terrain::TerrainConfig,
     terrain_data::{TileAtlas, INVALID_ATLAS_INDEX, INVALID_LOD},
@@ -106,6 +106,8 @@ pub struct TileTree {
     tiles: Array4<TileState>,
     /// The count of tiles in x and y direction per layer.
     pub(crate) tree_size: u32,
+    pub(crate) lod_count: u32,
+    pub(crate) shape: TerrainShape,
     pub(crate) geometry_tile_count: u32,
     pub(crate) refinement_count: u32,
     pub(crate) grid_size: u32,
@@ -124,7 +126,6 @@ pub struct TileTree {
     #[cfg(feature = "high_precision")]
     pub(crate) surface_approximation: [crate::math::SurfaceApproximation; 6],
     pub(crate) approximate_height: f32,
-    pub(crate) height_scale: f32,
     pub(crate) order: u32,
 
     pub(crate) tile_tree_buffer: Handle<ShaderStorageBuffer>,
@@ -141,11 +142,10 @@ impl TileTree {
         commands: &mut Commands,
         buffers: &mut Assets<ShaderStorageBuffer>, // Todo: solve this dependency with a component hook in the future
     ) -> Self {
-        let model = &config.terrain_shape.model();
-        let scale = model.scale();
+        let scale = config.shape.scale();
 
         let data = Array4::default((
-            model.face_count() as usize,
+            config.shape.face_count() as usize,
             config.lod_count as usize,
             view_config.tree_size as usize,
             view_config.tree_size as usize,
@@ -173,6 +173,8 @@ impl TileTree {
 
         Self {
             tree_size: view_config.tree_size,
+            lod_count: config.lod_count,
+            shape: config.shape,
             geometry_tile_count: view_config.geometry_tile_count,
             refinement_count: view_config.refinement_count,
             grid_size: view_config.grid_size,
@@ -190,7 +192,7 @@ impl TileTree {
             view_local_position: default(),
             data,
             tiles: Array4::default((
-                model.face_count() as usize,
+                config.shape.face_count() as usize,
                 config.lod_count as usize,
                 view_config.tree_size as usize,
                 view_config.tree_size as usize,
@@ -201,7 +203,6 @@ impl TileTree {
             #[cfg(feature = "high_precision")]
             surface_approximation: default(),
             approximate_height: 0.0,
-            height_scale: 1.0,
             order: view_config.order,
             view_world_position: Default::default(),
             tile_tree_buffer,
@@ -228,12 +229,7 @@ impl TileTree {
             .as_ivec2()
     }
 
-    fn compute_tile_distance(
-        &self,
-        tile: TileCoordinate,
-        view_coordinate: Coordinate,
-        model: &TerrainModel,
-    ) -> f64 {
+    fn compute_tile_distance(&self, tile: TileCoordinate, view_coordinate: Coordinate) -> f64 {
         let tile_count = TileCoordinate::count(tile.lod) as f64;
         let view_tile_xy = Self::compute_tree_xy(view_coordinate, tile_count);
         let tile_offset = view_tile_xy.as_ivec2() - tile.xy;
@@ -253,23 +249,20 @@ impl TileTree {
 
         let tile_local_position =
             Coordinate::new(tile.face, (tile.xy.as_dvec2() + offset) / tile_count)
-                .local_position(model, self.approximate_height);
+                .local_position(self.shape, self.approximate_height);
 
         tile_local_position.distance(self.view_local_position)
     }
 
-    fn update(&mut self, view_grid_position: DVec3, tile_atlas: &TileAtlas) {
-        let model = &tile_atlas.model;
-        self.view_local_position = view_grid_position; // Todo: transform grid to local position
-
-        let view_coordinate = Coordinate::from_local_position(self.view_local_position, model);
+    fn update(&mut self) {
+        let view_coordinate = Coordinate::from_local_position(self.view_local_position, self.shape);
         self.view_face = view_coordinate.face;
 
-        for face in 0..model.face_count() {
+        for face in 0..self.shape.face_count() {
             let view_coordinate = view_coordinate.project_to_face(face);
             self.view_coordinates[face as usize] = view_coordinate;
 
-            for lod in 0..tile_atlas.lod_count {
+            for lod in 0..self.lod_count {
                 let origin = self.compute_origin(view_coordinate, lod);
 
                 for (x, y) in iproduct!(0..self.tree_size, 0..self.tree_size) {
@@ -280,7 +273,7 @@ impl TileTree {
                     };
 
                     let tile_distance =
-                        self.compute_tile_distance(tile_coordinate, view_coordinate, model);
+                        self.compute_tile_distance(tile_coordinate, view_coordinate);
                     let load_distance =
                         self.load_distance / TileCoordinate::count(tile_coordinate.lod) as f64;
 
@@ -329,24 +322,18 @@ impl TileTree {
     /// while selecting newly requested and released tiles.
     pub(crate) fn compute_requests(
         mut tile_trees: ResMut<TerrainViewComponents<TileTree>>,
-        tile_atlases: Query<&TileAtlas>,
         #[cfg(feature = "high_precision")] grids: crate::big_space::Grids,
         #[cfg(feature = "high_precision")] views: Query<(&Transform, &GridCell)>,
         #[cfg(not(feature = "high_precision"))] view_transforms: Query<&Transform>,
     ) {
-        for (&(terrain, view), tile_tree) in tile_trees.iter_mut() {
-            let tile_atlas = tile_atlases.get(terrain).unwrap();
-
+        for (&(_, view), tile_tree) in tile_trees.iter_mut() {
             let grid = grids.parent_grid(view).unwrap();
             let (transform, cell) = views.get(view).unwrap();
             let view_grid_position = grid.grid_position_double(cell, transform);
 
-            // Todo: work with global translations correctly
-            #[cfg(not(feature = "high_precision"))]
-            let view_grid_position = view_transform.translation.as_dvec3();
-
-            tile_tree.update(view_grid_position, tile_atlas);
+            tile_tree.view_local_position = view_grid_position;
             tile_tree.view_world_position = transform.translation;
+            tile_tree.update();
         }
     }
 
@@ -366,19 +353,14 @@ impl TileTree {
     }
 
     #[cfg(feature = "high_precision")]
-    pub fn generate_surface_approximation(
-        mut tile_trees: ResMut<TerrainViewComponents<TileTree>>,
-        tile_atlases: Query<&TileAtlas>,
-    ) {
-        for (&(terrain, _view), tile_tree) in tile_trees.iter_mut() {
-            let tile_atlas = tile_atlases.get(terrain).unwrap();
-
+    pub fn generate_surface_approximation(mut tile_trees: ResMut<TerrainViewComponents<TileTree>>) {
+        for tile_tree in tile_trees.values_mut() {
             tile_tree.surface_approximation = tile_tree.view_coordinates.map(|view_coordinate| {
                 crate::math::SurfaceApproximation::compute(
                     view_coordinate,
                     tile_tree.view_local_position,
                     tile_tree.view_world_position,
-                    &tile_atlas.model,
+                    tile_tree.shape,
                 )
             });
         }

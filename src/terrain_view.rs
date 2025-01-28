@@ -48,14 +48,14 @@ pub struct TerrainViewConfig {
 impl Default for TerrainViewConfig {
     fn default() -> Self {
         Self {
-            tree_size: 8,
+            tree_size: 16,
             geometry_tile_count: 1000000,
             refinement_count: 30,
             grid_size: 16,
             morph_range: 0.2,
             blend_range: 0.2,
             morph_distance: 32.0,
-            blend_distance: 2.0,
+            blend_distance: 8.0,
             subdivision_tolerance: 0.1,
             load_tolerance: 0.2,
             precision_threshold_distance: 0.001,

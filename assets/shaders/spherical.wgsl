@@ -7,9 +7,7 @@
 #import bevy_pbr::pbr_functions::{calculate_view, apply_pbr_lighting}
 
 struct GradientInfo {
-    min: f32,
-    max: f32,
-    custom: u32,
+    mode: u32,
 }
 
 @group(3) @binding(0)
@@ -20,42 +18,45 @@ var gradient_sampler: sampler;
 var<uniform> gradient_info: GradientInfo;
 
 fn sample_albedo(tile: AtlasTile) -> vec4<f32> {
-//    let uv = attachment_uv(tile.coordinate.uv, 1u);
-//
-//#ifdef FRAGMENT
-//#ifdef SAMPLE_GRAD
-//    return textureSampleGrad(albedo_atlas, terrain_sampler, uv, tile.index, tile.coordinate.uv_dx, tile.coordinate.uv_dy);
-//#else
-//    return textureSampleLevel(albedo_atlas, terrain_sampler, uv, tile.index, 0.0);
-//#endif
-//#else
-//    return textureSampleLevel(albedo_atlas, terrain_sampler, uv, tile.index, 0.0);
-//#endif
+    let attachment = attachments.albedo;
+    let uv         = tile.coordinate.uv * attachment.scale + attachment.offset;
 
-    return vec4<f32>(1.0);
+#ifdef FRAGMENT
+#ifdef SAMPLE_GRAD
+    return textureSampleGrad(albedo_attachment, terrain_sampler, uv, tile.index, tile.coordinate.uv_dx, tile.coordinate.uv_dy);
+#else
+    return textureSampleLevel(albedo_attachment, terrain_sampler, uv, tile.index, 0.0);
+#endif
+#else
+    return textureSampleLevel(albedo_attachment, terrain_sampler, uv, tile.index, 0.0);
+#endif
+}
+
+fn color_earth(tile: AtlasTile) -> vec4<f32> {
+   let height = sample_height(tile) / terrain.height_scale;
+
+    if (height < 0.0) {
+        return textureSampleLevel(gradient, gradient_sampler, mix(0.0, 0.075, pow(height / terrain.min_height, 0.25)), 0.0);
+    } else {
+        return textureSampleLevel(gradient, gradient_sampler, mix(0.09, 1.0, pow(height / terrain.max_height * 2.0, 1.0)), 0.0);
+    }
+}
+
+fn color_dataset(tile: AtlasTile) -> vec4<f32> {
+    let height = sample_height(tile) / terrain.height_scale;
+
+    return textureSampleLevel(gradient, gradient_sampler, inverse_mix(terrain.min_height, terrain.max_height, height), 0.0);
 }
 
 fn sample_color(tile: AtlasTile) -> vec4<f32> {
-    let height = sample_height(tile) / terrain_view.height_scale;
+    let height = sample_height(tile) / terrain.height_scale;
 
     var color: vec4<f32>;
-
-    if (gradient_info.custom == 1u) {
-        if (height < 0.0) {
-            color = textureSampleLevel(gradient, gradient_sampler, mix(0.0, 0.075, pow(height / gradient_info.min, 0.25)), 0.0);
-        }
-        else {
-            color = textureSampleLevel(gradient, gradient_sampler, mix(0.09, 1.0, pow(height / gradient_info.max * 2.0, 1.0)), 0.0);
-        }
-    }
-    else {
-        color = textureSampleLevel(gradient, gradient_sampler, inverse_mix(gradient_info.min, gradient_info.max, height), 0.0);
-    }
-
-    let albedo = sample_albedo(tile);
-
-    if (!all(albedo == vec4<f32>(1.0))) {
-        color = sample_albedo(tile);
+    switch (gradient_info.mode) {
+        case 0u: { color = color_dataset(tile); }
+        case 1u: { color = color_earth(tile);   }
+        case 2u: { color = sample_albedo(tile); }
+        case default: {}
     }
 
     return color;
@@ -63,7 +64,7 @@ fn sample_color(tile: AtlasTile) -> vec4<f32> {
 
 fn slope_gradient(world_normal: vec3<f32>, surface_gradient: vec3<f32>) -> vec4<f32> {
     let slope = compute_slope(world_normal, surface_gradient);
-    return textureSampleLevel(gradient, gradient_sampler, slope + 0.1, 0.0);
+    return textureSampleLevel(gradient, gradient_sampler, 5 * slope + 0.1, 0.0);
 }
 
 @fragment
@@ -87,9 +88,9 @@ fn fragment(input: FragmentInput) -> FragmentOutput {
 //        color = vec4<f32>(0.5, 0.5, 0.5, 1.0);
 //    }
 
-    // color = vec4(vec3(0.3), 1.0);
+//    color = vec4(vec3(0.3), 1.0);
 
-    // color = slope_gradient(info.world_normal, surface_gradient);
+//    color = slope_gradient(info.world_coordinate.normal, surface_gradient);
 
     var output: FragmentOutput;
     fragment_output(&info, &output, color, surface_gradient);

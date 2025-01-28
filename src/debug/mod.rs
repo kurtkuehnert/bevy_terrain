@@ -35,6 +35,7 @@ impl Plugin for TerrainDebugPlugin {
                 Update,
                 (
                     toggle_debug,
+                    update_terrain_parameter,
                     update_view_parameter,
                     finish_loading_images,
                     orbital_camera_controller,
@@ -222,24 +223,27 @@ pub fn toggle_debug(input: Res<ButtonInput<KeyCode>>, mut debug: ResMut<DebugTer
     }
 }
 
+pub fn update_terrain_parameter(
+    input: Res<ButtonInput<KeyCode>>,
+    mut tile_atlases: Query<&mut TileAtlas>,
+) {
+    for mut tile_atlas in tile_atlases.iter_mut() {
+        if input.pressed(KeyCode::ShiftLeft) && input.just_pressed(KeyCode::Equal) {
+            tile_atlas.height_scale += 0.1;
+        }
+        if input.just_pressed(KeyCode::Minus) {
+            tile_atlas.height_scale -= 0.1;
+        }
+    }
+}
+
 pub fn update_view_parameter(
     input: Res<ButtonInput<KeyCode>>,
     mut tile_trees: ResMut<TerrainViewComponents<TileTree>>,
-    tile_atlases: Query<&TileAtlas>,
 ) {
-    for (&(terrain, _), tile_tree) in tile_trees.iter_mut() {
-        let Ok(tile_atlas) = tile_atlases.get(terrain) else {
-            return;
-        };
+    for tile_tree in tile_trees.values_mut() {
+        let scale = tile_tree.shape.scale();
 
-        let scale = tile_atlas.model.scale();
-
-        if input.pressed(KeyCode::ShiftLeft) && input.just_pressed(KeyCode::Equal) {
-            tile_tree.height_scale += 0.1;
-        }
-        if input.just_pressed(KeyCode::Minus) {
-            tile_tree.height_scale -= 0.1;
-        }
         if input.just_pressed(KeyCode::KeyN) {
             tile_tree.blend_distance -= 0.25 * scale;
             println!(
