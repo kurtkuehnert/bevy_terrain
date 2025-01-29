@@ -18,6 +18,7 @@
 pub(crate) mod attachment;
 pub(crate) mod gpu_tile_atlas;
 pub(crate) mod tile_atlas;
+pub(crate) mod tile_loader;
 pub(crate) mod tile_tree;
 
 pub use crate::terrain_data::{

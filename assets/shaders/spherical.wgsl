@@ -38,7 +38,7 @@ fn color_earth(tile: AtlasTile) -> vec4<f32> {
     if (height < 0.0) {
         return textureSampleLevel(gradient, gradient_sampler, mix(0.0, 0.075, pow(height / terrain.min_height, 0.25)), 0.0);
     } else {
-        return textureSampleLevel(gradient, gradient_sampler, mix(0.09, 1.0, pow(height / terrain.max_height * 2.0, 1.0)), 0.0);
+        return textureSampleLevel(gradient, gradient_sampler, mix(0.09, 0.6, pow(height / terrain.max_height * 1.4, 1.0)), 0.0);
     }
 }
 

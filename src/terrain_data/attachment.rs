@@ -140,8 +140,7 @@ impl AttachmentConfig {
 }
 
 #[derive(Clone)]
-pub(crate) enum AttachmentData {
-    None,
+pub enum AttachmentData {
     /// Three channels  8 bit
     // Rgb8(Vec<(u8, u8, u8)>), Can not be represented currently
     /// Four  channels  8 bit
@@ -178,7 +177,7 @@ impl AttachmentData {
             AttachmentData::RI16(data) => cast_slice(data),
             AttachmentData::RgU16(data) => cast_slice(data),
             AttachmentData::RF32(data) => cast_slice(data),
-            AttachmentData::None => panic!("Attachment has no data."),
+            //  AttachmentData::None => panic!("Attachment has no data."),
         }
     }
 

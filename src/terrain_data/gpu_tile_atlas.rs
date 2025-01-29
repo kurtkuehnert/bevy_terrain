@@ -190,8 +190,6 @@ pub(crate) struct GpuAtlasAttachment {
 
     pub(crate) _max_atlas_write_slots: u32,
     pub(crate) atlas_write_slots: Vec<AtlasTileAttachment>,
-    pub(crate) upload_tiles: Vec<AtlasTileAttachmentWithData>,
-    pub(crate) download_tiles: Vec<Task<AtlasTileAttachmentWithData>>,
 }
 
 impl GpuAtlasAttachment {
@@ -209,7 +207,7 @@ impl GpuAtlasAttachment {
             .unwrap();
 
         let name = String::from(label);
-        let max_atlas_write_slots = tile_atlas.state.max_atlas_write_slots;
+        let max_atlas_write_slots = 4;
         let atlas_write_slots = Vec::with_capacity(max_atlas_write_slots as usize);
 
         let buffer_info = AtlasBufferInfo::new(attachment, tile_atlas.lod_count);
@@ -279,8 +277,6 @@ impl GpuAtlasAttachment {
             _bind_group: bind_group,
             _max_atlas_write_slots: max_atlas_write_slots,
             atlas_write_slots,
-            upload_tiles: default(),
-            download_tiles: default(),
         }
     }
 
@@ -317,35 +313,6 @@ impl GpuAtlasAttachment {
         }
     }
 
-    fn upload_tiles(&mut self, queue: &RenderQueue) {
-        for tile in self.upload_tiles.drain(..) {
-            let mut start = 0;
-
-            for mip_level in 0..self.buffer_info.mip_level_count {
-                let side_size = self.buffer_info.actual_side_size >> mip_level;
-                let texture_size = self.buffer_info.texture_size >> mip_level;
-                let end = start + (side_size * texture_size) as usize;
-
-                queue.write_texture(
-                    self.buffer_info.image_copy_texture(
-                        &self.atlas_texture,
-                        tile.tile.atlas_index,
-                        mip_level,
-                    ),
-                    &tile.data.bytes()[start..end],
-                    ImageDataLayout {
-                        offset: 0,
-                        bytes_per_row: Some(side_size),
-                        rows_per_image: Some(texture_size),
-                    },
-                    self.buffer_info.image_copy_size(mip_level),
-                );
-
-                start = end;
-            }
-        }
-    }
-
     pub(crate) fn _download_tiles(&self, command_encoder: &mut CommandEncoder) {
         for (tile, download_buffer) in iter::zip(&self.atlas_write_slots, &self.download_buffers) {
             command_encoder.copy_texture_to_buffer(
@@ -369,58 +336,6 @@ impl GpuAtlasAttachment {
             })
             .collect_vec();
     }
-
-    fn start_downloading_tiles(&mut self) {
-        let buffer_info = self.buffer_info;
-        let download_buffers = mem::take(&mut self.download_buffers);
-        let atlas_write_slots = mem::take(&mut self.atlas_write_slots);
-
-        self.download_tiles = iter::zip(atlas_write_slots, download_buffers)
-            .map(|(tile, download_buffer)| {
-                AsyncComputeTaskPool::get().spawn(async move {
-                    let (tx, rx) = async_channel::bounded(1);
-
-                    let buffer_slice = download_buffer.slice(..);
-
-                    buffer_slice.map_async(MapMode::Read, move |_| {
-                        tx.try_send(()).unwrap();
-                    });
-
-                    rx.recv().await.unwrap();
-
-                    let mut data = buffer_slice.get_mapped_range().to_vec();
-
-                    download_buffer.unmap();
-                    drop(download_buffer);
-
-                    if data.len() != buffer_info.actual_tile_size as usize {
-                        let actual_side_size = buffer_info.actual_side_size as usize;
-                        let aligned_side_size = buffer_info.aligned_side_size as usize;
-
-                        let mut take_offset = aligned_side_size;
-                        let mut place_offset = actual_side_size;
-
-                        for _ in 1..buffer_info.texture_size {
-                            data.copy_within(
-                                take_offset..take_offset + aligned_side_size,
-                                place_offset,
-                            );
-                            take_offset += aligned_side_size;
-                            place_offset += actual_side_size;
-                        }
-
-                        data.truncate(buffer_info.actual_tile_size as usize);
-                    }
-
-                    AtlasTileAttachmentWithData {
-                        tile,
-                        data: AttachmentData::from_bytes(&data, buffer_info.format),
-                        texture_size: buffer_info.texture_size,
-                    }
-                })
-            })
-            .collect_vec();
-    }
 }
 
 /// Stores the GPU representation of the [`TileAtlas`] (array textures)
@@ -431,6 +346,8 @@ impl GpuAtlasAttachment {
 pub struct GpuTileAtlas {
     /// Stores the atlas attachments of the terrain.
     pub(crate) attachments: HashMap<AttachmentLabel, GpuAtlasAttachment>,
+    pub(crate) upload_tiles: Vec<AtlasTileAttachmentWithData>,
+    pub(crate) download_tiles: Vec<Task<AtlasTileAttachmentWithData>>,
     pub(crate) is_spherical: bool,
 }
 
@@ -450,6 +367,8 @@ impl GpuTileAtlas {
 
         Self {
             attachments,
+            upload_tiles: default(),
+            download_tiles: default(),
             is_spherical: tile_atlas.shape.is_spherical(),
         }
     }
@@ -477,18 +396,14 @@ impl GpuTileAtlas {
         for (terrain, mut tile_atlas) in tile_atlases.iter_mut(&mut main_world) {
             let gpu_tile_atlas = gpu_tile_atlases.get_mut(&terrain).unwrap();
 
-            for (label, attachment) in &mut tile_atlas.attachments {
-                let gpu_attachment = gpu_tile_atlas.attachments.get_mut(label).unwrap();
+            mem::swap(
+                &mut tile_atlas.uploading_tiles,
+                &mut gpu_tile_atlas.upload_tiles,
+            );
 
-                mem::swap(
-                    &mut attachment.uploading_tiles,
-                    &mut gpu_attachment.upload_tiles,
-                );
-
-                attachment
-                    .downloading_tiles
-                    .extend(mem::take(&mut gpu_attachment.download_tiles));
-            }
+            tile_atlas
+                .downloading_tiles
+                .extend(mem::take(&mut gpu_tile_atlas.download_tiles));
         }
     }
 
@@ -502,16 +417,99 @@ impl GpuTileAtlas {
         for gpu_tile_atlas in gpu_tile_atlases.values_mut() {
             for attachment in gpu_tile_atlas.attachments.values_mut() {
                 attachment.create_download_buffers(&device);
-                attachment.upload_tiles(&queue);
             }
+
+            gpu_tile_atlas.upload_tiles(&queue);
         }
     }
 
     pub(crate) fn cleanup(mut gpu_tile_atlases: ResMut<TerrainComponents<GpuTileAtlas>>) {
         for gpu_tile_atlas in gpu_tile_atlases.values_mut() {
-            for attachment in gpu_tile_atlas.attachments.values_mut() {
-                attachment.start_downloading_tiles();
+            gpu_tile_atlas.start_downloading_tiles();
+        }
+    }
+
+    fn upload_tiles(&mut self, queue: &RenderQueue) {
+        for tile in self.upload_tiles.drain(..) {
+            let attachment = self.attachments.get(&tile.tile.label).unwrap();
+            let mut start = 0;
+
+            for mip_level in 0..attachment.buffer_info.mip_level_count {
+                let side_size = attachment.buffer_info.actual_side_size >> mip_level;
+                let texture_size = attachment.buffer_info.texture_size >> mip_level;
+                let end = start + (side_size * texture_size) as usize;
+
+                queue.write_texture(
+                    attachment.buffer_info.image_copy_texture(
+                        &attachment.atlas_texture,
+                        tile.tile.atlas_index,
+                        mip_level,
+                    ),
+                    &tile.data.bytes()[start..end],
+                    ImageDataLayout {
+                        offset: 0,
+                        bytes_per_row: Some(side_size),
+                        rows_per_image: Some(texture_size),
+                    },
+                    attachment.buffer_info.image_copy_size(mip_level),
+                );
+
+                start = end;
             }
+        }
+    }
+
+    fn start_downloading_tiles(&mut self) {
+        for attachment in self.attachments.values_mut() {
+            let buffer_info = attachment.buffer_info;
+            let download_buffers = mem::take(&mut attachment.download_buffers);
+            let atlas_write_slots = mem::take(&mut attachment.atlas_write_slots);
+
+            self.download_tiles
+                .extend(iter::zip(atlas_write_slots, download_buffers).map(
+                    |(tile, download_buffer)| {
+                        AsyncComputeTaskPool::get().spawn(async move {
+                            let (tx, rx) = async_channel::bounded(1);
+
+                            let buffer_slice = download_buffer.slice(..);
+
+                            buffer_slice.map_async(MapMode::Read, move |_| {
+                                tx.try_send(()).unwrap();
+                            });
+
+                            rx.recv().await.unwrap();
+
+                            let mut data = buffer_slice.get_mapped_range().to_vec();
+
+                            download_buffer.unmap();
+                            drop(download_buffer);
+
+                            if data.len() != buffer_info.actual_tile_size as usize {
+                                let actual_side_size = buffer_info.actual_side_size as usize;
+                                let aligned_side_size = buffer_info.aligned_side_size as usize;
+
+                                let mut take_offset = aligned_side_size;
+                                let mut place_offset = actual_side_size;
+
+                                for _ in 1..buffer_info.texture_size {
+                                    data.copy_within(
+                                        take_offset..take_offset + aligned_side_size,
+                                        place_offset,
+                                    );
+                                    take_offset += aligned_side_size;
+                                    place_offset += actual_side_size;
+                                }
+
+                                data.truncate(buffer_info.actual_tile_size as usize);
+                            }
+
+                            AtlasTileAttachmentWithData {
+                                tile,
+                                data: AttachmentData::from_bytes(&data, buffer_info.format),
+                            }
+                        })
+                    },
+                ));
         }
     }
 }
