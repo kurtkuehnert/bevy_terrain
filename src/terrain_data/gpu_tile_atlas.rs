@@ -1,7 +1,8 @@
 use crate::{
+    plugin::TerrainSettings,
     terrain::TerrainComponents,
     terrain_data::{
-        attachment::{AttachmentData, AttachmentFormat},
+        attachment::{AttachmentData, AttachmentFormat, AttachmentLabel},
         tile_atlas::{
             AtlasAttachment, AtlasTileAttachment, AtlasTileAttachmentWithData, TileAtlas,
         },
@@ -16,9 +17,10 @@ use bevy::{
         Extract, MainWorld,
     },
     tasks::{AsyncComputeTaskPool, Task},
+    utils::HashMap,
 };
 use itertools::Itertools;
-use std::{array, iter, mem};
+use std::{iter, mem};
 
 const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
 
@@ -177,6 +179,8 @@ impl AtlasBufferInfo {
 }
 
 pub(crate) struct GpuAtlasAttachment {
+    pub(crate) index: usize,
+
     pub(crate) buffer_info: AtlasBufferInfo,
 
     pub(crate) atlas_texture: Texture,
@@ -193,10 +197,18 @@ pub(crate) struct GpuAtlasAttachment {
 impl GpuAtlasAttachment {
     pub(crate) fn new(
         device: &RenderDevice,
+        label: &AttachmentLabel,
         attachment: &AtlasAttachment,
         tile_atlas: &TileAtlas,
+        settings: &TerrainSettings,
     ) -> Self {
-        let name = attachment.name.clone();
+        let index = settings
+            .attachments
+            .iter()
+            .position(|l| l == label)
+            .unwrap();
+
+        let name = String::from(label);
         let max_atlas_write_slots = tile_atlas.state.max_atlas_write_slots;
         let atlas_write_slots = Vec::with_capacity(max_atlas_write_slots as usize);
 
@@ -209,7 +221,7 @@ impl GpuAtlasAttachment {
             size: Extent3d {
                 width: buffer_info.texture_size,
                 height: buffer_info.texture_size,
-                depth_or_array_layers: tile_atlas.atlas_size,
+                depth_or_array_layers: settings.atlas_size,
             },
             mip_level_count: attachment.mip_level_count,
             sample_count: 1,
@@ -259,6 +271,7 @@ impl GpuAtlasAttachment {
         );
 
         Self {
+            index,
             buffer_info,
             atlas_texture,
             _atlas_write_section: atlas_write_section,
@@ -417,20 +430,23 @@ impl GpuAtlasAttachment {
 #[derive(Component)]
 pub struct GpuTileAtlas {
     /// Stores the atlas attachments of the terrain.
-    pub(crate) attachments: [Option<GpuAtlasAttachment>; 8],
+    pub(crate) attachments: HashMap<AttachmentLabel, GpuAtlasAttachment>,
     pub(crate) is_spherical: bool,
 }
 
 impl GpuTileAtlas {
     /// Creates a new gpu tile atlas and initializes its attachment textures.
-    fn new(device: &RenderDevice, tile_atlas: &TileAtlas) -> Self {
-        let mut attachments = array::from_fn(|_| None);
-
-        for (index, attachment) in tile_atlas.attachments.iter().enumerate() {
-            if let Some(attachment) = attachment {
-                attachments[index] = Some(GpuAtlasAttachment::new(device, attachment, tile_atlas));
-            }
-        }
+    fn new(device: &RenderDevice, tile_atlas: &TileAtlas, settings: &TerrainSettings) -> Self {
+        let attachments = tile_atlas
+            .attachments
+            .iter()
+            .map(|(label, attachment)| {
+                (
+                    label.clone(),
+                    GpuAtlasAttachment::new(device, label, attachment, tile_atlas, settings),
+                )
+            })
+            .collect();
 
         Self {
             attachments,
@@ -443,9 +459,10 @@ impl GpuTileAtlas {
         device: Res<RenderDevice>,
         mut gpu_tile_atlases: ResMut<TerrainComponents<GpuTileAtlas>>,
         mut tile_atlases: Extract<Query<(Entity, &TileAtlas), Added<TileAtlas>>>,
+        settings: Extract<Res<TerrainSettings>>,
     ) {
         for (terrain, tile_atlas) in tile_atlases.iter_mut() {
-            gpu_tile_atlases.insert(terrain, GpuTileAtlas::new(&device, tile_atlas));
+            gpu_tile_atlases.insert(terrain, GpuTileAtlas::new(&device, tile_atlas, &settings));
         }
     }
 
@@ -460,10 +477,9 @@ impl GpuTileAtlas {
         for (terrain, mut tile_atlas) in tile_atlases.iter_mut(&mut main_world) {
             let gpu_tile_atlas = gpu_tile_atlases.get_mut(&terrain).unwrap();
 
-            for (attachment, gpu_attachment) in iter::zip(
-                tile_atlas.attachments.iter_mut().flatten(),
-                gpu_tile_atlas.attachments.iter_mut().flatten(),
-            ) {
+            for (label, attachment) in &mut tile_atlas.attachments {
+                let gpu_attachment = gpu_tile_atlas.attachments.get_mut(label).unwrap();
+
                 mem::swap(
                     &mut attachment.uploading_tiles,
                     &mut gpu_attachment.upload_tiles,
@@ -484,7 +500,7 @@ impl GpuTileAtlas {
         mut gpu_tile_atlases: ResMut<TerrainComponents<GpuTileAtlas>>,
     ) {
         for gpu_tile_atlas in gpu_tile_atlases.values_mut() {
-            for attachment in gpu_tile_atlas.attachments.iter_mut().flatten() {
+            for attachment in gpu_tile_atlas.attachments.values_mut() {
                 attachment.create_download_buffers(&device);
                 attachment.upload_tiles(&queue);
             }
@@ -493,7 +509,7 @@ impl GpuTileAtlas {
 
     pub(crate) fn cleanup(mut gpu_tile_atlases: ResMut<TerrainComponents<GpuTileAtlas>>) {
         for gpu_tile_atlas in gpu_tile_atlases.values_mut() {
-            for attachment in gpu_tile_atlas.attachments.iter_mut().flatten() {
+            for attachment in gpu_tile_atlas.attachments.values_mut() {
                 attachment.start_downloading_tiles();
             }
         }

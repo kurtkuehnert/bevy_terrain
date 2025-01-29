@@ -26,17 +26,17 @@ impl<C> Default for TerrainComponents<C> {
 /// Here you can define all fundamental parameters of the terrain.
 #[derive(Serialize, Deserialize, Asset, TypePath, Debug, Clone)]
 pub struct TerrainConfig {
+    /// The path to the terrain folder inside the assets directory.
+    pub path: String,
     pub shape: TerrainShape,
     /// The count of level of detail layers.
     pub lod_count: u32,
     pub min_height: f32,
     pub max_height: f32,
-    /// The path to the terrain folder inside the assets directory.
-    pub path: String,
-    /// The tiles of the terrain.
-    pub tiles: Vec<TileCoordinate>,
     /// The attachments of the terrain.
     pub attachments: HashMap<AttachmentLabel, AttachmentConfig>,
+    /// The tiles of the terrain.
+    pub tiles: Vec<TileCoordinate>,
 }
 
 impl Default for TerrainConfig {
@@ -69,7 +69,7 @@ impl TerrainConfig {
     }
 
     pub fn save_file<P: AsRef<Path>>(&self, path: P) -> anyhow::Result<()> {
-        let encoded = ron::to_string(self)?;
+        let encoded = ron::ser::to_string_pretty(self, ron::ser::PrettyConfig::default())?;
         fs::write(path, encoded)?;
         Ok(())
     }

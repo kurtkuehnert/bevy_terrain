@@ -1,5 +1,5 @@
 #import bevy_terrain::types::{TileCoordinate, Blend}
-#import bevy_terrain::bindings::{terrain_view, approximate_height, temporary_tiles, state, indirect_buffer}
+#import bevy_terrain::bindings::{terrain_view, approximate_height, temporary_tiles, state, indirect_buffer, culling_view}
 #import bevy_terrain::functions::{compute_view_coordinate, compute_world_coordinate, lookup_tile, apply_height}
 #import bevy_terrain::attachments::{sample_height, sample_height_mask}
 
@@ -28,12 +28,12 @@ fn prepare_root() {
     let coordinate       = compute_view_coordinate(terrain_view.face, terrain_view.lod);
     let world_coordinate = compute_world_coordinate(coordinate, approximate_height);
 
-    let tile             = lookup_tile(coordinate, Blend(coordinate.lod, 0.0), 0u);
+    let tile = lookup_tile(coordinate, Blend(coordinate.lod, 0.0), 0u);
     if (!sample_height_mask(tile)) { approximate_height = sample_height(tile); }
 
-    let distance         = dot(world_coordinate.normal, terrain_view.world_position) -
-                           dot(world_coordinate.normal, apply_height(world_coordinate, approximate_height));
-    if (distance < 0.0) { state.tile_count   = 0u; }
+    // Todo: this does not work
+    // let distance = dot(normalize(apply_height(world_coordinate, approximate_height) - terrain_view.world_position), world_coordinate.normal);
+    // if (distance > 0.0) { state.tile_count   = 0u; }
 }
 
 @compute @workgroup_size(1, 1, 1)

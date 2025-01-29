@@ -78,9 +78,11 @@ impl AttachmentUniform {
     fn new(tile_atlas: &GpuTileAtlas) -> Self {
         Self {
             attachments: array::from_fn(|i| {
-                tile_atlas.attachments[i]
-                    .as_ref()
-                    .map_or(AttachmentConfig::default(), |attachment| {
+                tile_atlas
+                    .attachments
+                    .iter()
+                    .find(|(_, attachment)| attachment.index == i)
+                    .map_or(AttachmentConfig::default(), |(_, attachment)| {
                         AttachmentConfig::new(attachment)
                     })
             }),
@@ -146,11 +148,14 @@ impl GpuTerrain {
         });
 
         let attachment_textures = array::from_fn(|i| {
-            gpu_tile_atlas.attachments[i]
-                .as_ref()
-                .map_or(fallback_image.d2_array.texture_view.clone(), |attachment| {
-                    attachment.atlas_texture.create_view(&default())
-                })
+            gpu_tile_atlas
+                .attachments
+                .iter()
+                .find(|(_, attachment)| attachment.index == i)
+                .map_or(
+                    fallback_image.d2_array.texture_view.clone(),
+                    |(_, attachment)| attachment.atlas_texture.create_view(&default()),
+                )
         });
 
         let attachment_buffer = GpuBuffer::create(
