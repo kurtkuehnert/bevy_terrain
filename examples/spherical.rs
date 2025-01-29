@@ -111,7 +111,7 @@ fn initialize(
             ..default()
         },
         CustomMaterial {
-            gradient: Handle::default(),
+            gradient: gradient2.clone(),
             gradient_info: GradientInfo { mode: 2 },
         },
         view,

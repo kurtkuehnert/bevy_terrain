@@ -4,10 +4,11 @@ use itertools::{iproduct, Itertools};
 use serde::{Deserialize, Serialize};
 use std::{fmt::Error, iter, str::FromStr};
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Hash, Default)]
 pub enum AttachmentLabel {
+    #[default]
     Height,
-    Custom(String),
+    Custom(String), // Todo: this should not be a heap allocated string
     Empty(usize),
 }
 
