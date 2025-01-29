@@ -1,4 +1,5 @@
 use crate::{
+    formats::TiffLoader,
     prelude::TerrainConfig,
     render::{
         terrain_pass::{
@@ -12,7 +13,11 @@ use crate::{
     },
     shaders::{load_terrain_shaders, InternalShaders},
     terrain::TerrainComponents,
-    terrain_data::{attachment::AttachmentLabel, GpuTileAtlas, TileAtlas, TileTree},
+    terrain_data::{
+        attachment::AttachmentLabel,
+        tile_loader::{finish_loading, start_loading},
+        GpuTileAtlas, TileAtlas, TileTree,
+    },
     terrain_view::TerrainViewComponents,
 };
 use bevy::{
@@ -73,6 +78,7 @@ impl Plugin for TerrainPlugin {
             .init_resource::<InternalShaders>()
             .init_resource::<TerrainViewComponents<TileTree>>()
             .init_resource::<TerrainSettings>()
+            .init_asset_loader::<TiffLoader>()
             .add_systems(
                 PostUpdate,
                 check_visibility::<With<TileAtlas>>.in_set(VisibilitySystems::CheckVisibility),
@@ -81,7 +87,9 @@ impl Plugin for TerrainPlugin {
                 Last,
                 (
                     TileTree::compute_requests,
+                    finish_loading,
                     TileAtlas::update,
+                    start_loading,
                     TileTree::adjust_to_tile_atlas,
                     #[cfg(feature = "high_precision")]
                     TileTree::generate_surface_approximation,

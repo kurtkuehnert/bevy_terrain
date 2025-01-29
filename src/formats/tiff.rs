@@ -52,7 +52,7 @@ impl AssetLoader for TiffLoader {
             TextureDimension::D2,
             data,
             TextureFormat::R16Unorm,
-            RenderAssetUsages::default(),
+            RenderAssetUsages::MAIN_WORLD,
         ))
     }
 
