@@ -81,22 +81,22 @@ impl Plugin for TerrainPlugin {
             .init_asset_loader::<TiffLoader>()
             .add_systems(
                 PostUpdate,
-                check_visibility::<With<TileAtlas>>.in_set(VisibilitySystems::CheckVisibility),
-            )
-            .add_systems(
-                Last,
                 (
-                    TileTree::compute_requests,
-                    finish_loading,
-                    TileAtlas::update,
-                    start_loading,
-                    TileTree::adjust_to_tile_atlas,
-                    #[cfg(feature = "high_precision")]
-                    TileTree::generate_surface_approximation,
-                    TileTree::update_terrain_view_buffer,
-                    TileAtlas::update_terrain_buffer,
-                )
-                    .chain(),
+                    check_visibility::<With<TileAtlas>>.in_set(VisibilitySystems::CheckVisibility),
+                    (
+                        TileTree::compute_requests,
+                        finish_loading,
+                        TileAtlas::update,
+                        start_loading,
+                        TileTree::adjust_to_tile_atlas,
+                        #[cfg(feature = "high_precision")]
+                        TileTree::generate_surface_approximation,
+                        TileTree::update_terrain_view_buffer,
+                        TileAtlas::update_terrain_buffer,
+                    )
+                        .chain()
+                        .after(TransformSystem::TransformPropagate),
+                ),
             );
         app.sub_app_mut(RenderApp)
             .init_resource::<SpecializedComputePipelines<TerrainTilingPrepassPipelines>>()

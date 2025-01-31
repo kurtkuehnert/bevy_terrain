@@ -1,4 +1,4 @@
-use bevy::{math::DVec3, prelude::*, reflect::TypePath, render::render_resource::*};
+use bevy::{prelude::*, reflect::TypePath, render::render_resource::*};
 use bevy_terrain::prelude::*;
 
 const RADIUS: f64 = 6371000.0;
@@ -10,7 +10,7 @@ struct GradientInfo {
 
 #[derive(Asset, AsBindGroup, TypePath, Clone)]
 pub struct CustomMaterial {
-    #[texture(0, dimension = "1d")]
+    #[texture(0)]
     #[sampler(1)]
     gradient: Handle<Image>,
     #[uniform(2)]
@@ -55,34 +55,32 @@ fn initialize(
     let gradient1 = asset_server.load("textures/gradient1.png");
     images.load_image(
         &gradient1,
-        TextureDimension::D1,
+        TextureDimension::D2,
         TextureFormat::Rgba8UnormSrgb,
     );
 
     let gradient2 = asset_server.load("textures/gradient2.png");
     images.load_image(
         &gradient2,
-        TextureDimension::D1,
+        TextureDimension::D2,
         TextureFormat::Rgba8UnormSrgb,
     );
 
     let mut view = Entity::PLACEHOLDER;
 
     commands.spawn_big_space(Grid::default(), |root| {
-        let (cell, translation) = root.grid().translation_to_grid(-DVec3::X * RADIUS * 3.0);
-
         view = root
             .spawn_spatial((
+                Transform::from_translation(-Vec3::X * RADIUS as f32 * 3.0)
+                    .looking_to(Vec3::X, Vec3::Y),
                 DebugCameraController::new(RADIUS),
                 OrbitalCameraController::default(),
-                Transform::from_translation(translation).looking_to(Vec3::X, Vec3::Y),
-                cell,
             ))
             .id();
     });
 
     commands.spawn_terrain(
-        asset_server.load("/Volumes/ExternalSSD/tiles/earth/config.tc.ron"),
+        asset_server.load("terrains/test/config.tc.ron"),
         TerrainViewConfig::default(),
         CustomMaterial {
             gradient: gradient1.clone(),
@@ -90,6 +88,16 @@ fn initialize(
         },
         view,
     );
+
+    // commands.spawn_terrain(
+    //     asset_server.load("/Volumes/ExternalSSD/tiles/earth/config.tc.ron"),
+    //     TerrainViewConfig::default(),
+    //     CustomMaterial {
+    //         gradient: gradient1.clone(),
+    //         gradient_info: GradientInfo { mode: 1 },
+    //     },
+    //     view,
+    // );
 
     // commands.spawn_terrain(
     //     asset_server.load("/Volumes/ExternalSSD/tiles/scope/config.tc.ron"),

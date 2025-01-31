@@ -70,7 +70,7 @@ description = "Preprocesses the terrain data for the spherical examples."
 [[example]]
 name = "spherical"
 path = "examples/spherical.rs"
-required-features = ["high_precision", "bevy/embedded_watcher"]
+required-features = ["high_precision"]
 
 [package.metadata.example.spherical]
 name = "Spherical"
