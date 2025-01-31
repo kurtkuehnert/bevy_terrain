@@ -31,6 +31,9 @@ async-channel = "2.1"
 derive_more = "1.0.0"
 slab = "0.4.9"
 
+[dev-dependencies]
+rand = "0.9.0"
+
 [[example]]
 name = "preprocess_planar"
 path = "examples/preprocess_planar.rs"
@@ -75,4 +78,15 @@ required-features = ["high_precision"]
 [package.metadata.example.spherical]
 name = "Spherical"
 description = "Renders a spherical terrain using a custom shader."
+
+
+
+[[example]]
+name = "precision_demo"
+path = "examples/precision_demo.rs"
+required-features = ["high_precision"]
+
+[package.metadata.example.precision_demo]
+name = "Precision Demo"
+description = "Visualizes the error introduced by the surface approximation."
 
