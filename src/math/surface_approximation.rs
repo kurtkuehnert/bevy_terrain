@@ -9,7 +9,7 @@ use bevy::{
 ///
 /// The idea behind the approximation, is to map from uv coordinates relative to the view, to world positions relative to the view.
 /// Therefore, we identify a origin tile with sufficiently high lod (origin LOD), that serves as a reference, to which we can compute our relative coordinate using partly integer math.
-#[derive(Copy, Clone, Debug, Default, ShaderType)]
+#[derive(Clone, Debug, Default, ShaderType)]
 pub struct SurfaceApproximation {
     /// The constant coefficient of the series.
     /// Describes the offset between the location vertically under view and the view position.

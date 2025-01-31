@@ -128,7 +128,7 @@ impl From<&TileTree> for TerrainViewUniform {
                 .map(|view_coordinate| ViewCoordinate::new(view_coordinate, tile_tree.view_lod)),
             world_position: tile_tree.view_world_position,
             #[cfg(feature = "high_precision")]
-            surface_approximation: tile_tree.surface_approximation,
+            surface_approximation: tile_tree.surface_approximation.clone(),
         }
     }
 }

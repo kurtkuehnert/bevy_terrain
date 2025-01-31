@@ -3,4 +3,4 @@ Cargo.lock
 target
 assets/**/data/*
 assets/**/config.tc
-assets/terrains/spherical/source/height/200m.tif
+assets/terrains/

@@ -1,19 +1,23 @@
 //! Contains a debug resource and systems controlling it to visualize different internal
 //! data of the plugin.
 use crate::{
-    debug::{camera::debug_camera_controller, orbital_camera::orbital_camera_controller},
+    debug::{
+        approximation_debug::debug_surface_approximation, camera::debug_camera_controller,
+        orbital_camera::orbital_camera_controller,
+    },
     prelude::TileAtlas,
     terrain_data::TileTree,
     terrain_view::TerrainViewComponents,
 };
+
 use bevy::{
     prelude::*,
     render::{render_resource::*, Extract, RenderApp},
-    transform::TransformSystem,
     window::PrimaryWindow,
 };
-
+mod approximation_debug;
 mod camera;
+
 mod orbital_camera;
 
 pub use crate::debug::{camera::DebugCameraController, orbital_camera::OrbitalCameraController};
@@ -39,11 +43,12 @@ impl Plugin for TerrainDebugPlugin {
                     update_view_parameter,
                     finish_loading_images,
                     orbital_camera_controller,
+                    debug_camera_controller,
                 ),
             )
             .add_systems(
-                PostUpdate,
-                debug_camera_controller.before(TransformSystem::TransformPropagate),
+                Last,
+                debug_surface_approximation.after(TileTree::generate_surface_approximation),
             );
 
         app.sub_app_mut(RenderApp)

@@ -11,7 +11,7 @@ struct GradientInfo {
 }
 
 @group(3) @binding(0)
-var gradient: texture_1d<f32>;
+var gradient: texture_2d<f32>;
 @group(3) @binding(1)
 var gradient_sampler: sampler;
 @group(3) @binding(2)
@@ -36,16 +36,16 @@ fn color_earth(tile: AtlasTile) -> vec4<f32> {
    let height = sample_height(tile) / terrain.height_scale;
 
     if (height < 0.0) {
-        return textureSampleLevel(gradient, gradient_sampler, mix(0.0, 0.075, pow(height / terrain.min_height, 0.25)), 0.0);
+        return textureSampleLevel(gradient, gradient_sampler, vec2<f32>(mix(0.0, 0.075, pow(height / terrain.min_height, 0.25)), 0.5), 0.0);
     } else {
-        return textureSampleLevel(gradient, gradient_sampler, mix(0.09, 0.6, pow(height / terrain.max_height * 1.4, 1.0)), 0.0);
+        return textureSampleLevel(gradient, gradient_sampler, vec2<f32>(mix(0.09, 0.6, pow(height / terrain.max_height * 1.4, 1.0)), 0.5), 0.0);
     }
 }
 
 fn color_dataset(tile: AtlasTile) -> vec4<f32> {
     let height = sample_height(tile) / terrain.height_scale;
 
-    return textureSampleLevel(gradient, gradient_sampler, inverse_mix(terrain.min_height, terrain.max_height, height), 0.0);
+    return textureSampleLevel(gradient, gradient_sampler, vec2<f32>(inverse_mix(terrain.min_height, terrain.max_height, height), 0.5), 0.0);
 }
 
 fn sample_color(tile: AtlasTile) -> vec4<f32> {
@@ -64,7 +64,7 @@ fn sample_color(tile: AtlasTile) -> vec4<f32> {
 
 fn slope_gradient(world_normal: vec3<f32>, surface_gradient: vec3<f32>) -> vec4<f32> {
     let slope = compute_slope(world_normal, surface_gradient);
-    return textureSampleLevel(gradient, gradient_sampler, 5 * slope + 0.1, 0.0);
+    return textureSampleLevel(gradient, gradient_sampler, vec2<f32>(5 * slope + 0.1, 0.5), 0.0);
 }
 
 @fragment
