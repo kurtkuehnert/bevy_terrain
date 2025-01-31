@@ -22,7 +22,6 @@ tiff = "0.9"
 bytemuck = "1.14"
 ndarray = "0.16.1"
 itertools = "0.14.0"
-image = "0.25"
 bitflags = "2.4"
 anyhow = "1.0"
 serde = "1.0.210"
@@ -35,58 +34,20 @@ slab = "0.4.9"
 rand = "0.9.0"
 
 [[example]]
-name = "preprocess_planar"
-path = "examples/preprocess_planar.rs"
-required-features = ["bevy/embedded_watcher"]
-
-[package.metadata.example.preprocess_planar]
-name = "Preprocess Planar"
-description = "Preprocesses the terrain data for the planar examples."
-
-[[example]]
 name = "minimal"
 path = "examples/minimal.rs"
-required-features = ["bevy/embedded_watcher"]
-
-[package.metadata.example.minial]
-name = "Minimal"
-description = "Renders a basic flat terrain with only the base attachment."
 
 [[example]]
 name = "planar"
 path = "examples/planar.rs"
-required-features = ["high_precision", "bevy/embedded_watcher"]
-
-[package.metadata.example.planar]
-name = "Planar Advanced"
-description = "Renders a flat terrain with the base attachment and an albedo texture, using a custom shader."
-
-[[example]]
-name = "preprocess_spherical"
-path = "examples/preprocess_spherical.rs"
-required-features = ["bevy/embedded_watcher"]
-
-[package.metadata.example.preprocess_spherical]
-name = "Preprocess Spherical"
-description = "Preprocesses the terrain data for the spherical examples."
+required-features = ["high_precision"]
 
 [[example]]
 name = "spherical"
 path = "examples/spherical.rs"
 required-features = ["high_precision"]
 
-[package.metadata.example.spherical]
-name = "Spherical"
-description = "Renders a spherical terrain using a custom shader."
-
-
-
 [[example]]
 name = "precision_demo"
 path = "examples/precision_demo.rs"
 required-features = ["high_precision"]
-
-[package.metadata.example.precision_demo]
-name = "Precision Demo"
-description = "Visualizes the error introduced by the surface approximation."
-

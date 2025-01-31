@@ -2,13 +2,7 @@ use bevy::render::{
     render_resource::{encase::internal::WriteInto, *},
     renderer::{RenderDevice, RenderQueue},
 };
-use image::{ImageBuffer, Luma, LumaA, Rgb, Rgba};
 use std::ops::Deref;
-
-pub type Rgb8Image = ImageBuffer<Rgb<u8>, Vec<u8>>;
-pub type Rgba8Image = ImageBuffer<Rgba<u8>, Vec<u8>>;
-pub type R16Image = ImageBuffer<Luma<u16>, Vec<u16>>;
-pub type Rg16Image = ImageBuffer<LumaA<u16>, Vec<u16>>;
 
 #[derive(Copy, Clone)]
 enum BufferType {
