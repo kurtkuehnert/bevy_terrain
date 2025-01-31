@@ -208,7 +208,7 @@ fn coordinate_change_lod(coordinate: ptr<function, Coordinate>, new_lod: u32) {
     let uv = (*coordinate).uv * scale;
 
     (*coordinate).lod = new_lod;
-    (*coordinate).xy = vec2<u32>(vec2<f32>((*coordinate).xy) * scale) + vec2<u32>(uv);
+    (*coordinate).xy = vec2<u32>(vec2<f32>(xy) * scale) + vec2<u32>(uv);
     (*coordinate).uv = uv % 1.0 + select(vec2<f32>(xy % u32(1 / scale)) * scale, vec2<f32>(0.0), lod_difference > 0);
 
 #ifdef FRAGMENT
