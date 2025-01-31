@@ -1,5 +1,5 @@
 mod coordinate;
-mod ellipsoid;
+mod spheroid;
 #[cfg(feature = "high_precision")]
 mod surface_approximation;
 mod terrain_shape;

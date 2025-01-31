@@ -1,4 +1,4 @@
-use crate::math::ellipsoid::project_point_ellipsoid;
+use crate::math::spheroid::project_point_spheroid;
 use bevy::{
     math::{DMat4, DVec3},
     prelude::*,
@@ -88,10 +88,8 @@ impl TerrainShape {
                 major_axis,
                 minor_axis,
             } => {
-                let surface_position = project_point_ellipsoid(
-                    DVec3::new(major_axis, major_axis, minor_axis),
-                    local_position,
-                );
+                let surface_position =
+                    project_point_spheroid(major_axis, minor_axis, local_position);
                 unit_from_local
                     .transform_point3(surface_position)
                     .normalize()
