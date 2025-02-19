@@ -2,7 +2,6 @@
 
 #import bevy_terrain::types::{AtlasTile, TangentSpace}
 #import bevy_terrain::bindings::{terrain, terrain_view, terrain_sampler, attachments, height_attachment}
-#import bevy_terrain::functions::tile_count
 
 fn sample_height(tile: AtlasTile) -> f32 {
     let attachment = attachments.height;

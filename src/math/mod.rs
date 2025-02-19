@@ -15,7 +15,7 @@ pub use crate::math::{
 };
 
 /// The square of the parameter c of the algebraic sigmoid function, used to convert between uv and st coordinates.
-const C_SQR: f64 = 0.87 * 0.87;
+const SIGMA: f64 = 0.87 * 0.87;
 
 const BLOCK_SIZE: i32 = 8;
 

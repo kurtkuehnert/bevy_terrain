@@ -19,7 +19,7 @@ fn project_point_ellipse(e: DVec2, y: DVec2) -> DVec2 {
     let sign = y.signum();
     let y = y.abs();
 
-    let x = if y.x == 0.0 {
+    sign * if y.x == 0.0 {
         DVec2::new(0.0, e.y)
     } else if y.y == 0.0 {
         let n = e.x * y.x;
@@ -41,9 +41,7 @@ fn project_point_ellipse(e: DVec2, y: DVec2) -> DVec2 {
         } else {
             y
         }
-    };
-
-    sign * x
+    }
 }
 
 fn find_root(r: DVec2, z: DVec2, g: f64) -> f64 {

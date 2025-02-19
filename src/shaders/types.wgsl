@@ -23,7 +23,7 @@ struct TerrainView {
     subdivision_distance: f32,
     morph_range: f32,
     blend_range: f32,
-    precision_threshold_distance: f32,
+    precision_distance: f32,
     face: u32,
     lod: u32,
     coordinates: array<ViewCoordinate, 6>,

@@ -1,6 +1,6 @@
 #import bevy_terrain::types::{TileCoordinate, Coordinate}
 #import bevy_terrain::bindings::{terrain, culling_view, terrain_view, final_tiles, approximate_height, temporary_tiles, state}
-#import bevy_terrain::functions::{compute_subdivision_coordinate, compute_world_coordinate, apply_height, tile_count}
+#import bevy_terrain::functions::{compute_subdivision_coordinate, compute_world_coordinate, apply_height}
 #import bevy_render::maths::affine3_to_square
 
 fn child_index() -> i32 {
@@ -19,7 +19,7 @@ fn should_be_divided(tile: TileCoordinate) -> bool {
     let coordinate       = compute_subdivision_coordinate(Coordinate(tile.face, tile.lod, tile.xy, vec2<f32>(0.0)));
     let world_coordinate = compute_world_coordinate(coordinate, approximate_height);
 
-    return world_coordinate.view_distance < terrain_view.subdivision_distance / tile_count(tile.lod + 1);
+    return world_coordinate.view_distance < terrain_view.subdivision_distance / exp2(f32(tile.lod + 1));
 }
 
 fn subdivide(tile: TileCoordinate) {

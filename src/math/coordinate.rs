@@ -1,6 +1,6 @@
 use crate::math::{
-    FaceRotation, TerrainShape, BLOCK_SIZE, C_SQR, FACE_MATRICES, INVERSE_FACE_MATRICES,
-    NEIGHBOURING_FACES, NEIGHBOUR_OFFSETS,
+    FaceRotation, TerrainShape, BLOCK_SIZE, FACE_MATRICES, INVERSE_FACE_MATRICES,
+    NEIGHBOURING_FACES, NEIGHBOUR_OFFSETS, SIGMA,
 };
 use bevy::{
     math::{DVec2, DVec3},
@@ -44,7 +44,7 @@ impl Coordinate {
             let abc = INVERSE_FACE_MATRICES[face as usize] * unit_position;
             let xy = abc.yz() / abc.x;
 
-            let uv = 0.5 * xy * ((1.0 + C_SQR) / (1.0 + C_SQR * xy * xy)).powf(0.5) + 0.5;
+            let uv = 0.5 * xy * ((1.0 + SIGMA) / (1.0 + SIGMA * xy * xy)).powf(0.5) + 0.5;
 
             Self { face, uv }
         } else {
@@ -58,7 +58,7 @@ impl Coordinate {
     pub fn unit_position(self, is_spherical: bool) -> DVec3 {
         if is_spherical {
             let xy =
-                (2.0 * self.uv - 1.0) / (1.0 - 4.0 * C_SQR * (self.uv - 1.0) * self.uv).powf(0.5);
+                (2.0 * self.uv - 1.0) / (1.0 - 4.0 * SIGMA * (self.uv - 1.0) * self.uv).powf(0.5);
 
             FACE_MATRICES[self.face as usize] * DVec3::new(1.0, xy.x, xy.y).normalize()
         } else {
