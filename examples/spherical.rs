@@ -80,7 +80,7 @@ fn initialize(
     });
 
     commands.spawn_terrain(
-        asset_server.load("terrains/test/config.tc.ron"),
+        asset_server.load("terrains/earth/config.tc.ron"),
         TerrainViewConfig::default(),
         CustomMaterial {
             gradient: gradient1.clone(),

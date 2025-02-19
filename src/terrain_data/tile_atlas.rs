@@ -71,6 +71,11 @@ pub struct AtlasAttachment {
 
 impl AtlasAttachment {
     fn new(config: &AttachmentConfig, path: &str) -> Self {
+        let path = if path.starts_with("assets") {
+            path[7..].to_string()
+        } else {
+            path.to_string()
+        };
         // let path = format!("assets/{path}/data/{name}");
 
         Self {

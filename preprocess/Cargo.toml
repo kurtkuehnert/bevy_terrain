@@ -1,0 +1,23 @@
+[package]
+name = "bevy_terrain_preprocess"
+version = "0.1.0"
+edition = "2021"
+
+
+[dependencies]
+bevy_terrain = { path = "..", features = ["high_precision"] }
+gag = "1.0.0"
+gdal = { version = "0.17.0", features = ["bindgen", "ndarray"] }
+gdal-sys = "0.10.0"
+glam = "0.29.2"
+itertools = "0.14.0"
+thiserror = "2.0.8"
+num = "0.4"
+rayon = "1.10.0"
+thread_local = "1.1.8"
+clap = { version = "4.5.17", features = ["derive"] }
+indicatif = { version = "0.17.8", features = ["rayon"] }
+ndarray = "0.15"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(gdal_major_ge_3)', 'cfg(gdal_major_ge_4)', 'cfg(gdal_minor_ge_5)', 'cfg(gdal_minor_ge_7)'] }
