@@ -40,7 +40,7 @@ pub struct TerrainViewConfig {
     /// For planar terrains this can be set to zero and for spherical / ellipsoidal terrains a value of around 0.1 is necessary.
     pub subdivision_tolerance: f64,
     pub load_tolerance: f64,
-    pub precision_threshold_distance: f64,
+    pub precision_distance: f64,
     pub view_lod: u32,
     pub order: u32,
 }
@@ -58,7 +58,7 @@ impl Default for TerrainViewConfig {
             blend_distance: 8.0,
             subdivision_tolerance: 0.1,
             load_tolerance: 0.2,
-            precision_threshold_distance: 0.001,
+            precision_distance: 0.001,
             view_lod: 10,
             order: 0,
         }

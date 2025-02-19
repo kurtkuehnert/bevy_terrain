@@ -1,6 +1,6 @@
-use crate::math::{Coordinate, TerrainShape, C_SQR, FACE_MATRICES};
+use crate::math::{Coordinate, TerrainShape, FACE_MATRICES, SIGMA};
 use bevy::{
-    math::{DMat4, DVec2, DVec3, Vec3},
+    math::{DVec2, DVec3, Vec3},
     render::render_resource::ShaderType,
 };
 
@@ -52,15 +52,15 @@ impl SurfaceApproximation {
             let DVec2 { x: u, y: v } = view_coordinate.uv;
             let face = view_coordinate.face as usize;
 
-            let x_denom = (1.0 - 4.0 * C_SQR * u * (u - 1.0)).sqrt();
+            let x_denom = (1.0 - 4.0 * SIGMA * u * (u - 1.0)).sqrt();
             let x = (2.0 * u - 1.0) / x_denom;
-            let x_du = 2.0 * (C_SQR + 1.0) / x_denom.powi(3);
-            let x_duu = 12.0 * C_SQR * (C_SQR + 1.0) * (2.0 * u - 1.0) / x_denom.powi(5);
+            let x_du = 2.0 * (SIGMA + 1.0) / x_denom.powi(3);
+            let x_duu = 12.0 * SIGMA * (SIGMA + 1.0) * (2.0 * u - 1.0) / x_denom.powi(5);
 
-            let y_denom = (1.0 - 4.0 * C_SQR * v * (v - 1.0)).sqrt();
+            let y_denom = (1.0 - 4.0 * SIGMA * v * (v - 1.0)).sqrt();
             let y = (2.0 * v - 1.0) / y_denom;
-            let y_dv = 2.0 * (C_SQR + 1.0) / y_denom.powi(3);
-            let y_dvv = 12.0 * C_SQR * (C_SQR + 1.0) * (2.0 * v - 1.0) / y_denom.powi(5);
+            let y_dv = 2.0 * (SIGMA + 1.0) / y_denom.powi(3);
+            let y_dvv = 12.0 * SIGMA * (SIGMA + 1.0) * (2.0 * v - 1.0) / y_denom.powi(5);
 
             let l = (1.0 + x * x + y * y).sqrt();
             let l_du = x * x_du / l;
@@ -90,16 +90,13 @@ impl SurfaceApproximation {
             let c_duv = 2.0 * y * l_du * l_dv - l * (y_dv * l_du + y * l_duv);
             let c_dvv = 2.0 * y * l_dv * l_dv - l * (2.0 * y_dv * l_dv + y * l_dvv) + y_dvv * l * l;
 
-            // The model matrix is used to transform the local position and directions into the corresponding world position and directions.
-            // p is transformed as a point, thus it takes the model position into account.
-            // The other coefficients are transformed as vectors, so they discard the translation.
-            let m = shape.local_from_unit() * DMat4::from_mat3(FACE_MATRICES[face]);
-            let p = m.transform_point3(DVec3::new(a, b, c) / l);
-            let p_du = m.transform_vector3(DVec3::new(a_du, b_du, c_du) / l.powi(2));
-            let p_dv = m.transform_vector3(DVec3::new(a_dv, b_dv, c_dv) / l.powi(2));
-            let p_duu = m.transform_vector3(DVec3::new(a_duu, b_duu, c_duu) / l.powi(3));
-            let p_duv = m.transform_vector3(DVec3::new(a_duv, b_duv, c_duv) / l.powi(3));
-            let p_dvv = m.transform_vector3(DVec3::new(a_dvv, b_dvv, c_dvv) / l.powi(3));
+            let m = shape.local_from_unit() * FACE_MATRICES[face];
+            let p = m * DVec3::new(a, b, c) / l;
+            let p_du = m * DVec3::new(a_du, b_du, c_du) / l.powi(2);
+            let p_dv = m * DVec3::new(a_dv, b_dv, c_dv) / l.powi(2);
+            let p_duu = m * DVec3::new(a_duu, b_duu, c_duu) / l.powi(3);
+            let p_duv = m * DVec3::new(a_duv, b_duv, c_duv) / l.powi(3);
+            let p_dvv = m * DVec3::new(a_dvv, b_dvv, c_dvv) / l.powi(3);
 
             SurfaceApproximation {
                 p: (p - view_local_position).as_vec3() + view_world_position,

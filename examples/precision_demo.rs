@@ -196,7 +196,7 @@ fn update(errors: Res<Errors>, mut gizmos: Gizmos) {
     }
 }
 
-const C_SQR: f32 = 0.87 * 0.87;
+const SIGMA: f32 = 0.87 * 0.87;
 
 const FACE_MATRICES: [Mat3; 6] = [
     Mat3::from_cols_array(&[-1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0, 0.0]),
@@ -210,15 +210,11 @@ const FACE_MATRICES: [Mat3; 6] = [
 fn f32_position((tile, tile_uv): (TileCoordinate, Vec2), shape: TerrainShape) -> DVec3 {
     let uv = (tile.xy.as_vec2() + tile_uv) / TileCoordinate::count(tile.lod) as f32;
 
-    let xy = (2.0 * uv - 1.0) / (1.0 - 4.0 * C_SQR * (uv - 1.0) * uv).powf(0.5);
+    let xy = (2.0 * uv - 1.0) / (1.0 - 4.0 * SIGMA * (uv - 1.0) * uv).powf(0.5);
 
     let unit_position = FACE_MATRICES[tile.face as usize] * Vec3::new(1.0, xy.x, xy.y).normalize();
 
-    shape
-        .local_from_unit()
-        .as_mat4()
-        .transform_point3(unit_position)
-        .as_dvec3()
+    (shape.local_from_unit().as_mat3() * unit_position).as_dvec3()
 }
 
 fn approximate_position(

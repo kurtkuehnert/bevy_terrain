@@ -117,7 +117,7 @@ pub struct TileTree {
     pub(crate) blend_distance: f64,
     pub(crate) subdivision_distance: f64,
     pub(crate) load_distance: f64,
-    pub(crate) precision_threshold_distance: f64,
+    pub(crate) precision_distance: f64,
     pub(crate) view_face: u32,
     pub(crate) view_lod: u32,
     pub(crate) view_local_position: DVec3,
@@ -186,10 +186,11 @@ impl TileTree {
                 * (1.0 + view_config.subdivision_tolerance),
             morph_range: view_config.morph_range,
             blend_range: view_config.blend_range,
-            precision_threshold_distance: view_config.precision_threshold_distance * scale,
+            precision_distance: view_config.precision_distance * scale,
             view_face: 0,
             view_lod: view_config.view_lod,
             view_local_position: default(),
+            view_world_position: default(),
             data,
             tiles: Array4::default((
                 config.shape.face_count() as usize,
@@ -204,7 +205,6 @@ impl TileTree {
             surface_approximation: default(),
             approximate_height: 0.0,
             order: view_config.order,
-            view_world_position: Default::default(),
             tile_tree_buffer,
             terrain_view_buffer,
             approximate_height_buffer,
@@ -329,9 +329,8 @@ impl TileTree {
         for (&(_, view), tile_tree) in tile_trees.iter_mut() {
             let grid = grids.parent_grid(view).unwrap();
             let (transform, cell) = views.get(view).unwrap();
-            let view_grid_position = grid.grid_position_double(cell, transform);
 
-            tile_tree.view_local_position = view_grid_position;
+            tile_tree.view_local_position = grid.grid_position_double(cell, transform);
             tile_tree.view_world_position = transform.translation;
             tile_tree.update();
         }

@@ -1,5 +1,5 @@
 #import bevy_terrain::preprocessing::{AtlasTile, atlas, attachment, pixel_coords, pixel_value, process_entry, is_border, inverse_mix}
-#import bevy_terrain::functions::{inside_square, tile_count};
+#import bevy_terrain::functions::{inside_square};
 
 struct SplitData {
     tile: AtlasTile,
@@ -29,7 +29,7 @@ override fn pixel_value(coords: vec2<u32>) -> vec4<f32> {
     let tile_coordinate = split_data.tile.coordinate;
     let tile_offset =  vec2<f32>(f32(tile_coordinate.x), f32(tile_coordinate.y));
     let tile_coords = vec2<f32>(coords - vec2<u32>(attachment.border_size)) / f32(attachment.center_size);
-    let tile_scale = tile_count(tile_coordinate.lod);
+    let tile_scale = exp2(f32((tile_coordinate.lod));
 
     var source_coords = (tile_offset + tile_coords) / tile_scale;
 

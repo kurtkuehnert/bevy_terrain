@@ -11,9 +11,9 @@
 
 struct FragmentInput {
     @builtin(position) clip_position: vec4<f32>,
-    @location(0)       tile_index: u32,
-    @location(1)       coordinate_uv: vec2<f32>,
-    @location(2)       height: f32,
+    @location(0) tile_index: u32,
+    @location(1) coordinate_uv: vec2<f32>,
+    @location(2) height: f32,
 }
 
 struct FragmentOutput {
@@ -88,7 +88,7 @@ fn fragment_debug(info: ptr<function, FragmentInfo>, output: ptr<function, Fragm
 
     // Todo: move this somewhere else
 #ifdef TEST1
-    if ((*info).view_distance < terrain_view.precision_threshold_distance) {
+    if ((*info).view_distance < terrain_view.precision_distance) {
         (*output).color = mix((*output).color, vec4<f32>(0.1), 0.7);
     }
 #endif

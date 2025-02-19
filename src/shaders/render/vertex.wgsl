@@ -13,9 +13,9 @@ struct VertexInput {
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
-    @location(0)       tile_index: u32,
-    @location(1)       coordinate_uv: vec2<f32>,
-    @location(2)       height: f32,
+    @location(0) tile_index: u32,
+    @location(1) coordinate_uv: vec2<f32>,
+    @location(2) height: f32,
 }
 
 struct VertexInfo {
