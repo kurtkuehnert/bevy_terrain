@@ -1,8 +1,7 @@
 [package]
 name = "bevy_terrain_preprocess"
 version = "0.1.0"
-edition = "2021"
-
+edition = "2024"
 
 [dependencies]
 bevy_terrain = { path = "..", features = ["high_precision"] }
@@ -21,3 +20,7 @@ ndarray = "0.15"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(gdal_major_ge_3)', 'cfg(gdal_major_ge_4)', 'cfg(gdal_minor_ge_5)', 'cfg(gdal_minor_ge_7)'] }
+
+[[example]]
+name = "preprocess_spherical"
+path = "examples/preprocess_spherical.rs"

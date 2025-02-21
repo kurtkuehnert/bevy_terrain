@@ -18,33 +18,7 @@ use bevy::{
     tasks::Task,
     utils::{HashMap, HashSet},
 };
-use itertools::assert_equal;
-use std::{collections::VecDeque, ops::DerefMut, path::PathBuf};
-
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, ShaderType)]
-pub struct AtlasTile {
-    pub(crate) coordinate: TileCoordinate,
-    #[size(16)]
-    pub(crate) atlas_index: u32,
-}
-
-impl AtlasTile {
-    pub fn new(tile_coordinate: TileCoordinate, atlas_index: u32) -> Self {
-        Self {
-            coordinate: tile_coordinate,
-            atlas_index,
-        }
-    }
-}
-
-impl From<AtlasTileAttachment> for AtlasTile {
-    fn from(tile: AtlasTileAttachment) -> Self {
-        Self {
-            coordinate: tile.coordinate,
-            atlas_index: tile.atlas_index,
-        }
-    }
-}
+use std::{collections::VecDeque, path::PathBuf};
 
 #[derive(Clone, Debug, Default)]
 pub struct TileAttachment {
@@ -52,16 +26,8 @@ pub struct TileAttachment {
     pub(crate) label: AttachmentLabel,
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct AtlasTileAttachment {
-    pub(crate) coordinate: TileCoordinate,
-    pub(crate) atlas_index: u32,
-    pub(crate) label: AttachmentLabel,
-}
-
 #[derive(Clone)]
 pub(crate) struct AtlasTileAttachmentWithData {
-    pub(crate) coordinate: TileCoordinate,
     pub(crate) atlas_index: u32,
     pub(crate) label: AttachmentLabel,
     pub(crate) data: AttachmentData,
@@ -110,7 +76,6 @@ enum LoadingState {
 
 /// The internal representation of a present tile in a [`TileAtlas`].
 struct TileState {
-    coordinate: TileCoordinate,
     /// Indicates whether or not the tile is loading or loaded.
     state: LoadingState,
     /// The index of the tile inside the atlas.
@@ -231,7 +196,6 @@ impl TileAtlas {
             };
 
             self.uploading_tiles.push(AtlasTileAttachmentWithData {
-                coordinate: tile.coordinate,
                 atlas_index: tile_state.atlas_index,
                 label: tile.label,
                 data,
@@ -256,34 +220,6 @@ impl TileAtlas {
             for tile_coordinate in tile_tree.requested_tiles.drain(..) {
                 tile_atlas.request_tile(tile_coordinate);
             }
-
-            let TileAtlas {
-                tile_states,
-                uploading_tiles,
-                to_load,
-                ..
-            } = tile_atlas.deref_mut();
-
-            // to_load.retain(|tile| {
-            //     if let Some(tile) = tile_states.get(&tile.coordinate) {
-            //         tile.requests > 0
-            //     } else {
-            //         dbg!("Tile is no longer needed.");
-            //         false
-            //     }
-            // });
-            //
-            // uploading_tiles.retain(|tile| {
-            //     if let Some(tile) = tile_states.get(&tile.coordinate) {
-            //         tile.requests > 0
-            //     } else {
-            //         dbg!("Tile is no longer needed.");
-            //         false
-            //     }
-            // });
-
-            // dbg!(tile_states.len());
-            // dbg!(tile_atlas.unused_tiles.len());
         }
     }
 
@@ -306,15 +242,8 @@ impl TileAtlas {
         if let Some(tile) = self.tile_states.get_mut(&tile_coordinate) {
             if tile.requests == 0 {
                 // the tile is now used again
-
-                panic!("never happens!");
-
-                // if !matches!(tile.state, LoadingState::Loaded) {
-                //     panic!("Tile, that is not loaded is reused!");
-                // }
-                //
-                // self.unused_tiles
-                //     .retain(|unused_tile| tile.atlas_index != unused_tile.atlas_index);
+                self.unused_indices
+                    .retain(|&atlas_index| tile.atlas_index != atlas_index);
             }
 
             tile.requests += 1;
@@ -330,7 +259,6 @@ impl TileAtlas {
             self.tile_states.insert(
                 tile_coordinate,
                 TileState {
-                    coordinate: tile_coordinate,
                     requests: 1,
                     state: LoadingState::Loading(self.attachments.len() as u32),
                     atlas_index,
@@ -356,15 +284,8 @@ impl TileAtlas {
 
         if tile.requests == 0 {
             self.unused_indices.push_back(tile.atlas_index);
-            self.tile_states.remove(&tile_coordinate);
 
-            // if !matches!(tile.state, LoadingState::Loaded) {
-            //     dbg!("Cancel loading tile.");
-            //     // the tile is not fully loaded
-            //     // We would rather discard the current progress, instead of finish loading a tile we do not need anymore.
-            //     // tile.state = LoadingState::Canceled;
-            //     self.tile_states.remove(&tile_coordinate);
-            // }
+            // Todo: we should cancel loading tiles, that have not yet started loading and a no longer requested
         }
     }
 }

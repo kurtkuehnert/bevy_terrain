@@ -4,8 +4,8 @@ use crate::{
 };
 use gag::Gag;
 use gdal::{
-    errors::{GdalError, Result as GdalResult},
     Dataset, GeoTransform,
+    errors::{GdalError, Result as GdalResult},
 };
 use gdal_sys::{
     CPLErr, CPLErrorReset, CPLGetLastErrorMsg, CPLGetLastErrorNo, GDALAccess::GA_Update,
@@ -15,7 +15,7 @@ use gdal_sys::{
 use glam::U64Vec2;
 use itertools::Itertools;
 use std::{
-    ffi::{c_char, c_double, c_int, c_void, CStr, CString},
+    ffi::{CStr, CString, c_char, c_double, c_int, c_void},
     os::unix::ffi::OsStrExt,
     path::Path,
     ptr, slice,
@@ -24,7 +24,7 @@ use std::{
 use thread_local::ThreadLocal;
 
 type UnusedFunction = unsafe extern "C" fn(_: *mut c_void) -> *mut c_void;
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn unused_function(_: *mut c_void) -> *mut c_void {
     ptr::null_mut()
 }
@@ -161,7 +161,7 @@ pub fn fill_no_data(src: &Dataset, fill_radius: f64) -> PreprocessResult<()> {
 
 pub type ProgressCallback<'a> = dyn Fn(f64) -> bool + Sync + 'a;
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn progress_c(complete: c_double, _message: *const c_char, arg: *mut c_void) -> c_int {
     assert!(!arg.is_null());
     let progress_callback = unsafe { arg.cast::<&ProgressCallback<'_>>().as_mut().unwrap() };
@@ -201,7 +201,7 @@ pub trait Transformer {
     ) -> PreprocessResult<()>;
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn transformer_c(
     arg: *mut c_void,
     dst_to_src: c_int,

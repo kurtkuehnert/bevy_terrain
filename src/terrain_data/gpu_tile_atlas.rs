@@ -3,9 +3,7 @@ use crate::{
     terrain::TerrainComponents,
     terrain_data::{
         attachment::{AttachmentData, AttachmentFormat, AttachmentLabel},
-        tile_atlas::{
-            AtlasAttachment, AtlasTileAttachment, AtlasTileAttachmentWithData, TileAtlas,
-        },
+        tile_atlas::{AtlasAttachment, AtlasTileAttachmentWithData, TileAtlas},
     },
     util::GpuBuffer,
 };
@@ -42,6 +40,12 @@ pub(crate) fn create_attachment_layout(device: &RenderDevice) -> BindGroupLayout
             ),
         ),
     )
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct AtlasTileAttachment {
+    pub(crate) atlas_index: u32,
+    pub(crate) label: AttachmentLabel,
 }
 
 #[derive(Default, ShaderType)]
@@ -504,7 +508,6 @@ impl GpuTileAtlas {
                             }
 
                             AtlasTileAttachmentWithData {
-                                coordinate: tile.coordinate,
                                 atlas_index: tile.atlas_index,
                                 label: tile.label,
                                 data: AttachmentData::from_bytes(&data, buffer_info.format),

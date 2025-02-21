@@ -3,7 +3,7 @@ use crate::{
     result::{PreprocessError, PreprocessResult},
 };
 use bevy_terrain::math::Coordinate;
-use gdal::{errors::GdalError, spatial_ref::SpatialRef, Dataset, GeoTransform, GeoTransformEx};
+use gdal::{Dataset, GeoTransform, GeoTransformEx, errors::GdalError, spatial_ref::SpatialRef};
 use gdal_sys::{
     GDALCreateReprojectionTransformerEx, GDALDestroyReprojectionTransformer,
     GDALReprojectionTransform,
@@ -167,7 +167,7 @@ impl Transformer for CubeTransformer {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn clone_custom_transformer(arg: *mut c_void, _: f64, _: f64) -> *mut c_void {
     // this assumes, that the transformer is thread safe and stateless
     // Otherwise, a new custom transformer should be created.

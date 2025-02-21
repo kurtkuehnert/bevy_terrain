@@ -25,7 +25,7 @@ pub struct DefaultLoader {
 impl Default for DefaultLoader {
     fn default() -> Self {
         Self {
-            loading_tiles: Slab::with_capacity(4),
+            loading_tiles: Slab::with_capacity(32),
         }
     }
 }

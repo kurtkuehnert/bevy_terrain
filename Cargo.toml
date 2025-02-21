@@ -3,7 +3,7 @@ name = "bevy_terrain"
 description = "Terrain Rendering for the Bevy Engine."
 version = "0.1.0-dev"
 license = "MIT OR Apache-2.0"
-edition = "2021"
+edition = "2024"
 categories = ["game-engines", "rendering", "graphics"]
 keywords = ["gamedev", "graphics", "bevy", "terrain"]
 exclude = ["assets/*"]
@@ -32,11 +32,7 @@ ron = "0.8.1"
 async-channel = "2.1"
 derive_more = { version = "2.0.1", features = ["from"] }
 slab = "0.4.9"
-
-[dev-dependencies]
 rand = "0.9.0"
-bevy_terrain_preprocess = { path = "preprocess" }
-gdal = { version = "0.17.0", features = ["bindgen", "ndarray"] }
 
 [[example]]
 name = "minimal"
@@ -52,10 +48,6 @@ name = "spherical"
 path = "examples/spherical.rs"
 required-features = ["high_precision"]
 
-[[example]]
-name = "preprocess_spherical"
-path = "examples/preprocess_spherical.rs"
-# required-features = ["high_precision"]
 
 [[example]]
 name = "precision_demo"
