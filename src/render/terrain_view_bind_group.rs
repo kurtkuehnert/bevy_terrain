@@ -241,7 +241,7 @@ impl GpuTerrainView {
     ) {
         for (&(terrain, view), tile_tree) in tile_trees.iter() {
             if gpu_terrain_views.contains_key(&(terrain, view)) {
-                return;
+                continue;
             }
 
             gpu_terrain_views.insert((terrain, view), GpuTerrainView::new(&device, tile_tree));

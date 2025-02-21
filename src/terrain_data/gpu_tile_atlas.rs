@@ -431,7 +431,7 @@ impl GpuTileAtlas {
 
     fn upload_tiles(&mut self, queue: &RenderQueue) {
         for tile in self.upload_tiles.drain(..) {
-            let attachment = self.attachments.get(&tile.tile.label).unwrap();
+            let attachment = self.attachments.get(&tile.label).unwrap();
             let mut start = 0;
 
             for mip_level in 0..attachment.buffer_info.mip_level_count {
@@ -442,7 +442,7 @@ impl GpuTileAtlas {
                 queue.write_texture(
                     attachment.buffer_info.image_copy_texture(
                         &attachment.atlas_texture,
-                        tile.tile.atlas_index,
+                        tile.atlas_index,
                         mip_level,
                     ),
                     &tile.data.bytes()[start..end],
@@ -504,7 +504,9 @@ impl GpuTileAtlas {
                             }
 
                             AtlasTileAttachmentWithData {
-                                tile,
+                                coordinate: tile.coordinate,
+                                atlas_index: tile.atlas_index,
+                                label: tile.label,
                                 data: AttachmentData::from_bytes(&data, buffer_info.format),
                             }
                         })

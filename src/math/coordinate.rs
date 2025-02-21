@@ -111,10 +111,6 @@ impl TileCoordinate {
         Self { face, lod, xy }
     }
 
-    pub fn count(lod: u32) -> u32 {
-        1 << lod
-    }
-
     pub fn path(self, path: &Path) -> PathBuf {
         let tile_block = self.xy / BLOCK_SIZE;
 
@@ -146,7 +142,7 @@ impl TileCoordinate {
         NEIGHBOUR_OFFSETS.iter().map(move |&offset| {
             let edge_position = self.xy + offset;
 
-            let tile_count = Self::count(self.lod) as i32;
+            let tile_count = 1 << self.lod as i32;
             let scale = (tile_count - 1) as f64;
 
             if spherical {
@@ -204,7 +200,7 @@ pub struct ViewCoordinate {
 
 impl ViewCoordinate {
     pub fn new(coordinate: Coordinate, lod: u32) -> Self {
-        let count = TileCoordinate::count(lod) as f64;
+        let count = (lod as f64).exp2();
 
         Self {
             xy: (coordinate.uv * count).as_ivec2(),

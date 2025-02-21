@@ -1,6 +1,6 @@
 use crate::terrain_data::{
     attachment::{AttachmentData, AttachmentFormat},
-    tile_atlas::{AtlasTileAttachment, AtlasTileAttachmentWithData, TileAtlas},
+    tile_atlas::{TileAtlas, TileAttachment},
 };
 use bevy::{
     asset::{AssetServer, Assets, Handle},
@@ -11,7 +11,7 @@ use slab::Slab;
 
 struct LoadingTile {
     handle: Handle<Image>,
-    tile: AtlasTileAttachment,
+    tile: TileAttachment,
     texture_size: u32,
     format: AttachmentFormat,
     mip_level_count: u32,
@@ -31,7 +31,7 @@ impl Default for DefaultLoader {
 }
 
 impl DefaultLoader {
-    fn to_load_next(&self, tiles: &mut Vec<AtlasTileAttachment>) -> Option<AtlasTileAttachment> {
+    fn to_load_next(&self, tiles: &mut Vec<TileAttachment>) -> Option<TileAttachment> {
         // Todo: tile prioritization goes here
         tiles.pop()
     }
@@ -51,12 +51,7 @@ impl DefaultLoader {
                 let mut data = AttachmentData::from_bytes(&image.data, tile.format);
                 data.generate_mipmaps(tile.texture_size, tile.mip_level_count);
 
-                let tile = AtlasTileAttachmentWithData {
-                    tile: tile.tile.clone(),
-                    data,
-                };
-
-                atlas.tile_loaded(tile);
+                atlas.tile_loaded(tile.tile.clone(), data);
 
                 false
             } else {

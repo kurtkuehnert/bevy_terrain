@@ -8,7 +8,6 @@ use crate::{
         attachment::{AttachmentConfig, AttachmentData, AttachmentFormat, AttachmentLabel},
         tile_loader::DefaultLoader,
         tile_tree::{TileTree, TileTreeEntry},
-        INVALID_ATLAS_INDEX, INVALID_LOD,
     },
     terrain_view::TerrainViewComponents,
 };
@@ -19,7 +18,8 @@ use bevy::{
     tasks::Task,
     utils::{HashMap, HashSet},
 };
-use std::{collections::VecDeque, mem, ops::DerefMut, path::PathBuf};
+use itertools::assert_equal;
+use std::{collections::VecDeque, ops::DerefMut, path::PathBuf};
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, ShaderType)]
 pub struct AtlasTile {
@@ -47,6 +47,12 @@ impl From<AtlasTileAttachment> for AtlasTile {
 }
 
 #[derive(Clone, Debug, Default)]
+pub struct TileAttachment {
+    pub(crate) coordinate: TileCoordinate,
+    pub(crate) label: AttachmentLabel,
+}
+
+#[derive(Clone, Debug, Default)]
 pub struct AtlasTileAttachment {
     pub(crate) coordinate: TileCoordinate,
     pub(crate) atlas_index: u32,
@@ -55,7 +61,9 @@ pub struct AtlasTileAttachment {
 
 #[derive(Clone)]
 pub(crate) struct AtlasTileAttachmentWithData {
-    pub(crate) tile: AtlasTileAttachment,
+    pub(crate) coordinate: TileCoordinate,
+    pub(crate) atlas_index: u32,
+    pub(crate) label: AttachmentLabel,
     pub(crate) data: AttachmentData,
 }
 
@@ -92,7 +100,7 @@ impl AtlasAttachment {
 /// The current state of a tile of a [`TileAtlas`].
 ///
 /// This indicates, whether the tile is loading or loaded and ready to be used.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum LoadingState {
     /// The tile is loading, but can not be used yet.
     Loading(u32),
@@ -102,6 +110,7 @@ enum LoadingState {
 
 /// The internal representation of a present tile in a [`TileAtlas`].
 struct TileState {
+    coordinate: TileCoordinate,
     /// Indicates whether or not the tile is loading or loaded.
     state: LoadingState,
     /// The index of the tile inside the atlas.
@@ -131,11 +140,11 @@ struct TileState {
 pub struct TileAtlas {
     pub(crate) attachments: HashMap<AttachmentLabel, AtlasAttachment>, // stores the attachment data
     tile_states: HashMap<TileCoordinate, TileState>,
-    unused_tiles: VecDeque<AtlasTile>,
+    unused_indices: VecDeque<u32>,
     existing_tiles: HashSet<TileCoordinate>,
     pub(crate) uploading_tiles: Vec<AtlasTileAttachmentWithData>,
     pub(crate) downloading_tiles: Vec<Task<AtlasTileAttachmentWithData>>,
-    pub(crate) to_load: Vec<AtlasTileAttachment>,
+    pub(crate) to_load: Vec<TileAttachment>,
 
     pub(crate) lod_count: u32,
     pub(crate) min_height: f32,
@@ -164,11 +173,6 @@ impl TileAtlas {
             })
             .collect();
 
-        let existing_tiles = HashSet::from_iter(config.tiles.clone());
-        let unused_tiles = (0..settings.atlas_size)
-            .map(|atlas_index| AtlasTile::new(TileCoordinate::INVALID, atlas_index))
-            .collect();
-
         let terrain_buffer = buffers.add(ShaderStorageBuffer::with_size(
             TerrainUniform::min_size().get() as usize,
             RenderAssetUsages::all(),
@@ -177,12 +181,11 @@ impl TileAtlas {
         Self {
             attachments,
             tile_states: default(),
-            unused_tiles,
-            existing_tiles,
+            unused_indices: (0..settings.atlas_size).collect(),
+            existing_tiles: HashSet::from_iter(config.tiles.clone()),
             to_load: default(),
             uploading_tiles: default(),
             downloading_tiles: default(),
-
             lod_count: config.lod_count,
             min_height: config.min_height,
             max_height: config.max_height,
@@ -198,17 +201,14 @@ impl TileAtlas {
         loop {
             if best_tile_coordinate == TileCoordinate::INVALID {
                 // highest lod is not loaded
-                return TileTreeEntry {
-                    atlas_index: INVALID_ATLAS_INDEX,
-                    atlas_lod: INVALID_LOD,
-                };
+                return TileTreeEntry::default();
             }
 
-            if let Some(atlas_tile) = self.tile_states.get(&best_tile_coordinate) {
-                if matches!(atlas_tile.state, LoadingState::Loaded) {
+            if let Some(tile) = self.tile_states.get(&best_tile_coordinate) {
+                if matches!(tile.state, LoadingState::Loaded) {
                     // found best loaded tile
                     return TileTreeEntry {
-                        atlas_index: atlas_tile.atlas_index,
+                        atlas_index: tile.atlas_index,
                         atlas_lod: best_tile_coordinate.lod,
                     };
                 }
@@ -220,8 +220,8 @@ impl TileAtlas {
         }
     }
 
-    pub(crate) fn tile_loaded(&mut self, tile: AtlasTileAttachmentWithData) {
-        if let Some(tile_state) = self.tile_states.get_mut(&tile.tile.coordinate) {
+    pub(crate) fn tile_loaded(&mut self, tile: TileAttachment, data: AttachmentData) {
+        if let Some(tile_state) = self.tile_states.get_mut(&tile.coordinate) {
             tile_state.state = match tile_state.state {
                 LoadingState::Loading(1) => LoadingState::Loaded,
                 LoadingState::Loading(n) => LoadingState::Loading(n - 1),
@@ -230,7 +230,14 @@ impl TileAtlas {
                 }
             };
 
-            self.uploading_tiles.push(tile);
+            self.uploading_tiles.push(AtlasTileAttachmentWithData {
+                coordinate: tile.coordinate,
+                atlas_index: tile_state.atlas_index,
+                label: tile.label,
+                data,
+            });
+        } else {
+            dbg!("Tile is no longer loaded.");
         }
     }
 
@@ -257,21 +264,26 @@ impl TileAtlas {
                 ..
             } = tile_atlas.deref_mut();
 
-            to_load.retain(|tile| {
-                if let Some(tile) = tile_states.get(&tile.coordinate) {
-                    tile.requests > 0
-                } else {
-                    false
-                }
-            });
+            // to_load.retain(|tile| {
+            //     if let Some(tile) = tile_states.get(&tile.coordinate) {
+            //         tile.requests > 0
+            //     } else {
+            //         dbg!("Tile is no longer needed.");
+            //         false
+            //     }
+            // });
+            //
+            // uploading_tiles.retain(|tile| {
+            //     if let Some(tile) = tile_states.get(&tile.coordinate) {
+            //         tile.requests > 0
+            //     } else {
+            //         dbg!("Tile is no longer needed.");
+            //         false
+            //     }
+            // });
 
-            uploading_tiles.retain(|tile| {
-                if let Some(tile) = tile_states.get(&tile.tile.coordinate) {
-                    tile.requests > 0
-                } else {
-                    false
-                }
-            });
+            // dbg!(tile_states.len());
+            // dbg!(tile_atlas.unused_tiles.len());
         }
     }
 
@@ -285,39 +297,40 @@ impl TileAtlas {
         }
     }
 
-    fn allocate_tile(&mut self) -> u32 {
-        // Todo: handle atlas out of indices better
-        // consider discarding present tiles, which are less important
-        // Either this should not happen at all, or the LOD selection should take view direction into account
-        let unused_tile = self.unused_tiles.pop_front().expect("Atlas out of indices");
-
-        self.tile_states.remove(&unused_tile.coordinate);
-
-        unused_tile.atlas_index
-    }
-
     fn request_tile(&mut self, tile_coordinate: TileCoordinate) {
         if !self.existing_tiles.contains(&tile_coordinate) {
             return;
         }
 
-        let mut tile_states = mem::take(&mut self.tile_states);
-
         // check if the tile is already present else start loading it
-        if let Some(tile) = tile_states.get_mut(&tile_coordinate) {
+        if let Some(tile) = self.tile_states.get_mut(&tile_coordinate) {
             if tile.requests == 0 {
                 // the tile is now used again
-                self.unused_tiles
-                    .retain(|unused_tile| tile.atlas_index != unused_tile.atlas_index);
+
+                panic!("never happens!");
+
+                // if !matches!(tile.state, LoadingState::Loaded) {
+                //     panic!("Tile, that is not loaded is reused!");
+                // }
+                //
+                // self.unused_tiles
+                //     .retain(|unused_tile| tile.atlas_index != unused_tile.atlas_index);
             }
 
             tile.requests += 1;
         } else {
-            let atlas_index = self.allocate_tile();
+            let atlas_index = self
+                .unused_indices
+                .pop_front()
+                .expect("Atlas out of indices");
 
-            tile_states.insert(
+            self.tile_states
+                .retain(|_, tile| tile.atlas_index != atlas_index); // remove tile if it is still cached
+
+            self.tile_states.insert(
                 tile_coordinate,
                 TileState {
+                    coordinate: tile_coordinate,
                     requests: 1,
                     state: LoadingState::Loading(self.attachments.len() as u32),
                     atlas_index,
@@ -325,15 +338,12 @@ impl TileAtlas {
             );
 
             for label in self.attachments.keys() {
-                self.to_load.push(AtlasTileAttachment {
+                self.to_load.push(TileAttachment {
                     coordinate: tile_coordinate,
-                    atlas_index,
                     label: label.clone(),
                 });
             }
         }
-
-        self.tile_states = tile_states;
     }
 
     fn release_tile(&mut self, tile_coordinate: TileCoordinate) {
@@ -341,23 +351,20 @@ impl TileAtlas {
             return;
         }
 
-        let tile = self
-            .tile_states
-            .get_mut(&tile_coordinate)
-            .expect("Tried releasing a tile, which is not present.");
+        let tile = self.tile_states.get_mut(&tile_coordinate).unwrap();
         tile.requests -= 1;
 
         if tile.requests == 0 {
-            // tile is unused for now
-            self.unused_tiles
-                .push_back(AtlasTile::new(tile_coordinate, tile.atlas_index));
+            self.unused_indices.push_back(tile.atlas_index);
+            self.tile_states.remove(&tile_coordinate);
 
-            if !matches!(tile.state, LoadingState::Loaded) {
-                dbg!("discarding tile");
-                // the tile is not fully loaded
-                // We would rather discard the current progress, instead of finish loading a tile we do not need anymore.
-                self.tile_states.remove(&tile_coordinate);
-            }
+            // if !matches!(tile.state, LoadingState::Loaded) {
+            //     dbg!("Cancel loading tile.");
+            //     // the tile is not fully loaded
+            //     // We would rather discard the current progress, instead of finish loading a tile we do not need anymore.
+            //     // tile.state = LoadingState::Canceled;
+            //     self.tile_states.remove(&tile_coordinate);
+            // }
         }
     }
 }

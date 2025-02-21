@@ -217,7 +217,7 @@ impl TileTree {
     }
 
     fn compute_origin(&self, view_coordinate: Coordinate, lod: u32) -> IVec2 {
-        let tile_count = TileCoordinate::count(lod) as f64;
+        let tile_count = (lod as f64).exp2();
         let tree_xy = Self::compute_tree_xy(view_coordinate, tile_count);
 
         (tree_xy - 0.5 * self.tree_size as f64)
@@ -230,7 +230,7 @@ impl TileTree {
     }
 
     fn compute_tile_distance(&self, tile: TileCoordinate, view_coordinate: Coordinate) -> f64 {
-        let tile_count = TileCoordinate::count(tile.lod) as f64;
+        let tile_count = (tile.lod as f64).exp2();
         let view_tile_xy = Self::compute_tree_xy(view_coordinate, tile_count);
         let tile_offset = view_tile_xy.as_ivec2() - tile.xy;
         let mut offset = view_tile_xy % 1.0;
@@ -274,8 +274,7 @@ impl TileTree {
 
                     let tile_distance =
                         self.compute_tile_distance(tile_coordinate, view_coordinate);
-                    let load_distance =
-                        self.load_distance / TileCoordinate::count(tile_coordinate.lod) as f64;
+                    let load_distance = self.load_distance / (tile_coordinate.lod as f64).exp2();
 
                     let state = if lod == 0 || tile_distance < load_distance {
                         RequestState::Requested
@@ -286,8 +285,8 @@ impl TileTree {
                     let tile = &mut self.tiles[[
                         face as usize,
                         lod as usize,
-                        (tile_coordinate.xy.x as usize % self.tree_size as usize),
-                        (tile_coordinate.xy.y as usize % self.tree_size as usize),
+                        tile_coordinate.xy.x as usize % self.tree_size as usize,
+                        tile_coordinate.xy.y as usize % self.tree_size as usize,
                     ]];
 
                     // check if tile_tree slot refers to a new tile
