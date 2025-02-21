@@ -24,3 +24,4 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(gdal_major_ge_3)', 'cfg(gd
 [[example]]
 name = "preprocess_spherical"
 path = "examples/preprocess_spherical.rs"
+
