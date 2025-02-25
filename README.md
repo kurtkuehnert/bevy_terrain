@@ -87,10 +87,11 @@ Use them to fly over the terrain, experiment with the quality settings and enter
 
 ## Attribution
 
-The planar terrain dataset is generated using the free version of the Gaia Terrain Generator.
-The spherical terrain example dataset is a reprojected version of the GEBCO_2023 Grid dataset.
+The examples use the following demo datasets:
 
-GEBCO Compilation Group (2023) GEBCO 2023 Grid (doi:10.5285/f98b053b-0cbc-6c23-e053-6c86abc0af7b)
+- GEBCO Compilation Group (2023) - GEBCO 2023 Grid (doi:10.5285/f98b053b-0cbc-6c23-e053-6c86abc0af7b)
+- Unearthed Outdoors - True Marble Global Image Dataset GeoTIFF - [Creative Commons Attribution 3.0 United States
+  License](https://creativecommons.org/licenses/by/3.0/us/legalcode)
 
 ## License
 

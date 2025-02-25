@@ -163,6 +163,10 @@ impl TileAtlas {
     pub(crate) fn get_best_tile(&self, tile_coordinate: TileCoordinate) -> TileTreeEntry {
         let mut best_tile_coordinate = tile_coordinate;
 
+        if !self.existing_tiles.contains(&tile_coordinate) {
+            return TileTreeEntry::default();
+        }
+
         loop {
             if best_tile_coordinate == TileCoordinate::INVALID {
                 // highest lod is not loaded

@@ -10,7 +10,7 @@ fn main() {
         overwrite: true,
         no_data: PreprocessNoData::Source,
         data_type: PreprocessDataType::DataType(GdalDataType::Float32),
-        fill_radius: 16.0,
+        fill_radius: 32.0,
         create_mask: true,
         lod_count: None,
         attachment_label: AttachmentLabel::Height,

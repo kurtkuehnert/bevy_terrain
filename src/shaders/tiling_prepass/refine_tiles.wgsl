@@ -1,6 +1,6 @@
-#import bevy_terrain::types::{TileCoordinate, Coordinate}
+#import bevy_terrain::types::{TileCoordinate, Coordinate, Blend}
 #import bevy_terrain::bindings::{terrain, culling_view, terrain_view, final_tiles, approximate_height, temporary_tiles, state}
-#import bevy_terrain::functions::{compute_subdivision_coordinate, compute_world_coordinate, apply_height}
+#import bevy_terrain::functions::{compute_subdivision_coordinate, compute_world_coordinate, apply_height, compute_blend, lookup_tile}
 #import bevy_render::maths::affine3_to_square
 
 fn child_index() -> i32 {
@@ -121,9 +121,20 @@ fn horizon_cull(tile: TileCoordinate) -> bool {
     return false;
 }
 
+fn no_data_cull(tile: TileCoordinate) -> bool {
+    let coordinate = compute_subdivision_coordinate(Coordinate(tile.face, tile.lod, tile.xy, vec2<f32>(0.0)));
+    let view_distance = compute_world_coordinate(coordinate, approximate_height).view_distance;
+    var blend = compute_blend(view_distance);
+    blend.lod = min(tile.lod, blend.lod);
+    let atlas_tile = lookup_tile(coordinate, blend, 0u);
+
+    return atlas_tile.index == 4294967295;
+}
+
 fn cull(tile: TileCoordinate) -> bool {
     if (frustum_cull(tile)) { return true; }
     if (horizon_cull(tile)) { return true; }
+    if (no_data_cull(tile)) { return true; }
 
     return false;
 }

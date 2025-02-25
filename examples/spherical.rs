@@ -84,7 +84,7 @@ fn initialize(
         TerrainViewConfig::default(),
         CustomMaterial {
             gradient: gradient1.clone(),
-            gradient_info: GradientInfo { mode: 1 },
+            gradient_info: GradientInfo { mode: 2 },
         },
         view,
     );
