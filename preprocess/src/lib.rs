@@ -11,7 +11,7 @@ mod transformers;
 
 use crate::{
     cli::PreprocessBar,
-    dataset::{clear_directory, delete_directory, PreprocessContext},
+    dataset::{PreprocessContext, clear_directory, delete_directory},
     downsample::downsample_and_stitch,
     fill_no_data::create_mask_and_fill_no_data,
     reproject::reproject,
@@ -19,8 +19,8 @@ use crate::{
 };
 use bevy_terrain::prelude::*;
 use gdal::{
-    raster::{GdalDataType, GdalType},
     Dataset,
+    raster::{GdalDataType, GdalType},
 };
 use num::NumCast;
 use std::time::Instant;

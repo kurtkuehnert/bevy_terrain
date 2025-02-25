@@ -12,7 +12,7 @@ use crate::{
 
 use bevy::{
     prelude::*,
-    render::{render_resource::*, Extract, RenderApp},
+    render::{Extract, RenderApp, render_resource::*},
     window::PrimaryWindow,
 };
 mod approximation_debug;
@@ -290,18 +290,38 @@ pub fn update_view_parameter(
     }
 }
 
+fn fibonacci_sphere(n: usize) -> Vec<Vec3> {
+    let golden_ratio = (1.0 + 5.0_f32.sqrt()) / 2.0; // Approx. 1.618
+    let mut directions = Vec::with_capacity(n);
+
+    for i in 0..n {
+        let index = i as f32 + 0.5;
+        let theta = 2.0 * std::f32::consts::PI * index / golden_ratio; // Azimuthal angle
+        let phi = (1.0 - 2.0 * index / n as f32).acos(); // Inclination angle
+
+        let x = theta.cos() * phi.sin();
+        let y = theta.sin() * phi.sin();
+        let z = phi.cos();
+
+        directions.push(Vec3::new(x, y, z));
+    }
+
+    directions
+}
+
 pub(crate) fn debug_lighting(mut commands: Commands) {
-    commands.spawn((
-        DirectionalLight {
-            illuminance: 5000.0,
-            ..default()
-        },
-        Transform::from_xyz(-1.0, 1.0, -3.0).looking_at(Vec3::ZERO, Vec3::Y),
-    ));
-    commands.insert_resource(AmbientLight {
-        brightness: 100.0,
-        ..default()
-    });
+    let illuminance = 10000.0;
+    let n = 10;
+
+    for dir in fibonacci_sphere(n) {
+        commands.spawn((
+            DirectionalLight {
+                illuminance: illuminance / n as f32,
+                ..default()
+            },
+            Transform::from_translation(dir).looking_at(Vec3::ZERO, Vec3::Y),
+        ));
+    }
 }
 
 pub fn debug_window(mut window: Query<&mut Window, With<PrimaryWindow>>) {

@@ -3,9 +3,9 @@ use crate::result::{PreprocessError, PreprocessResult};
 use bevy_terrain::math::TileCoordinate;
 use bevy_terrain::terrain_data::{AttachmentConfig, AttachmentLabel};
 use gdal::{
+    Dataset, DatasetOptions, DriverManager, GdalOpenFlags, GeoTransform,
     programs::raster::build_vrt,
     raster::{ColorInterpretation, GdalDataType, GdalType, RasterCreationOptions},
-    Dataset, DatasetOptions, DriverManager, GdalOpenFlags, GeoTransform,
 };
 use glam::{IVec2, U64Vec2};
 use itertools::Itertools;
