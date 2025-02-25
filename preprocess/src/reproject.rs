@@ -1,11 +1,11 @@
 use crate::{
-    dataset::{create_empty_dataset, FaceInfo, PreprocessContext},
-    gdal_extension::{warp, GDALCustomTransformer, ProgressCallback, SuggestedWarpOutput},
+    dataset::{FaceInfo, PreprocessContext, create_empty_dataset},
+    gdal_extension::{GDALCustomTransformer, ProgressCallback, SuggestedWarpOutput, warp},
     result::PreprocessResult,
     transformers::CustomTransformer,
 };
 use bevy_terrain::prelude::AttachmentLabel;
-use gdal::{raster::GdalType, Dataset, GeoTransform, GeoTransformEx};
+use gdal::{Dataset, GeoTransform, GeoTransformEx, raster::GdalType};
 use glam::{DVec2, IVec2, U64Vec2};
 use itertools::Itertools;
 use std::collections::HashMap;

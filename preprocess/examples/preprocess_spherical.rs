@@ -62,8 +62,8 @@ fn main() {
     // };
 
     let args = Cli {
-        src_path: vec!["/Volumes/ExternalSSD/swiss_data/swiss_large.tif".into()],
-        terrain_path: "assets/terrains/swiss".into(),
+        src_path: vec!["/Volumes/ExternalSSD/swiss_data/swiss_huge.tif".into()],
+        terrain_path: "/Volumes/ExternalSSD/tiles/swiss".into(),
         temp_path: None,
         overwrite: true,
         no_data: PreprocessNoData::NoData(10000.0),

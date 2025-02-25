@@ -84,7 +84,7 @@ fn initialize(
         TerrainViewConfig::default(),
         CustomMaterial {
             gradient: gradient1.clone(),
-            gradient_info: GradientInfo { mode: 2 },
+            gradient_info: GradientInfo { mode: 1 },
         },
         view,
     );
@@ -103,7 +103,7 @@ fn initialize(
     );
 
     commands.spawn_terrain(
-        asset_server.load("terrains/swiss/config.tc.ron"),
+        asset_server.load("/Volumes/ExternalSSD/tiles/swiss/config.tc.ron"), //"terrains/swiss/config.tc.ron"),
         TerrainViewConfig {
             order: 1,
             ..default()

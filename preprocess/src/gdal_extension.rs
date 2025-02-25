@@ -91,7 +91,7 @@ pub fn warp(
     options.hDstDS = dst.c_dataset();
     // options.eResampleAlg = GDALResampleAlg::GRA_NearestNeighbour;
     options.eResampleAlg = GDALResampleAlg::GRA_Bilinear;
-    options.dfWarpMemoryLimit = 1024f64.powi(2) * 8.0;
+    options.dfWarpMemoryLimit = 1024f64.powi(2) * 8.0; // Todo: figure out, why this affects reprojection at the poles
 
     // for some reason this is not automatically recognized, so we have to set it manually
     options.eWorkingDataType = context.data_type as u32;
