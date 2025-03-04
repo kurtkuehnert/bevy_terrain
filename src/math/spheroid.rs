@@ -6,40 +6,40 @@ use std::cmp::Ordering;
 // http://creativecommons.org/licenses/by/4.0/
 
 pub fn project_point_spheroid(major_axis: f64, minor_axis: f64, y: DVec3) -> DVec3 {
-    let e = DVec2::new(major_axis, minor_axis); // ellipse
-    let a = DVec2::new(y.x, y.z); // axis of ellipse
-    let y = DVec2::new(a.length(), y.y); // position relative to ellipse
-    let x = project_point_ellipse(e, y); // position on ellipse
-    let a = x.x * a.normalize(); // axis of spheroid
+    let ellipse = DVec2::new(major_axis, minor_axis);
+    let axis = DVec2::new(y.x, y.z);
+    let input_position = DVec2::new(axis.length(), y.y);
+    let ellipse_position = project_point_ellipse(ellipse, input_position);
+    let axis = ellipse_position.x * axis.normalize();
 
-    DVec3::new(a.x, x.y, a.y) // position on spheroid
+    DVec3::new(axis.x, ellipse_position.y, axis.y)
 }
 
-fn project_point_ellipse(e: DVec2, y: DVec2) -> DVec2 {
-    let sign = y.signum();
-    let y = y.abs();
+fn project_point_ellipse(ellipse: DVec2, input_position: DVec2) -> DVec2 {
+    let sign = input_position.signum();
+    let input_position = input_position.abs();
 
-    sign * if y.x == 0.0 {
-        DVec2::new(0.0, e.y)
-    } else if y.y == 0.0 {
-        let n = e.x * y.x;
-        let d = e.x * e.x - e.y * e.y;
+    sign * if input_position.x == 0.0 {
+        DVec2::new(0.0, ellipse.y)
+    } else if input_position.y == 0.0 {
+        let n = ellipse.x * input_position.x;
+        let d = ellipse.x * ellipse.x - ellipse.y * ellipse.y;
 
         if n < d {
             let f = n / d;
-            DVec2::new(e.x * f, e.y * (1.0 - f * f).sqrt())
+            DVec2::new(ellipse.x * f, ellipse.y * (1.0 - f * f).sqrt())
         } else {
-            DVec2::new(e.x, 0.0)
+            DVec2::new(ellipse.x, 0.0)
         }
     } else {
-        let z = y / e;
+        let z = input_position / ellipse;
         let g = z.length_squared() - 1.0;
 
         if g != 0.0 {
-            let r = DVec2::new((e.x * e.x) / (e.y * e.y), 1.0);
-            y * r / (find_root(r, z, g) + r)
+            let r = DVec2::new((ellipse.x * ellipse.x) / (ellipse.y * ellipse.y), 1.0);
+            input_position * r / (find_root(r, z, g) + r)
         } else {
-            y
+            input_position
         }
     }
 }

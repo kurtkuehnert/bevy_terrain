@@ -61,12 +61,29 @@ fn main() {
     //     format: AttachmentFormat::RF32,
     // };
 
+    // let args = Cli {
+    //     src_path: vec!["/Volumes/ExternalSSD/swiss_data/swiss_huge.tif".into()],
+    //     terrain_path: "/Volumes/ExternalSSD/tiles/swiss".into(),
+    //     temp_path: None,
+    //     overwrite: true,
+    //     no_data: PreprocessNoData::NoData(10000.0),
+    //     data_type: PreprocessDataType::DataType(GdalDataType::Float32),
+    //     fill_radius: 32.0,
+    //     create_mask: true,
+    //     lod_count: None,
+    //     attachment_label: AttachmentLabel::Height,
+    //     texture_size: 512,
+    //     border_size: 2,
+    //     mip_level_count: 1,
+    //     format: AttachmentFormat::RF32,
+    // };
+
     let args = Cli {
-        src_path: vec!["/Volumes/ExternalSSD/swiss_data/swiss_huge.tif".into()],
-        terrain_path: "/Volumes/ExternalSSD/tiles/swiss".into(),
+        src_path: vec!["/Volumes/ExternalSSD/demo_data/02_Raster/DTM_1m_MBES_60062_L05_32631_DTM_18_S02_20180814_1M_EPSG32631_1.tif".into()],
+        terrain_path: "/Volumes/ExternalSSD/tiles/sas".into(),
         temp_path: None,
         overwrite: true,
-        no_data: PreprocessNoData::NoData(10000.0),
+        no_data: PreprocessNoData::Source,
         data_type: PreprocessDataType::DataType(GdalDataType::Float32),
         fill_radius: 32.0,
         create_mask: true,

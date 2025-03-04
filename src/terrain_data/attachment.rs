@@ -1,6 +1,6 @@
 use bevy::render::render_resource::TextureFormat;
 use bytemuck::cast_slice;
-use itertools::{iproduct, Itertools};
+use itertools::{Itertools, iproduct};
 use serde::{Deserialize, Serialize};
 use std::{fmt::Error, iter, str::FromStr};
 
@@ -242,6 +242,38 @@ impl AttachmentData {
             }
         }
 
+        fn generate_mipmap_f32(
+            data: &mut Vec<f32>,
+            parent_size: usize,
+            child_size: usize,
+            start: usize,
+        ) {
+            for (child_y, child_x) in iproduct!(0..child_size, 0..child_size) {
+                let mut value = 0.0;
+                let mut count = 0;
+
+                for (parent_x, parent_y) in
+                    iproduct!(0..2, 0..2).map(|(x, y)| ((child_x << 1) + x, (child_y << 1) + y))
+                {
+                    let index = start + parent_y * parent_size + parent_x;
+                    let data = data[index];
+
+                    if data != 0.0 {
+                        value += data;
+                        count += 1;
+                    }
+                }
+
+                let value = if count == 0 {
+                    0.0
+                } else {
+                    value / count as f32
+                };
+
+                data.push(value);
+            }
+        }
+
         let mut start = 0;
         let mut parent_size = texture_size as usize;
 
@@ -255,7 +287,12 @@ impl AttachmentData {
                 AttachmentData::RU16(data) => {
                     generate_mipmap_r16(data, parent_size, child_size, start)
                 }
-                _ => {}
+                AttachmentData::RF32(data) => {
+                    generate_mipmap_f32(data, parent_size, child_size, start)
+                }
+                _ => {
+                    unimplemented!()
+                }
             }
 
             start += parent_size * parent_size;

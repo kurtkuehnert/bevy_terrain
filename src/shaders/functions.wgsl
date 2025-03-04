@@ -1,6 +1,6 @@
 #define_import_path bevy_terrain::functions
 
-#import bevy_terrain::bindings::{terrain, origins, terrain_view, geometry_tiles, tile_tree, view}
+#import bevy_terrain::bindings::{terrain, origins, terrain_view, geometry_tiles, tile_tree, view, approximate_height}
 #import bevy_terrain::types::{TileCoordinate, WorldCoordinate, TileTree, TileTreeEntry, AtlasTile, Blend, BestLookup, Coordinate, Morph, TangentSpace}
 #import bevy_render::maths::{affine3_to_square, mat2x4_f32_to_mat3x3_unpack}
 
@@ -30,11 +30,10 @@ fn compute_coordinate(vertex_index: u32) -> Coordinate {
 #endif
 
 #ifdef FRAGMENT
-fn compute_coordinate(tile_index: u32, coordinate_uv: vec2<f32>) -> Coordinate {
+fn compute_coordinate(tile_index: u32, tile_uv: vec2<f32>) -> Coordinate {
     let tile = geometry_tiles[tile_index];
-    let uv   = coordinate_uv;
 
-    return Coordinate(tile.face, tile.lod, tile.xy, uv, dpdx(uv), dpdy(uv));
+    return Coordinate(tile.face, tile.lod, tile.xy, tile_uv, dpdx(tile_uv), dpdy(tile_uv));
 }
 #endif
 
@@ -46,6 +45,14 @@ fn compute_world_coordinate(coordinate: Coordinate, height: f32) -> WorldCoordin
     }
 
     return world_coordinate;
+}
+
+fn correct_world_coordinate(coordinate: Coordinate, view_distance: f32) -> WorldCoordinate {
+    if (high_precision(view_distance)) {
+        return compute_world_coordinate_precise(coordinate, approximate_height);
+    } else {
+        return compute_world_coordinate_imprecise(coordinate, approximate_height);
+    }
 }
 
 fn compute_world_coordinate_imprecise(coordinate: Coordinate, height: f32) -> WorldCoordinate {
@@ -117,8 +124,8 @@ fn compute_tangent_space(world_coordinate: WorldCoordinate) -> TangentSpace {
     return TangentSpace(tangent_x, tangent_y, scale);
 }
 
-fn apply_height(world: WorldCoordinate, height: f32) -> vec3<f32> {
-    return world.position + height * world.normal;
+fn apply_height(world_coordinate: WorldCoordinate, height: f32) -> vec3<f32> {
+    return world_coordinate.position + height * world_coordinate.normal;
 }
 
 fn inverse_mix(a: f32, b: f32, value: f32) -> f32 {
@@ -168,10 +175,10 @@ fn compute_view_coordinate(face: u32, lod: u32) -> Coordinate {
     return view_coordinate;
 }
 
-fn compute_subdivision_coordinate(coordinate: Coordinate) -> Coordinate {
-    let view_coordinate = compute_view_coordinate(coordinate.face, coordinate.lod);
+fn compute_subdivision_coordinate(tile: TileCoordinate) -> Coordinate {
+    let view_coordinate = compute_view_coordinate(tile.face, tile.lod);
 
-    var offset = vec2<i32>(view_coordinate.xy) - vec2<i32>(coordinate.xy);
+    var offset = vec2<i32>(view_coordinate.xy) - vec2<i32>(tile.xy);
     var uv     = view_coordinate.uv;
 
     if      (offset.x < 0) { uv.x = 0.0; }
@@ -179,9 +186,11 @@ fn compute_subdivision_coordinate(coordinate: Coordinate) -> Coordinate {
     if      (offset.y < 0) { uv.y = 0.0; }
     else if (offset.y > 0) { uv.y = 1.0; }
 
-    var subdivision_coordinate = coordinate;
-    subdivision_coordinate.uv = uv;
-    return subdivision_coordinate;
+#ifdef FRAGMENT
+    return Coordinate(tile.face, tile.lod, tile.xy, uv, vec2<f32>(0.0), vec2<f32>(0.0));
+#else
+    return Coordinate(tile.face, tile.lod, tile.xy, uv);
+#endif
 }
 
 fn coordinate_change_lod(coordinate: ptr<function, Coordinate>, new_lod: u32) {
@@ -246,21 +255,21 @@ fn lookup_best(lookup_coordinate: Coordinate) -> BestLookup {
 
     coordinate_change_lod(&coordinate, tile_tree_entry.atlas_lod);
 
-    return BestLookup(AtlasTile(tile_tree_entry.atlas_index, coordinate), tile_tree_uv);
+    return BestLookup(AtlasTile(tile_tree_entry.atlas_index, coordinate, 0.0), tile_tree_uv);
 }
 
-fn lookup_tile(lookup_coordinate: Coordinate, blend: Blend, lod_offset: u32) -> AtlasTile {
+fn lookup_tile(lookup_coordinate: Coordinate, blend: Blend) -> AtlasTile {
 #ifdef TILE_TREE_LOD
     return lookup_best(lookup_coordinate).tile;
 #else
     var coordinate = lookup_coordinate;
 
-    coordinate_change_lod(&coordinate, blend.lod - lod_offset);
+    coordinate_change_lod(&coordinate, blend.lod);
 
     let tile_tree_entry = lookup_tile_tree_entry(coordinate);
 
     coordinate_change_lod(&coordinate, tile_tree_entry.atlas_lod);
 
-    return AtlasTile(tile_tree_entry.atlas_index, coordinate);
+    return AtlasTile(tile_tree_entry.atlas_index, coordinate, blend.ratio);
 #endif
 }

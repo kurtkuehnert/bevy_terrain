@@ -12,7 +12,7 @@
 struct FragmentInput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) tile_index: u32,
-    @location(1) coordinate_uv: vec2<f32>,
+    @location(1) tile_uv: vec2<f32>,
     @location(2) height: f32,
 }
 
@@ -35,11 +35,10 @@ fn fragment_info(input: FragmentInput) -> FragmentInfo{
     var info: FragmentInfo;
     info.clip_position    = input.clip_position;
     info.height           = input.height;
-    info.coordinate       = compute_coordinate(input.tile_index, input.coordinate_uv);
+    info.coordinate       = compute_coordinate(input.tile_index, input.tile_uv);
     info.world_coordinate = compute_world_coordinate(info.coordinate, input.height);
     info.tangent_space    = compute_tangent_space(info.world_coordinate);
     info.blend            = compute_blend(info.world_coordinate.view_distance);
-
     return info;
 }
 
@@ -85,11 +84,9 @@ fn fragment_debug(info: ptr<function, FragmentInfo>, output: ptr<function, Fragm
     (*output).color = vec4<f32>(normal, 1.0);
     // (*output).color = vec4<f32>(surface_gradient, 1.0);
 #endif
-
-    // Todo: move this somewhere else
 #ifdef TEST1
-    if ((*info).view_distance < terrain_view.precision_distance) {
-        (*output).color = mix((*output).color, vec4<f32>(0.1), 0.7);
+    if (high_precision((*info).world_coordinate.view_distance)) {
+        (*output).color = mix((*output).color, vec4<f32>(0.3), 0.5);
     }
 #endif
 }
@@ -98,17 +95,12 @@ fn fragment_debug(info: ptr<function, FragmentInfo>, output: ptr<function, Fragm
 fn fragment(input: FragmentInput) -> FragmentOutput {
     var info = fragment_info(input);
 
-    let tile             = lookup_tile(info.coordinate, info.blend, 0u);
+    let tile             = lookup_tile(info.coordinate, info.blend);
     let mask             = sample_height_mask(tile);
-    var color            = vec4<f32>(0.5);
-    var surface_gradient = sample_surface_gradient(tile, info.tangent_space);
+    let color            = vec4<f32>(0.5);
+    let surface_gradient = sample_surface_gradient(tile, info.tangent_space);
 
     if mask { discard; }
-
-    if (info.blend.ratio > 0.0) {
-        let tile2        = lookup_tile(info.coordinate, info.blend, 1u);
-        surface_gradient = mix(surface_gradient, sample_surface_gradient(tile2, info.tangent_space), info.blend.ratio);
-    }
 
     var output: FragmentOutput;
     fragment_output(&info, &output, color, surface_gradient);

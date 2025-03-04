@@ -28,7 +28,7 @@ fn prepare_root() {
     let coordinate       = compute_view_coordinate(terrain_view.face, terrain_view.lod);
     let world_coordinate = compute_world_coordinate(coordinate, approximate_height);
 
-    let tile = lookup_tile(coordinate, Blend(coordinate.lod, 0.0), 0u);
+    let tile = lookup_tile(coordinate, Blend(coordinate.lod, 0.0));
     if (!sample_height_mask(tile)) { approximate_height = sample_height(tile); }
 
     // Todo: this does not work

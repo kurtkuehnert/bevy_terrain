@@ -1,6 +1,6 @@
 #define_import_path bevy_terrain::debug
 
-#import bevy_terrain::types::{Coordinate, WorldCoordinate, AtlasTile, Blend}
+#import bevy_terrain::types::{Coordinate, WorldCoordinate, TileCoordinate, AtlasTile, Blend}
 #import bevy_terrain::bindings::{terrain, tile_tree, terrain_view, approximate_height, geometry_tiles, attachments, origins}
 #import bevy_terrain::functions::{lookup_best, compute_world_coordinate, tree_lod, compute_subdivision_coordinate}
 #import bevy_pbr::mesh_view_bindings::view
@@ -68,7 +68,9 @@ fn show_geometry_lod(coordinate: Coordinate) -> vec4<f32> {
 
     var color = checker_color(coordinate, ratio);
 
-    if (distance(coordinate.uv, compute_subdivision_coordinate(coordinate).uv) < 0.1) {
+    let tile = TileCoordinate(coordinate.face, coordinate.lod, coordinate.xy);
+
+    if (distance(coordinate.uv, compute_subdivision_coordinate(tile).uv) < 0.1) {
         color = mix(index_color(coordinate.lod + 1), vec4(0.0), 0.7);
     }
 

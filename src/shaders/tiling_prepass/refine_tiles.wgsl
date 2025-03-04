@@ -1,4 +1,4 @@
-#import bevy_terrain::types::{TileCoordinate, Coordinate, Blend}
+#import bevy_terrain::types::{TileCoordinate, Coordinate, WorldCoordinate, Blend}
 #import bevy_terrain::bindings::{terrain, culling_view, terrain_view, final_tiles, approximate_height, temporary_tiles, state}
 #import bevy_terrain::functions::{compute_subdivision_coordinate, compute_world_coordinate, apply_height, compute_blend, lookup_tile}
 #import bevy_render::maths::affine3_to_square
@@ -15,11 +15,8 @@ fn final_index() -> i32 {
     return atomicAdd(&state.final_index, 1);
 }
 
-fn should_be_divided(tile: TileCoordinate) -> bool {
-    let coordinate       = compute_subdivision_coordinate(Coordinate(tile.face, tile.lod, tile.xy, vec2<f32>(0.0)));
-    let world_coordinate = compute_world_coordinate(coordinate, approximate_height);
-
-    return world_coordinate.view_distance < terrain_view.subdivision_distance / exp2(f32(tile.lod + 1));
+fn should_be_divided(coordinate: Coordinate, world_coordinate: WorldCoordinate) -> bool {
+    return world_coordinate.view_distance < terrain_view.subdivision_distance / exp2(f32(coordinate.lod + 1));
 }
 
 fn subdivide(tile: TileCoordinate) {
@@ -34,8 +31,8 @@ fn subdivide(tile: TileCoordinate) {
 const min_height: f32 = 10.0 * -12000.0;
 const max_height: f32 = 10.0 * 9000.0;
 
-fn frustum_cull(tile: TileCoordinate) -> bool {
-    let center_coordinate = Coordinate(tile.face, tile.lod, tile.xy, vec2<f32>(0.5));
+fn frustum_cull(coordinate: Coordinate) -> bool {
+    let center_coordinate = Coordinate(coordinate.face, coordinate.lod, coordinate.xy, vec2<f32>(0.5));
     let center_position   = compute_world_coordinate(center_coordinate, approximate_height).position;
 
     // identify furthest corner from center
@@ -45,7 +42,7 @@ fn frustum_cull(tile: TileCoordinate) -> bool {
     // using the closest edge does not suffice
     for (var i = 0u; i < 4; i = i + 1) {
         let corner_uv = vec2<f32>(f32(i & 1u), f32(i >> 1u & 1u));
-        let corner_coordinate = Coordinate(tile.face, tile.lod, tile.xy, corner_uv);
+        let corner_coordinate = Coordinate(coordinate.face, coordinate.lod, coordinate.xy, corner_uv);
         let corner_world_coordinate = compute_world_coordinate(corner_coordinate, approximate_height);
         let corner_min = apply_height(corner_world_coordinate, min_height);
         let corner_max = apply_height(corner_world_coordinate, max_height);
@@ -65,12 +62,13 @@ fn frustum_cull(tile: TileCoordinate) -> bool {
      return false;
 }
 
+// Todo: use the actual major and minor axis of the terrain
 const MAJOR_AXES: f32 = 6371000.0;
 const MINOR_AXES: f32 = 6371000.0;
 
-fn horizon_cull(tile: TileCoordinate) -> bool {
+fn horizon_cull(coordinate: Coordinate, world_coordinate: WorldCoordinate) -> bool {
     // Todo: implement high precision supprot for culling
-    if (tile.lod < 3) { return false; }
+    if (coordinate.lod < 3) { return false; }
     // up to LOD 3, the closest point estimation is not reliable when projecting to adjacent sides
     // to prevent issues with cut of corners, horizon culling is skipped for those cases
     // this still leads to adeqate culling when close to the surface
@@ -81,11 +79,11 @@ fn horizon_cull(tile: TileCoordinate) -> bool {
 
 
     let radius = MAJOR_AXES;
-    let aspect_ratio = (MAJOR_AXES/ MINOR_AXES);
+    let aspect_ratio = (MAJOR_AXES / MINOR_AXES);
 
     // transform from ellipsoidal to spherical coordinates
     // this eliminates the oblatness of the ellipsoid
-    let ellipsoid_to_sphere = vec3<f32>(radius, radius/ aspect_ratio, radius);
+    let ellipsoid_to_sphere = vec3<f32>(radius, radius / aspect_ratio, radius);
 
     // radius of our culling sphere
     // for correct conservative beviour, we have to adjust the minimal height according to the aspect ratio
@@ -101,9 +99,7 @@ fn horizon_cull(tile: TileCoordinate) -> bool {
     // position on the edge of the tile closest to the viewer with maximum height applied
     // serves as a conservative ocluder proxy
     // if this point is not visible, no other point of the tile should be visible
-    let edge_coordinate = compute_subdivision_coordinate(Coordinate(tile.face, tile.lod, tile.xy, vec2<f32>(0.0)));
-    let edge_world_coordinate = compute_world_coordinate(edge_coordinate, approximate_height);
-    let t = apply_height(edge_world_coordinate, max_height) / ellipsoid_to_sphere;
+    let t = apply_height(world_coordinate, max_height) / ellipsoid_to_sphere;
 
     let vt = t - v;
     let vo = o - v;
@@ -121,20 +117,18 @@ fn horizon_cull(tile: TileCoordinate) -> bool {
     return false;
 }
 
-fn no_data_cull(tile: TileCoordinate) -> bool {
-    let coordinate = compute_subdivision_coordinate(Coordinate(tile.face, tile.lod, tile.xy, vec2<f32>(0.0)));
-    let view_distance = compute_world_coordinate(coordinate, approximate_height).view_distance;
-    var blend = compute_blend(view_distance);
-    blend.lod = min(tile.lod, blend.lod);
-    let atlas_tile = lookup_tile(coordinate, blend, 0u);
+fn no_data_cull(coordinate: Coordinate, world_coordinate: WorldCoordinate) -> bool {
+    var blend      = compute_blend(world_coordinate.view_distance);
+    blend.lod      = min(coordinate.lod, blend.lod);
+    let atlas_tile = lookup_tile(coordinate, blend);
 
     return atlas_tile.index == 4294967295;
 }
 
-fn cull(tile: TileCoordinate) -> bool {
-    if (frustum_cull(tile)) { return true; }
-    if (horizon_cull(tile)) { return true; }
-    if (no_data_cull(tile)) { return true; }
+fn cull(coordinate: Coordinate, world_coordinate: WorldCoordinate) -> bool {
+    if (frustum_cull(coordinate)) { return true; }
+    if (horizon_cull(coordinate, world_coordinate)) { return true; }
+    if (no_data_cull(coordinate, world_coordinate)) { return true; }
 
     return false;
 }
@@ -143,11 +137,13 @@ fn cull(tile: TileCoordinate) -> bool {
 fn refine_tiles(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
     if (invocation_id.x >= state.tile_count) { return; }
 
-    let tile = temporary_tiles[parent_index(invocation_id.x)];
+    let tile             = temporary_tiles[parent_index(invocation_id.x)];
+    let coordinate       = compute_subdivision_coordinate(tile);
+    let world_coordinate = compute_world_coordinate(coordinate, approximate_height);
 
-    if cull(tile) { return; }
+    if cull(coordinate, world_coordinate) { return; }
 
-    if (should_be_divided(tile)) {
+    if (should_be_divided(coordinate, world_coordinate)) {
         subdivide(tile);
     } else {
         final_tiles[final_index()] = tile;

@@ -84,36 +84,49 @@ fn initialize(
         TerrainViewConfig::default(),
         CustomMaterial {
             gradient: gradient1.clone(),
-            gradient_info: GradientInfo { mode: 1 },
+            gradient_info: GradientInfo { mode: 2 },
         },
         view,
     );
 
-    commands.spawn_terrain(
-        asset_server.load("terrains/los/config.tc.ron"),
-        TerrainViewConfig {
-            order: 1,
-            ..default()
-        },
-        CustomMaterial {
-            gradient: gradient2.clone(),
-            gradient_info: GradientInfo { mode: 0 },
-        },
-        view,
-    );
-
-    commands.spawn_terrain(
-        asset_server.load("/Volumes/ExternalSSD/tiles/swiss/config.tc.ron"), //"terrains/swiss/config.tc.ron"),
-        TerrainViewConfig {
-            order: 1,
-            ..default()
-        },
-        CustomMaterial {
-            gradient: gradient1.clone(),
-            gradient_info: GradientInfo { mode: 1 },
-        },
-        view,
-    );
+    // commands.spawn_terrain(
+    //     asset_server.load("terrains/los/config.tc.ron"),
+    //     TerrainViewConfig {
+    //         order: 1,
+    //         ..default()
+    //     },
+    //     CustomMaterial {
+    //         gradient: gradient2.clone(),
+    //         gradient_info: GradientInfo { mode: 0 },
+    //     },
+    //     view,
+    // );
+    //
+    // commands.spawn_terrain(
+    //     asset_server.load("/Volumes/ExternalSSD/tiles/swiss/config.tc.ron"), //"terrains/swiss/config.tc.ron"),
+    //     TerrainViewConfig {
+    //         order: 1,
+    //         ..default()
+    //     },
+    //     CustomMaterial {
+    //         gradient: gradient1.clone(),
+    //         gradient_info: GradientInfo { mode: 1 },
+    //     },
+    //     view,
+    // );
+    //
+    // commands.spawn_terrain(
+    //     asset_server.load("/Volumes/ExternalSSD/tiles/sas/config.tc.ron"),
+    //     TerrainViewConfig {
+    //         order: 2,
+    //         ..default()
+    //     },
+    //     CustomMaterial {
+    //         gradient: gradient2.clone(),
+    //         gradient_info: GradientInfo { mode: 0 },
+    //     },
+    //     view,
+    // );
 
     // commands.spawn_terrain(
     //     asset_server.load("/Volumes/ExternalSSD/tiles/earth/config.tc.ron"),
@@ -137,17 +150,17 @@ fn initialize(
     //     },
     //     view,
     // );
-    //
-    // commands.spawn_terrain(
-    //     asset_server.load("/Volumes/ExternalSSD/tiles/hartenstein/config.tc.ron"),
-    //     TerrainViewConfig {
-    //         order: 1,
-    //         ..default()
-    //     },
-    //     CustomMaterial {
-    //         gradient: gradient2.clone(),
-    //         gradient_info: GradientInfo { mode: 2 },
-    //     },
-    //     view,
-    // );
+
+    commands.spawn_terrain(
+        asset_server.load("/Volumes/ExternalSSD/tiles/hartenstein/config.tc.ron"),
+        TerrainViewConfig {
+            order: 1,
+            ..default()
+        },
+        CustomMaterial {
+            gradient: gradient2.clone(),
+            gradient_info: GradientInfo { mode: 2 },
+        },
+        view,
+    );
 }

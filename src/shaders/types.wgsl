@@ -83,6 +83,7 @@ struct TileTreeEntry {
 struct AtlasTile {
     index: u32,
     coordinate: Coordinate,
+    blend_ratio: f32,
 }
 
 #ifdef HIGH_PRECISION
@@ -122,4 +123,12 @@ struct TangentSpace {
     tangent_x: vec3<f32>,
     tangent_y: vec3<f32>,
     scale: f32,
+}
+
+struct SampleUV {
+    uv: vec2<f32>,
+#ifdef FRAGMENT
+    dx: vec2<f32>,
+    dy: vec2<f32>,
+#endif
 }
