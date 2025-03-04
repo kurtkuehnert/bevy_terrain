@@ -4,3 +4,4 @@ target
 assets/**/data/*
 assets/**/config.tc
 assets/terrains/
+assets/source_data
